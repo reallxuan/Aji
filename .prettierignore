@@ -6,3 +6,4 @@ pnpm-lock.yaml
 .superpowers
 docs
 *.md
+src/transport/generated
