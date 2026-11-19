@@ -145,24 +145,33 @@ To avoid two processes competing for GPU memory, analysis queries pause during p
 
 This is the core of Phase 1 and Aji's largest difference from LizzieYzy.
 
-**Manifest.** Aji maintains its own JSON manifest listing every available engine package, network and runtime library: version, platform, backend, download URLs (several, including mirrors), size, SHA-256 and dependencies. The manifest lives in a separate public repository. Aji fetches it at startup and falls back to the copy bundled in the installer. It does not scrape GitHub's "latest", because "latest" is not one version and the network page has no API.
+**Manifest.** Aji maintains its own JSON manifest listing every available engine package, network and runtime library: version, platform, backend, download URLs (several, including mirrors), size, a digest and dependencies. The digest is SHA-256 for engines and NVIDIA archives, and the model server's MD5 (its ETag) for networks. The manifest lives in a separate public repository, and its CI signs it with minisign (roadmap O5). Aji verifies the signature against a public key built into the app, and uses the copy bundled in the installer until a newer signed copy arrives. It does not scrape GitHub's "latest", because "latest" is not one version and the network page has no API.
 
-**Hosting. [Proposed]** Files Aji builds itself, such as the Metal build of KataGo, are published on GitHub Releases, and the manifest on GitHub Pages; both are free. Each file in the manifest may list several URLs, which Aji tries in order. Settings accept a download-acceleration prefix or a custom mirror URL for users in mainland China. Whether to pay for a mirror reachable from the mainland is the owner's decision (D1); Phase 1 does not depend on it.
+**Hosting.** The Metal build of KataGo is published on GitHub Releases of `reallxuan/aji-manifest`, and the signed manifest on its GitHub Pages site; both are free (the Metal release is done in M3; the manifest's first publication follows the merge). Mirrors, several URLs per file (which Aji tries in order), and a download-acceleration prefix or a custom mirror URL in settings for users in mainland China stay **[Proposed]**. Whether to pay for a mirror reachable from the mainland is the owner's decision (D1); Phase 1 does not depend on it.
 
 **Hardware detection to backend choice.** Aji detects GPU vendor, model, driver version and memory, then recommends a default from the table below, which the user can change:
 
 | Hardware | Default backend | Fallback |
 |---|---|---|
-| NVIDIA | CUDA (cuda12.8 or newer packages on 50-series), with the runtime downloaded by Aji **[To verify, see R1]** | DirectML, then OpenCL |
-| AMD (Windows) | ROCm (self-contained) | DirectML, then OpenCL |
-| AMD (Linux) | OpenCL | — |
-| Intel GPU | ONNX + OpenVINO (self-contained) | OpenCL |
-| Apple Silicon | Metal, built in Aji's own CI and hosted by Aji **[To verify, see R2]** | — |
-| No usable GPU | Eigen AVX2 | Eigen |
+| NVIDIA, driver 580 or newer and compute capability 7.5 or newer | CUDA 13.2 (cuDNN 9.24) | DirectML, then OpenCL |
+| NVIDIA, driver 572.61 or newer otherwise (older card or driver) | CUDA 12.8 (cuDNN 9.8) | DirectML, then OpenCL |
+| NVIDIA, older or unknown driver | DirectML | OpenCL |
+| AMD (Windows), GPU family known (RX 6000, 7000 and 9000 series; Radeon 8050S and 8060S) | ROCm for that family (self-contained) | DirectML, then OpenCL |
+| AMD (Windows), family unknown | DirectML | OpenCL |
+| Intel GPU (Windows) | ONNX + OpenVINO (self-contained) | DirectML, then OpenCL |
+| Any GPU (Linux) | OpenCL | Eigen AVX2 (Eigen without AVX2) |
+| Apple Silicon | Metal, built in Aji's own CI and hosted by Aji | — |
+| No usable GPU, including only the Microsoft Basic Render Driver (Remote Desktop, a VM) | Eigen AVX2 if the CPU has AVX2, else Eigen | Eigen |
+| Intel Mac | Not supported | — |
 
-**Post-install verification.** After a download, Aji checks the SHA-256, unpacks, runs KataGo's `benchmark` to obtain thread counts and related settings and writes them into a generated config, then sends a minimal analysis query to confirm results come back. If any step fails, Aji tries the fallback backend and explains the cause in plain language.
+- NVIDIA runtimes (cuBLAS, NVRTC, cuDNN) are downloaded by Aji from NVIDIA's own servers as whole archives and checked against the SHA-256 that NVIDIA publishes; Aji never re-hosts them (R1, `docs/research/r1-nvidia-runtime.md`). CUDA 13 dropped Maxwell, Pascal and Volta, hence the compute-capability split.
+- TensorRT is not offered in Phase 1: NVIDIA publishes no hash for its archive, and hashing it would mean downloading 1.94 GB to build the manifest.
+- The NVIDIA defaults are provisional until R4's benchmarks on the RTX 5070 arrive; their results are written back here.
+- The Metal build is self-contained (static protobuf and abseil), targets macOS 13 (minos 13.0; not yet run there), and benchmarked within 1% of Homebrew's KataGo on the M5 (R2 done).
 
-**Network choice.** Aji recommends a network that balances strength and speed, adjusted to the GPU tier. The user can switch in a list. The human-style network (human SL) is an optional download.
+**Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, runs KataGo's `benchmark` to obtain thread counts and related settings and writes them into a generated config, then sends a minimal analysis query to confirm results come back. If any step fails, Aji tries the fallback backend and explains the cause in plain language.
+
+**Network choice.** Aji lists the networks in katagotraining.org Elo order and preselects the highest-rated one the chosen engine can load, the same on every machine, with no GPU tiers and no local measurement (roadmap O4). The user can pick another row. The human-style network (human SL) is an optional download.
 
 ### 6.4 Remote access
 

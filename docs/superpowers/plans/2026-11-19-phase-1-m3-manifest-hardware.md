@@ -31,7 +31,19 @@
 - [R1: NVIDIA runtime](../../research/r1-nvidia-runtime.md), sections 6 and 7.
 - [Phase 1 LizzieYzy menu check](../../audits/phase-1-lizzieyzy-menu.md): E14. Only G1 is approved, and it was done in M2; the other proposals stay open.
 
-**Status:** Not started; to be executed subagent-driven, with no worktrees. Already on the branch: Task 0, plus planning fixtures.
+**Status:** Done on 2026-11-20, except the items under Outstanding.
+- **Mac.** The exit check passed on the M5.
+  - `aji-setup-report` reported Apple M5, `appleGpuCores` 10, `memoryBytes` 25769803776, 10 cores and OS "macOS 27.2". The default is `metal`, with versions `["1.18.2"]`. The 8 networks are in Elo order, with `kata1-tf3-b11c768-s12382M-d6533M` preselected. The bundled manifest has sequence 1795103730.
+  - One deviation from Step 1: the report prints the source as `"Bundled"`, not `"bundled"`. It is logged for the final review.
+- **Table tests.** `recommend_table`: 36 tests pass, and every charter 6.3 row has a test.
+- **App.** `pnpm tauri build --bundles app` produced Aji.app (6.82 MiB). At startup it logged `aji: manifest Bundled sequence 1795103730`. The owner confirmed that analysis runs. The fetch from the Pages site fails silently until the manifest is published (Step 6).
+- **Metal release (S2).** `reallxuan/aji-manifest` release `katago-v1.18.2-metal`: asset 3934477 bytes, SHA-256 `b307bc8c285e9cc9adff506519925dc2ed4453bf3bc8f52c47dd97104d1f26ea`, built by `katago-metal.yml` on a GitHub `macos-15` runner. On the M5, after a curl download, the binary has no quarantine attribute, links only `/usr/lib` and `/System/Library`, and has `minos 13.0`. `katago version` reports v1.18.2 on the Metal backend. The benchmark (b18c384nbt, 10 threads, 800 visits, final reading) gave 202.51 visits/s against Homebrew's 204.42, 0.9% slower.
+- **Signing.** The owner's minisign key ABDFEC3DB730B0C2 is in `keys/aji-manifest.pub` (aji-manifest) and in `TRUSTED_KEYS` (Aji). The secret `MINISIGN_SECRET_KEY` is set in that repository.
+- **Outstanding.**
+  - Step 2, the PC from its capture: the owner's real capture has not arrived. Only a hand-written synthetic capture (RTX 5070, driver 591.44, capability 12.0) was run. It gave cuda (cuda13.2, versions 1.18.2 and 1.18.1) as the default, then directml and opencl. This does not stand for the real PC.
+  - Task 12 Step 4, the PC benchmark results from `scripts/benchmark-windows.ps1` (S3, R4). They move to M4 if they arrive after M3 closes.
+  - Step 6, after the owner merges into `main` and with the owner's OK: run `manifest.yml` once; check that `aji-setup-report --fetch` gives `source` fetched with a sequence above the bundled one; check that a one-byte change to the cache falls back to bundled; and read the `main` push's Windows CI run, the first Windows compile of Task 0's manifest embedding and of the DXGI code.
+- TensorRT is out of Phase 1 (ruling R5).
 
 ## Owner decisions for M3 (2026-11-19)
 
@@ -178,7 +190,7 @@
   - A missing `hw.optional.*` key is silently left out (exit 0). An unknown key elsewhere prints `sysctl: unknown oid` and exits 1.
   - Homebrew KataGo 1.18.2 links libzip, protobuf 36.2 and 23 abseil 20260817.0 dylibs from `/opt/homebrew` (`otool -L`). It is not self-contained, which is why Aji builds its own.
   - Metal speed, measured with Homebrew KataGo 1.18.2 using `katago benchmark -config gtp_example.cfg -model <net>` (800 visits, auto-tuned threads unless noted). The raw outputs, M4's benchmark-parser fixtures, are committed in `crates/aji-manager/tests/fixtures/benchmark/1.18.2-metal/` (`72ac88f`).
-    - With transformer networks, stderr repeats `Failed to import MPS module`. Convolutional networks do not print it. **[To verify]** in Task 3: whether Aji's own build prints it too, and whether it is a slower fallback path.
+    - With transformer networks, stderr repeats `Failed to import MPS module`. Convolutional networks do not print it. Answered in Task 3: Aji's own static Metal build prints it too, with the transformer network tf3-b10c512, and the benchmark still completes. It does not appear with the convolutional b18c384nbt, on either build. Whether it means a slower path has not been established.
 
     | Network | KataGo's recommended threads | visits/s there | Best visits/s |
     |---|---|---|---|
