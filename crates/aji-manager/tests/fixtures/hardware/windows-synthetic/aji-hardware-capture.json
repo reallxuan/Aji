@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "captured": "2026-11-19T00:00:00Z",
+  "tool": "scripts/capture-hardware-windows.ps1",
+  "dxgi": [
+    {
+      "index": 0,
+      "description": "NVIDIA GeForce RTX 5070",
+      "vendorId": "0x10DE",
+      "deviceId": "0x2F04",
+      "subSysId": "0x00000000",
+      "revision": 161,
+      "dedicatedVideoMemory": 12821241856,
+      "dedicatedSystemMemory": 0,
+      "sharedSystemMemory": 16891613184,
+      "flags": 0,
+      "umdVersion": "32.0.15.9144"
+    },
+    {
+      "index": 1,
+      "description": "Microsoft Basic Render Driver",
+      "vendorId": "0x1414",
+      "deviceId": "0x008C",
+      "subSysId": "0x00000000",
+      "revision": 0,
+      "dedicatedVideoMemory": 0,
+      "dedicatedSystemMemory": 0,
+      "sharedSystemMemory": 16891613184,
+      "flags": 2,
+      "umdVersion": "10.0.26100.1"
+    }
+  ],
+  "wmiVideoControllers": [
+    {
+      "name": "NVIDIA GeForce RTX 5070",
+      "adapterCompatibility": "NVIDIA",
+      "videoProcessor": "NVIDIA GeForce RTX 5070",
+      "adapterRam": 4293918720,
+      "driverVersion": "32.0.15.9144",
+      "driverDate": "2026-10-01",
+      "pnpDeviceId": "PCI\\VEN_10DE&DEV_2F04&SUBSYS_00000000&REV_A1",
+      "status": "OK"
+    }
+  ],
+  "nvidiaSmi": {
+    "present": true,
+    "location": "%SystemRoot%\\System32",
+    "base": {
+      "exitCode": 0,
+      "stdout": [
+        "index, name, memory.total [MiB], driver_version, pci.device_id, pci.sub_device_id",
+        "0, NVIDIA GeForce RTX 5070, 12227 MiB, 591.44, 0x2F0410DE, 0x00000000"
+      ]
+    },
+    "computeCap": {
+      "exitCode": 0,
+      "stdout": ["index, compute_cap", "0, 12.0"]
+    },
+    "version": {
+      "exitCode": 0,
+      "stdout": ["NVIDIA-SMI version  : 591.44", "NVML version        : 591.44"]
+    }
+  },
+  "cpu": [
+    {
+      "name": "Example CPU 8-Core Processor           ",
+      "manufacturer": "ExampleVendor",
+      "numberOfCores": 8,
+      "numberOfLogicalProcessors": 16,
+      "architecture": 9
+    }
+  ],
+  "cpuFeatures": { "avx": true, "avx2": true },
+  "memory": { "totalPhysicalMemory": 34359738368 },
+  "os": {
+    "caption": "Microsoft Windows 11 Pro",
+    "version": "10.0.26100",
+    "buildNumber": "26100",
+    "osArchitecture": "64-bit",
+    "displayVersion": "25H2",
+    "currentBuild": "26100",
+    "ubr": 6584
+  },
+  "session": { "sessionName": "Console" }
+}

@@ -14,7 +14,11 @@ ts-rs = "12.0.1"
 minisign-verify = "0.3.0"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "charset", "system-proxy"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tokio = { version = "1.54.1", features = ["rt", "macros", "time", "sync"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "time", "sync", "process"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Graphics_Dxgi", "Win32_Foundation"] }
 
 [dev-dependencies]
 minisign = "0.10"

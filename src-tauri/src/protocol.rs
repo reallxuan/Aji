@@ -6,6 +6,7 @@
 
 use aji_core::PositionKey;
 use aji_engine::{AnalysisUpdate, EngineState};
+pub use aji_manager::OsKind;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -53,30 +54,6 @@ pub struct AppInfo {
     pub version: String,
     pub os: OsKind,
     pub arch: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub enum OsKind {
-    Windows,
-    Macos,
-    Linux,
-    Other,
-}
-
-impl OsKind {
-    pub fn current() -> Self {
-        if cfg!(target_os = "windows") {
-            Self::Windows
-        } else if cfg!(target_os = "macos") {
-            Self::Macos
-        } else if cfg!(target_os = "linux") {
-            Self::Linux
-        } else {
-            Self::Other
-        }
-    }
 }
 
 /// A failed request. The UI shows text looked up from `code`; `message` is for logs only.
@@ -216,15 +193,5 @@ mod tests {
             serde_json::to_value(e).unwrap(),
             json!({"code": "internal", "message": "boom"})
         );
-    }
-
-    #[test]
-    fn current_os_matches_the_build_target() {
-        #[cfg(target_os = "macos")]
-        assert_eq!(OsKind::current(), OsKind::Macos);
-        #[cfg(target_os = "windows")]
-        assert_eq!(OsKind::current(), OsKind::Windows);
-        #[cfg(target_os = "linux")]
-        assert_eq!(OsKind::current(), OsKind::Linux);
     }
 }
