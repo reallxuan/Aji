@@ -29,6 +29,7 @@ const KNOWN_CODES: Record<ErrorCode, true> = {
   internal: true,
   engineNotConfigured: true,
   engineNotRunning: true,
+  setupUnknownEngine: true,
 };
 
 function isKnownCode(value: unknown): value is ErrorCode {

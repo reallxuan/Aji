@@ -11,7 +11,8 @@
   "errors": {
     "internal": "Aji ran into an internal error.",
     "engineNotConfigured": "No engine is set up.",
-    "engineNotRunning": "KataGo is not running."
+    "engineNotRunning": "KataGo is not running.",
+    "setupUnknownEngine": "That engine is not in the list."
   },
   "engine": {
     "state": {

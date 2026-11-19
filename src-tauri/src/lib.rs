@@ -9,6 +9,10 @@ use std::time::Duration;
 
 use aji_core::{BoardSize, Komi, Position, Rules};
 use aji_engine::{Engine, EngineOptions};
+use aji_manager::Setup;
+use aji_manager::manifest::{
+    BUNDLED, ClientOptions, MANIFEST_BASES, ManifestStore, http_client, trusted_keys,
+};
 use tauri::{Manager, RunEvent};
 
 pub use ipc::{EVENT_CHANNEL, TauriEventSink};
@@ -80,6 +84,40 @@ fn start_engine(app: &tauri::App) -> Engine {
     })
 }
 
+/// Opens the manifest store and refreshes it in the background. The refresh is never awaited: the
+/// bundled or cached copy answers setup requests until a newer one arrives.
+fn start_setup(app: &tauri::App, version: &str) -> Arc<Setup> {
+    let cache_dir = app
+        .path()
+        .app_local_data_dir()
+        .map(|dir| dir.join("manifest"))
+        .unwrap_or_else(|error| {
+            // A folder of this run's own in the temp directory: nothing is cached between runs,
+            // and no other folder is touched.
+            eprintln!("aji: manifest cache is not kept between runs: {error}");
+            std::env::temp_dir().join(format!("aji-manifest-{}", std::process::id()))
+        });
+    let setup = Arc::new(Setup::new(ManifestStore::open(
+        BUNDLED,
+        cache_dir,
+        trusted_keys(),
+    )));
+    let refreshing = Arc::clone(&setup);
+    let client = http_client(&format!("Aji/{version}"), ClientOptions::default());
+    tauri::async_runtime::spawn(async move {
+        let source = refreshing.manifest().refresh(&client, MANIFEST_BASES).await;
+        let current = refreshing.manifest().current();
+        eprintln!(
+            "aji: manifest {source:?} sequence {}",
+            current.manifest.sequence
+        );
+        for (source, rejection) in &current.rejected {
+            eprintln!("aji: manifest {source:?} rejected: {rejection:?}");
+        }
+    });
+    setup
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
@@ -88,7 +126,8 @@ pub fn run() {
         .setup(move |app| {
             fit_main_window(app);
             let engine = start_engine(app);
-            app.manage(AppContext::detect(version, engine));
+            let setup = start_setup(app, &version);
+            app.manage(AppContext::detect(version, engine, setup));
             Ok(())
         })
         .build(context)

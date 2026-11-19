@@ -94,3 +94,30 @@ config:
 - `reportAnalysisWinratesAs=BLACK` makes every winrate and score lead Black's.
 - `logToStderr=true` sends KataGo's log to stderr, which Aji keeps (the last 50 lines) for crash
   reports.
+
+## Checking the setup recommendation: `aji-setup-report`
+
+`aji-setup-report` prints what the setup wizard would offer on a machine, as pretty JSON:
+
+```sh
+cargo run -p aji-manager --bin aji-setup-report
+```
+
+The output has these keys:
+
+- `manifest`: the copy in use (`source`, `sequence`) and `rejected`, one line for each copy that was turned away.
+- `hardware`: the detected OS, CPU, memory and GPUs.
+- `recommendation`: the backends in order, the default and the fallbacks.
+- `versions`: the engine versions for each backend in the recommendation.
+- `networks`: the networks for the newest engine of the default backend.
+
+Options:
+
+- `--fetch` refreshes the manifest from the published URL first. Without it the program makes no network call and
+  uses the manifest compiled into the binary. Until the manifest is published, a fetch fails and the bundled copy
+  stays in use.
+- `--hardware <report.json>` reads a `HardwareReport` from a file instead of detecting.
+- `--windows-capture <aji-hardware-capture.json>` builds the report from a capture made on a Windows PC, so the
+  PC's recommendation can be checked on another machine. Give at most one of the two options.
+
+The program keeps no cache: it uses a temporary folder that it removes at the end.

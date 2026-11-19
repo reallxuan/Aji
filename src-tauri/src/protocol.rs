@@ -7,6 +7,9 @@
 use aji_core::PositionKey;
 use aji_engine::{AnalysisUpdate, EngineState};
 pub use aji_manager::OsKind;
+use aji_manager::hardware::HardwareReport;
+use aji_manager::manifest::Backend;
+use aji_manager::recommend::{BackendRecommendation, EngineVersionChoice, NetworkList};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -21,6 +24,10 @@ pub enum Request {
     EngineStop,
     AnalysisPause,
     AnalysisResume,
+    SetupDetect,
+    SetupBackends,
+    SetupVersions { backend: Backend },
+    SetupNetworks { engine: String },
 }
 
 /// The answer to a [`Request`], tagged the same way.
@@ -35,6 +42,18 @@ pub enum Response {
         position: PositionKey,
         /// The latest analysis of that position, if any has arrived.
         analysis: Option<AnalysisUpdate>,
+    },
+    SetupDetect {
+        hardware: HardwareReport,
+    },
+    SetupBackends {
+        recommendation: BackendRecommendation,
+    },
+    SetupVersions {
+        versions: Vec<EngineVersionChoice>,
+    },
+    SetupNetworks {
+        networks: NetworkList,
     },
     Ok,
 }
@@ -71,6 +90,7 @@ pub enum ErrorCode {
     Internal,
     EngineNotConfigured,
     EngineNotRunning,
+    SetupUnknownEngine,
 }
 
 #[cfg(test)]
@@ -180,6 +200,65 @@ mod tests {
         assert_eq!(
             serde_json::to_value(ErrorCode::EngineNotRunning).unwrap(),
             json!("engineNotRunning")
+        );
+    }
+
+    #[test]
+    fn setup_request_json_shapes() {
+        for (value, request) in [
+            (json!({"type": "setupDetect"}), Request::SetupDetect),
+            (json!({"type": "setupBackends"}), Request::SetupBackends),
+            (
+                json!({"type": "setupVersions", "backend": "cuda"}),
+                Request::SetupVersions {
+                    backend: Backend::Cuda,
+                },
+            ),
+            (
+                json!({"type": "setupNetworks", "engine": "katago-v1.18.2-metal-macos-arm64"}),
+                Request::SetupNetworks {
+                    engine: "katago-v1.18.2-metal-macos-arm64".into(),
+                },
+            ),
+        ] {
+            assert_eq!(serde_json::from_value::<Request>(value).unwrap(), request);
+        }
+    }
+
+    #[test]
+    fn setup_response_json_shapes() {
+        let versions = serde_json::to_value(Response::SetupVersions { versions: vec![] }).unwrap();
+        assert_eq!(versions, json!({"type": "setupVersions", "versions": []}));
+        let networks = serde_json::to_value(Response::SetupNetworks {
+            networks: NetworkList {
+                networks: vec![],
+                preselected: None,
+                human: None,
+            },
+        })
+        .unwrap();
+        assert_eq!(networks["type"], "setupNetworks");
+        assert_eq!(networks["networks"]["preselected"], json!(null));
+        let backends = serde_json::to_value(Response::SetupBackends {
+            recommendation: BackendRecommendation {
+                platform: None,
+                gpu: None,
+                backends: vec![],
+                default: None,
+                fallbacks: vec![],
+                notes: vec![],
+            },
+        })
+        .unwrap();
+        assert_eq!(backends["type"], "setupBackends");
+        assert_eq!(backends["recommendation"]["default"], json!(null));
+    }
+
+    #[test]
+    fn setup_unknown_engine_code_json_shape() {
+        assert_eq!(
+            serde_json::to_value(ErrorCode::SetupUnknownEngine).unwrap(),
+            json!("setupUnknownEngine")
         );
     }
 
