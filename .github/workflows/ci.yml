@@ -56,8 +56,9 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: rm -rf src/transport/generated
-      # Also regenerates src/transport/generated through ts-rs.
-      - run: cargo test --workspace
+      # Also regenerates src/transport/generated through ts-rs. --no-fail-fast runs every test
+      # binary even after one fails, so one failing binary cannot hide the others.
+      - run: cargo test --workspace --no-fail-fast
       # Linux only: the other OSes rewrite the files but are not gated.
       - name: Generated TypeScript bindings are up to date
         if: runner.os == 'Linux'
