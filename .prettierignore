@@ -7,3 +7,7 @@ pnpm-lock.yaml
 docs
 *.md
 src/transport/generated
+# Recorded test data stays byte-exact.
+**/tests/fixtures
+# Local Claude Code state, such as session worktrees.
+.claude
