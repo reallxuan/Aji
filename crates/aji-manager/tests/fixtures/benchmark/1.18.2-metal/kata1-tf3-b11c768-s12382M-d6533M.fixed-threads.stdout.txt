@@ -1,0 +1,57 @@
+2026-11-19 22:14:59+0800: Running with following config:
+allowResignation = true
+lagBuffer = 1.0
+logAllGTPCommunication = true
+logDir = gtp_logs
+logSearchInfo = true
+logSearchInfoForChosenMove = false
+logToStderr = false
+maxTimePondering = 60.0
+maxVisits = 500
+numSearchThreads = 6
+ponderingEnabled = false
+resignConsecTurns = 3
+resignThreshold = -0.90
+rules = tromp-taylor
+searchFactorAfterOnePass = 0.50
+searchFactorAfterTwoPass = 0.25
+searchFactorWhenWinning = 0.40
+searchFactorWhenWinningThreshold = 0.95
+
+2026-11-19 22:14:59+0800: Loading model and initializing benchmark...
+2026-11-19 22:14:59+0800: Testing with default positions for board size: 19
+2026-11-19 22:14:59+0800: nnRandSeed0 = 8486714053005885920
+2026-11-19 22:14:59+0800: After dedups: nnModelFile0 = networks/kata1-tf3-b11c768-s12382M-d6533M.bin.gz useFP16 auto
+2026-11-19 22:14:59+0800: Initializing neural net buffer to be size 19 * 19 exactly
+
+2026-11-19 22:15:02+0800: Loaded config gtp.cfg
+2026-11-19 22:15:02+0800: Loaded model networks/kata1-tf3-b11c768-s12382M-d6533M.bin.gz
+
+Testing using 800 visits.
+  If you have a good GPU, you might increase this using "-visits N" to get more accurate results.
+  If you have a weak GPU and this is taking forever, you can decrease it instead to finish the benchmark faster.
+
+You are currently using the Metal version of KataGo.
+
+Your GTP config is currently set to use numSearchThreads = 6
+Testing different numbers of threads (board size 19x19): 
+numSearchThreads =  6: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads =  6: 1 / 10 positions, visits/s = 49.84 (16.2 secs)      numSearchThreads =  6: 2 / 10 positions, visits/s = 45.26 (35.6 secs)      numSearchThreads =  6: 3 / 10 positions, visits/s = 45.04 (53.6 secs)      numSearchThreads =  6: 4 / 10 positions, visits/s = 43.84 (73.4 secs)      numSearchThreads =  6: 5 / 10 positions, visits/s = 45.91 (87.7 secs)      numSearchThreads =  6: 6 / 10 positions, visits/s = 46.91 (103.0 secs)      numSearchThreads =  6: 7 / 10 positions, visits/s = 47.78 (117.9 secs)      numSearchThreads =  6: 8 / 10 positions, visits/s = 49.31 (130.6 secs)      numSearchThreads =  6: 9 / 10 positions, visits/s = 50.43 (143.7 secs)      numSearchThreads =  6: 10 / 10 positions, visits/s = 51.03 nnEvals/s = 42.10 nnBatches/s = 14.11 avgBatchSize = 2.98 (157.7 secs) (EloDiff baseline)
+numSearchThreads =  8: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads =  8: 1 / 10 positions, visits/s = 50.23 (16.1 secs)      numSearchThreads =  8: 2 / 10 positions, visits/s = 49.76 (32.4 secs)      numSearchThreads =  8: 3 / 10 positions, visits/s = 48.12 (50.3 secs)      numSearchThreads =  8: 4 / 10 positions, visits/s = 47.59 (67.8 secs)      numSearchThreads =  8: 5 / 10 positions, visits/s = 46.74 (86.3 secs)      numSearchThreads =  8: 6 / 10 positions, visits/s = 47.52 (101.9 secs)      numSearchThreads =  8: 7 / 10 positions, visits/s = 48.41 (116.7 secs)      numSearchThreads =  8: 8 / 10 positions, visits/s = 49.36 (130.8 secs)      numSearchThreads =  8: 9 / 10 positions, visits/s = 50.33 (144.3 secs)      numSearchThreads =  8: 10 / 10 positions, visits/s = 50.81 nnEvals/s = 42.89 nnBatches/s = 10.81 avgBatchSize = 3.97 (158.8 secs) (EloDiff -22)
+numSearchThreads = 10: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads = 10: 1 / 10 positions, visits/s = 50.36 (16.1 secs)      numSearchThreads = 10: 2 / 10 positions, visits/s = 45.02 (35.9 secs)      numSearchThreads = 10: 3 / 10 positions, visits/s = 44.89 (54.1 secs)      numSearchThreads = 10: 4 / 10 positions, visits/s = 44.99 (71.9 secs)      numSearchThreads = 10: 5 / 10 positions, visits/s = 47.16 (85.8 secs)      numSearchThreads = 10: 6 / 10 positions, visits/s = 47.54 (102.1 secs)      numSearchThreads = 10: 7 / 10 positions, visits/s = 48.23 (117.4 secs)      numSearchThreads = 10: 8 / 10 positions, visits/s = 49.64 (130.4 secs)      numSearchThreads = 10: 9 / 10 positions, visits/s = 50.44 (144.3 secs)      numSearchThreads = 10: 10 / 10 positions, visits/s = 50.82 nnEvals/s = 42.53 nnBatches/s = 8.61 avgBatchSize = 4.94 (159.2 secs) (EloDiff -41)
+
+
+Based on some test data, each speed doubling gains perhaps ~250 Elo by searching deeper.
+Based on some test data, each thread costs perhaps 7 Elo if using 800 visits, and 2 Elo if using 5000 visits (by making MCTS worse).
+So APPROXIMATELY based on this benchmark, if you intend to do a 5 second search: 
+numSearchThreads =  6: (baseline) (recommended)
+numSearchThreads =  8:   -22 Elo
+numSearchThreads = 10:   -41 Elo
+
+If you care about performance, you may want to edit numSearchThreads in gtp.cfg based on the above results!
+If you intend to do much longer searches, configure the seconds per game move you expect with the '-time' flag and benchmark again.
+If you intend to do short or fixed-visit searches, use lower numSearchThreads for better strength, high threads will weaken strength.
+If interested see also other notes about performance and mem usage in the top of gtp.cfg
+
+Running additional tests of a few other settings at numSearchThreads = 6.
+Re-measuring the current recommendation as a baseline:
+numSearchThreads =  6: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads =  6: 1 / 10 positions, visits/s = 58.30 (13.8 secs)      

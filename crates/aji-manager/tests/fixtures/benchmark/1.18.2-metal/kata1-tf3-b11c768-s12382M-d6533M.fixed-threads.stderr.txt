@@ -1,0 +1,12 @@
+Metal backend 0: GPU mode - using MPSGraph (GPU)
+Metal backend: MPSGraph initialized on Apple M5 (mask optimized)
+Metal backend 0: Initialized MPSGraph GPU-only mode
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module
+Failed to import MPS module

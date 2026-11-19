@@ -17,3 +17,6 @@ were captured separately and are unedited; no home path appears in them.
   summary block, which makes it the truncated-output case for the parser.
 - With the transformer networks (`tf2`, `tf3`), stderr repeats `Failed to import MPS module`.
   The convolutional networks do not print it.
+- `kata1-tf3-b11c768-...fixed-threads.*` used `-t 6,8,10 -v 800 -n 10` instead of auto-tuning,
+  which is the shape M4's own benchmark run takes. It has a full summary block and was stopped
+  during KataGo's optional extra tests (half batch size, two server threads) that follow it.
