@@ -2,5 +2,6 @@
 
 pub mod hardware;
 pub mod manifest;
+pub mod recommend;
 
 pub use hardware::OsKind;
