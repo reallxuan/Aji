@@ -5,7 +5,7 @@
 - Specs: [project charter](../specs/2026-11-19-aji-project-charter-design.md) (source of truth), [interface design](../specs/2026-11-19-aji-ui-design.md)
 - Markers follow the charter: **[Decided]**, **[Proposed]**, **[To verify]**.
 
-This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md) and [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md).
+This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md), [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md) and [M3 Manifest, hardware detection, recommendation](2026-11-19-phase-1-m3-manifest-hardware.md).
 
 ## 1. What Phase 1 must deliver
 
@@ -35,8 +35,8 @@ Only O3 is needed before M1 starts, because Task 1 writes the identifier into th
 | O1 | Main-screen scope in Phase 1: follow the charter's phasing (section 1 above) or build everything the interface design draws | Follow the charter | M7 |
 | O2 | Where the game record lives: in the Rust backend as a game session, with the UI receiving snapshots; or in the UI, with `aji-core` compiled to WebAssembly | Rust backend (section 3.1) | M6 |
 | O3 | Bundle identifier. It becomes part of the data-directory path on every OS and is costly to change after release | `io.github.reallxuan.aji` | M1 |
-| O4 | Which network the wizard preselects (interface design 7, open item) | Keep Elo order, preselect by GPU tier | M3 |
-| O5 | Sign the manifest so a mirror cannot swap checksums | Ed25519 signature, public key built into Aji; owner holds the private key as a CI secret of the manifest repository | M3 |
+| O4 | Which network the wizard preselects (interface design 7, open item) | **Decided 2026-11-19:** keep Elo order and preselect the top row, the highest-rated network on katagotraining.org that the chosen engine can load, on every machine; no GPU tiers and no local measurement | M3 |
+| O5 | Sign the manifest so a mirror cannot swap checksums | **Decided 2026-11-19:** minisign (Ed25519) signature made in the manifest repository's CI from a secret the owner created; public key built into Aji, with room for a second key | M3 |
 | O6 | Chinese font size (interface design 3, open item) | Subset LXGW WenKai to GB2312 plus every character in the `zh-CN` locale, WOFF2, Regular and Medium; characters outside the subset fall back to the system Chinese font | M5 |
 | O7 | Failure states, settings, and the opened game library are not drawn | Designs for failure states and minimal settings are proposed at the start of M5 and shown to the owner before they are built; the library stays closed in Phase 1 (title shown, chevron inert) | M5 |
 | O8 | App icon | Tauri's placeholder until the owner supplies one | M8 |
@@ -156,6 +156,8 @@ Detailed plan: [2026-11-19-phase-1-m2-analysis-skeleton.md](2026-11-19-phase-1-m
 **Exit:** on both machines, the CI-built app with a hand-placed KataGo shows live candidates for the empty board. Killing KataGo shows the crashed state with its stderr. Quitting Aji leaves no KataGo process behind.
 
 ### M3. Manifest, hardware detection, recommendation
+
+Detailed plan: [2026-11-19-phase-1-m3-manifest-hardware.md](2026-11-19-phase-1-m3-manifest-hardware.md). S2 (the Metal build) and the Mac half of S3 are part of it; A1 and A2 are done.
 
 - Manifest schema v1: engines (version, release date, platform, backend, CUDA version where relevant, files, required runtimes), runtimes, and networks (name, Elo, release date, size, kind: main or human SL). Every file has several URLs, a size and a SHA-256. A copy is bundled into the app at build time. The fetched copy is used only if its signature checks (O5).
 - Manifest repository content: a generator script that reads KataGo release assets and the network list, downloads each file once to compute its checksum, and writes the manifest.

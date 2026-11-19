@@ -198,7 +198,7 @@ A five-segment progress line sits at the top of the panel on every step. Each st
 - The version step comes after the backend step because the available versions depend on the backend. **[Proposed]** At the time of writing the newest CUDA build is 1.18.2 while every other backend stops at 1.18.1, and 1.17.2 exists for TensorRT only. The list shows only versions that ship the chosen backend for the detected platform. The versions and dates in the mockup are real, read from the KataGo releases on 2026-11-19.
 - The network list comes from Aji's manifest, which is built from katagotraining.org. The names, ratings and dates in the mockup are real values read from that page on 2026-11-19.
 - The download source selector is on the install step, where a slow download is noticed, not on a step of its own. **[Proposed]**
-- **[Open]** Which network is preselected. The highest-rated network is also among the slowest. The proposal is to keep the list in Elo order but preselect by GPU tier; the owner has not answered.
+- **[Decided 2026-11-19]** Which network is preselected: the top row, the highest-rated network on katagotraining.org that the chosen KataGo version can load, on every machine. There are no GPU tiers and no local measurement. On 2026-11-19 that is the transformer `kata1-tf3-b11c768-s12382M-d6533M`.
 - **[Open]** The list has no size or speed column, because the source page publishes neither. Both should be added once the manifest carries them, since strength against speed is the real choice.
 - **[Open]** Failure states (download error, runtime will not load, fallback to another backend) are described in the charter but not drawn.
 
