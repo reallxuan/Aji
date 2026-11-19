@@ -1,0 +1,1490 @@
+[
+  {
+    "tag_name": "v1.18.2",
+    "published_at": "2026-08-30T01:54:00Z",
+    "assets": [
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45545991,
+        "digest": "sha256:90175e19e0706ba14527b5e78d478fd6f5c5ea71be56fa6ea4551f68c8453724",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn8.9.7-linux-x64.zip",
+        "size": 50783789,
+        "digest": "sha256:16c69f42291fe8c6d196d722d92299a5b04de852611d6c022a0dd9e0e83b5688",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6970524,
+        "digest": "sha256:effd95d2bc6c2e2cea14c3eb8ce04d7af90c3279e9577642d6ce75051edf2d39",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn8.9.7-windows-x64.zip",
+        "size": 9735980,
+        "digest": "sha256:40b8f592eae0064e73a6fc7b07e52e91fe0c6b395533ec3632b5b2b2d6adb4e8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45637762,
+        "digest": "sha256:9868d6709726bd748d617c739afaaa91b56f42cb8f013affb9b821f852fba3b2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn9.8.0-linux-x64.zip",
+        "size": 50893347,
+        "digest": "sha256:3e30b486b7bc38287eeead350aa832ff8ca50d1f0c0a83b5409cabf8a3bc9c5d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6981967,
+        "digest": "sha256:46b405d94f5ce5ac0f294c3c4e3ef4562f991a4e6f5ba74dee497142f384bad2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.1-cudnn9.8.0-windows-x64.zip",
+        "size": 9748641,
+        "digest": "sha256:b8e40a7e278be20418d8be8965d47f181841a00d99b56d4a421f070391f85b4d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.1-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45644685,
+        "digest": "sha256:d9f7279ca37bf3bdcc21db34f16bd4c7b343b18eef9ef6b0cc72b0b2cef71f5b",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn8.9.7-linux-x64.zip",
+        "size": 50878339,
+        "digest": "sha256:20abe1e5a5a8edff97c833b476563f93dfc2b08689fca6f963e215c1be08481c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 7059746,
+        "digest": "sha256:34a13ea82f281a33b6fd93dc700da03151e8872270b9521f81a56f2f7c1ab244",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn8.9.7-windows-x64.zip",
+        "size": 9821118,
+        "digest": "sha256:068c871926ca1a0d0f5589ca68beb7fe776a9a25a301f1e4d9eaf6b416977fe9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45729700,
+        "digest": "sha256:649f62a3abbe21d5c479509c7fc10862a15790196969db1309450c260bdf425d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn9.8.0-linux-x64.zip",
+        "size": 50958671,
+        "digest": "sha256:8c39d9ac1053f0e0eff0b0d376fcc2b7503e8caf44020710dda758de53a802f8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7073110,
+        "digest": "sha256:a0a6300fdcbedd67d5a22533ecad00570c5fed659cb4c3f3ae6c347bbacea3c8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.5-cudnn9.8.0-windows-x64.zip",
+        "size": 9834578,
+        "digest": "sha256:2d88fc26f7a64ae02278240eca87d7c56f149a88674f76b716faf5fc4690f5ac",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.5-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.8-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 46146059,
+        "digest": "sha256:6d005d2ec8530b5f19f870f2aa794107e6af9d80f48e43420cd9a3b49dfabbca",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.8-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.8-cudnn9.8.0-linux-x64.zip",
+        "size": 51350638,
+        "digest": "sha256:2cb197fc9bc2050f29112abb5b83cdbad63936cb4605d6e199772aedc9806c02",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.8-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7412623,
+        "digest": "sha256:1651446106766eef3c48f6b0769bdf13df091244f08dbbd7c3e7055662170c3a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10173580,
+        "digest": "sha256:69a94227afaaf268634134805b9469f9f482760ee6c986d315d89525de0eefa2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-linux-x64+bs50.zip",
+        "size": 45671788,
+        "digest": "sha256:353ec6b4e7dc7a6ee7df41c4c9683240e0a0da1afb8adef512ca9d84bfd83397",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-linux-x64.zip",
+        "size": 50896760,
+        "digest": "sha256:f75ad848543014c3ff8df6e9d378efc078c07d458c5e6def06bbb5df8accb169",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64+bs50.zip",
+        "size": 7055066,
+        "digest": "sha256:bc3ce7b5ad240e31733c14355035178f6def4ad68bbf086d6e6f74a4b13ac6ff",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9825374,
+        "digest": "sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.18.1",
+    "published_at": "2026-08-24T04:27:54Z",
+    "assets": [
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45535452,
+        "digest": "sha256:b6e66c8b0d81406e4a28291f8cae4cd849b533ac3120480d2f5fe5c49d7b135f",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn8.9.7-linux-x64.zip",
+        "size": 50790097,
+        "digest": "sha256:79700b8e7086edcbb94b1eaca428e6beee16c38e89c056a9a5681b015f9e020e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6929670,
+        "digest": "sha256:61e92800f564ec456b87c553c84654b39cb96c7b7000094e09eb60e2acd205ef",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn8.9.7-windows-x64.zip",
+        "size": 9697364,
+        "digest": "sha256:e0ae8637b88aa40b18d994e44a78fed7233d17142589e9c172a6f79b251a47f9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45589869,
+        "digest": "sha256:37dcfc0190d968feb8ec504493e9d60bc5b20994369e7235208bafceef5a95c3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn9.8.0-linux-x64.zip",
+        "size": 50870294,
+        "digest": "sha256:242e6720e085a67bbb6605408fbcf607812185e40cea5f5fe4090e71201a49c0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6943930,
+        "digest": "sha256:50702ff2d91384ab4f73f43dd721cabc26506dc7cf05aa1341accf055f3dacce",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.1-cudnn9.8.0-windows-x64.zip",
+        "size": 9711098,
+        "digest": "sha256:2a45cc69057d4d73cf1e7164023e70eb093e3bf61a16897be1a15717e5b2c1e4",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.1-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45605411,
+        "digest": "sha256:e07bceecbbeb0238cb6b30371f93a7828ac45c91d24ed7dab5cbf632ebfdb669",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn8.9.7-linux-x64.zip",
+        "size": 50831816,
+        "digest": "sha256:6485972083e39347dd0bbeda2fab38cbe4d8675df0c7b5b741e8bb219cdb4df0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 7022292,
+        "digest": "sha256:a022febcf9a07764e40adbe115f8c53290106d2f76a3f9039b6e8dd8e96a411b",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn8.9.7-windows-x64.zip",
+        "size": 9783871,
+        "digest": "sha256:973ac4a75f1168dd43d6433b269922d66d8d14ce2c91dfe6551422f228acfa8f",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45658267,
+        "digest": "sha256:51dc2d67cc7a4240d2529960a5d5e1b64772d5eb15290a56d3f568283502cb59",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn9.8.0-linux-x64.zip",
+        "size": 50942450,
+        "digest": "sha256:32a8104b20bed3c231b2239f9c9b5de88f86340e4257d31e7434d9042a36a4ee",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7035766,
+        "digest": "sha256:3af81e0a50d77001cd6a274531ed6d4047790db6fecec14489c9f42643b667c0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.5-cudnn9.8.0-windows-x64.zip",
+        "size": 9796756,
+        "digest": "sha256:d9cdd781fe1eb5760ef24342bf6f2d5d70317fe1457133c20589f817c8a921d9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.5-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.8-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 46069070,
+        "digest": "sha256:ec5b756e983e9952b0220d46a348de197d57c00eeeb67c137c64821bb82c4f34",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.8-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.8-cudnn9.8.0-linux-x64.zip",
+        "size": 51344405,
+        "digest": "sha256:f84222594101abbde8a0df885c54fd8fcfe90a3c1a9ab140e0354fc28cbfa61c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.8-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7373230,
+        "digest": "sha256:b8eef60ea732bc25f86515f32a0f836127fdbf8e6fbf7c1e572efecfc7452621",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10135501,
+        "digest": "sha256:8caabc5675950f52d285a686c19727f7a56a982313a7f055ade060ba78df552e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda13.2-cudnn9.24.0-linux-x64+bs50.zip",
+        "size": 45581922,
+        "digest": "sha256:d11484cb859febbc18cc34df921d1fd7843f81f7106bfb535d54d4391588ed7c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda13.2-cudnn9.24.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda13.2-cudnn9.24.0-linux-x64.zip",
+        "size": 50873776,
+        "digest": "sha256:7294a8d0717726d7a8cc33015d2eca71496cfbef6c0fbb69e5f30d6711f9f689",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda13.2-cudnn9.24.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64+bs50.zip",
+        "size": 7022291,
+        "digest": "sha256:9bb8a2e122b7b135d0e5810f237880e1f1b9e4a7863d9384dc15e1ef0e1d5d22",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9784089,
+        "digest": "sha256:7dcb2427726aaa2a47322a1f44759eeb0ab8125f5dc7a15f478736df1837d99c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigen-linux-x64+bs50.zip",
+        "size": 36523433,
+        "digest": "sha256:d5ba96836e3dd1040d743b8a1434bdb70fbc257b403070033b16028019f00783",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigen-linux-x64.zip",
+        "size": 41780528,
+        "digest": "sha256:993b642601e806037003d11e43775e7b4fc65281aed9b9469b7122f18fc16811",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigen-windows-x64+bs50.zip",
+        "size": 3136207,
+        "digest": "sha256:e299cde01e8394bdb756a627a56fd9fe433f79a5179c8546888d380241796f04",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigen-windows-x64.zip",
+        "size": 5903072,
+        "digest": "sha256:074485cf150c38aa3bb14ac9f54f2952ffefbceb44673709bbb8a83650bf95d6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigenavx2-linux-x64+bs50.zip",
+        "size": 36557304,
+        "digest": "sha256:95887a0b52d47bdfae6181d2aad255bf222395f144a79319d0bc46dc8ad0b527",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigenavx2-linux-x64.zip",
+        "size": 41821245,
+        "digest": "sha256:33e79780dbe3bf6ee859e16f64952cdfc90f7210c8f71ad978ffcba85ad20d79",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigenavx2-windows-x64+bs50.zip",
+        "size": 3135786,
+        "digest": "sha256:b350b4fc01e218e4a4e09deece80f5954da70f16d5e799d5bef5456ffc5a342e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-eigenavx2-windows-x64.zip",
+        "size": 5899607,
+        "digest": "sha256:0d62ffa41ee04dd89dd1b80fe45e306c837231cb1e2dccb4f5780d0ca7c313db",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx-openvino-linux-x64+bs50.zip",
+        "size": 120159120,
+        "digest": "sha256:9d2524e63fae702f8099f6523c7f68f3f81ef77ff286a1a9ff6229055124587c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx-openvino-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx-openvino-linux-x64.zip",
+        "size": 120160187,
+        "digest": "sha256:e8884c576117f901d96184c9158db21c17a012a7b3093964a65aaf79fe0b87f9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx-openvino-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx-openvino2026.2.1-windows-x64+bs50.zip",
+        "size": 84223848,
+        "digest": "sha256:4309a1293f5b0a3e1a08145e598964100a07668b4da64db7e7238550b15eed7d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx-openvino2026.2.1-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx-openvino2026.2.1-windows-x64.zip",
+        "size": 86695392,
+        "digest": "sha256:3bde52d034e59949d8527cfafdff5a854425048faca0a448788766dfd79bd039",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx-openvino2026.2.1-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx1.24.4-directml-windows-x64+bs50.zip",
+        "size": 21112327,
+        "digest": "sha256:99422e506a97ee9b2ad79b82d1b9c427a92bc4d0462eb828782ffa180402a955",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx1.24.4-directml-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-onnx1.24.4-directml-windows-x64.zip",
+        "size": 23584379,
+        "digest": "sha256:cc5ab3923344a2c35b023307794850b5453f1f7ebbd80b7372bf4485d9ce37ee",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx1.24.4-directml-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-opencl-linux-x64+bs50.zip",
+        "size": 36060094,
+        "digest": "sha256:dfe6284970c81f4708cb0738e0d88c2606e28dcdbddc0089394bf832888f62d8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-opencl-linux-x64.zip",
+        "size": 41325151,
+        "digest": "sha256:81ecea81526adb412a392ec728dbdf9627e754df7cf1a7a3dbb8ef220182184a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-opencl-windows-x64+bs50.zip",
+        "size": 3235507,
+        "digest": "sha256:12896c7dd4c418166e17748d3a053cc4b7be72e103f68ff793c3fdc6cb6f3b22",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-opencl-windows-x64.zip",
+        "size": 6004137,
+        "digest": "sha256:1710db1903ab921aa6837a9599c8474f8a59f057650217c5d9bc125ee393a9ff",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx103X-windows-x64+bs50.zip",
+        "size": 214560357,
+        "digest": "sha256:ec1f21a1f9b424036cc725fecfee682547de4b94fcf3b9a7bc3e32fab61e9a04",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx103X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx103X-windows-x64.zip",
+        "size": 217380864,
+        "digest": "sha256:1786cf55cd474cc240c12f65ba2d9971e35f8d057bd019ae570ec615476c9d59",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx103X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx110X-windows-x64+bs50.zip",
+        "size": 218658487,
+        "digest": "sha256:2e57a24cf7edc2e79ffadaeeb1b9084ee5a8823f807c4848b9f71c0c86c40747",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx110X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx110X-windows-x64.zip",
+        "size": 221478994,
+        "digest": "sha256:2b89770a36dafe66ed90731aceb7f6f84ba082f50da39b9ef0d606c4d2af481a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx110X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx1151-windows-x64+bs50.zip",
+        "size": 173332686,
+        "digest": "sha256:e83f56503b1645b83fe40d48543b827399aa82388ea3c03c090211eaaceb8375",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx1151-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx1151-windows-x64.zip",
+        "size": 176153193,
+        "digest": "sha256:e9c7496825ed88c8312191e6df4ae185e0363014fe6e689856da2144743ec142",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx1151-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx120X-windows-x64+bs50.zip",
+        "size": 554041622,
+        "digest": "sha256:55214e66169bd3b3dacf1e8d3055cf63c469f26527783a76781bf2afde87cd72",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx120X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.13-gfx120X-windows-x64.zip",
+        "size": 556862129,
+        "digest": "sha256:f98f20b204d2ebb996959764e94453ccf996099ea6f46f377d6649180c5c38b3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx120X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.14.0-linux-x64+bs50.zip",
+        "size": 83487052,
+        "digest": "sha256:17ef4bb48bf543bd25dcfddece92f585db792025a1bb1a898aca494000851647",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.14.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.14.0-linux-x64.zip",
+        "size": 85571470,
+        "digest": "sha256:f392514b335489a1a99158171f2dd6b00aee5cfcec31f097d59e098f1cf100b4",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.14.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.2.4-linux-x64+bs50.zip",
+        "size": 18909079,
+        "digest": "sha256:ec949553b76dd1448ee6eaf22f5b3aacd48ce85aedbf369e9ec390f83f26f7ce",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.2.4-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-rocm7.2.4-linux-x64.zip",
+        "size": 20848171,
+        "digest": "sha256:599c3f121e33ac891ea1b205e7b4b41ad5f4ccf9f83421cb4fb738395718e453",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.2.4-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.16.1-cuda13.2-linux-x64+bs50.zip",
+        "size": 37918499,
+        "digest": "sha256:1967c2dd6c18beda584a40981d634ba87dc7ce3aebe52c3d6702c3f55dd957c6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.16.1-cuda13.2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.16.1-cuda13.2-linux-x64.zip",
+        "size": 43118123,
+        "digest": "sha256:897aff709fc9dc071a6ab8c6f5b66715a49552b52c7d777dacb1711c997cbdbd",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.16.1-cuda13.2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.16.1-cuda13.2-windows-x64+bs50.zip",
+        "size": 5731366,
+        "digest": "sha256:66e27c299321d36d03f36facad175b6ed5891864e90c3a2afa463290b9eb966a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.16.1-cuda13.2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.16.1-cuda13.2-windows-x64.zip",
+        "size": 8497675,
+        "digest": "sha256:4315a0a154f41765ae511a647fadb0477b4f736006a5e6093cefa683ddaaa343",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.16.1-cuda13.2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.2.0-cuda12.5-linux-x64+bs50.zip",
+        "size": 37857302,
+        "digest": "sha256:18eeb8cd36189d0a077500219dcdd16fb1cbbfc1bbcb1b95720385735b828423",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.2.0-cuda12.5-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.2.0-cuda12.5-linux-x64.zip",
+        "size": 43046369,
+        "digest": "sha256:9c7fd47de965edb945e712d0144b09b0cc1f29311311378ce230806b822d8331",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.2.0-cuda12.5-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.2.0-cuda12.5-windows-x64+bs50.zip",
+        "size": 5616744,
+        "digest": "sha256:b03db61e396afed133f554ee89807e7ad63363608188a8e49a6f831f41d740b3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.2.0-cuda12.5-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.2.0-cuda12.5-windows-x64.zip",
+        "size": 8378417,
+        "digest": "sha256:c33cbdb8a369bfebc5f8ac38950549d09e44432c411dba48e3471fadb08f9004",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.2.0-cuda12.5-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.9.0-cuda12.8-linux-x64+bs50.zip",
+        "size": 37883720,
+        "digest": "sha256:13f2ab4b2290e0e2ee73aa3f248132b870770fc5a89d3d90b6c21f2112a7a1c4",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.9.0-cuda12.8-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.9.0-cuda12.8-linux-x64.zip",
+        "size": 43122191,
+        "digest": "sha256:dbf9d2929f980f15fcec3be598f052f9c9ae6ac1e1ac33c120e9c4df40facfe6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.9.0-cuda12.8-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.9.0-cuda12.8-windows-x64+bs50.zip",
+        "size": 5615440,
+        "digest": "sha256:00a4c02b91b34be977f3ea0e65c83ac4d5fd31a8e72031ec830289a77c1bcf62",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.9.0-cuda12.8-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.1-trt10.9.0-cuda12.8-windows-x64.zip",
+        "size": 8375820,
+        "digest": "sha256:49b7229803b2ccee5205cc9d1f7b1a37790469405324de5e5acaafe7a8a9172a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-trt10.9.0-cuda12.8-windows-x64.zip"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.18.0",
+    "published_at": "2026-08-22T15:51:35Z",
+    "assets": [
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45458808,
+        "digest": "sha256:af86e4f916f02ec32901553283ee23a176d7baed24309534961b0b4e2ae5d2ef",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn8.9.7-linux-x64.zip",
+        "size": 50662353,
+        "digest": "sha256:88a5a424c8cab9ee5a35c475a6c22633a9f5a43ea959878cb786c6f73955a7d6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6923250,
+        "digest": "sha256:cb74f62a29cab3358968a473a34211e3b2a3126f1e7588d610ab10af828c0681",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn8.9.7-windows-x64.zip",
+        "size": 9688460,
+        "digest": "sha256:ff3671112ebed8ee1bb4ae43c8614a0d29c99204ed15a57b3b9b44bdaeb17179",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45538177,
+        "digest": "sha256:29ca2a515cfab5386f950383c85d143a19a8d9f57ef964b2b13bf99f71edaaf8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn9.8.0-linux-x64.zip",
+        "size": 50796537,
+        "digest": "sha256:a152b3218f0f7f7bfc80d3e0522b659f7464cfe53c35948fcd3268abcd418ebf",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6938933,
+        "digest": "sha256:1b56bf732206cfc1f962913bb4ffb6ebe14620d23bac00b181d945e03f359359",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.1-cudnn9.8.0-windows-x64.zip",
+        "size": 9702565,
+        "digest": "sha256:0564135b049c9be3ecb754a83987b762e7164d3313cdaeb0206af0c155b24ee7",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.1-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 45528762,
+        "digest": "sha256:20a8a8da3012443ca538bbcd867648bef025995c9df2087f59de8ca94f2d7629",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn8.9.7-linux-x64.zip",
+        "size": 50780144,
+        "digest": "sha256:c28644599616189236a1e7522d13616c77472d10921668c55c5a4bb2e373d179",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 7015578,
+        "digest": "sha256:f7b1b44f4b29327859c02912f20960a637d9180ad84b2306e385f51ceb99efd0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn8.9.7-windows-x64.zip",
+        "size": 9774123,
+        "digest": "sha256:cfb8ca46837262921c1b315ed46698930842293fe2042985ef50dcf13f630565",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 45596064,
+        "digest": "sha256:b328294c5f8b264f5682e4706a415e2482795085323401aed2190df8bc94db97",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn9.8.0-linux-x64.zip",
+        "size": 50858883,
+        "digest": "sha256:e9404e58f493956dfe9471b8a9eec64e1711af8078c40ad8ec58048c4f91408e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7029822,
+        "digest": "sha256:e0f8fe92bbb83a2981c83621e9b8202156abec7934ab701155f417ead0e983b8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.5-cudnn9.8.0-windows-x64.zip",
+        "size": 9786712,
+        "digest": "sha256:f518d91f7a0175d97200358639e7978826d98a53d2e7376afb7d1f23268e5ba6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.5-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.8-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 46001724,
+        "digest": "sha256:20a2a7214a45b6aabf99b7ccf1dca560b1348e848b2012487b6a5b71a0f56d4a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.8-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.8-cudnn9.8.0-linux-x64.zip",
+        "size": 51238737,
+        "digest": "sha256:6d4720fed7362c8dc71e51932489a9ab53b89e9e98f2ddac339d7e0d408e6733",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.8-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 7364746,
+        "digest": "sha256:4e64767b876839eda88bc4824860187cb65e1182a7eb97a1f98d9e5557bf527e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10129879,
+        "digest": "sha256:6a3e2602d70e8c7fbcc6d5b914f5a2465a1bf0d030df99e6832ee7da28ec4d8d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda13.2-cudnn9.24.0-linux-x64+bs50.zip",
+        "size": 45531672,
+        "digest": "sha256:79291689ceac49c40a13c265d3f023e40ef7f488bb9d61635cf2c454e481aaaa",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda13.2-cudnn9.24.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda13.2-cudnn9.24.0-linux-x64.zip",
+        "size": 50782814,
+        "digest": "sha256:1e117626895aa164d3cceddc750fe9bad29493d32bbb333debad5210af734a02",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda13.2-cudnn9.24.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64+bs50.zip",
+        "size": 7008971,
+        "digest": "sha256:16f1b463762bead837dfa0a8a64f31e60e8a3012c1bae527dee149fb4b67cb08",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9779228,
+        "digest": "sha256:8406aeb855bfe9c70ac6b9e07651849bc15864aef415e60af84bd4961a25b5b5",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigen-linux-x64+bs50.zip",
+        "size": 36443579,
+        "digest": "sha256:57f777eb9fb880af723067bc86013b99f575c627b648b0b284c294b1b2a657ef",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigen-linux-x64.zip",
+        "size": 41693965,
+        "digest": "sha256:3e062b4ba90d5a2d986bc0312a61e6b7abdf92235e59db13f1febb30f643297d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigen-windows-x64+bs50.zip",
+        "size": 3130491,
+        "digest": "sha256:9d4bcc4d02d95328de3967039543f152bf9a845ac790ea078bef1c00cb9955a7",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigen-windows-x64.zip",
+        "size": 5897043,
+        "digest": "sha256:d89c7cddc2c5543b6316d9094b7748cbc28ddddf8aa4dc4304a5b78032476221",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigenavx2-linux-x64+bs50.zip",
+        "size": 36498881,
+        "digest": "sha256:ca71081edc109b28ba0b232c55c695d13d33181031f9450fcb1dabfbb39b9b46",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigenavx2-linux-x64.zip",
+        "size": 41740115,
+        "digest": "sha256:a98c0a2d8f76fcf06722b7fb789b47df2b21dd2255e72c62735f88ddcbd90bc5",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigenavx2-windows-x64+bs50.zip",
+        "size": 3129103,
+        "digest": "sha256:843be11bf88e4f9dc9633fd32e354462dfb2f60e536c2ca6d8cd32bb33172c92",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-eigenavx2-windows-x64.zip",
+        "size": 5893172,
+        "digest": "sha256:6b861f7391efa3381218d5fbd227c44d3065d9fb38cf4b315e1b5dee9f3ac13f",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx-openvino-linux-x64+bs50.zip",
+        "size": 120072683,
+        "digest": "sha256:53972d4e1d348b505d2cbeb1ca4a39429f1c973029f34c27f0c897679d091c76",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx-openvino-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx-openvino-linux-x64.zip",
+        "size": 120064480,
+        "digest": "sha256:ab609758de954cd788614d0a300b8c997216c9b8a19e8c11bc56a29fe0d84475",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx-openvino-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx-openvino2026.2.1-windows-x64+bs50.zip",
+        "size": 84218572,
+        "digest": "sha256:c3c42db9aab415faa40dde0b499afc2ec8f55cdc8f3ef720e42df3eab5aacfb8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx-openvino2026.2.1-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx-openvino2026.2.1-windows-x64.zip",
+        "size": 86689235,
+        "digest": "sha256:0b472fe3f7c43f87509a514c4f86ee7482602f791c53b85274a227a4449a126c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx-openvino2026.2.1-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx1.24.4-directml-windows-x64+bs50.zip",
+        "size": 21107696,
+        "digest": "sha256:4d4bac60913977bac506d31a484aab017f43ce62ee8e903ebde78a882722a4b2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx1.24.4-directml-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-onnx1.24.4-directml-windows-x64.zip",
+        "size": 23578481,
+        "digest": "sha256:94b9100a167d6c68c58647c26a0b73cecfed3a59a6e707fca053be80d619aa27",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx1.24.4-directml-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-opencl-linux-x64+bs50.zip",
+        "size": 35982768,
+        "digest": "sha256:2bb05925b360581ca63069f6a7addab5787495867613eb12426b7a1c42a30c27",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-opencl-linux-x64.zip",
+        "size": 41218436,
+        "digest": "sha256:efb913fce8088e77867d890fc05b127cbb375f18fd1cf6636db4ee65d49a31a2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-opencl-windows-x64+bs50.zip",
+        "size": 3229554,
+        "digest": "sha256:97f61e1c99cf609f9c3bd35a52f9725fa0eb87ac7f9bbe3659c7b55a0d4db852",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-opencl-windows-x64.zip",
+        "size": 5998887,
+        "digest": "sha256:2224a32cb1cf9960d9b7caf9a53f049ccab7c7c822023171bd526fae120d7b54",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx103X-windows-x64+bs50.zip",
+        "size": 214554938,
+        "digest": "sha256:006ea07f3396ea66793e835e4caec091d5a5552477ca3c766487847ce8a045d2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx103X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx103X-windows-x64.zip",
+        "size": 217370664,
+        "digest": "sha256:7bcd6d5ef265b32ff1eaf8aab1d3bd159a60d0b836558813fe7e1072885bea31",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx103X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx110X-windows-x64+bs50.zip",
+        "size": 218653068,
+        "digest": "sha256:b9f967c3474c8c945a2eda04c408909b318cb3ae52191ef02af42f6b6223f10a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx110X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx110X-windows-x64.zip",
+        "size": 221468794,
+        "digest": "sha256:17bf8a8304eae7edcaed867ee67444d2a572cf369d18786713cfd70c8ec7a238",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx110X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx1151-windows-x64+bs50.zip",
+        "size": 173327267,
+        "digest": "sha256:141131cc2fa5b5c0ff86ec20f3e84a729608bb92d05cdeef8ef4b611b17f1a74",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx1151-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx1151-windows-x64.zip",
+        "size": 176142993,
+        "digest": "sha256:b5858457cbeb6f439c1c300cbc6f16b6ee0836b489b7b632cfb42fbc36c0108e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx1151-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx120X-windows-x64+bs50.zip",
+        "size": 554036203,
+        "digest": "sha256:dc8b0684903fe266e67e6b5133b9182e5a3689d498921345ae85b562cd808d68",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx120X-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.13-gfx120X-windows-x64.zip",
+        "size": 556851929,
+        "digest": "sha256:1ea8e68e3d7d767ace51e2f12015aadf0a6991f4737ec144c1875b71b3386779",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx120X-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.14.0-linux-x64+bs50.zip",
+        "size": 83376096,
+        "digest": "sha256:ab2675571499906c63bcb468ab412d7321fc5773f4a206670fe169f1938ff242",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.14.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.14.0-linux-x64.zip",
+        "size": 85472397,
+        "digest": "sha256:a3bcca271b20add46a9de8905796b43a1eb07085f0264f63bc8c253ddf5815d0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.14.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.2.4-linux-x64+bs50.zip",
+        "size": 18849442,
+        "digest": "sha256:e2125608bae3f2cd1cb43e8429679da3339ea5632b269b502c1b864312231eb8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.2.4-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-rocm7.2.4-linux-x64.zip",
+        "size": 20788836,
+        "digest": "sha256:42c05ad7b17d465bb2548a16f5e8144b89c3e3a1d919d1ba4587f27cf1c4ac3b",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.2.4-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.16.1-cuda13.2-linux-x64+bs50.zip",
+        "size": 37816368,
+        "digest": "sha256:3f57936333373b6b8c5b5bedbbbc12095b3171857dbecb925d8e50eebc129d46",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.16.1-cuda13.2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.16.1-cuda13.2-linux-x64.zip",
+        "size": 43070593,
+        "digest": "sha256:1c0db469ba40402e341e68338b14a363217fbd0b9b9039457f481c706baea2c2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.16.1-cuda13.2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.16.1-cuda13.2-windows-x64+bs50.zip",
+        "size": 5723932,
+        "digest": "sha256:055aa2474304abc483cd1f0e028ab32524bffd98ba2ebf1c3243fb7eef7ab16c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.16.1-cuda13.2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.16.1-cuda13.2-windows-x64.zip",
+        "size": 8490475,
+        "digest": "sha256:ac19db06eca90fddb8f93aa4d97009d5fd0dc67e8b802b35f13336010f5fde01",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.16.1-cuda13.2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.2.0-cuda12.5-linux-x64+bs50.zip",
+        "size": 37777510,
+        "digest": "sha256:8586ffc94308261e23cd19b869a1ef921ca16367cbb15ce415f241117f9cca46",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.2.0-cuda12.5-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.2.0-cuda12.5-linux-x64.zip",
+        "size": 43006931,
+        "digest": "sha256:18a6280aa6ed4f51b291987d6ba9079bbd8dc8026a5e3a425e00f84203acebe8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.2.0-cuda12.5-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.2.0-cuda12.5-windows-x64+bs50.zip",
+        "size": 5612652,
+        "digest": "sha256:33e6d1c69d4f346099ccbe6f1b39d4aaeb6d8a1ba31b09a769b54248ccfc7667",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.2.0-cuda12.5-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.2.0-cuda12.5-windows-x64.zip",
+        "size": 8372587,
+        "digest": "sha256:7e7dc7ccd621860d78e45edf1afaaaac590e087774da845eda45c2cae41933d3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.2.0-cuda12.5-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.9.0-cuda12.8-linux-x64+bs50.zip",
+        "size": 37820874,
+        "digest": "sha256:d2aa3aeff7826ca84d715bb2c8fc6bbd591fd5cb8f27774152361f40d7c0c602",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.9.0-cuda12.8-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.9.0-cuda12.8-linux-x64.zip",
+        "size": 43016275,
+        "digest": "sha256:f6351953b3114f2af53cb800954765696fcb14eeff7546555490a9fa4b8b7650",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.9.0-cuda12.8-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.9.0-cuda12.8-windows-x64+bs50.zip",
+        "size": 5610006,
+        "digest": "sha256:fc899d816dcfa2873f09670df7d2e906419dd8aa8ec41099399649788bfd2126",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.9.0-cuda12.8-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.18.0-trt10.9.0-cuda12.8-windows-x64.zip",
+        "size": 8370022,
+        "digest": "sha256:97aa98dfbd6952438fe5226ac917450032e1fa4d8aa61547092137a8451018ef",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-trt10.9.0-cuda12.8-windows-x64.zip"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.17.2",
+    "published_at": "2026-08-05T15:28:53Z",
+    "assets": [
+      {
+        "name": "katago-v1.17.2-trt10.16.1-cuda13.2-linux-x64+bs50.zip",
+        "size": 34527845,
+        "digest": "sha256:64fd26814c99dfe3162901e17a652153bbf3a188361ad3fc47dbb6422977d800",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.16.1-cuda13.2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.16.1-cuda13.2-linux-x64.zip",
+        "size": 39773222,
+        "digest": "sha256:7ae8baa47007b71715a22eae5134bd35fca96a7ac88dab566a0036c785eddc1b",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.16.1-cuda13.2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.16.1-cuda13.2-windows-x64+bs50.zip",
+        "size": 5036290,
+        "digest": "sha256:1986f6dc964a193118750582a388cf1656894f6b60557b1bda0e4fab78babb97",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.16.1-cuda13.2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.16.1-cuda13.2-windows-x64.zip",
+        "size": 7799495,
+        "digest": "sha256:7919b1a91fdd42fddac098ae8a98b68612354998e7c2c25b4102598f848a4c63",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.16.1-cuda13.2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.2.0-cuda12.5-linux-x64+bs50.zip",
+        "size": 34461434,
+        "digest": "sha256:7f287d5bbb79449658446f1552e923602516688d259fbcba9ea8546f8f0d5a88",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.2.0-cuda12.5-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.2.0-cuda12.5-linux-x64.zip",
+        "size": 39698208,
+        "digest": "sha256:2707739fc4c01b21330d2845bd73bb779929ac7f8649914c5b9c3e2cc4ef25b8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.2.0-cuda12.5-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.2.0-cuda12.5-windows-x64+bs50.zip",
+        "size": 4921059,
+        "digest": "sha256:87e17a0b3cba2206be6e5c8d8489e859b9f3492339e1dee3b1e0edcb8342f70a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.2.0-cuda12.5-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.2.0-cuda12.5-windows-x64.zip",
+        "size": 7680011,
+        "digest": "sha256:80467b4dac7b934d2c26a3f17a4c5c9585a9d4da4551fdfac04a5383893439ad",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.2.0-cuda12.5-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.9.0-cuda12.8-linux-x64+bs50.zip",
+        "size": 34506600,
+        "digest": "sha256:514b647ddd0a7ff87dc659a44b096f1f57d4135ea65eef970b0ad391313ee5e5",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.9.0-cuda12.8-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.9.0-cuda12.8-linux-x64.zip",
+        "size": 39754702,
+        "digest": "sha256:d90ca0973df6e3526df0036bb70d1a1460aab9c6cf12db89017e4d1a691cd195",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.9.0-cuda12.8-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.9.0-cuda12.8-windows-x64+bs50.zip",
+        "size": 4920375,
+        "digest": "sha256:b9c1d1199f864eb00c36dc0742180c4f2c2591cf5757a2a4e01671d00f92c1eb",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.9.0-cuda12.8-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.2-trt10.9.0-cuda12.8-windows-x64.zip",
+        "size": 7678930,
+        "digest": "sha256:be09c4ecc02028e2bdf98ff489683840bc9be480ba94f1cfe6f7e15018e36be6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.2/katago-v1.17.2-trt10.9.0-cuda12.8-windows-x64.zip"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.17.1",
+    "published_at": "2026-07-31T17:40:02Z",
+    "assets": [
+      {
+        "name": "b10c384h6nbttflrs.bin.gz",
+        "size": 38245488,
+        "digest": "sha256:0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/b10c384h6nbttflrs.bin.gz"
+      },
+      {
+        "name": "b10c512h8nbt3tflrs-fson-silu-rsnh.bin.gz",
+        "size": 94281753,
+        "digest": "sha256:c04db4a503721d948bb720324f3cbdac6088cc9eb243632f020e4b6846f58995",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/b10c512h8nbt3tflrs-fson-silu-rsnh.bin.gz"
+      },
+      {
+        "name": "b11c768h12nbt3tflrs-fson-silu.bin.gz",
+        "size": 211660960,
+        "digest": "sha256:1881600caab9e9d85a3dd6a019e9b8e7d2c237b5f984e13ed49a8645be3077c6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/b11c768h12nbt3tflrs-fson-silu.bin.gz"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 41969556,
+        "digest": "sha256:459b394bde477e4367ead12af815132c98b9bccc815dc5275774315e2bbd01bf",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn8.9.7-linux-x64.zip",
+        "size": 47203104,
+        "digest": "sha256:666bbd46e4a8f0b03b1859bcd22e3875b14b50afe6e960f8fd6323f51d9176f6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6063706,
+        "digest": "sha256:cf5e628a062f8f757a17fcc3fbf97f586f0fa0aa30b0fb680d8e70de0de0cc81",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn8.9.7-windows-x64.zip",
+        "size": 8825192,
+        "digest": "sha256:4d5bf961e993bd6eddfe975530a32be1e41c67aba865a2b372dbab13603e048a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 41993030,
+        "digest": "sha256:496ccb627d19ac0a5f2b2f467a45f18fd0e7c1345b4d9c897ce83bc72ac0aa4f",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn9.8.0-linux-x64.zip",
+        "size": 47297578,
+        "digest": "sha256:451ae213021cef0d2fcbfae650479532b53361c5ecbdfe1a5a643065bc76edc8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6075140,
+        "digest": "sha256:0c406e0b7652e3aa9ab5a78b89e2620a4c2ac81f79e00d24dc553a0d86a0193a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.1-cudnn9.8.0-windows-x64.zip",
+        "size": 8839470,
+        "digest": "sha256:b081832d48b4a553436ad5c54f9c4f4feff39df7b52e68228929e9f8a70988bc",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.1-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 42041240,
+        "digest": "sha256:3aed656fabba95b97d9f49c5f4f85cdb1202ec43adab5205d1d6e2ab2c748db5",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn8.9.7-linux-x64.zip",
+        "size": 47294180,
+        "digest": "sha256:d34af911b3cc90e12b23e2303f199d18e1dc5f1f5c727131633be28ea53ab864",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6155091,
+        "digest": "sha256:16c4e83131b2d1ad4dad09d0604c1160abd1d386c49952f3db6883a49688cad2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn8.9.7-windows-x64.zip",
+        "size": 8909032,
+        "digest": "sha256:16f52a926b50e0ae84aa711cb1607f9cdbb4c2863756a61d37bc43675db4f255",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 42116372,
+        "digest": "sha256:678bc06677dd390204e5851940d1f28d1e85023322d3d9362fc3836bb46d7294",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn9.8.0-linux-x64.zip",
+        "size": 47374555,
+        "digest": "sha256:6253eb13ec68af3da5c59c4e850212bd45202e7d768a8e58a393752c32c82488",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6165265,
+        "digest": "sha256:f162d2d7c76421ece209c29baae410d844a553176a6447c8976035eeef7a17bf",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.5-cudnn9.8.0-windows-x64.zip",
+        "size": 8927381,
+        "digest": "sha256:4e7ed20e0d7c43526ef7c9fd383062ea8f1663269016da08b9cf0ad7a3fc9e66",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.5-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.8-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 42434050,
+        "digest": "sha256:977c00cc10dbd21fc855f9a6339e8d004a80019c2b234b346c17eaa261184d74",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.8-cudnn9.8.0-linux-x64.zip",
+        "size": 47673281,
+        "digest": "sha256:458d226c2c8533600251bba3b2ee612d3aee0c796f592a2b53839a6a05b0826e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6453146,
+        "digest": "sha256:e0e507bbc18ca7cf40bb0b9e8e27328c9e733255f5147a9c49197038a39b878e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 9213749,
+        "digest": "sha256:476a35c0b43cc937906d4313acaf592a97a30775ec51d37f5401a284ad9fa0f9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda13.2-cudnn9.24.0-linux-x64+bs50.zip",
+        "size": 41959357,
+        "digest": "sha256:3574cd98779eb985068636d4aa78e74b8bb7f0c56aad7fa33b8738edf452e407",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda13.2-cudnn9.24.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda13.2-cudnn9.24.0-linux-x64.zip",
+        "size": 47194247,
+        "digest": "sha256:bdd622acbe0fcebe059fe0c53188fc39a4457840d1cf804f294a7f86ca695f5d",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda13.2-cudnn9.24.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64+bs50.zip",
+        "size": 5892008,
+        "digest": "sha256:aa2386786d55b656dc94131d7eb2b88dd1d6dd501a47f17894fe340163284a73",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 8658330,
+        "digest": "sha256:df0ec60476dd231356d1de2adc0e118ff372639b6d02b24492e82e1a6be8a7d0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigen-linux-x64+bs50.zip",
+        "size": 33863638,
+        "digest": "sha256:1a1fc9058d0a2806a0e4d4b06d0ca276580f0eb1935818dabeb428e6f219b941",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigen-linux-x64.zip",
+        "size": 39132330,
+        "digest": "sha256:cca71fff39abd19bd9acfc17750025d4bb0ee6adbad99d7513a2c6401b0a7af3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigen-windows-x64+bs50.zip",
+        "size": 2481495,
+        "digest": "sha256:8395e14a34ad80192e50f85baf994f514de49ea2c31a7458ec87e0a6dc39b082",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigen-windows-x64.zip",
+        "size": 5246691,
+        "digest": "sha256:3a7538ecb6facefcfe16d649fd695c29e44f8372cb7de8c316eee5779865f379",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigenavx2-linux-x64+bs50.zip",
+        "size": 33916981,
+        "digest": "sha256:5fb410192f126ecc55d36d1ee631fcb8057971f9703a8b498d8d005549769ea2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigenavx2-linux-x64.zip",
+        "size": 39180735,
+        "digest": "sha256:234bf7866bc26f37baaeed60dc358b821bafc8e73e9bc50cb2d2a1cf51502d44",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigenavx2-windows-x64+bs50.zip",
+        "size": 2482238,
+        "digest": "sha256:9cd30977984c10f514ea12b73a22ce5f574303a6031a2c6fbc0a78fa13835849",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-eigenavx2-windows-x64.zip",
+        "size": 5245487,
+        "digest": "sha256:f13f1126575a22dc728e931011b1b2e404ce2d02b566876a44a01aea3d27e293",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-opencl-linux-x64+bs50.zip",
+        "size": 33398251,
+        "digest": "sha256:b6b934586711218cd6c377329c2c2d4761102b09224cf184f32c4058966047e0",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-opencl-linux-x64.zip",
+        "size": 38644908,
+        "digest": "sha256:be537295868c0b8ff6985e62e411fff67cbba2dc872343c74896063de1ef51e9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.1-opencl-windows-x64+bs50.zip",
+        "size": 2580449,
+        "digest": "sha256:aaabf0e200a6665c34a51729b5a71a1881f11ba3821da44c6be015fa17c760b6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.1-opencl-windows-x64.zip",
+        "size": 5347873,
+        "digest": "sha256:68d0a9b11ef7e3c1ddfc5bcd400306ca66c3770dd67a22cb377d3aaaf32e8c66",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-windows-x64.zip"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.17.0",
+    "published_at": "2026-07-29T18:44:07Z",
+    "assets": [
+      {
+        "name": "b10c384h6nbttflrs.bin.gz",
+        "size": 38245488,
+        "digest": "sha256:0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b10c384h6nbttflrs.bin.gz"
+      },
+      {
+        "name": "b10c512h8nbt3tflrs-fson-silu-rsnh.bin.gz",
+        "size": 94281753,
+        "digest": "sha256:c04db4a503721d948bb720324f3cbdac6088cc9eb243632f020e4b6846f58995",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b10c512h8nbt3tflrs-fson-silu-rsnh.bin.gz"
+      },
+      {
+        "name": "b11c768h12nbt3tflrs-fson-silu.bin.gz",
+        "size": 211660960,
+        "digest": "sha256:1881600caab9e9d85a3dd6a019e9b8e7d2c237b5f984e13ed49a8645be3077c6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b11c768h12nbt3tflrs-fson-silu.bin.gz"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 41969585,
+        "digest": "sha256:990bbc5e6ca1d7747a212e904896ca88019ae571474f0fb464a6abcff9c66250",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn8.9.7-linux-x64.zip",
+        "size": 47203140,
+        "digest": "sha256:65da232fdada69f6ffd4601c51e3fc02b58bbd6baaf21ac52e80fed9a78ac1bd",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6063705,
+        "digest": "sha256:475cd76d8a88679f893cb11c36c640bdf1565a6686ee0ffaa1ae24b5ec166a87",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn8.9.7-windows-x64.zip",
+        "size": 8825192,
+        "digest": "sha256:33e7963242814ce6157c9d2d4ad5517abeeb7dd4e18cbb40c538ecbd7da4d874",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 41993075,
+        "digest": "sha256:7ab8630ac7af4e224243cb750348ae4cc9ea022985fe2c0748dac36031132bca",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn9.8.0-linux-x64.zip",
+        "size": 47297659,
+        "digest": "sha256:6990be34f86f7b72082ddc03f4950062e39d01939a42256699dfc5cd13f18219",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6075150,
+        "digest": "sha256:8fea7289cd450e04d1eac05ba9dbbdbe04d4eaaddde41c81ee7d78d0128e01f3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.1-cudnn9.8.0-windows-x64.zip",
+        "size": 8839465,
+        "digest": "sha256:a2129a74119c63fe3deb2548dcade60822045e48d10b29ea7d2b81bbdcf16ecd",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.1-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn8.9.7-linux-x64+bs50.zip",
+        "size": 42041284,
+        "digest": "sha256:3782430c9f8c9215c054e39d1bd4dd4b444aae7365898726cdfc11c81b7d9116",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn8.9.7-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn8.9.7-linux-x64.zip",
+        "size": 47294191,
+        "digest": "sha256:80f29943833d5744d9840bb6435625d29616d2f4bafe5d7176aa935cdf815f2e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn8.9.7-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn8.9.7-windows-x64+bs50.zip",
+        "size": 6155816,
+        "digest": "sha256:6b2e277b50e0eae83c27094df89b8263107a8d6a996a8f1d4de3de10b9a12a61",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn8.9.7-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn8.9.7-windows-x64.zip",
+        "size": 8912826,
+        "digest": "sha256:b03276245c682f573055ea1daf98201b76e5facc03c00ba5e30090402e89177e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn8.9.7-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 42116102,
+        "digest": "sha256:e2a99274aa099dbcfa4b4f33a3375e567c53e83fc196785cef4d2833142f287b",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn9.8.0-linux-x64.zip",
+        "size": 47374568,
+        "digest": "sha256:7f2523f7737033692930fd65340ace0d9a3596bbca9081a8ab15af311fee28a6",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6165590,
+        "digest": "sha256:853795c0924c657405963e676df99d5fc69bd0d1c3514396a61f9ceed6a7c378",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.5-cudnn9.8.0-windows-x64.zip",
+        "size": 8929297,
+        "digest": "sha256:27b0dc8318b19b118671351e81f2759a45e4919678e0a9dce313715bd672d0d3",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.5-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.8-cudnn9.8.0-linux-x64+bs50.zip",
+        "size": 42433750,
+        "digest": "sha256:6b5943f2f16ac3267e52cf964bd9c72c7e02cd5d6ebae079ea77a6d85d2a8425",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.8-cudnn9.8.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.8-cudnn9.8.0-linux-x64.zip",
+        "size": 47673312,
+        "digest": "sha256:4e16b44baa353d1da9253584953af07fdc8dbbf09e32cbae433b1cc4991a4a14",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.8-cudnn9.8.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64+bs50.zip",
+        "size": 6452565,
+        "digest": "sha256:1504cd6dd578b43ba441371434422a41648226694263cbf883241db6479ef00e",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 9214114,
+        "digest": "sha256:6b84485bd5d0eff3bd1f9f76add5ac0f989f8f940206ced1d99dbb841f143387",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda13.2-cudnn9.24.0-linux-x64+bs50.zip",
+        "size": 41959361,
+        "digest": "sha256:af29e4f9f33195a8fbadce5a345c41981c8c3745d9b8ebe0c35025d84c338456",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda13.2-cudnn9.24.0-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda13.2-cudnn9.24.0-linux-x64.zip",
+        "size": 47194249,
+        "digest": "sha256:35a052c87e536cbb2a568f81ba6256d863e42f2a8bc0123b2c4de6d3cdd1c6b5",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda13.2-cudnn9.24.0-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64+bs50.zip",
+        "size": 5891060,
+        "digest": "sha256:d91d4763730fc7e1d85ed12d3b2fc97eea3158af467868cfcccc5896ad94c3d8",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 8657854,
+        "digest": "sha256:f94ca9066a6b80a6f3c00aa483c41963f94a46c970ec82f7f3d12d2a110034e7",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigen-linux-x64+bs50.zip",
+        "size": 33863643,
+        "digest": "sha256:28697bb96b60d1db754ac5d9ec7f380523c60bac297560bda2a92f84c4b05e6a",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigen-linux-x64.zip",
+        "size": 39132195,
+        "digest": "sha256:0ae933c4da837e348583b4f3744f347a2b442c22b0bb9980b5b4f53f8760e1c2",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigen-windows-x64+bs50.zip",
+        "size": 2481078,
+        "digest": "sha256:38fcd34f6d5aac4ec3dede4a15b5893adaf0f4ab070361fed452e788e61912d9",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigen-windows-x64.zip",
+        "size": 5246760,
+        "digest": "sha256:20b02914048d18c8f5a761571317923caf6c9ffb79bf07201bcc52c1979f0ffb",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-windows-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigenavx2-linux-x64+bs50.zip",
+        "size": 33917043,
+        "digest": "sha256:d37d56ba2002591d87b2f0441a7514fb22742a4eba62ddedd226183182dcf126",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-linux-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigenavx2-linux-x64.zip",
+        "size": 39180757,
+        "digest": "sha256:ee01d50a7e925bfb24f30446551d74b4427d45fc99b1c34bad6faa0dbff8c34c",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-linux-x64.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigenavx2-windows-x64+bs50.zip",
+        "size": 2481937,
+        "digest": "sha256:8be2dd17aaf11f2d61c2b9b7958dca7646636fbb878e1abcaf45ffb11ee35036",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-windows-x64%2Bbs50.zip"
+      },
+      {
+        "name": "katago-v1.17.0-eigenavx2-windows-x64.zip",
+        "size": 5244223,
+        "digest": "sha256:d1aac273140b1223a44f34e8d3694d07691d3da7915d599891c517ed20e97618",
+        "browser_download_url": "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-windows-x64.zip"
+      }
+    ]
+  }
+]

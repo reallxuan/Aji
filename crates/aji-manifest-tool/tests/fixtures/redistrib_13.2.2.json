@@ -1,0 +1,53 @@
+{
+  "release_date": "2026-07-16",
+  "release_label": "13.2.2",
+  "release_product": "cuda",
+  "libcublas": {
+    "name": "CUDA cuBLAS",
+    "license": "CUDA Toolkit",
+    "license_path": "libcublas/LICENSE.txt",
+    "version": "13.4.1.3",
+    "linux-x86_64": {
+      "relative_path": "libcublas/linux-x86_64/libcublas-linux-x86_64-13.4.1.3-archive.tar.xz",
+      "sha256": "2ae4563b6f49f29c65cd550146a7acc9b12633e11c2c9d748545ca7fc5cfcd74",
+      "md5": "e2e17fef59c7b7c4bec699ea4f41e3ed",
+      "size": "808733088"
+    },
+    "linux-sbsa": {
+      "relative_path": "libcublas/linux-sbsa/libcublas-linux-sbsa-13.4.1.3-archive.tar.xz",
+      "sha256": "b75ee548844788ac322bc5db7b35df29daf84b3215d94b526ee73c12e7db00c1",
+      "md5": "6faa93bd646913149af9681e14619405",
+      "size": "1022133812"
+    },
+    "windows-x86_64": {
+      "relative_path": "libcublas/windows-x86_64/libcublas-windows-x86_64-13.4.1.3-archive.zip",
+      "sha256": "bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a",
+      "md5": "e107bb79a9bba78b12a5d8e8e0ae2032",
+      "size": "388113288"
+    }
+  },
+  "cuda_nvrtc": {
+    "name": "CUDA NVRTC",
+    "license": "CUDA Toolkit",
+    "license_path": "cuda_nvrtc/LICENSE.txt",
+    "version": "13.2.86",
+    "linux-x86_64": {
+      "relative_path": "cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-13.2.86-archive.tar.xz",
+      "sha256": "6e0661e31a43c22ad030637adeb881822249ffb2a14a19691828f117f5ab2de9",
+      "md5": "e141cfd54838de7e4570b896218b5f84",
+      "size": "60704976"
+    },
+    "linux-sbsa": {
+      "relative_path": "cuda_nvrtc/linux-sbsa/cuda_nvrtc-linux-sbsa-13.2.86-archive.tar.xz",
+      "sha256": "5d9bceae00f986d4c3bd89f1bc6fa7c154b1c2136bdc3eeb1af57ab2b95da002",
+      "md5": "e0dc5079a4c63ee603a424cca7a7840e",
+      "size": "55865928"
+    },
+    "windows-x86_64": {
+      "relative_path": "cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-13.2.86-archive.zip",
+      "sha256": "c8d4254c51bfa3fa982bd40bf36de9800d4c65211945e8393fbf4c310ef9232a",
+      "md5": "f9cef76bf5681c07e86af2d0c95885e0",
+      "size": "288218786"
+    }
+  }
+}
