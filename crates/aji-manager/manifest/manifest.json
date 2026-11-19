@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "sequence": 1763500000,
+  "generated": "2025-11-18T21:06:40Z",
+  "engines": [
+    {
+      "id": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64",
+      "version": "1.18.2",
+      "released": "2026-08-30",
+      "platform": "windows-x64",
+      "backend": "cuda",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "config": {},
+      "file": {
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9825374,
+        "digest": "sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514",
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      }
+    },
+    {
+      "id": "katago-v1.18.2-metal-macos-arm64",
+      "version": "1.18.2",
+      "released": "2026-08-30",
+      "platform": "macos-arm64",
+      "backend": "metal",
+      "variant": "metal",
+      "config": {},
+      "file": {
+        "name": "katago-v1.18.2-metal-macos-arm64.zip",
+        "size": 8123456,
+        "digest": "sha256:a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "urls": [
+          "https://github.com/reallxuan/aji-manifest/releases/download/katago-v1.18.2-metal/katago-v1.18.2-metal-macos-arm64.zip"
+        ]
+      }
+    },
+    {
+      "id": "katago-v1.18.1-eigenavx2-linux-x64",
+      "version": "1.18.1",
+      "released": "2026-06-15",
+      "platform": "linux-x64",
+      "backend": "eigenavx2",
+      "variant": "eigenavx2",
+      "config": {},
+      "file": {
+        "name": "katago-v1.18.1-eigenavx2-linux-x64.zip",
+        "size": 7345678,
+        "digest": "sha256:0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-linux-x64.zip"
+        ]
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "id": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "minDriver": "580.00",
+      "minComputeCapability": "7.5",
+      "components": [
+        {
+          "product": "CUDA Toolkit",
+          "name": "CUDA cuBLAS",
+          "version": "13.4.1.3",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.2.2.json",
+          "archive": {
+            "path": "compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-13.4.1.3-archive.zip",
+            "size": 388113288,
+            "digest": "sha256:bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a"
+          },
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "extract": [
+            "cublas64_13.dll",
+            "cublasLt64_13.dll"
+          ],
+          "licence": {
+            "name": "NVIDIA CUDA Toolkit EULA",
+            "url": "https://docs.nvidia.com/cuda/eula/index.html",
+            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/LICENSE.txt",
+            "textSha256": "1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd",
+            "requiresAcceptance": true
+          }
+        }
+      ],
+      "notice": "NVIDIA CUDA cuBLAS 13.4.1.3, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence."
+    }
+  ],
+  "networks": [
+    {
+      "id": "kata1-tf3-b11c768-s12382M-d6533M",
+      "family": "tf3-b11c768",
+      "kind": "main",
+      "elo": 14639.0,
+      "eloGames": 2833,
+      "uploaded": "2026-11-01",
+      "minEngineVersion": "1.17.0",
+      "file": {
+        "name": "kata1-tf3-b11c768-s12382M-d6533M.bin.gz",
+        "size": 262041254,
+        "digest": "md5:db954878202524766e2f75ac61ae34c3",
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b11c768-s12382M-d6533M.bin.gz"
+        ]
+      },
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      }
+    },
+    {
+      "id": "kata1-b18c384nbt-s9996604416-d4316597426",
+      "family": "b18c384nbt",
+      "kind": "main",
+      "elo": 13629.0,
+      "eloGames": 3991,
+      "uploaded": "2024-05-26",
+      "file": {
+        "name": "kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+        "size": 97898094,
+        "digest": "md5:efc406f90990b1fb96034f426e9965fe",
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz"
+        ]
+      },
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      }
+    }
+  ]
+}

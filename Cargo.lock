@@ -56,6 +56,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aji-manager"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
