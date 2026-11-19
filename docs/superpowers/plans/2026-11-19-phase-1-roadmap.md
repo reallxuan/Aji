@@ -15,7 +15,7 @@ This is the phase-level plan. It splits Phase 1 into milestones, orders them, an
 
 **In scope** (charter sections 7 and 8, interface design section 9):
 
-- Tauri skeleton; CI builds installers for Windows, macOS and Linux on every push.
+- Tauri skeleton; CI runs checks on every push and builds installers for Windows, macOS and Linux on every push to `main`, or on demand for any branch.
 - Manifest repository and format. First entries: Windows NVIDIA, Windows generic (DirectML, OpenCL), macOS Metal, CPU (Eigen), plus Linux Eigen and OpenCL.
 - Hardware detection, backend recommendation, download, verification, benchmark, smoke test, fallback on failure.
 - First-run wizard (interface design section 7).
@@ -133,7 +133,7 @@ Detailed plan: [2026-11-19-phase-1-m1-foundation.md](2026-11-19-phase-1-m1-found
 - Theme tokens for both themes; the theme follows the OS, and dark is used when the OS preference cannot be read.
 - i18next with `zh-CN` and `en`; language follows the OS; a key-parity test; a lint rule against literal JSX text.
 - The protocol (`rpc`, `Request::AppInfo`), TypeScript generation, and the TypeScript `Transport` with Tauri and fake implementations.
-- CI: checks on every push, plus Windows NSIS, macOS DMG and Linux AppImage installers as artifacts. Licence checks for Rust and npm dependencies.
+- CI: checks on every push. Windows NSIS, macOS DMG and Linux AppImage installers as artifacts on every push to `main`, or from a manual run on any branch. Licence checks for Rust and npm dependencies.
 
 **Exit:** the CI installers install and open on the PC and the Mac. The panel shows the version line from the Rust side in the OS language, and the theme follows the OS.
 

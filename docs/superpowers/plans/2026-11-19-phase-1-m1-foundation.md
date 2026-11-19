@@ -575,7 +575,7 @@ git commit -m "feat: add the UI transport layer and show the app version from Ru
 - Create: `.github/workflows/ci.yml`, `deny.toml`, `scripts/check-npm-licenses.mjs`.
 
 **Interfaces:**
-- Produces: a workflow named `CI` that runs on every push and pull request. Its jobs are `frontend`, `rust` and `licenses`, and the bundle jobs of Task 7 depend on them.
+- Produces: a workflow named `CI` that runs on every push and pull request (and on demand, from Task 7). Its jobs are `frontend`, `rust` and `licenses`, and the bundle jobs of Task 7 depend on them.
 
 - [ ] **Step 1: Write `scripts/check-npm-licenses.mjs`**
 
@@ -631,7 +631,7 @@ git commit -m "ci: run lint, type, test and licence checks on every push"
 
 - [ ] **Step 1: Add the `bundle` job**
 
-  1. `needs: [frontend, rust, licenses]`.
+  1. `needs: [frontend, rust, licenses]`, and `if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'`. Installers build only for pushes to `main` or a manual run (owner decision, 2026-11-19), so the workflow also gets a `workflow_dispatch` trigger, and `main` runs are never cancelled by a newer push.
   2. Matrix:
      - `windows-latest` with `--bundles nsis`.
      - `macos-15` (arm64) with `--bundles dmg`.
@@ -651,9 +651,10 @@ git add .github/workflows/ci.yml README.md
 git commit -m "ci: build Windows, macOS and Linux installers on every push"
 ```
 
-- [ ] **Step 4: Owner pushes `feat/m1-foundation`, then verify the run**
+- [ ] **Step 4: Owner pushes `feat/m1-foundation`, then build the installers on demand**
 
-  Run `gh run watch` on the triggered run. Expected: every job green and three artifacts attached.
+  1. The push runs the checks only. Run `gh run watch` on it. Expected: `frontend`, `rust` and `licenses` green, `bundle` skipped.
+  2. Start the installers with `gh workflow run CI --ref feat/m1-foundation` (or Actions → CI → Run workflow), then `gh run watch` that run. Expected: every job green and three artifacts attached.
 
 - [ ] **Step 5: Owner verifies on the Windows PC with the RTX 5070**
 
