@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+@import './theme.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ground text-text;
+    margin: 0;
+    overflow: hidden;
+    /* Inter first, so Latin letters and digits never fall to WenKai (interface design, section 3). */
+    font-family:
+      Inter,
+      'LXGW WenKai',
+      -apple-system,
+      'PingFang SC',
+      'Microsoft YaHei',
+      'Noto Sans CJK SC',
+      sans-serif;
+    font-feature-settings: 'tnum';
+  }
+}

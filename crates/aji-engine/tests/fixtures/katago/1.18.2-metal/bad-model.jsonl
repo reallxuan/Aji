@@ -1,0 +1,17 @@
+{"t":0.083,"s":"err","line":"2026-11-19 17:58:08+0800: Running with following config:"}
+{"t":0.083,"s":"err","line":"logToStderr = true"}
+{"t":0.083,"s":"err","line":"nnCacheSizePowerOfTwo = 20"}
+{"t":0.083,"s":"err","line":"nnMaxBatchSize = 64"}
+{"t":0.083,"s":"err","line":"nnMutexPoolSizePowerOfTwo = 14"}
+{"t":0.083,"s":"err","line":"nnRandomize = true"}
+{"t":0.083,"s":"err","line":"numAnalysisThreads = 2"}
+{"t":0.083,"s":"err","line":"numSearchThreads = 16"}
+{"t":0.083,"s":"err","line":"reportAnalysisWinratesAs = BLACK"}
+{"t":0.083,"s":"err","line":""}
+{"t":0.083,"s":"err","line":"2026-11-19 17:58:08+0800: Analysis Engine starting..."}
+{"t":0.083,"s":"err","line":"2026-11-19 17:58:08+0800: KataGo v1.18.2"}
+{"t":0.099,"s":"err","line":"2026-11-19 17:58:08+0800: nnRandSeed0 = 2866583186550309228"}
+{"t":0.099,"s":"err","line":"2026-11-19 17:58:08+0800: After dedups: nnModelFile0 = ~/personal/Aji/crates/aji-engine/tests/fixtures/katago/1.18.2-metal/missing.bin.gz useFP16 auto"}
+{"t":0.099,"s":"err","line":"2026-11-19 17:58:08+0800: Initializing neural net buffer to be size 19 * 19 allowing smaller boards"}
+{"t":0.1,"s":"err","line":"libc++abi: terminating due to uncaught exception of type StringError: Error loading or parsing model file ~/personal/Aji/crates/aji-engine/tests/fixtures/katago/1.18.2-metal/missing.bin.gz: Could not open file ~/personal/Aji/crates/aji-engine/tests/fixtures/katago/1.18.2-metal/missing.bin.gz - does not exist or invalid permissions?"}
+{"t":0.1,"s":"ctl","line":"exit code=null signal=SIGABRT"}

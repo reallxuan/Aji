@@ -1,0 +1,5 @@
+{
+  "transcript": "../katago/1.18.2-metal/analysis.jsonl",
+  "crashAfterReports": 2,
+  "crashStderrLines": 60
+}
