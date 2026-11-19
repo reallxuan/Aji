@@ -1,0 +1,13 @@
+[package]
+name = "aji-engine"
+description = "KataGo analysis protocol: queries, response parsing, throttling and caching"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+aji-core = { path = "../aji-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = "12.0.1"
