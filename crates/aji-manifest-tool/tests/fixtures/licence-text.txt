@@ -1,0 +1,3 @@
+NVIDIA test licence text
+This file stands in for an NVIDIA LICENSE.txt in the tests.
+It is not a real licence.

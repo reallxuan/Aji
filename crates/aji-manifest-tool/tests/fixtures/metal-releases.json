@@ -1,0 +1,14 @@
+[
+  {
+    "tag_name": "katago-v1.18.2-metal",
+    "published_at": "2026-08-31T10:00:00Z",
+    "assets": [
+      {
+        "name": "katago-v1.18.2-metal-macos-arm64.zip",
+        "size": 8123456,
+        "digest": "sha256:a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "browser_download_url": "https://github.com/reallxuan/aji-manifest/releases/download/katago-v1.18.2-metal/katago-v1.18.2-metal-macos-arm64.zip"
+      }
+    ]
+  }
+]
