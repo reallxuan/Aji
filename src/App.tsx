@@ -1,6 +1,7 @@
+import { MainFrame } from './layout/MainFrame';
 import { useThemeSync } from './theme/useThemeSync';
 
 export default function App() {
   useThemeSync();
-  return null;
+  return <MainFrame panel={null} />;
 }
