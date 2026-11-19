@@ -12,5 +12,38 @@
     "internal": "Aji 内部出错。",
     "engineNotConfigured": "尚未设置引擎。",
     "engineNotRunning": "KataGo 未在运行。"
+  },
+  "engine": {
+    "state": {
+      "notConfigured": "尚未设置引擎。",
+      "starting": "正在启动 KataGo…",
+      "ready": "KataGo 已就绪。",
+      "analysing": "分析中",
+      "paused": "分析已暂停",
+      "stopped": "KataGo 已停止。",
+      "crashed": "KataGo 已停止运行。"
+    },
+    "crash": {
+      "exited": "KataGo 意外退出。",
+      "notResponding": "KataGo 没有响应。",
+      "spawnFailed": "无法启动 KataGo。",
+      "exitCode": "退出代码 {{code}}",
+      "signal": "被信号 {{signal}} 终止",
+      "details": "KataGo 最后的输出"
+    },
+    "action": {
+      "pause": "暂停分析",
+      "resume": "继续分析",
+      "restart": "重启引擎"
+    }
+  },
+  "analysis": {
+    "columns": {
+      "move": "落点",
+      "winrate": "黑方胜率",
+      "scoreLead": "黑方领先",
+      "visits": "计算量"
+    },
+    "pass": "停一手"
   }
 }

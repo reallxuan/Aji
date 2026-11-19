@@ -1,3 +1,4 @@
+import type { AppEvent } from './generated/AppEvent';
 import type { ErrorCode } from './generated/ErrorCode';
 import type { Request } from './generated/Request';
 import type { Response } from './generated/Response';
@@ -8,6 +9,8 @@ import type { Response } from './generated/Response';
  */
 export interface Transport {
   request(request: Request): Promise<Response>;
+  /** Receives events the engine side pushes. Returns a function that stops delivery. */
+  subscribe(listener: (event: AppEvent) => void): () => void;
 }
 
 /** A failed request. Show text looked up from `code`; `message` is for logs only. */

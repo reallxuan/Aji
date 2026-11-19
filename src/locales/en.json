@@ -12,5 +12,38 @@
     "internal": "Aji ran into an internal error.",
     "engineNotConfigured": "No engine is set up.",
     "engineNotRunning": "KataGo is not running."
+  },
+  "engine": {
+    "state": {
+      "notConfigured": "No engine is set up.",
+      "starting": "Starting KataGo…",
+      "ready": "KataGo is ready.",
+      "analysing": "Analysing",
+      "paused": "Analysis paused",
+      "stopped": "KataGo is stopped.",
+      "crashed": "KataGo has stopped."
+    },
+    "crash": {
+      "exited": "KataGo quit unexpectedly.",
+      "notResponding": "KataGo stopped responding.",
+      "spawnFailed": "KataGo could not be started.",
+      "exitCode": "Exit code {{code}}",
+      "signal": "Ended by signal {{signal}}",
+      "details": "Last lines from KataGo"
+    },
+    "action": {
+      "pause": "Pause analysis",
+      "resume": "Resume analysis",
+      "restart": "Restart engine"
+    }
+  },
+  "analysis": {
+    "columns": {
+      "move": "Move",
+      "winrate": "Black win rate",
+      "scoreLead": "Black lead",
+      "visits": "Visits"
+    },
+    "pass": "Pass"
   }
 }

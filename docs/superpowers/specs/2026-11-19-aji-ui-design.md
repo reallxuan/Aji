@@ -38,6 +38,7 @@ Two themes, dark and light. The default follows the operating system; when the s
 | `line` | `#5A5A61` | `#A3A39E` | Tree connectors, inactive outlines |
 | `score` | `#E3A548` | `#B26A00` | Score-lead line and its axis labels |
 | `engine-ok` | `#1E8E5A` | `#1E8E5A` | Engine running indicator |
+| `engine-error` | `#E5484D` | `#C62828` | Engine indicator, crashed state **[Proposed]** |
 
 The values are **[Proposed]** starting points taken from the mockups. The dark theme was reviewed more closely than the light one.
 

@@ -21,6 +21,7 @@ it('defines the dark tokens from the interface design', () => {
     line: '#5A5A61',
     score: '#E3A548',
     'engine-ok': '#1E8E5A',
+    'engine-error': '#E5484D',
   });
 });
 it('defines the light tokens from the interface design', () => {
@@ -34,7 +35,11 @@ it('defines the light tokens from the interface design', () => {
     line: '#A3A39E',
     score: '#B26A00',
     'engine-ok': '#1E8E5A',
+    'engine-error': '#C62828',
   });
+});
+it('defines the dark tokens as the default before a theme is set', () => {
+  expect(css).toMatch(/:root,\s*:root\[data-theme='dark'\]\s*\{/);
 });
 it('defines the board base colour once for both themes', () => {
   expect(css).toMatch(/:root\s*\{[^}]*--board-base:\s*#DDB067;/i);

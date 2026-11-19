@@ -4,6 +4,7 @@
   --board-base: #ddb067;
 }
 
+:root,
 :root[data-theme='dark'] {
   --ground: #161618;
   --panel: #1e1e21;
@@ -14,6 +15,7 @@
   --line: #5a5a61;
   --score: #e3a548;
   --engine-ok: #1e8e5a;
+  --engine-error: #e5484d;
 }
 
 :root[data-theme='light'] {
@@ -26,6 +28,7 @@
   --line: #a3a39e;
   --score: #b26a00;
   --engine-ok: #1e8e5a;
+  --engine-error: #c62828;
 }
 
 @theme inline {
@@ -38,5 +41,6 @@
   --color-line: var(--line);
   --color-score: var(--score);
   --color-engine-ok: var(--engine-ok);
+  --color-engine-error: var(--engine-error);
   --color-board-base: var(--board-base);
 }
