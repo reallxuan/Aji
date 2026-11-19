@@ -128,6 +128,8 @@ Analysis-engine and benchmark formats are taken from recorded runs (S3, and the 
 
 Detailed plan: [2026-11-19-phase-1-m1-foundation.md](2026-11-19-phase-1-m1-foundation.md).
 
+**Status:** done on 2026-11-19. The Mac exit check passed; the Windows installer check moves to M8.
+
 - Cargo workspace and the Tauri 2 app in `src-tauri`. Vite, React 19, TypeScript, Tailwind CSS 4, Vitest, ESLint and Prettier. Zustand arrives in M2 with the first shared state.
 - The main frame layout of interface design section 4 (board square from window height, panel takes the rest).
 - Theme tokens for both themes; the theme follows the OS, and dark is used when the OS preference cannot be read.

@@ -18,6 +18,8 @@
 - [Interface design](../specs/2026-11-19-aji-ui-design.md), sections 2, 3 and 4.
 - [Phase 1 roadmap](2026-11-19-phase-1-roadmap.md), sections 3.2 and M1.
 
+**Status:** Done on 2026-11-19. The Mac check (Task 7 Step 6) passed on the M5 with a DMG built locally from `fd73a82` and flagged as downloaded. The owner skipped the Windows check (Task 7 Step 5); it moves to Phase 1 acceptance in M8.
+
 ## Global Constraints
 
 - **Language.** Everything in the repository is in English. Chinese appears only as interface text: in `src/locales/zh-CN.json`, and in tests that assert the rendered Chinese strings.
@@ -83,11 +85,11 @@ These are the inputs most likely to bite a user of this milestone, and the task 
 
 Rust is not installed on the development Mac. This task changes the owner's machine, so the owner runs it or approves each command.
 
-- [ ] **Step 1: Install rustup and the stable toolchain**
+- [x] **Step 1: Install rustup and the stable toolchain**
 
   Run, from <https://rustup.rs>: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`. Then open a new shell.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
   Run `rustc --version && cargo --version`. Expected: both print a stable version. The Xcode Command Line Tools are already installed at `/Library/Developer/CommandLineTools`, which is all Tauri needs on macOS.
 
@@ -109,17 +111,17 @@ Rust is not installed on the development Mac. This task changes the owner's mach
 - Produces (`src/theme/useThemeSync.ts`): `useThemeSync(): void`. It applies the resolved theme on mount and again when either `prefers-color-scheme` media query changes. The preference is `'system'` until M5 adds settings.
 - Produces (CSS): `--ground`, `--panel`, `--hairline`, `--divider-soft`, `--text`, `--text-muted`, `--line`, `--score`, `--engine-ok` and `--board-base`, mapped to Tailwind colours of the same names with `@theme inline` (`bg-ground`, `text-text-muted` and so on).
 
-- [ ] **Step 1: Create the branch**
+- [x] **Step 1: Create the branch**
 
   Run `git switch -c feat/m1-foundation main`.
 
-- [ ] **Step 2: Generate the template and move it in**
+- [x] **Step 2: Generate the template and move it in**
 
   1. Run `pnpm create tauri-app@latest aji --template react-ts --manager pnpm --identifier io.github.reallxuan.aji --yes` in the scratchpad.
   2. Copy the result into the repository root. Keep the repository's own `README.md`, `LICENSE` and `.gitignore`.
   3. Delete the template's demo code: the `greet` command, its logos, and `App.css`.
 
-- [ ] **Step 3: Make it a workspace, and set the app identity**
+- [x] **Step 3: Make it a workspace, and set the app identity**
 
   1. Root `Cargo.toml`:
      - `[workspace]` with `members = ["src-tauri"]` and `resolver = "3"`.
@@ -134,13 +136,13 @@ Rust is not installed on the development Mac. This task changes the owner's mach
      - `app.security.csp = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'"`.
   5. `package.json`: `"packageManager"`, `"engines": { "node": ">=24" }`, and the scripts `lint` (`eslint . && prettier --check .`), `format`, `typecheck` (`tsc --noEmit`) and `test` (`vitest run`).
 
-- [ ] **Step 4: Add the frontend tooling**
+- [x] **Step 4: Add the frontend tooling**
 
   1. Install Tailwind CSS 4 with `@tailwindcss/vite`, Vitest, jsdom, `@testing-library/react`, `@testing-library/jest-dom`, ESLint 9, typescript-eslint, `eslint-plugin-react-hooks` and Prettier.
   2. In `vite.config.ts`, set `test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'] }`.
   3. Configure Prettier with `{ "singleQuote": true, "printWidth": 100 }`.
 
-- [ ] **Step 5: Write the failing tests** in `src/theme/theme.test.ts`
+- [x] **Step 5: Write the failing tests** in `src/theme/theme.test.ts`
 
 ```ts
 import css from '../styles/theme.css?raw';
@@ -187,26 +189,26 @@ it('applies the theme as a data attribute', () => {
 });
 ```
 
-- [ ] **Step 6: Run the tests to verify they fail**
+- [x] **Step 6: Run the tests to verify they fail**
 
   Run `pnpm test src/theme`. Expected: FAIL, because `./theme` and `theme.css` do not exist.
 
-- [ ] **Step 7: Implement `theme.css`, `theme.ts` and `useThemeSync`**
+- [x] **Step 7: Implement `theme.css`, `theme.ts` and `useThemeSync`**
 
   1. `theme.css` holds three blocks: `:root` (board base), `:root[data-theme='dark']` and `:root[data-theme='light']`, each with one declaration per token. Then an `@theme inline` block maps `--color-<token>: var(--<token>)`.
   2. `index.css` imports Tailwind and `theme.css`, and sets `body` to `bg-ground text-text`, with the font stack and `tnum`.
   3. `main.tsx` calls `applyTheme(resolveTheme('system', readSystemTheme(window.matchMedia?.bind(window))))` before the first render, so the first frame already has the right ground colour.
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
   Run `pnpm test src/theme`. Expected: PASS.
 
-- [ ] **Step 9: Verify the app**
+- [x] **Step 9: Verify the app**
 
   1. Run `pnpm lint && pnpm typecheck && pnpm tauri dev`. Expected: a 1440 × 900 window filled with the ground colour of the current OS theme.
   2. Switch the macOS appearance while it runs. Expected: the colour follows.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A
@@ -229,7 +231,7 @@ git commit -m "feat: scaffold Tauri app with theme tokens that follow the OS"
   - Renders the board area as a `bg-board-base` square at `frame.board`. M5 replaces the square with the canvas.
   - Renders the panel at `frame.panel`: full height, flush right, `bg-panel`, and a `border-hairline` left edge.
 
-- [ ] **Step 1: Write the failing test** in `src/layout/frame.test.ts`
+- [x] **Step 1: Write the failing test** in `src/layout/frame.test.ts`
 
 ```ts
 import { computeFrame } from './frame';
@@ -251,27 +253,27 @@ it('uses whole pixels for the board', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
   Run `pnpm test src/layout`. Expected: FAIL, because `./frame` does not exist.
 
-- [ ] **Step 3: Implement `computeFrame`**
+- [x] **Step 3: Implement `computeFrame`**
 
   `size = max(0, floor(min(height − 2·BOARD_MARGIN, width − 2·BOARD_MARGIN − PANEL_MIN_WIDTH)))`. The panel starts at `size + 2·BOARD_MARGIN` and takes the rest of the width.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
   Run `pnpm test src/layout`. Expected: PASS.
 
-- [ ] **Step 5: Implement `useWindowSize` and `MainFrame`, and render `MainFrame` from `App` with an empty panel**
+- [x] **Step 5: Implement `useWindowSize` and `MainFrame`, and render `MainFrame` from `App` with an empty panel**
 
   `useWindowSize` returns `{ width: window.innerWidth, height: window.innerHeight }` and updates on `resize`.
 
-- [ ] **Step 6: Verify the app**
+- [x] **Step 6: Verify the app**
 
   Run `pnpm tauri dev` and resize the window. Expected: the board square follows the height, the panel takes the rest of the width, and at the minimum window size both stay visible.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/layout src/App.tsx
@@ -292,7 +294,7 @@ git commit -m "feat: lay out the main frame with a square board area and side pa
 - Produces (`src/i18n/createI18n.ts`): `createI18n(language: Language): i18n`. It returns a new, initialised i18next instance (not the global one), with the bundled resources loaded synchronously and `fallbackLng: 'en'`. It also sets `document.documentElement.lang` to `language`, so the system's Chinese fallback fonts pick Simplified glyphs.
 - Produces (locale keys, used by Task 5): `about.versionLine`, `os.windows`, `os.macos`, `os.linux`, `os.other` and `errors.internal`, with the values in Step 7.
 
-- [ ] **Step 1: Write the failing tests** in `src/i18n/language.test.ts`
+- [x] **Step 1: Write the failing tests** in `src/i18n/language.test.ts`
 
 ```ts
 import { resolveLanguage } from './language';
@@ -313,7 +315,7 @@ it.each([
 });
 ```
 
-- [ ] **Step 2: Write the failing parity test** in `src/i18n/parity.test.ts`
+- [x] **Step 2: Write the failing parity test** in `src/i18n/parity.test.ts`
 
   The test flattens both locale files to dotted keys and asserts four things:
   - Both files have the same sorted key list.
@@ -321,23 +323,23 @@ it.each([
   - Each key has the same set of `{{placeholder}}` names in both files.
   - No `en` value contains a character in `㐀-鿿`.
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
   Run `pnpm test src/i18n`. Expected: FAIL, because the modules and the locale files do not exist.
 
-- [ ] **Step 4: Implement `resolveLanguage`**
+- [x] **Step 4: Implement `resolveLanguage`**
 
   An explicit preference wins. Otherwise, walk the locales in order and compare each locale's first subtag, lower-cased: `zh` gives `zh-CN`, `en` gives `en`. The first match wins. With no match, return `en`.
 
-- [ ] **Step 5: Implement `createI18n`, and wire it into `main.tsx`**
+- [x] **Step 5: Implement `createI18n`, and wire it into `main.tsx`**
 
   `main.tsx` calls `createI18n(resolveLanguage('system', navigator.languages))` and wraps `App` in `I18nextProvider`.
 
-- [ ] **Step 6: Add the lint rule against literal JSX text**
+- [x] **Step 6: Add the lint rule against literal JSX text**
 
   Install `eslint-plugin-i18next`. In `eslint.config.js`, set `'i18next/no-literal-string': ['error', { mode: 'jsx-text-only' }]` for `src/**/*.tsx`, excluding `*.test.tsx`.
 
-- [ ] **Step 7: Write the locale files**
+- [x] **Step 7: Write the locale files**
 
   | Key | `zh-CN` | `en` |
   |---|---|---|
@@ -348,16 +350,16 @@ it.each([
   | `os.other` | `未知系统` | `Unknown system` |
   | `errors.internal` | `Aji 内部出错。` | `Aji ran into an internal error.` |
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
   Run `pnpm test src/i18n`. Expected: PASS.
 
-- [ ] **Step 9: Verify that the lint rule bites**
+- [x] **Step 9: Verify that the lint rule bites**
 
   1. Add `<p>hello</p>` to `App.tsx` and run `pnpm lint`. Expected: FAIL with `i18next/no-literal-string`.
   2. Remove the line and run `pnpm lint`. Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/i18n src/locales src/main.tsx eslint.config.js package.json pnpm-lock.yaml
@@ -396,7 +398,7 @@ git commit -m "feat: add zh-CN and en locales with OS language detection"
   - `pub fn run()`, which builds `AppContext::detect` from the version in the generated context's package info.
 - Produces (TypeScript): `Request`, `Response`, `AppInfo`, `OsKind`, `ProtocolError` and `ErrorCode` in `src/transport/generated/`, one file per type.
 
-- [ ] **Step 1: Write the failing unit tests** at the bottom of `protocol.rs` and `service.rs`
+- [x] **Step 1: Write the failing unit tests** at the bottom of `protocol.rs` and `service.rs`
 
 ```rust
 // service.rs
@@ -433,33 +435,33 @@ fn current_os_matches_the_build_target() {
 }
 ```
 
-- [ ] **Step 2: Write the failing IPC test** in `src-tauri/tests/ipc.rs`
+- [x] **Step 2: Write the failing IPC test** in `src-tauri/tests/ipc.rs`
 
   1. Use Tauri's mock runtime, with `tauri` as a dev-dependency with the `test` feature: `mock_builder`, `mock_context`, `noop_assets` and `get_ipc_response`.
   2. Build `configure(mock_builder(), AppContext { version: "0.1.0".into(), os: OsKind::Linux, arch: "x86_64".into() })`, then create a webview.
   3. Invoke `rpc` with the JSON body `{"request": {"type": "appInfo"}}`. Assert that the response deserialises to `{"type":"appInfo","version":"0.1.0","os":"linux","arch":"x86_64"}`.
   4. Invoke `rpc` with `{"request": {"type": "nope"}}`. Assert an error response whose payload is a string, not a `ProtocolError`. This pins the case the TypeScript side must normalise (Review Focus 4).
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
   Run `pnpm build && cargo test -p aji`. Expected: compile errors for the missing items.
 
   `pnpm build` comes first because `tauri::generate_context!` embeds `../dist` at compile time and fails if it is missing.
 
-- [ ] **Step 4: Implement `protocol.rs`, `service.rs`, `ipc.rs` and `configure`, and set up generation**
+- [x] **Step 4: Implement `protocol.rs`, `service.rs`, `ipc.rs` and `configure`, and set up generation**
 
   1. Add the dependencies `serde` (derive), `serde_json` and `ts-rs`. Add the dev-dependencies `tokio` (macros, rt-multi-thread) and `tauri` (feature `test`).
   2. In `.cargo/config.toml`, set `[env] TS_RS_EXPORT_DIR = { value = "src/transport/generated", relative = true }`.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
   Run `cargo test -p aji`. Expected: PASS, and `src/transport/generated/` holds six `.ts` files. `Request.ts` declares `{ "type": "appInfo" }`.
 
-- [ ] **Step 6: Verify lint**
+- [x] **Step 6: Verify lint**
 
   Run `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings`. Expected: no output, exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .cargo src-tauri src/transport/generated .prettierignore eslint.config.js Cargo.lock
@@ -488,7 +490,7 @@ git commit -m "feat: add the rpc protocol with a transport-independent dispatche
 - Produces (`src/transport/TransportProvider.tsx`): `TransportProvider({ transport, children })` and `useTransport(): Transport`. The hook throws outside a provider.
 - Produces (`src/panel/VersionLine.tsx`): `VersionLine()`. While loading it renders nothing. On success it renders `about.versionLine`, with `os` translated through `os.<kind>`. On failure it renders `errors.<code>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // transport.test.ts
@@ -540,29 +542,29 @@ it('shows localised error text, not the raw message', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
   Run `pnpm test src/transport src/panel`. Expected: FAIL, because the modules do not exist.
 
-- [ ] **Step 3: Implement the transport modules, `TransportProvider` and `VersionLine`**
+- [x] **Step 3: Implement the transport modules, `TransportProvider` and `VersionLine`**
 
   `VersionLine` ignores a result that arrives after it unmounts.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
   Run `pnpm test`. Expected: PASS, the whole suite.
 
-- [ ] **Step 5: Wire the app together**
+- [x] **Step 5: Wire the app together**
 
   1. `main.tsx` wraps `App` in `TransportProvider` with `createTauriTransport()`.
   2. `App` renders `MainFrame` with a panel that holds `VersionLine` at its foot, in `text-text-muted`.
 
-- [ ] **Step 6: Verify the app**
+- [x] **Step 6: Verify the app**
 
   1. Run `pnpm tauri dev`. Expected: the panel shows `Aji version 0.1.0 · macOS aarch64` on an English-first Mac.
   2. Set the macOS language order to put English first and restart the app. Expected: still correct, with no CSP errors in the webview console.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src
@@ -577,24 +579,24 @@ git commit -m "feat: add the UI transport layer and show the app version from Ru
 **Interfaces:**
 - Produces: a workflow named `CI` that runs on every push and pull request (and on demand, from Task 7). Its jobs are `frontend`, `rust` and `licenses`, and the bundle jobs of Task 7 depend on them.
 
-- [ ] **Step 1: Write `scripts/check-npm-licenses.mjs`**
+- [x] **Step 1: Write `scripts/check-npm-licenses.mjs`**
 
   1. Run `pnpm licenses list --prod --json` and parse the output, which is grouped by licence.
   2. Fail with a list of `name@version (licence)` for anything outside this allow-list: `MIT`, `ISC`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `0BSD`, `MPL-2.0`, `CC0-1.0`, `Unlicense`, `BlueOak-1.0.0`, `OFL-1.1`.
   3. Accept an SPDX `OR` expression if any alternative is allowed.
 
-- [ ] **Step 2: Verify that it bites**
+- [x] **Step 2: Verify that it bites**
 
   1. Run `node scripts/check-npm-licenses.mjs`. Expected: exit 0.
   2. Temporarily empty the allow-list and run it again. Expected: exit 1, listing `react` and the other dependencies. Restore the list.
 
-- [ ] **Step 3: Write `deny.toml`**
+- [x] **Step 3: Write `deny.toml`**
 
   1. Add a `[licenses]` allow-list of the Global Constraints licences in SPDX form. Include `AGPL-3.0-or-later` for Aji's own crate.
   2. Run `cargo deny check licenses` (install the tool with `cargo install cargo-deny --locked`). Add a licence only if it is on the Global Constraints list, or is permissive and listed by the FSF as GPL-compatible. Name each addition in the commit message.
   3. Expected: `licenses ok`.
 
-- [ ] **Step 4: Write `ci.yml`**
+- [x] **Step 4: Write `ci.yml`**
 
   - `frontend` (`ubuntu-24.04`):
     1. `pnpm/action-setup`, which reads `packageManager`.
@@ -609,11 +611,11 @@ git commit -m "feat: add the UI transport layer and show the app version from Ru
     5. `git diff --exit-code -- src/transport/generated`, and `test -z "$(git status --porcelain src/transport/generated)"`, so stale or new generated files fail.
   - `licenses` (`ubuntu-24.04`): `EmbarkStudios/cargo-deny-action` with `command: check licenses`.
 
-- [ ] **Step 5: Verify the workflow file**
+- [x] **Step 5: Verify the workflow file**
 
   Run `gh workflow view` after the push, or validate locally with `actionlint` if installed. Expected: no syntax errors. The full run is verified in Task 7, after the owner pushes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/ci.yml deny.toml scripts/check-npm-licenses.mjs
@@ -629,7 +631,7 @@ git commit -m "ci: run lint, type, test and licence checks on every push"
 - Consumes: the `frontend`, `rust` and `licenses` jobs from Task 6.
 - Produces: CI artifacts `aji-windows-x64` (NSIS `.exe`), `aji-macos-arm64` (`.dmg`) and `aji-linux-x64` (`.AppImage`), kept for 14 days.
 
-- [ ] **Step 1: Add the `bundle` job**
+- [x] **Step 1: Add the `bundle` job**
 
   1. `needs: [frontend, rust, licenses]`, and `if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'`. Installers build only for pushes to `main` or a manual run (owner decision, 2026-11-19), so the workflow also gets a `workflow_dispatch` trigger, and `main` runs are never cancelled by a newer push.
   2. Matrix:
@@ -639,24 +641,24 @@ git commit -m "ci: run lint, type, test and licence checks on every push"
   3. Run `pnpm install --frozen-lockfile` and `pnpm tauri build <bundles>`.
   4. Upload `target/release/bundle/<kind>/*` with `actions/upload-artifact`, under the artifact names above.
 
-- [ ] **Step 2: Update `README.md`**
+- [x] **Step 2: Update `README.md`**
 
   1. Status: "Phase 1 in progress: the app skeleton builds; no engine support yet."
   2. Build from source: `pnpm install`, then `pnpm tauri dev`, with the prerequisites linked to Task 0.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/ci.yml README.md
 git commit -m "ci: build Windows, macOS and Linux installers on every push"
 ```
 
-- [ ] **Step 4: Owner pushes `feat/m1-foundation`, then build the installers on demand**
+- [x] **Step 4: Owner pushes `feat/m1-foundation`, then build the installers on demand**
 
   1. The push runs the checks only. Run `gh run watch` on it. Expected: `frontend`, `rust` and `licenses` green, `bundle` skipped.
   2. Start the installers with `gh workflow run CI --ref feat/m1-foundation` (or Actions → CI → Run workflow), then `gh run watch` that run. Expected: every job green and three artifacts attached.
 
-- [ ] **Step 5: Owner verifies on the Windows PC with the RTX 5070**
+- [ ] **Step 5: Owner verifies on the Windows PC with the RTX 5070** (skipped by the owner on 2026-11-19; done as part of M8)
 
   1. Install the NSIS artifact and pass SmartScreen with "More info", then "Run anyway".
   2. Expected:
@@ -666,7 +668,7 @@ git commit -m "ci: build Windows, macOS and Linux installers on every push"
      - Switching Windows between dark and light mode recolours the window.
   3. Record any further prompts in the pull request description.
 
-- [ ] **Step 6: Owner verifies on the MacBook Pro M5 (the development Mac)**
+- [x] **Step 6: Owner verifies on the MacBook Pro M5 (the development Mac)**
 
   1. Open the DMG, drag Aji to Applications, and allow it once under System Settings › Privacy & Security, "Open Anyway".
   2. Expected: the same checks as Step 5, with `macOS aarch64`. The language follows the first entry of System Settings › General › Language & Region. To check the Chinese interface without changing that, quit Aji and run `open -a Aji --args -AppleLanguages "(zh-Hans-CN)"`; the panel shows `Aji 版本 0.1.0 · macOS aarch64`.
