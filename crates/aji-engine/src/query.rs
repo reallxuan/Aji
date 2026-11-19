@@ -2,24 +2,23 @@
 
 use std::time::Duration;
 
-use aji_core::{Position, move_to_gtp};
+use aji_core::{CoreError, Position, move_to_gtp};
 use serde_json::{Value, json};
 
 /// Builds an analysis query line (without a trailing newline).
 ///
-/// `position` must already pass `Position::validate()`: an off-board point panics inside
-/// `move_to_gtp`.
+/// A point off the board gives `PointOffBoard`.
 pub fn analysis_query(
     id: &str,
     position: &Position,
     max_visits: u32,
     report_every: Duration,
-) -> String {
-    let moves: Vec<Value> = position
+) -> Result<String, CoreError> {
+    let moves = position
         .moves
         .iter()
-        .map(|&(c, mv)| json!([c.gtp(), move_to_gtp(mv, position.size)]))
-        .collect();
+        .map(|&(c, mv)| Ok(json!([c.gtp(), move_to_gtp(mv, position.size)?])))
+        .collect::<Result<Vec<Value>, CoreError>>()?;
     let mut q = json!({
         "id": id,
         "moves": moves,
@@ -31,14 +30,17 @@ pub fn analysis_query(
         "reportDuringSearchEvery": report_every.as_secs_f64(),
     });
     if !position.setup.is_empty() {
-        let stones: Vec<Value> = position
+        let stones = position
             .setup
             .iter()
-            .map(|&(c, p)| json!([c.gtp(), move_to_gtp(aji_core::Move::Play(p), position.size)]))
-            .collect();
+            .map(|&(c, p)| {
+                let at = move_to_gtp(aji_core::Move::Play(p), position.size)?;
+                Ok(json!([c.gtp(), at]))
+            })
+            .collect::<Result<Vec<Value>, CoreError>>()?;
         q["initialStones"] = Value::Array(stones);
     }
-    q.to_string()
+    Ok(q.to_string())
 }
 
 /// Builds an `{"id":…,"action":…}` query, such as `query_version` or `terminate_all`.
@@ -67,7 +69,7 @@ mod tests {
 
     #[test]
     fn query_json_shape() {
-        let line = analysis_query("aji-1", &p1(), 100_000, Duration::from_millis(100));
+        let line = analysis_query("aji-1", &p1(), 100_000, Duration::from_millis(100)).unwrap();
         assert!(!line.contains('\n'));
         let v: Value = serde_json::from_str(&line).unwrap();
         let want = json!({"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1});
@@ -80,8 +82,24 @@ mod tests {
         p.moves.clear();
         p.setup = vec![(Color::Black, Point { x: 3, y: 15 })];
         let v: Value =
-            serde_json::from_str(&analysis_query("a", &p, 10, Duration::from_millis(100))).unwrap();
+            serde_json::from_str(&analysis_query("a", &p, 10, Duration::from_millis(100)).unwrap())
+                .unwrap();
         assert_eq!(v["initialStones"], json!([["B", "D4"]]));
+    }
+
+    #[test]
+    fn off_board_points_are_an_error() {
+        let mut p = p1();
+        p.moves
+            .push((Color::Black, Move::Play(Point { x: 19, y: 0 })));
+        let off = Point { x: 19, y: 0 };
+        assert_eq!(
+            analysis_query("a", &p, 10, Duration::from_millis(100)),
+            Err(CoreError::PointOffBoard(off))
+        );
+        let mut p = p1();
+        p.setup = vec![(Color::Black, off)];
+        assert!(analysis_query("a", &p, 10, Duration::from_millis(100)).is_err());
     }
 
     #[test]

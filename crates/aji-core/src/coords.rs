@@ -107,15 +107,17 @@ pub enum Move {
     Pass,
 }
 
-/// Formats a move as a GTP vertex, for example `Q16` or `pass`.
-pub fn move_to_gtp(mv: Move, size: BoardSize) -> String {
+/// Formats a move as a GTP vertex, for example `Q16` or `pass`. A point off the board gives
+/// `PointOffBoard`.
+pub fn move_to_gtp(mv: Move, size: BoardSize) -> Result<String, CoreError> {
     match mv {
-        Move::Pass => "pass".to_string(),
-        Move::Play(p) => format!(
+        Move::Pass => Ok("pass".to_string()),
+        Move::Play(p) if p.x < size.get() && p.y < size.get() => Ok(format!(
             "{}{}",
             GTP_COLUMNS[usize::from(p.x)] as char,
             size.get() - p.y
-        ),
+        )),
+        Move::Play(p) => Err(CoreError::PointOffBoard(p)),
     }
 }
 
@@ -226,13 +228,25 @@ mod tests {
             (p(4, 4), "E5", n9),
         ];
         for (pt, s, size) in cases {
-            assert_eq!(move_to_gtp(Move::Play(pt), size), s);
+            assert_eq!(move_to_gtp(Move::Play(pt), size).unwrap(), s);
             assert_eq!(move_from_gtp(s, size).unwrap(), Move::Play(pt));
         }
         for s in ["pass", "PASS", "Pass"] {
             assert_eq!(move_from_gtp(s, n19).unwrap(), Move::Pass);
         }
-        assert_eq!(move_to_gtp(Move::Pass, n19), "pass");
+        assert_eq!(move_to_gtp(Move::Pass, n19).unwrap(), "pass");
+    }
+
+    #[test]
+    fn gtp_rejects_off_board_points() {
+        let n19 = BoardSize::NINETEEN;
+        let n9 = BoardSize::new(9).unwrap();
+        for (pt, size) in [(p(19, 0), n19), (p(0, 19), n19), (p(9, 0), n9)] {
+            assert_eq!(
+                move_to_gtp(Move::Play(pt), size),
+                Err(CoreError::PointOffBoard(pt))
+            );
+        }
     }
 
     #[test]

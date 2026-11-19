@@ -13,13 +13,13 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aji_core::Position;
+use aji_core::{Position, PositionKey};
 use tokio::runtime::Handle;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
 
-use crate::cache::AnalysisCache;
+use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
 use crate::process::{self, EngineFiles, Spawned, katago_launch, lock};
 use crate::query::{action_query, analysis_query, terminate_query};
 use crate::response::{KataLine, RawAnalysis, parse_line};
@@ -40,6 +40,8 @@ pub struct EngineOptions {
     pub throttle: Duration,
     /// Candidates kept per update, by KataGo's `order`.
     pub max_candidates: usize,
+    /// Positions the analysis cache keeps; the least recently used goes first.
+    pub cache_entries: usize,
     /// Lines of stderr kept for the crashed state.
     pub stderr_lines: usize,
     /// How often KataGo is pinged once it is ready.
@@ -65,6 +67,7 @@ impl Default for EngineOptions {
             report_every: Duration::from_millis(100),
             throttle: Duration::from_millis(100),
             max_candidates: 20,
+            cache_entries: DEFAULT_CACHE_ENTRIES,
             stderr_lines: 50,
             ping_every: Duration::from_secs(5),
             ping_timeout: Duration::from_secs(20),
@@ -88,6 +91,8 @@ pub enum EngineError {
     NotConfigured,
     /// KataGo is not running (stopped, crashed, not configured, or shut down).
     NotRunning,
+    /// The position has a point off the board.
+    InvalidPosition,
 }
 
 impl fmt::Display for EngineError {
@@ -95,23 +100,37 @@ impl fmt::Display for EngineError {
         f.write_str(match self {
             EngineError::NotConfigured => "no KataGo is configured",
             EngineError::NotRunning => "KataGo is not running",
+            EngineError::InvalidPosition => "the position has a point off the board",
         })
     }
 }
 
 impl std::error::Error for EngineError {}
 
-/// What `state()` and `pid()` read without asking the actor.
+/// What `state()`, `status()` and `pid()` read without asking the actor.
 struct Snapshot {
     state: EngineState,
     pid: Option<u32>,
+    position: PositionKey,
+    analysis: Option<AnalysisUpdate>,
+}
+
+/// The engine's state with the current position and the analysis shown for it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EngineStatus {
+    pub state: EngineState,
+    pub position: PositionKey,
+    /// The last update emitted for `position`. On `set_position` it becomes the cached entry
+    /// shown at once, or `None`. Otherwise only a newer emitted update replaces it, so
+    /// pause, resume and restart keep it until the next report.
+    pub analysis: Option<AnalysisUpdate>,
 }
 
 type Reply<T> = oneshot::Sender<T>;
 type Outcome = Result<(), EngineError>;
 
 enum Command {
-    SetPosition(Position, Reply<()>),
+    SetPosition(Position, Reply<Outcome>),
     Pause(Reply<Outcome>),
     Resume(Reply<Outcome>),
     Restart(Reply<Outcome>),
@@ -156,9 +175,12 @@ impl Engine {
         let snapshot = Arc::new(Mutex::new(Snapshot {
             state: state.clone(),
             pid: None,
+            position: position.key(),
+            analysis: None,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
+        let cache = AnalysisCache::with_capacity(options.cache_entries);
         let actor = Actor {
             throttle: Throttle::new(options.throttle),
             files,
@@ -173,7 +195,7 @@ impl Engine {
             state,
             position,
             paused: false,
-            cache: AnalysisCache::new(),
+            cache,
             queries: HashMap::new(),
             current: None,
             next_id: 1,
@@ -191,16 +213,27 @@ impl Engine {
         lock(&self.snapshot).state.clone()
     }
 
+    /// The state, the current position and the analysis shown for it, read together.
+    pub fn status(&self) -> EngineStatus {
+        let snapshot = lock(&self.snapshot);
+        EngineStatus {
+            state: snapshot.state.clone(),
+            position: snapshot.position,
+            analysis: snapshot.analysis.clone(),
+        }
+    }
+
     /// KataGo's process id while a process exists.
     pub fn pid(&self) -> Option<u32> {
         lock(&self.snapshot).pid
     }
 
     /// Makes `position` current. Returns once the change is applied: no update for another
-    /// position is emitted afterwards.
-    pub async fn set_position(&self, position: Position) {
-        self.ask(|reply| Command::SetPosition(position, reply))
-            .await;
+    /// position is emitted afterwards. A position with a point off the board gives
+    /// `InvalidPosition` and changes nothing.
+    pub async fn set_position(&self, position: Position) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetPosition(position, reply))
+            .await
     }
 
     pub async fn pause(&self) -> Result<(), EngineError> {
@@ -395,8 +428,7 @@ impl Actor {
     fn on_command(&mut self, command: Command) {
         match command {
             Command::SetPosition(position, reply) => {
-                self.set_position(position);
-                let _ = reply.send(());
+                let _ = reply.send(self.set_position(position));
             }
             Command::Pause(reply) => {
                 let _ = reply.send(self.pause());
@@ -415,13 +447,21 @@ impl Actor {
         }
     }
 
-    fn set_position(&mut self, position: Position) {
+    fn set_position(&mut self, position: Position) -> Outcome {
+        if position.validate().is_err() {
+            return Err(EngineError::InvalidPosition);
+        }
         if position == self.position {
-            return;
+            return Ok(());
         }
         self.terminate_current();
         self.position = position;
         self.throttle = Throttle::new(self.options.throttle);
+        {
+            let mut snapshot = lock(&self.snapshot);
+            snapshot.position = self.position.key();
+            snapshot.analysis = None;
+        }
         if let Some(cached) = self.cache.get(self.position.key()).cloned() {
             self.throttle.admit(std::time::Instant::now(), true);
             self.emit(EngineEvent::Analysis(cached));
@@ -429,6 +469,7 @@ impl Actor {
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
         }
+        Ok(())
     }
 
     fn pause(&mut self) -> Outcome {
@@ -871,8 +912,8 @@ impl Actor {
         self.set_state(state);
     }
 
-    fn wants_analysis(&self) -> bool {
-        // An invalid position would panic in `analysis_query`.
+    fn wants_analysis(&mut self) -> bool {
+        // The position given at spawn is not validated; `analysis_query` would refuse it.
         self.position.validate().is_ok()
             && self
                 .cache
@@ -883,12 +924,14 @@ impl Actor {
     fn submit(&mut self) {
         let id = format!("aji-{}", self.next_id);
         self.next_id += 1;
-        let line = analysis_query(
+        let Ok(line) = analysis_query(
             &id,
             &self.position,
             self.options.visit_cap,
             self.options.report_every,
-        );
+        ) else {
+            return;
+        };
         self.send(line);
         self.queries.insert(id.clone(), self.position.clone());
         self.current = Some(Active {
@@ -988,6 +1031,9 @@ impl Actor {
     }
 
     fn emit(&self, event: EngineEvent) {
+        if let EngineEvent::Analysis(update) = &event {
+            lock(&self.snapshot).analysis = Some(update.clone());
+        }
         (self.on_event)(event);
     }
 }

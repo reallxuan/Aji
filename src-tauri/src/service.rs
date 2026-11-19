@@ -49,6 +49,7 @@ impl From<EngineError> for ProtocolError {
         let code = match error {
             EngineError::NotConfigured => ErrorCode::EngineNotConfigured,
             EngineError::NotRunning => ErrorCode::EngineNotRunning,
+            EngineError::InvalidPosition => ErrorCode::Internal,
         };
         ProtocolError {
             code,

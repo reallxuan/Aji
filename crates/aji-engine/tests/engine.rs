@@ -509,7 +509,7 @@ async fn stale_position_updates_are_not_emitted() {
     p.until_state(|s| *s == analysing()).await;
     assert_eq!(p.next_analysis().await.position, p1().key());
 
-    bounded(p.engine.set_position(p2())).await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
     p.drain();
     let mut after = p.until_state(|s| *s == ready()).await;
     // `ready` comes from P2's own final, not from the final of P1's terminated query.
@@ -596,7 +596,7 @@ async fn not_configured_rejects_commands() {
         bounded(p.engine.stop()).await,
         Err(EngineError::NotConfigured)
     );
-    bounded(p.engine.set_position(p2())).await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
     assert_eq!(p.engine.state(), EngineState::NotConfigured);
     assert_eq!(p.engine.pid(), None);
     bounded(p.engine.shutdown()).await;
@@ -815,9 +815,9 @@ async fn capped_position_is_not_reanalysed() {
     assert_eq!(states(&seen), [&EngineState::Starting, &ready()]);
 
     // On switching back: the cached entry is emitted at once, and nothing is submitted.
-    bounded(p.engine.set_position(p2())).await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
     p.until_state(|s| *s == ready()).await;
-    bounded(p.engine.set_position(p1())).await;
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
     let back = p.drain();
     assert_eq!(back.len(), 1, "{back:?}");
     let EngineEvent::Analysis(cached) = &back[0] else {
@@ -852,15 +852,56 @@ async fn off_board_position_is_never_submitted() {
     assert_eq!(p.next_state().await, paused());
     assert_eq!(bounded(p.engine.resume()).await, Ok(()));
     assert_eq!(p.next_state().await, ready());
-    bounded(p.engine.set_position(p1())).await;
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
     assert_eq!(p.next_state().await, analysing());
 
-    // Switching to it while analysing ends in ready too.
-    bounded(p.engine.set_position(off_board)).await;
-    assert_eq!(p.engine.state(), ready());
-    assert!(p.drain().contains(&EngineEvent::State(ready())));
-    let quiet = p.collect_for(Duration::from_millis(300)).await;
-    assert!(updates(&quiet).is_empty(), "{quiet:?}");
+    // Switching to it while analysing is refused and changes nothing.
+    assert_eq!(
+        bounded(p.engine.set_position(off_board)).await,
+        Err(EngineError::InvalidPosition)
+    );
+    assert_eq!(p.engine.state(), analysing());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn set_position_rejects_an_off_board_move() {
+    let mut off_board = p1();
+    off_board
+        .moves
+        .push((Color::Black, Move::Play(Point { x: 19, y: 0 })));
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    p.drain();
+
+    assert_eq!(
+        bounded(p.engine.set_position(off_board)).await,
+        Err(EngineError::InvalidPosition)
+    );
+    assert_eq!(p.engine.status().position, p1().key());
+    let after = p.collect_for(Duration::from_millis(300)).await;
+    assert!(
+        updates(&after).iter().all(|u| u.position == p1().key()),
+        "an update carried another key: {after:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn status_carries_the_latest_analysis() {
+    let mut p = start(Some(files("normal")), p1());
+    let first = p.next_analysis().await;
+    let status = p.engine.status();
+    assert_eq!(status.position, p1().key());
+    assert_eq!(status.analysis, Some(first));
+
+    // Paused, so that no report for P2 can arrive before the check.
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    p.until_state(|s| *s == paused()).await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    let status = p.engine.status();
+    assert_eq!(status.position, p2().key());
+    assert_eq!(status.analysis, None);
     bounded(p.engine.shutdown()).await;
 }
 
