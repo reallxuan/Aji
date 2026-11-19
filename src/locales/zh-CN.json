@@ -9,6 +9,8 @@
     "other": "未知系统"
   },
   "errors": {
-    "internal": "Aji 内部出错。"
+    "internal": "Aji 内部出错。",
+    "engineNotConfigured": "尚未设置引擎。",
+    "engineNotRunning": "KataGo 未在运行。"
   }
 }

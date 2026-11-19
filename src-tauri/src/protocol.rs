@@ -4,6 +4,7 @@
 //! `src/transport/generated/` from them. They cross a process or network boundary, so they never
 //! carry file paths, and errors carry a code rather than user-facing text.
 
+use aji_engine::{AnalysisUpdate, EngineState};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -13,6 +14,11 @@ use ts_rs::TS;
 #[ts(export)]
 pub enum Request {
     AppInfo,
+    EngineStatus,
+    EngineRestart,
+    EngineStop,
+    AnalysisPause,
+    AnalysisResume,
 }
 
 /// The answer to a [`Request`], tagged the same way.
@@ -21,6 +27,17 @@ pub enum Request {
 #[ts(export)]
 pub enum Response {
     AppInfo(AppInfo),
+    EngineStatus { engine: EngineState },
+    Ok,
+}
+
+/// A message the engine side pushes to the UI without being asked, tagged the same way.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(export)]
+pub enum AppEvent {
+    EngineState { engine: EngineState },
+    AnalysisUpdate { analysis: AnalysisUpdate },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -68,6 +85,8 @@ pub struct ProtocolError {
 #[ts(export)]
 pub enum ErrorCode {
     Internal,
+    EngineNotConfigured,
+    EngineNotRunning,
 }
 
 #[cfg(test)]
@@ -94,6 +113,72 @@ mod tests {
         assert_eq!(
             serde_json::to_value(r).unwrap(),
             json!({"type": "appInfo", "version": "0.1.0", "os": "macos", "arch": "aarch64"})
+        );
+    }
+
+    #[test]
+    fn engine_request_json_shapes() {
+        for (name, request) in [
+            ("engineStatus", Request::EngineStatus),
+            ("engineRestart", Request::EngineRestart),
+            ("engineStop", Request::EngineStop),
+            ("analysisPause", Request::AnalysisPause),
+            ("analysisResume", Request::AnalysisResume),
+        ] {
+            assert_eq!(
+                serde_json::from_value::<Request>(json!({"type": name})).unwrap(),
+                request
+            );
+        }
+    }
+
+    #[test]
+    fn engine_response_json_shapes() {
+        assert_eq!(
+            serde_json::to_value(Response::EngineStatus {
+                engine: EngineState::Starting
+            })
+            .unwrap(),
+            json!({"type": "engineStatus", "engine": {"state": "starting"}})
+        );
+        assert_eq!(
+            serde_json::to_value(Response::Ok).unwrap(),
+            json!({"type": "ok"})
+        );
+    }
+
+    #[test]
+    fn app_event_json_shapes() {
+        assert_eq!(
+            serde_json::to_value(AppEvent::EngineState {
+                engine: EngineState::Stopped
+            })
+            .unwrap(),
+            json!({"type": "engineState", "engine": {"state": "stopped"}})
+        );
+        let update = AnalysisUpdate {
+            position: aji_core::PositionKey(7),
+            board_size: 19,
+            root_visits: 0,
+            winrate: 0.5,
+            score_lead: 0.0,
+            is_final: false,
+            candidates: vec![],
+        };
+        let value = serde_json::to_value(AppEvent::AnalysisUpdate { analysis: update }).unwrap();
+        assert_eq!(value["type"], "analysisUpdate");
+        assert!(value["analysis"].is_object());
+    }
+
+    #[test]
+    fn new_error_codes_json_shape() {
+        assert_eq!(
+            serde_json::to_value(ErrorCode::EngineNotConfigured).unwrap(),
+            json!("engineNotConfigured")
+        );
+        assert_eq!(
+            serde_json::to_value(ErrorCode::EngineNotRunning).unwrap(),
+            json!("engineNotRunning")
         );
     }
 

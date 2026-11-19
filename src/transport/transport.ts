@@ -22,7 +22,11 @@ export class TransportError extends Error {
 }
 
 // A Record keyed by ErrorCode, so a new code generated from Rust fails type checking until listed.
-const KNOWN_CODES: Record<ErrorCode, true> = { internal: true };
+const KNOWN_CODES: Record<ErrorCode, true> = {
+  internal: true,
+  engineNotConfigured: true,
+  engineNotRunning: true,
+};
 
 function isKnownCode(value: unknown): value is ErrorCode {
   return typeof value === 'string' && Object.hasOwn(KNOWN_CODES, value);

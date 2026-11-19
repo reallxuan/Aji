@@ -3,4 +3,4 @@
 /**
  * A request from the UI. Serialised as `{"type": "<camelCase variant>", ...fields}`.
  */
-export type Request = { "type": "appInfo" };
+export type Request = { "type": "appInfo" } | { "type": "engineStatus" } | { "type": "engineRestart" } | { "type": "engineStop" } | { "type": "analysisPause" } | { "type": "analysisResume" };

@@ -9,6 +9,8 @@
     "other": "Unknown system"
   },
   "errors": {
-    "internal": "Aji ran into an internal error."
+    "internal": "Aji ran into an internal error.",
+    "engineNotConfigured": "No engine is set up.",
+    "engineNotRunning": "KataGo is not running."
   }
 }

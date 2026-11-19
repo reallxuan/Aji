@@ -21,10 +21,13 @@ dependencies = [
 name = "aji"
 version = "0.1.0"
 dependencies = [
+ "aji-core",
+ "aji-engine",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "tempfile",
  "tokio",
  "ts-rs",
 ]
