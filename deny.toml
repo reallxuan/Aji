@@ -1,0 +1,26 @@
+# cargo-deny: Rust dependencies may only use licences compatible with AGPL-3.0-or-later
+# (CLAUDE.md, License). Add a licence here only if it is on that list, or is permissive and listed
+# by the FSF as GPL-compatible, and name the addition in the commit message.
+
+[graph]
+all-features = false
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# The list mirrors CLAUDE.md, so entries no current dependency uses are expected.
+unused-allowed-license = "allow"
+allow = [
+  "AGPL-3.0-or-later", # Aji itself
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MPL-2.0",
+  "Zlib",
+  "0BSD",
+  "CC0-1.0",
+  "Unicode-3.0",
+]
