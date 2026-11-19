@@ -1,0 +1,9 @@
+dist
+target
+src-tauri/target
+src-tauri/gen
+pnpm-lock.yaml
+.superpowers
+docs
+*.md
+src/transport/generated

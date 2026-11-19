@@ -1,0 +1,14 @@
+{
+  "about": {
+    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}"
+  },
+  "os": {
+    "windows": "Windows",
+    "macos": "macOS",
+    "linux": "Linux",
+    "other": "未知系统"
+  },
+  "errors": {
+    "internal": "Aji 内部出错。"
+  }
+}

@@ -92,7 +92,7 @@ Rows marked Decided were chosen by the owner. Everything else in this section is
 | Local data | SQLite (rusqlite) for the analysis cache and game library; settings in a JSON file | Whole-game analysis must persist so reopening a game does not recompute it |
 | Remote transport | WebSocket carrying the same JSON messages as local IPC, encrypted and token-authenticated | See 6.4; how encryption is provided on a local network is to verify (R12) |
 | Package management | pnpm + cargo workspace | |
-| CI | GitHub Actions, building installers for all three desktop platforms on every push | See section 3 |
+| CI | GitHub Actions: checks on every push; installers for all three desktop platforms on every push to `main`, or on demand for any branch | Decided 2026-11-19 (installers on `main` only, not every push). See section 3 |
 | Auto-update | tauri-plugin-updater | |
 | License | AGPL-3.0-or-later | Decided: AGPL. Anyone who distributes Aji, or offers a modified version over a network, must publish their source, which rules out closed-source commercial repackaging while keeping the project open source. The network clause matters because of remote access (6.4). "Or later" is proposed. All dependencies must be AGPL-compatible; KataGo (MIT) is |
 
