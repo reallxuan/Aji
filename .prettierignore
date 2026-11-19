@@ -11,3 +11,5 @@ src/transport/generated
 **/tests/fixtures
 # Local Claude Code state, such as session worktrees.
 .claude
+# The bundled manifest is generator output and stays byte-exact.
+crates/aji-manager/manifest
