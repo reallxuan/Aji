@@ -3,10 +3,13 @@ name: CI
 on:
   push:
   pull_request:
+  # Actions → CI → Run workflow builds installers for any branch on demand.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Every commit on main keeps its installers; other branches only need their latest run.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   frontend:
@@ -54,6 +57,8 @@ jobs:
           command: check licenses
 
   bundle:
+    # Installers are slow to build, so only for pushes to main or a manual run.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     needs: [frontend, rust, licenses]
     strategy:
       fail-fast: false

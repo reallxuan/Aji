@@ -20,7 +20,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-`pnpm test` runs the interface tests and `cargo test --workspace` the Rust tests. Installers for Windows, macOS and Linux are built by CI on every push.
+`pnpm test` runs the interface tests and `cargo test --workspace` the Rust tests. CI runs the checks on every push. It builds installers for Windows, macOS and Linux on every push to `main`, or for any branch from Actions → CI → Run workflow.
 
 ## License
 
