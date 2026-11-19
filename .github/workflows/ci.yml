@@ -52,3 +52,47 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
+
+  bundle:
+    needs: [frontend, rust, licenses]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundle: nsis
+            artifact: aji-windows-x64
+          # macos-15 is arm64; the macos-14 label is now an x64 image and deprecated.
+          - os: macos-15
+            bundle: dmg
+            artifact: aji-macos-arm64
+          # The oldest supported glibc. When this label is retired, build in an ubuntu:22.04
+          # container on ubuntu-24.04 instead.
+          - os: ubuntu-22.04
+            bundle: appimage
+            artifact: aji-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tauri Linux prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles ${{ matrix.bundle }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/release/bundle/${{ matrix.bundle }}/*
+          retention-days: 14
+          if-no-files-found: error
