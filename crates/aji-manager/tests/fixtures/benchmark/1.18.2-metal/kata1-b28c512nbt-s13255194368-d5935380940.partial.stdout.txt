@@ -1,0 +1,49 @@
+2026-11-19 22:09:31+0800: Running with following config:
+allowResignation = true
+lagBuffer = 1.0
+logAllGTPCommunication = true
+logDir = gtp_logs
+logSearchInfo = true
+logSearchInfoForChosenMove = false
+logToStderr = false
+maxTimePondering = 60.0
+maxVisits = 500
+numSearchThreads = 6
+ponderingEnabled = false
+resignConsecTurns = 3
+resignThreshold = -0.90
+rules = tromp-taylor
+searchFactorAfterOnePass = 0.50
+searchFactorAfterTwoPass = 0.25
+searchFactorWhenWinning = 0.40
+searchFactorWhenWinningThreshold = 0.95
+
+2026-11-19 22:09:31+0800: Loading model and initializing benchmark...
+2026-11-19 22:09:31+0800: Testing with default positions for board size: 19
+2026-11-19 22:09:31+0800: nnRandSeed0 = 2990875287248528253
+2026-11-19 22:09:31+0800: After dedups: nnModelFile0 = networks/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz useFP16 auto
+2026-11-19 22:09:31+0800: Initializing neural net buffer to be size 19 * 19 exactly
+
+2026-11-19 22:09:33+0800: Loaded config gtp.cfg
+2026-11-19 22:09:33+0800: Loaded model networks/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz
+
+Testing using 800 visits.
+  If you have a good GPU, you might increase this using "-visits N" to get more accurate results.
+  If you have a weak GPU and this is taking forever, you can decrease it instead to finish the benchmark faster.
+
+You are currently using the Metal version of KataGo.
+
+Your GTP config is currently set to use numSearchThreads = 6
+Automatically trying different numbers of threads to home in on the best (board size 19x19): 
+
+2026-11-19 22:09:33+0800: GPU -1 finishing, processed 5 rows 5 batches
+2026-11-19 22:09:33+0800: nnRandSeed0 = 11900643286785036531
+2026-11-19 22:09:33+0800: After dedups: nnModelFile0 = networks/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz useFP16 auto
+2026-11-19 22:09:33+0800: Initializing neural net buffer to be size 19 * 19 exactly
+
+
+Possible numbers of threads to test: 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 
+
+numSearchThreads =  5: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads =  5: 1 / 10 positions, visits/s = 79.17 (10.2 secs)      numSearchThreads =  5: 2 / 10 positions, visits/s = 74.06 (21.7 secs)      numSearchThreads =  5: 3 / 10 positions, visits/s = 71.08 (33.9 secs)      numSearchThreads =  5: 4 / 10 positions, visits/s = 75.32 (42.7 secs)      numSearchThreads =  5: 5 / 10 positions, visits/s = 77.84 (51.6 secs)      numSearchThreads =  5: 6 / 10 positions, visits/s = 76.40 (63.1 secs)      numSearchThreads =  5: 7 / 10 positions, visits/s = 77.32 (72.8 secs)      numSearchThreads =  5: 8 / 10 positions, visits/s = 77.54 (82.9 secs)      numSearchThreads =  5: 9 / 10 positions, visits/s = 78.90 (91.7 secs)      numSearchThreads =  5: 10 / 10 positions, visits/s = 78.47 nnEvals/s = 65.07 nnBatches/s = 26.15 avgBatchSize = 2.49 (102.4 secs)
+numSearchThreads = 12: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads = 12: 1 / 10 positions, visits/s = 82.93 (9.8 secs)      numSearchThreads = 12: 2 / 10 positions, visits/s = 78.28 (20.7 secs)      numSearchThreads = 12: 3 / 10 positions, visits/s = 77.14 (31.5 secs)      numSearchThreads = 12: 4 / 10 positions, visits/s = 78.44 (41.3 secs)      numSearchThreads = 12: 5 / 10 positions, visits/s = 81.48 (49.7 secs)      numSearchThreads = 12: 6 / 10 positions, visits/s = 79.51 (61.2 secs)      numSearchThreads = 12: 7 / 10 positions, visits/s = 81.00 (70.0 secs)      numSearchThreads = 12: 8 / 10 positions, visits/s = 81.39 (79.7 secs)      numSearchThreads = 12: 9 / 10 positions, visits/s = 82.06 (88.9 secs)      numSearchThreads = 12: 10 / 10 positions, visits/s = 82.74 nnEvals/s = 69.45 nnBatches/s = 11.74 avgBatchSize = 5.92 (98.0 secs)
+numSearchThreads =  3: 0 / 10 positions, visits/s = nan (0.0 secs)      numSearchThreads =  3: 1 / 10 positions, visits/s = 75.72 (10.6 secs)      numSearchThreads =  3: 2 / 10 positions, visits/s = 67.44 (23.8 secs)      numSearchThreads =  3: 3 / 10 positions, visits/s = 66.28 (36.3 secs)      numSearchThreads =  3: 4 / 10 positions, visits/s = 67.95 (47.2 secs)      numSearchThreads =  3: 5 / 10 positions, visits/s = 69.02 (58.1 secs)      numSearchThreads =  3: 6 / 10 positions, visits/s = 67.96 (70.8 secs)      numSearchThreads =  3: 7 / 10 positions, visits/s = 68.80 (81.6 secs)      numSearchThreads =  3: 8 / 10 positions, visits/s = 69.33 (92.5 secs)      numSearchThreads =  3: 9 / 10 positions, visits/s = 70.04 (103.0 secs)      
