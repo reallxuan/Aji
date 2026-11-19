@@ -12,10 +12,19 @@ it('sends each engine request and checks the response type', async () => {
   const t = createFakeTransport((request) => {
     sent.push(request);
     return request.type === 'engineStatus'
-      ? { type: 'engineStatus', engine: { state: 'starting' } }
+      ? {
+          type: 'engineStatus',
+          engine: { state: 'starting' },
+          position: '4d325c64abd378a1',
+          analysis: null,
+        }
       : { type: 'ok' };
   });
-  await expect(getEngineStatus(t)).resolves.toEqual({ state: 'starting' });
+  await expect(getEngineStatus(t)).resolves.toEqual({
+    engine: { state: 'starting' },
+    position: '4d325c64abd378a1',
+    analysis: null,
+  });
   await pauseAnalysis(t);
   await resumeAnalysis(t);
   await restartEngine(t);

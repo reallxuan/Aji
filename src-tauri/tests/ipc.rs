@@ -77,7 +77,10 @@ fn malformed_request_is_rejected_with_a_plain_string() {
 fn rpc_answers_engine_status() {
     assert_eq!(
         invoke_rpc(json!({"request": {"type": "engineStatus"}})),
-        Ok(json!({"type": "engineStatus", "engine": {"state": "notConfigured"}}))
+        Ok(
+            json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
+               "position": "4d325c64abd378a1", "analysis": null})
+        )
     );
 }
 

@@ -10,6 +10,8 @@ it('applies the status reply, then keeps following events', async () => {
   const transport = createFakeTransport(() => ({
     type: 'engineStatus',
     engine: { state: 'starting' },
+    position: 'aaaaaaaaaaaaaaaa',
+    analysis: null,
   }));
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TransportProvider transport={transport}>

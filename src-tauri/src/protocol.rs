@@ -4,6 +4,7 @@
 //! `src/transport/generated/` from them. They cross a process or network boundary, so they never
 //! carry file paths, and errors carry a code rather than user-facing text.
 
+use aji_core::PositionKey;
 use aji_engine::{AnalysisUpdate, EngineState};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -27,7 +28,13 @@ pub enum Request {
 #[ts(export)]
 pub enum Response {
     AppInfo(AppInfo),
-    EngineStatus { engine: EngineState },
+    EngineStatus {
+        engine: EngineState,
+        /// The position the engine is analysing.
+        position: PositionKey,
+        /// The latest analysis of that position, if any has arrived.
+        analysis: Option<AnalysisUpdate>,
+    },
     Ok,
 }
 
@@ -133,13 +140,30 @@ mod tests {
     }
 
     #[test]
+    fn engine_status_json_shape() {
+        assert_eq!(
+            serde_json::to_value(Response::EngineStatus {
+                engine: EngineState::NotConfigured,
+                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                analysis: None,
+            })
+            .unwrap(),
+            json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
+                   "position": "4d325c64abd378a1", "analysis": null})
+        );
+    }
+
+    #[test]
     fn engine_response_json_shapes() {
         assert_eq!(
             serde_json::to_value(Response::EngineStatus {
-                engine: EngineState::Starting
+                engine: EngineState::NotConfigured,
+                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                analysis: None,
             })
             .unwrap(),
-            json!({"type": "engineStatus", "engine": {"state": "starting"}})
+            json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
+                   "position": "4d325c64abd378a1", "analysis": null})
         );
         assert_eq!(
             serde_json::to_value(Response::Ok).unwrap(),

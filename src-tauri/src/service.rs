@@ -65,9 +65,14 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
             os: ctx.os,
             arch: ctx.arch.clone(),
         })),
-        Request::EngineStatus => Ok(Response::EngineStatus {
-            engine: ctx.engine.state(),
-        }),
+        Request::EngineStatus => {
+            let status = ctx.engine.status();
+            Ok(Response::EngineStatus {
+                engine: status.state,
+                position: status.position,
+                analysis: status.analysis,
+            })
+        }
         Request::EngineRestart => ctx.engine.restart().await.map(|()| Response::Ok),
         Request::EngineStop => ctx.engine.stop().await.map(|()| Response::Ok),
         Request::AnalysisPause => ctx.engine.pause().await.map(|()| Response::Ok),
@@ -116,7 +121,9 @@ mod tests {
         assert_eq!(
             handle(&ctx(), Request::EngineStatus).await,
             Ok(Response::EngineStatus {
-                engine: EngineState::NotConfigured
+                engine: EngineState::NotConfigured,
+                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                analysis: None,
             })
         );
     }

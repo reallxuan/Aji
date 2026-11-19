@@ -1,5 +1,7 @@
+import type { AnalysisUpdate } from './generated/AnalysisUpdate';
 import type { AppInfo } from './generated/AppInfo';
 import type { EngineState } from './generated/EngineState';
+import type { PositionKey } from './generated/PositionKey';
 import type { Request } from './generated/Request';
 import { TransportError, type Transport } from './transport';
 
@@ -16,10 +18,16 @@ function unexpected(response: { type?: unknown }): TransportError {
   return new TransportError('internal', `unexpected response type ${String(response.type)}`);
 }
 
-export async function getEngineStatus(transport: Transport): Promise<EngineState> {
+export interface EngineStatus {
+  engine: EngineState;
+  position: PositionKey;
+  analysis: AnalysisUpdate | null;
+}
+
+export async function getEngineStatus(transport: Transport): Promise<EngineStatus> {
   const response = await transport.request({ type: 'engineStatus' });
   if (response.type !== 'engineStatus') throw unexpected(response);
-  return response.engine;
+  return { engine: response.engine, position: response.position, analysis: response.analysis };
 }
 
 async function expectOk(transport: Transport, request: Request): Promise<void> {

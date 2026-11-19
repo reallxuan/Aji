@@ -14,8 +14,8 @@ export function useEngineSync(): void {
       if (active) store.getState().applyEvent(event);
     });
     getEngineStatus(transport).then(
-      (engine) => {
-        if (active) store.getState().applyStatus(engine);
+      (status) => {
+        if (active) store.getState().applyStatus(status);
       },
       () => {
         // The status line stays empty; the next pushed event fills it in.
