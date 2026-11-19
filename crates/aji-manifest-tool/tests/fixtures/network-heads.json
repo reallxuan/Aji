@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b11c768-s12382M-d6533M.bin.gz",
+    "status": 200,
+    "contentLength": 262041254,
+    "etag": "\"db954878202524766e2f75ac61ae34c3\"",
+    "lastModified": "Sun, 01 Nov 2026 05:49:27 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b40c768nbt-s11272M-d5935M.bin.gz",
+    "status": 200,
+    "contentLength": 863210287,
+    "etag": "\"bfc0e6de4e21fef617c1fe6d332e341c\"",
+    "lastModified": "Sat, 06 Jun 2026 22:20:42 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b10c512-s3203M-d5937M.bin.gz",
+    "status": 200,
+    "contentLength": 94281753,
+    "etag": "\"991c1e06764931ef797ad3098675b981\"",
+    "lastModified": "Tue, 25 Aug 2026 05:48:43 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz",
+    "status": 200,
+    "contentLength": 271447864,
+    "etag": "\"e575a5337a21fb4718eebcee7405c090\"",
+    "lastModified": "Sun, 22 Mar 2026 15:33:04 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz",
+    "status": 200,
+    "contentLength": 271440852,
+    "etag": "\"8fe2de3e7aa676ea5e6875b8771e4108\"",
+    "lastModified": "Sun, 07 Jun 2026 13:53:25 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf2-b10c384-s2941M-d5872M.bin.gz",
+    "status": 200,
+    "contentLength": 38245507,
+    "etag": "\"f181ed7ef23134bb5b6c9bf27e5235ce\"",
+    "lastModified": "Tue, 25 Aug 2026 05:47:57 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+    "status": 200,
+    "contentLength": 97898094,
+    "etag": "\"efc406f90990b1fb96034f426e9965fe\"",
+    "lastModified": "Sun, 26 May 2024 12:47:50 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b60c320-s9356080896-d3824355768.bin.gz",
+    "status": 200,
+    "contentLength": 403507095,
+    "etag": "\"8116b4d9ecdf28851a9ae8247a3465c5\"",
+    "lastModified": "Fri, 17 Nov 2023 18:43:07 GMT"
+  },
+  {
+    "url": "https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz",
+    "status": 200,
+    "contentLength": 99066230,
+    "etag": "\"dc7ce241411b05ef2a5416d6406313a4\"",
+    "lastModified": "Tue, 22 Apr 2025 14:33:10 GMT"
+  }
+]

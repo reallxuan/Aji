@@ -1,0 +1,65 @@
+{
+  "release_date": "2025-03-06",
+  "release_label": "12.8.1",
+  "release_product": "cuda",
+  "libcublas": {
+    "name": "CUDA cuBLAS",
+    "license": "CUDA Toolkit",
+    "license_path": "libcublas/LICENSE.txt",
+    "version": "12.8.4.1",
+    "linux-x86_64": {
+      "relative_path": "libcublas/linux-x86_64/libcublas-linux-x86_64-12.8.4.1-archive.tar.xz",
+      "sha256": "21718957c2cf000bacd69d36c95708a2319199e39e056f8b4f0f68e3b9f323bb",
+      "md5": "5d17d588c1d645140127ea8033d9606f",
+      "size": "938651324"
+    },
+    "linux-sbsa": {
+      "relative_path": "libcublas/linux-sbsa/libcublas-linux-sbsa-12.8.4.1-archive.tar.xz",
+      "sha256": "429803c0ea8aec1db0050f7bfd807d519e22c9bf223c19000d6018d930741028",
+      "md5": "11208a797fce647fb34902a6e63f0629",
+      "size": "937337100"
+    },
+    "windows-x86_64": {
+      "relative_path": "libcublas/windows-x86_64/libcublas-windows-x86_64-12.8.4.1-archive.zip",
+      "sha256": "57a470112cec7e112c95253dde8b3c7184d795dbd92b0bde77a4cb7f8c94c8aa",
+      "md5": "5982188f53c503844f6cb86606b6b696",
+      "size": "563660944"
+    },
+    "linux-aarch64": {
+      "relative_path": "libcublas/linux-aarch64/libcublas-linux-aarch64-12.8.4.1-archive.tar.xz",
+      "sha256": "d3c3f32be793fbc995754acf12f94fcec5afc8d85d860875b38eed3ff6f97804",
+      "md5": "056caa43ee8df05c58b8d30bc4a8814e",
+      "size": "513261552"
+    }
+  },
+  "cuda_nvrtc": {
+    "name": "CUDA NVRTC",
+    "license": "CUDA Toolkit",
+    "license_path": "cuda_nvrtc/LICENSE.txt",
+    "version": "12.8.93",
+    "linux-x86_64": {
+      "relative_path": "cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-12.8.93-archive.tar.xz",
+      "sha256": "992f5e4d95cb499f41e442245efa877dbd60c711451afe680a26700d61eb3843",
+      "md5": "0593520c0a536fa98234a96abb97b300",
+      "size": "114287212"
+    },
+    "linux-sbsa": {
+      "relative_path": "cuda_nvrtc/linux-sbsa/cuda_nvrtc-linux-sbsa-12.8.93-archive.tar.xz",
+      "sha256": "a24bb837c214a1620924b9721dcc0ce82623626f8cead704aed4eb08038ac5d3",
+      "md5": "aa6d319ddc5ac5d415f2723e4b5a6a21",
+      "size": "52218744"
+    },
+    "windows-x86_64": {
+      "relative_path": "cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-12.8.93-archive.zip",
+      "sha256": "a63302a077f0248a743a1a7caa7dbd80d0fac56c6cfa9c41fa05fac9b7e5eda5",
+      "md5": "fd35d3ea8bd150c1ed2582efc4f96418",
+      "size": "305588898"
+    },
+    "linux-aarch64": {
+      "relative_path": "cuda_nvrtc/linux-aarch64/cuda_nvrtc-linux-aarch64-12.8.93-archive.tar.xz",
+      "sha256": "ee5d20c3b0895dd541c41ccd790299ee922bd6799b35c036d5978fa88f89646e",
+      "md5": "600ea0aad6352c652c5ac255fb0bba23",
+      "size": "56291348"
+    }
+  }
+}

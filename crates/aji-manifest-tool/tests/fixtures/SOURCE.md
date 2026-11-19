@@ -11,3 +11,8 @@ digests). The live sources change daily, so tests use these files, not fresh dow
   kept to the top-level release fields, `libcublas` and `cuda_nvrtc`.
 - `redistrib_9.24.0.json`: `https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_9.24.0.json`,
   kept to the top-level release fields and `cudnn`.
+- `redistrib_12.8.1.json` (`libcublas`, `cuda_nvrtc`) and `redistrib_9.8.0.json` (`cudnn`): the same
+  NVIDIA redist JSON for the CUDA 12.8 runtime set, trimmed the same way.
+- `network-heads.json`: the `HEAD` answers of `media.katagotraining.org` for the eight listed
+  networks and `b18c384nbt-humanv0`: `url`, `status`, `contentLength`, `etag` and `lastModified`.
+  Each `etag` is the file's MD5. That held for the four files downloaded and checked on that day.

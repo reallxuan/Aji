@@ -19,7 +19,7 @@
 - M2's review items are folded in: `move_to_gtp` becomes total, the analysis cache is bounded, and the `engineStatus` reply carries the position and the latest analysis. The UI store also drops updates for any other position.
 
 **Tech Stack:**
-- Rust: tokio, serde, ts-rs, reqwest 0.13 with rustls on `ring`, minisign-verify, sysinfo, semver, `windows` (DXGI), and in the tool scraper, zip and sha2.
+- Rust: tokio, serde, ts-rs, reqwest 0.13 with rustls on `ring`, minisign-verify, sysinfo, semver, `windows` (DXGI), and in the tool scraper and sha2.
 - TypeScript: React 19, Zustand, Vitest. There is no new UI in M3; only the store and the protocol change.
 - KataGo v1.18.2 built from source with the Metal backend (CMake, Ninja, Swift 6.4.2 from the Command Line Tools), plus static protobuf and abseil.
 - minisign 0.11 (Ubuntu) in the publish workflow.
@@ -44,6 +44,9 @@
 | O4, network preselect | Preselect the top row: the highest-rated network on katagotraining.org that the chosen KataGo version can load. The same rule holds on every machine, with no GPU tiers and no local measurement (the owner: "you can easily get the elo from https://katagotraining.org/networks/"; "it doesn't make sense to run test on my local machine"). Today the top row is the transformer `kata1-tf3-b11c768-s12382M-d6533M`. |
 | `deny.toml` target list | Left to the plan (the owner: "don't care about this"). Task 5 adds the three shipped targets (Global Constraints, Dependencies). |
 | Execution | Subagent-driven, as in M2, with no git worktrees. |
+| NVIDIA runtime checks (during execution) | Nothing NVIDIA is downloaded on the Mac, and no DLL is hashed on its own. Aji downloads each NVIDIA archive whole and checks NVIDIA's own SHA-256 from its redist JSON. The NVIDIA user downloads more on first install (the CUDA 13.2 set is 1.95 GB instead of about 0.84 GB); the owner accepted that. |
+| Network digests (during execution) | The network's digest is the model server's ETag, which is its MD5. Nothing is downloaded to build the manifest. |
+| TensorRT (ruling during execution) | Not in the Phase 1 manifest. Its 1.94 GB archive has no NVIDIA-published hash, and its ETag is an S3 multipart one (`"…-232"`), so a hash would need the download the owner ruled out. NVIDIA users get CUDA, DirectML and OpenCL. The owner can undo this. |
 
 ## Global Constraints
 
@@ -79,7 +82,7 @@
     - use `rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }`, with `rustls::crypto::ring::default_provider().install_default()` called once before the first client is built (an `Err` because it is already installed is ignored);
     - `cargo tree -i aws-lc-sys` and `cargo tree -i openssl-sys` must both report no match. reqwest 0.13.5 resolved rustls 0.23.46 in the planning dry run; there must be one `rustls` in the tree (`cargo tree -d -i rustls` prints nothing).
   - Two licence findings from a planning dry run of this exact set against `deny.toml`:
-    - `zip`'s default features pull in bzip2 (licence `bzip2-1.0.6`), which is not on the allow-list. Use `zip = { version = "9", default-features = false, features = ["deflate"] }`: KataGo's and NVIDIA's archives are deflate.
+    - `zip`'s default features pull in bzip2 (licence `bzip2-1.0.6`), which is not on the allow-list. M3 no longer needs `zip`. M4's unpacker must use `zip = { version = "9", default-features = false, features = ["deflate"] }`, since KataGo's and NVIDIA's archives are deflate.
     - `rustls-platform-verifier` pulls in `webpki-root-certs` (CDLA-Permissive-2.0), but only for `wasm32` targets, which Aji never builds. cargo-deny fails anyway, because it checks every target.
       - So `deny.toml` `[graph]` gains `targets = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-unknown-linux-gnu"]`, the three shipped targets, with no new licence allowed. The owner left this to the plan. The mobile targets are added in Phase 7.
       - With both changes, the planned set and the current workspace pass `cargo deny check licenses`.
@@ -95,11 +98,9 @@
     | `semver` | 1 | MIT OR Apache-2.0 | aji-manager |
     | `windows` | 0.62 (`Win32_Graphics_Dxgi`, `Win32_Foundation`) | MIT OR Apache-2.0 | aji-manager, Windows only |
     | `scraper` | 0.29 | ISC | tool |
-    | `zip` | 9, `default-features = false`, `deflate` | MIT | tool |
-    | `sha2` | 0.11 | MIT OR Apache-2.0 | aji-manager, tool |
+    | `sha2` | 0.11 | MIT OR Apache-2.0 | tool (licence text hashes) |
     | `minisign` | 0.10 | MIT | aji-manager dev-dependency |
-    | `regex` | 1 | MIT OR Apache-2.0 | aji-manager (AMD family, versions), tool |
-    | `md-5` | 0.11 | MIT OR Apache-2.0 | tool (ETag check) |
+    | `regex` | 1 | MIT OR Apache-2.0 | aji-manager (AMD family), tool |
 
 - **KataGo releases** (recorded 2026-11-19 from `api.github.com/repos/lightvector/KataGo/releases`):
   - **Versions.** The manifest covers v1.17.0 and later, the first versions that load transformer networks. Release dates (UTC):
@@ -114,14 +115,13 @@
     | v1.17.0 | 2026-07-29 |
 
     v1.18.2 ships CUDA packages only; v1.17.2 ships TensorRT only.
-  - **Asset metadata.** Every asset has `name`, `size`, `browser_download_url` and `digest` (`sha256:<hex>`). The engine `sha256` comes from `digest`, so KataGo packages are not downloaded to hash them. Networks have no published hash and are downloaded.
-  - **Phase 1 allow-list**, matched against the asset name with `^katago-v(?<ver>[0-9.]+)-(?<tag>.+)\.zip$`. Nothing else is listed: no `+bs50` packages, no cuDNN 8.9.7, no CUDA 12.1 or 12.5, and no TensorRT 10.2 or 10.9.
+  - **Asset metadata.** Every asset has `name`, `size`, `browser_download_url` and `digest` (`sha256:<hex>`). The engine's digest is GitHub's `digest`, used as-is, so KataGo packages are not downloaded to hash them. Networks use the model server's ETag MD5 (see below). Building the manifest downloads no engine, network or runtime archive.
+  - **Phase 1 allow-list**, matched against the asset name with `^katago-v(?<ver>[0-9.]+)-(?<tag>.+)\.zip$`. Nothing else is listed: no `+bs50` packages, no cuDNN 8.9.7, no CUDA 12.1 or 12.5, and no TensorRT at all (Owner decisions, TensorRT).
 
     | `tag` pattern | Platform | Backend | Variant | Extra |
     |---|---|---|---|---|
     | `(cuda13\.2-cudnn9\.24\.0)-windows-x64` | windows-x64 | cuda | group 1 | runtime `nvidia-cuda13.2-cudnn9.24.0-windows-x64` |
     | `(cuda12\.8-cudnn9\.8\.0)-windows-x64` | windows-x64 | cuda | group 1 | runtime `nvidia-cuda12.8-cudnn9.8.0-windows-x64` |
-    | `(trt10\.16\.1-cuda13\.2)-windows-x64` | windows-x64 | tensorrt | group 1 | runtime `nvidia-trt10.16.1-cuda13.2-windows-x64` |
     | `(onnx[0-9.]+-directml)-windows-x64` | windows-x64 | directml | group 1 | config `onnxProvider = directml` |
     | `(onnx-openvino[0-9.]*)-windows-x64` | windows-x64 | openvino | group 1 | config `onnxProvider = openvino` |
     | `(rocm[0-9.]+-(gfx103X\|gfx110X\|gfx1151\|gfx120X))-windows-x64` | windows-x64 | rocm | group 1 | `gpuFamily` = group 2 |
@@ -136,7 +136,12 @@
     - Windows ROCm needs only a recent AMD driver. Each package is for one GPU family.
     - The ONNX packages need `onnxProvider` set in the config.
 - **NVIDIA** (R1, plus NVIDIA's CUDA 13 notes):
-  - CUDA 13 dropped Maxwell, Pascal and Volta, so the CUDA 13.2 and TensorRT 10.16.1 sets need compute capability 7.5 or newer.
+  - CUDA 13 dropped Maxwell, Pascal and Volta, so the CUDA 13.2 set needs compute capability 7.5 or newer.
+  - Aji downloads each NVIDIA archive whole and checks NVIDIA's SHA-256 from the redist JSON (Owner decisions). The manifest names the DLLs to extract; it carries no per-DLL hash.
+  - Archive sizes from the JSON files recorded on 2026-11-19:
+    - CUDA 13.2 set: cuBLAS 388,113,288 + NVRTC 288,218,786 + cuDNN 1,274,017,601 = 1,950,349,675 bytes;
+    - CUDA 12.8 set: 563,660,944 + 305,588,898 + 675,349,654 = 1,544,599,496 bytes.
+  - Licence texts: each component's `license_path` under its redist root, for example `https://developer.download.nvidia.com/compute/cuda/redist/libcublas/LICENSE.txt` (63,021 bytes) and `https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/LICENSE.txt` (29,662 bytes).
   - Minimum Windows drivers: 580.00 for CUDA 13.x and 572.61 for CUDA 12.8 Update 1.
   - NVIDIA's redist JSON gives, for each component and platform, `relative_path`, `sha256`, `md5` and `size`. `size` is a string. cuDNN nests one level deeper, by CUDA variant (`cuda12`, `cuda13`).
   - Hosts: `https://developer.download.nvidia.com/`, then `https://developer.download.nvidia.cn/`. NVIDIA files are never re-hosted.
@@ -146,7 +151,7 @@
     - Cell 2: `YYYY-MM-DD HH:MM:SS UTC`.
     - Cell 3: `<elo> ± <sd> - (<games> games)`, with `,` as the thousands separator.
     - Cell 4: a link to `https://media.katagotraining.org/uploaded/networks/models/kata1/<name>.bin.gz`. The `kata1-random` row has no link.
-  - The model server answers `HEAD` with `content-length` and an `etag` that equals the file's MD5. The four downloaded during planning all matched.
+  - The model server answers `HEAD` with `content-length` and an `etag` that equals the file's MD5. The four networks downloaded during planning all matched. That MD5, as `md5:<hex>`, is the network's digest in the manifest (Owner decisions). The `HEAD` answers of 2026-11-19 are recorded in `crates/aji-manifest-tool/tests/fixtures/network-heads.json`.
   - The human SL network is `https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz`, 99,066,230 bytes, last modified 2025-04-22.
   - Licence page: `https://katagotraining.org/network_license/`.
   - **Network list rule.** Take the main networks with at least 1,000 rated games. Group them by family, which is the name up to and including the `b<n>c<n>[nbt][x2]` token with the `kata1-` prefix removed. Keep the highest Elo of each family, sort by Elo, and keep the top 8. On the 2026-11-19 page this gives exactly the interface mockup's eight rows:
@@ -362,24 +367,30 @@ git -C /Users/zepher/personal/aji-manifest commit -m "build: add a self-containe
     - `generated` is RFC 3339 UTC.
     - `sequence` is the generation time in seconds since 1970. It only grows.
   - `pub enum Platform`: `windows-x64`, `macos-arm64`, `linux-x64`, plus `#[serde(other)] Unknown`.
-  - `pub enum Backend`: `cuda`, `tensorrt`, `directml`, `openvino`, `rocm`, `opencl`, `metal`, `eigenavx2`, `eigen`, plus `#[serde(other)] Unknown`.
+  - `pub enum Backend`: `cuda`, `directml`, `openvino`, `rocm`, `opencl`, `metal`, `eigenavx2`, `eigen`, plus `#[serde(other)] Unknown`. TensorRT is left out (Owner decisions); an older Aji skips a future `tensorrt` entry as `Unknown`.
   - `pub struct Engine { pub id: String, pub version: semver::Version, pub released: String, pub platform: Platform, pub backend: Backend, pub variant: String, pub runtime: Option<String>, pub gpu_family: Option<String>, pub config: BTreeMap<String, String>, pub file: FileRef }`.
     - `id` is the asset file stem, for example `katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64`.
     - `released` is `YYYY-MM-DD`.
-  - `pub struct FileRef { pub name: String, pub size: u64, pub sha256: String, pub urls: Vec<String> }`.
+  - `pub struct FileRef { pub name: String, pub size: u64, pub digest: Digest, pub urls: Vec<String> }`.
+  - `pub enum Digest { Sha256(String), Md5(String) }` serialises as one string, `"sha256:<64 lowercase hex>"` or `"md5:<32 lowercase hex>"`, GitHub's `digest` format. Engines and NVIDIA archives use SHA-256; networks use MD5.
   - `pub struct Runtime { pub id, pub platform, pub min_driver: Option<String>, pub min_compute_capability: Option<String>, pub components: Vec<RuntimeComponent>, pub notice: String }`.
-  - `pub struct RuntimeComponent { pub product, pub name, pub version, pub nvidia_manifest: Option<String>, pub archive: Archive, pub hosts: Vec<String>, pub members: Vec<Member>, pub licence: Licence }`.
-  - `pub struct Archive { pub path, pub size: u64, pub sha256, pub sha256_source: Sha256Source }`, with `Sha256Source` `nvidia` or `maintainer`.
-  - `pub struct Member { pub path, pub size: u64, pub sha256, pub compute_capability: Option<String> }`.
-  - `pub struct Licence { pub name, pub version: Option<String>, pub url, pub file_in_archive, pub text_sha256, pub requires_acceptance: bool }`.
+  - `pub struct RuntimeComponent { pub product, pub name, pub version, pub nvidia_manifest: String, pub archive: Archive, pub hosts: Vec<String>, pub extract: Vec<String>, pub licence: Licence }`.
+    - `extract` lists the DLL file names to take out of the archive. `*` is a wildcard, as in `cudnn*64_9.dll`.
+  - `pub struct Archive { pub path: String, pub size: u64, pub digest: Digest }`.
+    - `path` is relative to each host, for example `compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-13.4.1.3-archive.zip`.
+    - The archive is downloaded whole and checked against NVIDIA's own SHA-256 (Owner decisions).
+  - `pub struct Licence { pub name, pub url, pub text_url, pub text_sha256, pub requires_acceptance: bool }`.
+    - `text_url` is NVIDIA's `LICENSE.txt` for that component on the redist server.
+    - `text_sha256` is the SHA-256 of that text. When it changes, Aji asks for acceptance again.
 
-    These follow R1 section 7. `nvidia_manifest` is null and `sha256_source` is `maintainer` for TensorRT, which has no NVIDIA JSON.
+    These follow R1 section 7, simplified by the owner's decision to verify whole archives.
   - `pub struct Network { pub id, pub family, pub kind: NetworkKind, pub elo: Option<f64>, pub elo_games: Option<u32>, pub uploaded: String, pub min_engine_version: Option<semver::Version>, pub file: FileRef, pub licence: NetworkLicence { name, url } }`, with `NetworkKind` `main`, `humanSl`, plus `#[serde(other)] Unknown`.
   - `pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, ManifestError>`.
     - Unknown fields are ignored.
     - Entries whose platform, backend or kind is `Unknown` are dropped.
     - Then it validates:
-      - every `sha256` is 64 lowercase hex digits;
+      - every digest is `sha256:` with 64, or `md5:` with 32, lowercase hex digits;
+      - every runtime component has at least one `extract` name and at least one `https://` host;
       - every `size` is above 0;
       - every URL list is non-empty and all `https://`;
       - ids are unique per list;
@@ -390,17 +401,23 @@ git -C /Users/zepher/personal/aji-manifest commit -m "build: add a self-containe
     - `katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64`, with the real size and digest from Global Constraints;
     - `katago-v1.18.2-metal-macos-arm64`;
     - `katago-v1.18.1-eigenavx2-linux-x64`;
-  - one runtime, `nvidia-cuda13.2-cudnn9.24.0-windows-x64`, with R1's cuBLAS component and real values;
+  - one runtime, `nvidia-cuda13.2-cudnn9.24.0-windows-x64`, with its cuBLAS component and the real values from `redistrib_13.2.2.json`;
   - two networks: rows 1 and 7 of the network table.
 
 - [ ] **Step 1: Write the failing tests** (in `schema.rs`)
-  - `parses_the_sample`: 3 engines, 1 runtime and 2 networks. Engine 0 has size 9825374, sha256 `4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514` and runtime `nvidia-cuda13.2-cudnn9.24.0-windows-x64`. Network 0 has elo 14639.0 and min version 1.17.0.
+  - `parses_the_sample`: 3 engines, 1 runtime and 2 networks.
+    - Engine 0 has size 9825374, digest `sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514` and runtime `nvidia-cuda13.2-cudnn9.24.0-windows-x64`.
+    - Network 0 has elo 14639.0, min version 1.17.0, size 262041254 and digest `md5:db954878202524766e2f75ac61ae34c3`.
+    - The runtime's cuBLAS archive has size 388113288 and digest `sha256:bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a`.
   - `unknown_fields_are_ignored`: an extra top-level field and an extra engine field.
   - `entries_with_unknown_backend_or_platform_are_skipped`: an engine with `"backend":"vulkan"` and one with `"platform":"freebsd-x64"` are dropped, and the rest are kept.
   - `a_newer_schema_is_rejected`: `"schema":2` gives `UnsupportedSchema(2)`.
   - `invalid_entries_reject_the_manifest`, one case each:
-    - an uppercase sha256;
-    - a 63-digit sha256;
+    - an uppercase SHA-256 digest;
+    - a 63-digit SHA-256 digest;
+    - a 31-digit MD5 digest;
+    - an unknown algorithm, such as `sha1:…`;
+    - a runtime component with an empty `extract`;
     - `size` 0;
     - an `http://` URL;
     - an empty `urls`;
@@ -580,17 +597,16 @@ git commit -m "feat(manager): detect the OS, CPU, memory and GPUs"
 - Produces (serde camelCase, TS export):
   - `pub struct BackendRecommendation { pub platform: Option<Platform>, pub gpu: Option<GpuReport>, pub backends: Vec<BackendChoice>, pub default: Option<Backend>, pub fallbacks: Vec<Backend>, pub notes: Vec<RecommendationNote> }`.
   - `pub struct BackendChoice { pub backend: Backend, pub tags: Vec<BackendTag> }`.
-  - `pub enum BackendTag { Fastest, SlowStart, NoRuntimeDownload, MostCompatible, Slowest, CpuOnly }`. The wizard's texts from interface design 7 map to these:
+  - `pub enum BackendTag { Fastest, NoRuntimeDownload, MostCompatible, Slowest, CpuOnly }`. The wizard's texts from interface design 7 map to these:
 
     | Tag | Mockup text |
     |---|---|
     | `fastest` | `最快` |
-    | `slowStart` | `启动较慢` |
     | `noRuntimeDownload` | `免运行库` |
     | `mostCompatible` + `slowest` | `兼容性最好，最慢` |
 
   - `pub enum RecommendationNote { UnsupportedPlatform, NoUsableGpu, DriverTooOldForCuda, UnknownAmdFamily, NoEngineForBackend }`.
-  - `pub struct EngineVersionChoice { pub engine: String, pub version: String, pub released: String, #[ts(type = "number")] pub download_bytes: u64, #[ts(type = "number | null")] pub runtime_bytes: Option<u64>, pub latest: bool }`. `runtime_bytes` is the sum of the member sizes the GPU needs.
+  - `pub struct EngineVersionChoice { pub engine: String, pub version: String, pub released: String, #[ts(type = "number")] pub download_bytes: u64, #[ts(type = "number | null")] pub runtime_bytes: Option<u64>, pub latest: bool }`. `runtime_bytes` is the sum of the runtime's archive sizes, which is what the user downloads.
   - `pub struct NetworkChoice { pub network: String, pub family: String, pub elo: Option<f64>, pub uploaded: String, #[ts(type = "number")] pub size_bytes: u64 }`.
   - `pub struct NetworkList { pub networks: Vec<NetworkChoice>, pub preselected: Option<String>, pub human: Option<NetworkChoice> }`.
   - `pub fn recommend_backends(report: &HardwareReport, manifest: &Manifest) -> BackendRecommendation`.
@@ -608,7 +624,7 @@ git commit -m "feat(manager): detect the OS, CPU, memory and GPUs"
 
   | GPU and conditions | `backends` in order (variant) | `default` | `fallbacks` |
   |---|---|---|---|
-  | NVIDIA, Windows, driver ≥ 580.00, compute capability ≥ 7.5 | cuda (cuda13.2-cudnn9.24.0), tensorrt (trt10.16.1-cuda13.2), directml, opencl | cuda | directml, opencl |
+  | NVIDIA, Windows, driver ≥ 580.00, compute capability ≥ 7.5 | cuda (cuda13.2-cudnn9.24.0), directml, opencl | cuda | directml, opencl |
   | NVIDIA, Windows, driver ≥ 572.61 where the first row does not apply (driver below 580.00, or capability below 7.5 or unknown) | cuda (cuda12.8-cudnn9.8.0), directml, opencl | cuda | directml, opencl |
   | NVIDIA, Windows, driver below 572.61 or unknown | directml, opencl; note `DriverTooOldForCuda` | directml | opencl |
   | AMD, Windows, family known | rocm (that family), directml, opencl | rocm | directml, opencl |
@@ -626,7 +642,6 @@ git commit -m "feat(manager): detect the OS, CPU, memory and GPUs"
     - anything else is unknown.
   - **Tags:**
     - cuda, rocm and openvino get `fastest`;
-    - tensorrt gets `slowStart`;
     - directml gets `noRuntimeDownload`;
     - opencl gets `mostCompatible` and `slowest`;
     - eigenavx2 and eigen get `cpuOnly`;
@@ -643,11 +658,11 @@ git commit -m "feat(manager): detect the OS, CPU, memory and GPUs"
     - one engine for every backend and variant in the allow-list, for v1.18.1;
     - the cuda engines also for v1.18.2;
     - metal for v1.18.2;
-    - runtimes for the three NVIDIA sets;
+    - runtimes for the two NVIDIA sets;
     - the eight networks plus `b18c384nbt-humanv0`.
   - One test per table row, asserting `backends`, `default`, `fallbacks` and `notes` exactly:
     - `nvidia_rtx50_new_driver` (RTX 5070, driver 591.44, capability 12.0): versions(cuda) gives `["1.18.2", "1.18.1"]`, both cuda13.2.
-    - `nvidia_rtx50_driver_575` (575.51) gives cuda12.8 and no tensorrt.
+    - `nvidia_rtx50_driver_575` (575.51) gives cuda12.8.
     - `nvidia_pascal_new_driver` (GTX 1080, 581.29, capability 6.1) gives cuda12.8.
     - `nvidia_without_nvidia_smi` (no capability) gives cuda12.8.
     - `nvidia_driver_too_old` (566.03) gives directml first, with the note.
@@ -669,7 +684,7 @@ git commit -m "feat(manager): detect the OS, CPU, memory and GPUs"
     - `preselects_the_top_row`: `kata1-tf3-b11c768-s12382M-d6533M` for `apple_m5`, `nvidia_rtx50_new_driver` and `no_gpu_avx2` alike.
     - `preselect_follows_elo_not_architecture`: in a test manifest where a b28c512nbt network out-rates every `tf` one, the b28 is first and preselected.
     - `preselect_skips_networks_the_engine_cannot_load`: for an engine of version 1.16.0, the preselected network is `kata1-zhizi-b40c768nbt-s11272M-d5935M`, the best non-transformer.
-  - `runtime_bytes_counts_only_this_gpu`: TensorRT for capability 12.0 counts the sm120 builder resource and not the sm86 one.
+  - `runtime_bytes_is_the_whole_archives`: versions(cuda) gives `runtime_bytes` 1950349675 for the RTX 5070 (the CUDA 13.2 set) and 1544599496 for the GTX 1080 (the CUDA 12.8 set).
 - [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-manager --test recommend_table`. Expected: compile errors.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them to verify they pass.** Same command. Expected: PASS.
@@ -752,50 +767,58 @@ git commit -m "feat: answer setup requests from the manifest and the hardware re
 ### Task 9: The manifest generator
 
 **Files:**
-- Create: `crates/aji-manifest-tool/{Cargo.toml,src/main.rs,src/releases.rs,src/networks.rs,src/runtimes.rs,src/generate.rs}`.
+- Create: `crates/aji-manifest-tool/{Cargo.toml,src/main.rs,src/releases.rs,src/networks.rs,src/nvidia.rs,src/generate.rs}`.
 - Fixtures under `crates/aji-manifest-tool/tests/fixtures/`:
   - Already committed during planning, with `SOURCE.md` (recorded 2026-11-19):
     - `katago-releases.json`: the six releases, trimmed to `tag_name`, `published_at` and each asset's `name`, `size`, `digest` and `browser_download_url`;
     - `networks.html`: the whole page, 504,019 bytes;
-    - `redistrib_13.2.2.json` (`libcublas`, `cuda_nvrtc`) and `redistrib_9.24.0.json` (`cudnn`).
+    - `network-heads.json`: the `HEAD` answers (`url`, `status`, `contentLength`, `etag`, `lastModified`) for the eight networks and the human SL network;
+    - `redistrib_13.2.2.json` and `redistrib_12.8.1.json` (`libcublas`, `cuda_nvrtc`), `redistrib_9.24.0.json` and `redistrib_9.8.0.json` (`cudnn`).
     
     The live sources change daily. Tests read these files and never re-fetch them.
   - Create:
     - `metal-releases.json`: a hand-made answer naming one `katago-v1.18.2-metal-macos-arm64.zip`;
-    - `tiny-runtime.zip`: built by the test itself, with two DLL-named members and a `LICENSE`.
+    - `licence-text.txt`: a few lines standing in for an NVIDIA `LICENSE.txt`.
 - Modify: `Cargo.toml` (members).
 
 **Interfaces:**
 - Consumes: Task 4 types and `parse_manifest`.
 - Produces the binary `aji-manifest`:
-  - `aji-manifest generate --runtimes <runtimes.json> --cache <dir> --out <manifest.json> [--sequence <n>] [--katago-releases <file>] [--metal-releases <file>] [--networks-page <file>]`.
+  - `aji-manifest generate --out <manifest.json> [--sequence <n>] [--katago-releases <file>] [--metal-releases <file>] [--networks-page <file>] [--network-heads <file>] [--nvidia-dir <dir>] [--licence-texts <dir>]`.
     - Without the file flags it reads:
       - `https://api.github.com/repos/lightvector/KataGo/releases?per_page=30`;
       - `https://api.github.com/repos/reallxuan/aji-manifest/releases?per_page=30`;
       - `https://katagotraining.org/networks/`;
-      - `GH_TOKEN`, when set, as a bearer token.
-    - Networks are downloaded into `--cache` by name. A cached file is reused only when its size and MD5 match the server's `content-length` and `etag`. Each is then SHA-256 hashed.
+      - one `HEAD` request for each chosen network;
+      - the four NVIDIA JSON files and each component's `LICENSE.txt`.
+      
+      `GH_TOKEN`, when set, goes to GitHub as a bearer token.
+    - It downloads no engine, network or runtime archive.
+    - **Networks.**
+      - The digest is `md5:` plus the `HEAD` answer's `etag` without its quotes; the size is `content-length`.
+      - An ETag that is not exactly 32 hex digits, such as an S3 multipart `"…-232"`, fails the generation, naming the network.
+      - The human SL network's `uploaded` date comes from its `last-modified`.
+    - **NVIDIA sets.** These are constants in `nvidia.rs`:
+
+      | Set | Driver | Capability | Components (NVIDIA JSON) | `extract` |
+      |---|---|---|---|---|
+      | `nvidia-cuda13.2-cudnn9.24.0-windows-x64` | 580.00 | 7.5 | libcublas 13.4.1.3 and cuda_nvrtc 13.2.86 (`redistrib_13.2.2.json`); cudnn 9.24.0.43, `cuda13` (`redistrib_9.24.0.json`) | `cublas64_13.dll`, `cublasLt64_13.dll`; `nvrtc64_130_0.dll`, `nvrtc-builtins64_132.dll`; `cudnn*64_9.dll` |
+      | `nvidia-cuda12.8-cudnn9.8.0-windows-x64` | 572.61 | 5.0 | libcublas 12.8.4.1 and cuda_nvrtc 12.8.93 (`redistrib_12.8.1.json`); cudnn 9.8.0.87, `cuda12` (`redistrib_9.8.0.json`) | `cublas64_12.dll`, `cublasLt64_12.dll`; `nvrtc64_120_0.dll`, `nvrtc-builtins64_128.dll`; `cudnn*64_9.dll` |
+
+      - The JSON URLs are `https://developer.download.nvidia.com/compute/cuda/redist/redistrib_<v>.json` and `https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_<v>.json`.
+      - The archive `path` is `compute/cuda/redist/` or `compute/cudnn/redist/`, followed by the JSON's `windows-x86_64` `relative_path`. Its size is parsed from the JSON's string, and its digest is `sha256:` plus the JSON's `sha256`.
+      - The hosts are both NVIDIA hosts from Global Constraints.
+      - The licence names are `NVIDIA CUDA Toolkit EULA` for the JSON licence `CUDA Toolkit`, at `https://docs.nvidia.com/cuda/eula/index.html`, and `NVIDIA cuDNN Software License Agreement` for `cudnn`, at `https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html`.
+      - `text_url` is the redist root plus the JSON's `license_path`; `text_sha256` hashes the fetched text.
+      - The notice has one line per component: `NVIDIA <JSON name> <version>, © NVIDIA Corporation. Licensed under the <licence name>. Not covered by Aji's AGPL licence.`
     - The output is pretty JSON with sorted keys. Engines are sorted by platform, backend, variant and version (descending); networks by Elo. Identical inputs and `--sequence` give identical bytes.
-    - It runs `parse_manifest` on its own output before writing and fails if that fails.
-  - `aji-manifest runtimes --cache <dir> --out <runtimes.json>`. The three sets are constants in `runtimes.rs`:
-
-    | Set | Driver | Capability | Components (NVIDIA JSON) | Members, by file-name pattern |
-    |---|---|---|---|---|
-    | `nvidia-cuda13.2-cudnn9.24.0-windows-x64` | 580.00 | 7.5 | libcublas 13.4.1.3 and cuda_nvrtc (`redistrib_13.2.2.json`); cudnn 9.24.0.43 `cuda13` (`redistrib_9.24.0.json`) | `cublas64_\d+\.dll`, `cublasLt64_\d+\.dll`, `nvrtc64_\d+_0\.dll`, `nvrtc-builtins64_\d+\.dll`, `cudnn[a-z_]*64_9\.dll` |
-    | `nvidia-cuda12.8-cudnn9.8.0-windows-x64` | 572.61 | 5.0 | libcublas 12.8.4.1 and cuda_nvrtc 12.8.93 (`redistrib_12.8.1.json`); cudnn 9.8.0.87 `cuda12` (`redistrib_9.8.0.json`) | the same patterns |
-    | `nvidia-trt10.16.1-cuda13.2-windows-x64` | 580.00 | 7.5 | TensorRT 10.16.1.11 zip at `compute/machine-learning/tensorrt/10.16.1/zip/TensorRT-10.16.1.11.Windows.amd64.cuda-13.2.zip` (`sha256Source: maintainer`); cuda_nvrtc from 13.2.2 | `nvinfer_10\.dll`, `nvonnxparser_10\.dll`, `nvinfer_builder_resource_sm(\d+)_10\.dll` (capability from the digits: `120` → `12.0`, `86` → `8.6`), plus the nvrtc patterns |
-
-    - For each component it downloads the archive from the first host, checks NVIDIA's SHA-256 where there is one, and hashes each matching member.
-    - It hashes the archive's top-level `LICENSE` or `LICENSE.txt` as `textSha256`, and reads `version` from its first `Last updated` line (null if there is none).
-    - It includes the `.cn` host only when a `HEAD` of the same path there answers 200.
-    - The notice reads: `NVIDIA <component name> <version>, © NVIDIA Corporation. Licensed under the <licence name>. Not covered by Aji's AGPL licence.`
+    - It runs `parse_manifest` on its own output before writing, and fails if that fails.
   - `aji-manifest verify --manifest <file> --signature <file> --public-key <file>` verifies with `aji_manager::verify`, parses, and prints `sequence <n> engines <n> runtimes <n> networks <n>`.
 
 - [ ] **Step 1: Check the committed fixtures.** Run `! grep -rqF "$HOME" crates/aji-manifest-tool/tests/fixtures crates/aji-manager/tests/fixtures`. Expected: exit 0. Version filtering in the tool uses `semver`: a string comparison would put `v1.9.0` after `v1.17.0`.
 - [ ] **Step 2: Write the failing tests**
-  - `allow_list_windows_1_18_1`: exactly 12 engines for windows-x64 v1.18.1:
+  - `allow_list_windows_1_18_1`: exactly 11 engines for windows-x64 v1.18.1:
     - cuda ×2;
-    - tensorrt;
     - directml with `onnxProvider = directml`;
     - openvino with `onnxProvider = openvino`;
     - rocm ×4, with families gfx103X, gfx110X, gfx1151 and gfx120X;
@@ -803,29 +826,32 @@ git commit -m "feat: answer setup requests from the manifest and the hardware re
     - eigenavx2;
     - eigen.
   - `allow_list_linux_1_18_1`: opencl, eigenavx2 and eigen only.
-  - `no_bs50_or_cudnn8_or_old_trt`: no engine id contains `+bs50`, `cudnn8.9.7`, `trt10.2.0` or `trt10.9.0`.
-  - `engine_uses_the_github_digest`: `katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64` has size 9825374, the sha256 from Global Constraints, the `browser_download_url`, `released` 2026-08-30 and runtime `nvidia-cuda13.2-cudnn9.24.0-windows-x64`.
+  - `no_bs50_or_cudnn8_or_tensorrt`: no engine id contains `+bs50`, `cudnn8.9.7` or `trt`.
+  - `engine_uses_the_github_digest`: `katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64` has size 9825374, digest `sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514`, the `browser_download_url`, `released` 2026-08-30 and runtime `nvidia-cuda13.2-cudnn9.24.0-windows-x64`.
   - `versions_start_at_1_17_0`: versions compare with `semver`, so a release `v1.9.0` that the test adds to the input is left out.
   - `metal_engine_from_aji_manifest_releases`.
   - `network_list_matches_the_page`: the eight ids, Elos, games and dates of the Global Constraints table, in that order.
+  - `network_digest_from_etag`: `kata1-tf3-b11c768-s12382M-d6533M` has digest `md5:db954878202524766e2f75ac61ae34c3` and size 262041254.
+  - `a_multipart_etag_fails`: an ETag of `"56d884632364106ca7f99ba428b468b6-232"` fails, naming the network.
   - `transformers_need_1_17`: tf2 and tf3 families have min version 1.17.0; the others have none.
-  - `human_sl_network_is_listed`: `b18c384nbt-humanv0`, kind `humanSl`, elo null.
-  - `redistrib_component_lookup`:
-    - cuBLAS 13.4.1.3 gives the archive path, size 388113288 (parsed from the string) and sha256 `bc6f5904…`;
-    - cuDNN 9.24.0.43 `cuda13` resolves through the extra level.
-  - `members_are_hashed_from_the_archive`: `tiny-runtime.zip` gives the right sizes and hashes, and the licence hash and `Last updated` value.
-  - `builder_resource_capability`: `nvinfer_builder_resource_sm120_10.dll` gives `12.0`.
+  - `human_sl_network_is_listed`: `b18c384nbt-humanv0`, kind `humanSl`, elo null, digest `md5:dc7ce241411b05ef2a5416d6406313a4`, size 99066230, uploaded 2025-04-22.
+  - `nvidia_sets_from_redist`:
+    - the CUDA 13.2 set's archives have sizes 388113288, 288218786 and 1274017601;
+    - its cuBLAS digest is `sha256:bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a`;
+    - cuDNN resolves through `cuda13`;
+    - the CUDA 12.8 set's archive sizes sum to 1544599496.
+  - `licence_text_is_hashed`: with `--licence-texts` pointing at `licence-text.txt`, every component's `text_sha256` equals that file's SHA-256, computed in the test.
   - `generate_is_deterministic`: all file flags and `--sequence 1763500000`, run twice, give byte-identical files.
   - `generated_manifest_parses`.
 - [ ] **Step 3: Run them to verify they fail.** Run `cargo test -p aji-manifest-tool`. Expected: compile errors.
-- [ ] **Step 4: Implement.** Dependencies: `aji-manager`, `reqwest` (as in Global Constraints, plus `json` and `stream`), `rustls`, `tokio`, `scraper`, `zip` (deflate only), `sha2`, `md-5` (`0.11`, MIT OR Apache-2.0, for the ETag check), `serde_json` and `regex` (`1`, MIT OR Apache-2.0). Arguments are parsed by hand; there is no CLI crate.
+- [ ] **Step 4: Implement.** Dependencies: `aji-manager`, `reqwest` (as in Global Constraints, plus `json`), `rustls`, `tokio`, `scraper`, `sha2`, `serde_json` and `regex`. Arguments are parsed by hand; there is no CLI crate.
 - [ ] **Step 5: Run them to verify they pass.** Same command. Expected: PASS.
 - [ ] **Step 6: Licences, lint and commit**
 
 ```bash
 cargo deny check licenses && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 git add Cargo.toml Cargo.lock crates/aji-manifest-tool
-git commit -m "feat(manifest-tool): generate the manifest from KataGo releases, networks and NVIDIA runtimes"
+git commit -m "feat(manifest-tool): generate the manifest from KataGo releases, networks and NVIDIA's redist data"
 ```
 
 ### Task 10: The manifest repository (S2 in CI, publishing, the signing key)
@@ -837,8 +863,7 @@ Outward-facing. Each push and each workflow run waits for the owner's OK.
   - `README.md`, replacing the one-line default;
   - `.github/workflows/katago-metal.yml`;
   - `.github/workflows/manifest.yml`;
-  - `keys/aji-manifest.pub`;
-  - `inputs/.gitkeep`.
+  - `keys/aji-manifest.pub`.
 
 **Interfaces:**
 - Consumes: Task 3's script; Task 9's tool, built from `reallxuan/Aji` at a given ref.
@@ -857,12 +882,11 @@ Outward-facing. Each push and each workflow run waits for the owner's OK.
       1. check out this repository, and `reallxuan/Aji` at `aji_ref` into `aji/`;
       2. `rustup toolchain install` in `aji/`;
       3. `cargo build --release --manifest-path aji/Cargo.toml -p aji-manifest-tool`;
-      4. restore `actions/cache` for `networks/`, key `networks-v1`;
-      5. `aji-manifest generate --runtimes inputs/runtimes.json --cache networks --out site/v1/manifest.json`, with `GH_TOKEN: ${{ github.token }}`;
-      6. `sudo apt-get install -y minisign`;
-      7. write `${{ secrets.MINISIGN_SECRET_KEY }}` to a `umask 077` temp file and run `minisign -S -s <file> -m site/v1/manifest.json -x site/v1/manifest.json.minisig -t "aji-manifest sequence <n>"`, then delete the file;
-      8. `aji-manifest verify --manifest site/v1/manifest.json --signature site/v1/manifest.json.minisig --public-key keys/aji-manifest.pub`;
-      9. `actions/upload-pages-artifact` from `site/`, then `actions/deploy-pages`.
+      4. `aji-manifest generate --out site/v1/manifest.json`, with `GH_TOKEN: ${{ github.token }}`;
+      5. `sudo apt-get install -y minisign`;
+      6. write `${{ secrets.MINISIGN_SECRET_KEY }}` to a `umask 077` temp file and run `minisign -S -s <file> -m site/v1/manifest.json -x site/v1/manifest.json.minisig -t "aji-manifest sequence <n>"`, then delete the file;
+      7. `aji-manifest verify --manifest site/v1/manifest.json --signature site/v1/manifest.json.minisig --public-key keys/aji-manifest.pub`;
+      8. `actions/upload-pages-artifact` from `site/`, then `actions/deploy-pages`.
   - `README.md` covers:
     - what the repository is;
     - the two URLs;
@@ -900,43 +924,27 @@ Outward-facing. Each push and each workflow run waits for the owner's OK.
   4. Unzip, then run `./katago version` and Task 3 Step 5's back-to-back benchmark. Expected: within 10% of Homebrew's run.
 - [ ] **Step 7:** The manifest workflow is **not** run yet. It needs the tool on Aji's `main`; Task 13 runs it after the merge.
 
-### Task 11: Real data: runtimes, the bundled manifest and the trusted key
+### Task 11: Real data: the bundled manifest and the trusted key
 
 **Files:**
-- Create: `/Users/zepher/personal/aji-manifest/inputs/runtimes.json`.
 - Replace: `crates/aji-manager/manifest/manifest.json` (Task 4's sample copy).
 - Modify: `crates/aji-manager/src/manifest/keys.rs`.
 
-- [ ] **Step 1: The runtimes.** Ask the owner first.
-  - The download is about 5.4 GB of NVIDIA archives from NVIDIA's servers: the CUDA 13.2 set (1.95 GB), the CUDA 12.8 set (1.54 GB) and the TensorRT zip (1.94 GB), with the CUDA 13.2 NVRTC archive shared.
-  - By making it, the owner, as maintainer, accepts the CUDA Toolkit EULA, the cuDNN SLA and the TensorRT SLA for that copy.
-  
-  With the OK, run `cargo run --release -p aji-manifest-tool -- runtimes --cache "$SCRATCH/nvidia" --out /Users/zepher/personal/aji-manifest/inputs/runtimes.json`.
-
-  Expected:
-  - three sets;
-  - the cuBLAS 13.4.1.3 member `cublas64_13.dll` has sha256 `91200c2ff57b8477e94254a4501030d75e1bb35a2de3a476e7ab66df897cb046` and size 51572848, R1's values from NVIDIA's archive;
-  - the TensorRT set lists one builder resource for each capability.
-- [ ] **Step 2: The bundled manifest.** Ask the owner first: about 1.6 GB of networks is still to download (rows 2, 4 and 8 plus the human SL network). Rows 1, 3, 5, 6 and 7 are already in the planning scratchpad and can seed `--cache`.
-
-  With the OK, run `cargo run --release -p aji-manifest-tool -- generate --runtimes /Users/zepher/personal/aji-manifest/inputs/runtimes.json --cache "$SCRATCH/networks" --out crates/aji-manager/manifest/manifest.json`.
-
-  Expected:
-  - for v1.18.1 windows-x64, the 12 engines of Task 9's allow-list test;
+- [ ] **Step 1: The bundled manifest.** Run `cargo run --release -p aji-manifest-tool -- generate --out crates/aji-manager/manifest/manifest.json`. It reads only APIs, pages, `HEAD` answers, NVIDIA's JSON files and the licence texts, well under 1 MB in all. Expected:
+  - for v1.18.1 windows-x64, the 11 engines of Task 9's allow-list test;
   - the metal engine from Task 10's release;
-  - 8 main networks plus the human SL one;
+  - the two NVIDIA runtime sets, with the CUDA 13.2 set's archives summing to 1950349675 bytes;
+  - 8 main networks, each with an `md5:` digest, plus the human SL network;
   - a file of 1 MiB or less.
-- [ ] **Step 3: The trusted key.** `TRUSTED_KEYS` gets the base64 line of `keys/aji-manifest.pub`.
+- [ ] **Step 2: The trusted key.** `TRUSTED_KEYS` gets the base64 line of `keys/aji-manifest.pub`.
   - Test `trusted_keys_decode`: `trusted_keys().len() == 1`.
-  - `bundled_manifest_parses` is extended to `bundled_manifest_covers_phase_1`: at least one engine each for windows-x64 cuda, windows-x64 directml, macos-arm64 metal and linux-x64 eigenavx2, and exactly 8 main networks.
-- [ ] **Step 4: Run** `cargo test --workspace`. Expected: PASS. Run `cargo run -p aji-manager --bin aji-setup-report`. Expected: Task 13's Mac values.
-- [ ] **Step 5: Commit in both repositories.** Pushing aji-manifest waits for the owner.
+  - `bundled_manifest_parses` is extended to `bundled_manifest_covers_phase_1`: at least one engine each for windows-x64 cuda, windows-x64 directml, macos-arm64 metal and linux-x64 eigenavx2; exactly 8 main networks; and 2 runtimes.
+- [ ] **Step 3: Run** `cargo test --workspace`. Expected: PASS. Run `cargo run -p aji-manager --bin aji-setup-report`. Expected: Task 13's Mac values.
+- [ ] **Step 4: Commit**
 
 ```bash
-git add crates/aji-manager/manifest/manifest.json crates/aji-manager/src/manifest/keys.rs crates/aji-manager/src
+git add crates/aji-manager/manifest/manifest.json crates/aji-manager/src
 git commit -m "feat(manager): bundle the first real manifest and trust the manifest key"
-git -C /Users/zepher/personal/aji-manifest add inputs/runtimes.json
-git -C /Users/zepher/personal/aji-manifest commit -m "data: add NVIDIA runtime sets for CUDA 13.2, CUDA 12.8 and TensorRT 10.16.1"
 ```
 
 ### Task 12: The PC benchmark script (S3, PC half)
@@ -947,11 +955,10 @@ git -C /Users/zepher/personal/aji-manifest commit -m "data: add NVIDIA runtime s
 **Interfaces:**
 - Consumes: the bundled manifest from Task 11, copied next to the script. It is the single source of URLs and hashes.
 - Produces: `powershell -ExecutionPolicy Bypass -File .\benchmark-windows.ps1 [-Network <id>...]` writes `aji-benchmarks\<engine-id>\<network>.{stdout,stderr}.txt` and `aji-benchmarks\summary.json`.
-  - **Engines.** For the newest version it downloads and verifies (SHA-256 against the manifest) the cuda13.2, cuda12.8, tensorrt, directml and opencl Windows engines.
+  - **Engines.** For the newest version it downloads and verifies (SHA-256 against the manifest) the cuda13.2, cuda12.8, directml and opencl Windows engines.
   - **Runtimes.**
     - It prints each NVIDIA licence name, URL and notice from the manifest, and continues only after the owner types `accept`.
-    - It then downloads each component's whole archive, checks the archive SHA-256, extracts the members the RTX 5070 needs, and checks each member's SHA-256.
-    - The members go into `aji-benchmarks\runtimes\<set>\`.
+    - It then downloads each component's whole archive, checks its digest against the manifest, and extracts the `extract` names into `aji-benchmarks\runtimes\<set>\`.
   - **Networks.** The default is rows 1, 3 and 7 of the network table.
   - **Runs.** Each run prepends the runtime folder to the child's `PATH` only, then runs `katago.exe benchmark -config <generated gtp config with onnxProvider where needed> -model <net> -v 800`.
   - Nothing is written outside `aji-benchmarks\`, and no system setting changes.
@@ -976,7 +983,7 @@ git commit -m "chore: add a Windows script that benchmarks every NVIDIA backend"
   - versions `["1.18.2"]`;
   - the 8 networks in Elo order, with `kata1-tf3-b11c768-s12382M-d6533M` preselected;
   - the manifest `source: "bundled"`.
-- [ ] **Step 2: The PC from its capture.** On the Mac, run `aji-setup-report --windows-capture crates/aji-manager/tests/fixtures/hardware/windows-pc/aji-hardware-capture.json`. Expected: the RTX 5070 with its real driver and capability; cuda (cuda13.2) default, then tensorrt, directml and opencl, if the driver is 580 or newer. On the PC itself, the owner may run the same command from a `cargo` build, or defer to M8 as in M1 and M2.
+- [ ] **Step 2: The PC from its capture.** On the Mac, run `aji-setup-report --windows-capture crates/aji-manager/tests/fixtures/hardware/windows-pc/aji-hardware-capture.json`. Expected: the RTX 5070 with its real driver and capability; cuda (cuda13.2) default, then directml and opencl, if the driver is 580 or newer. On the PC itself, the owner may run the same command from a `cargo` build, or defer to M8 as in M1 and M2.
 - [ ] **Step 3: Charter table tests.** `cargo test -p aji-manager --test recommend_table` passes, and every row of charter 6.3 has a test.
 - [ ] **Step 4: The app still works.**
   - Build with `pnpm tauri build --bundles app`, then open `Aji.app`.
@@ -995,6 +1002,7 @@ git commit -m "chore: add a Windows script that benchmarks every NVIDIA backend"
 ## Deferred items carried
 
 - To M4 and M5: R1 section 6.1's first run on NVIDIA. DirectML (23.6 MB) is installed first so analysis starts within a minute or two. The CUDA runtime downloads behind it, and Aji switches once CUDA passes its benchmark and smoke test. M3's recommendation already lists both. The install order and the switch belong to the pipeline and the wizard.
+- To M4: verifying `md5:` and `sha256:` digests while streaming (with `md-5` and `sha2`), extracting an NVIDIA archive's `extract` names, and `zip` with `deflate` only (Global Constraints, Dependencies).
 - To M4: from M2's review, a deadline after killing an unkillable KataGo, startup-timeout tuning, and a throttle tolerance (admit at about 90% of the report interval). From M3, the downloader, unpacking, the benchmark parser (fixtures from Task 9), config generation (`config` overrides from the manifest) and the licence-acceptance record.
-- S3 on the PC (Task 12) measures backends (which CUDA build, and CUDA against TensorRT and DirectML on the RTX 5070: charter risk R4), never networks. Network choice follows the published Elo. The owner may drop Task 12 if R4 is not worth measuring.
+- S3 on the PC (Task 12) measures backends (which CUDA build, and CUDA against DirectML on the RTX 5070: charter risk R4), never networks. Network choice follows the published Elo. The owner may drop Task 12 if R4 is not worth measuring.
 - Kept open with the owner: M1's deferred findings 1, 2, 3, 6, 7, 8 and 11; audit proposals G2 to G12 and X1; and M2's proposed values (Chinese rules with komi 7.5, the 100,000-visit cap, the 60 s stall timeout, and the `engine-error` colours).
