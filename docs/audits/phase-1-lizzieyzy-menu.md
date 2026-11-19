@@ -1,7 +1,7 @@
 # Phase 1 LizzieYzy Menu Check
 
 - Date: 2026-11-19
-- Status: Draft for the owner's review
+- Status: Draft for the owner's review. The owner approved G1 on 2026-11-19, for M2; the other proposals are open.
 - Roadmap item: S5 of the M0 track in `docs/superpowers/plans/2026-11-19-phase-1-roadmap.md` (merged into `dev` in `90f1d79`; not yet on `main`, so it is cited by path rather than linked). The result feeds M5 (first-run wizard and settings). Several rows also feed M2, M6, M7 and M8.
 - Charter: [section 7](../superpowers/specs/2026-11-19-aji-project-charter-design.md) requires this check at the start of each phase. Interface design: [aji-ui-design](../superpowers/specs/2026-11-19-aji-ui-design.md).
 - Markers follow the charter. Everything that changes scope is **[Proposed]**; this document edits neither the charter nor the roadmap.

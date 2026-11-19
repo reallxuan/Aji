@@ -5,7 +5,7 @@
 - Specs: [project charter](../specs/2026-11-19-aji-project-charter-design.md) (source of truth), [interface design](../specs/2026-11-19-aji-ui-design.md)
 - Markers follow the charter: **[Decided]**, **[Proposed]**, **[To verify]**.
 
-This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. The first one is written: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md).
+This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md) and [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md).
 
 ## 1. What Phase 1 must deliver
 
@@ -72,7 +72,7 @@ The alternative (O2) is `aji-core` compiled to WebAssembly, with the tree held i
 - Settings: `settings.json` in the OS config directory (`app_config_dir`).
 - Engines, runtimes, networks and generated configs: in the OS local data directory (`app_local_data_dir`), not the roaming one, because CUDA runtimes are large.
 - KataGo runs with its working directory set to the engine's install folder, and the model and config are passed as relative paths. This keeps non-ASCII user-profile paths, common on Chinese Windows, out of KataGo's command line.
-- When Aji exits or crashes, KataGo must not keep running. Windows uses a job object with kill-on-close, and Linux uses the parent-death signal. On macOS, Aji relies on KataGo exiting when its stdin closes **[To verify in M2]**, with a watchdog as the fallback if it does not.
+- When Aji exits or crashes, KataGo must not keep running. Windows uses a job object with kill-on-close, and Linux uses the parent-death signal. On macOS, Aji relies on KataGo exiting when its stdin closes. This was verified on the Mac on 2026-11-19 with KataGo 1.18.2: started with `-quit-without-waiting`, KataGo exits within 0.1 s of its parent being killed with SIGKILL. Without that flag, a search that is not reporting progress survives as an orphan. Aji therefore always passes `-quit-without-waiting`, and macOS needs no orphan watchdog.
 
 ### 3.4 Engine-side defaults
 
@@ -141,6 +141,9 @@ Detailed plan: [2026-11-19-phase-1-m1-foundation.md](2026-11-19-phase-1-m1-found
 
 ### M2. Analysis walking skeleton
 
+Detailed plan: [2026-11-19-phase-1-m2-analysis-skeleton.md](2026-11-19-phase-1-m2-analysis-skeleton.md).
+
+- Engine lifecycle (audit G1, approved by the owner on 2026-11-19): the protocol also gets `engine.restart` and `engine.stop`, and a watchdog treats an engine that stops answering like a crash, restarting it once. The settings buttons for these come in M5.
 - `aji-core` (first types only): colour, point, move, GTP coordinates (no I column), rules, komi, `Position`, and a `PositionKey` hash for the cache.
 - `aji-engine`: an analysis-engine process wrapper. It spawns KataGo as in 3.3 (with `CREATE_NO_WINDOW` on Windows), reads line-delimited JSON, routes responses by query id, terminates stale queries, keeps the last 50 lines of stderr, detects exits, throttles updates and caches results in memory.
 - A fake KataGo binary that replays recorded transcripts, so CI needs no GPU. Tests run on all three OS runners from here on.

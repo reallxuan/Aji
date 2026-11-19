@@ -214,6 +214,7 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Hardware detection and backend recommendation | 1 | Not in LizzieYzy |
 | In-app download of KataGo, networks and runtime libraries | 1 | Not in LizzieYzy |
 | Automatic benchmark and config generation | 1 | Manual commands in LizzieYzy |
+| Engine lifecycle: restart, stop (frees GPU memory), and detection of a hung engine with one automatic restart | 1 | Hang detection is always on; it is an option in LizzieYzy (自动检测并重启卡死的引擎) |
 | Several engine profiles (different networks and parameters) with one-click switching | 2 | Simpler interface |
 | Rules, komi and board size, including sizes other than 19x19 | 2 | |
 | Engine log and raw protocol console | 2 | Replaces the GTP console (Gtp控制台) |
