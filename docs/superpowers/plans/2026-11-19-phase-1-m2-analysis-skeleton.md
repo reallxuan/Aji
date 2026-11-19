@@ -22,7 +22,10 @@
 - [Phase 1 roadmap](2026-11-19-phase-1-roadmap.md), sections 3.1 to 3.4, M2 and section 6.
 - [Phase 1 LizzieYzy menu check](../../audits/phase-1-lizzieyzy-menu.md): G1 (approved for M2 on 2026-11-19) and K1.
 
-**Status:** Not started.
+**Status:** Done on 2026-11-19.
+- **Mac.** The exit check passed on the M5 with a local build (`pnpm tauri build --bundles app`): all six checks of Task 8 Steps 2 to 5. It found that Restart and Resume froze the panel, because updates were held back until they beat the cached visit count while KataGo starts every search from zero. The fix shows the live search (Review Focus 5) and was folded into the engine commit.
+- **Windows PC.** The check (Task 8 Step 6) moves to M8, as in M1.
+- **CI.** The push of the merge `19a0810` to `main` (run 44533163865) **failed**. Frontend, licences, and Rust on Ubuntu and macOS passed. On Windows, clippy passed, but `cargo test --workspace` stopped at `src-tauri/tests/ipc.rs`, which exited with `STATUS_ENTRYPOINT_NOT_FOUND` (0xc0000139) before running a test. Cargo stops at the first failing test binary, so the `aji-core` and `aji-engine` tests never ran on Windows: `force_quit_leaves_no_engine` and `starts_from_a_folder_with_cjk_and_spaces` remain unproven there. The `bundle` job was skipped, so `19a0810` has no CI installers. The owner put the fix in M3, checked by the `main` push after M3 merges (2026-11-19).
 
 ## Global Constraints
 
@@ -119,7 +122,7 @@ The fake KataGo replays these files, and the parser tests assert their exact lin
   | — (`ta1` to `ta3`) | empty, then B C3, then B C4, sent together | `maxVisits` 100000 each, then `terminate_all` after 0.3 s. `record.cfg` runs two at a time, so `ta3` never starts | `noResults` |
   | — (`e1` to `e5`) | the five error cases of the recording on 2026-11-19 | `maxVisits` 10 | error and warning lines |
 
-- [ ] **Step 1: Write the recorder** `scripts/record-katago-transcript.mjs`
+- [x] **Step 1: Write the recorder** `scripts/record-katago-transcript.mjs`
   - Usage: `node scripts/record-katago-transcript.mjs --katago <path> --model <path> --config <path> --out-dir <dir>`.
   - It spawns KataGo with exactly the Global Constraints launch arguments and sends `query_version` immediately, before the ready line, which records the real ordering.
   - It then runs a 9×9, 50-visit warm-up query (Metal warm-up), followed by the table's queries in order.
@@ -134,8 +137,8 @@ The fake KataGo replays these files, and the parser tests assert their exact lin
     - `p0`'s final has more than 20 `moveInfos`;
     - a `noResults` line exists;
     - the `query_version` reply comes after the ready line.
-- [ ] **Step 2: Write `record.cfg`**: `numAnalysisThreads = 2`, `numSearchThreadsPerAnalysisThread = 16`, `nnMaxBatchSize = 64`, `nnCacheSizePowerOfTwo = 20`, `nnMutexPoolSizePowerOfTwo = 14`, `nnRandomize = true`.
-- [ ] **Step 3: Record**
+- [x] **Step 2: Write `record.cfg`**: `numAnalysisThreads = 2`, `numSearchThreadsPerAnalysisThread = 16`, `nnMaxBatchSize = 64`, `nnCacheSizePowerOfTwo = 20`, `nnMutexPoolSizePowerOfTwo = 14`, `nnRandomize = true`.
+- [x] **Step 3: Record**
 
   Run: `node scripts/record-katago-transcript.mjs --katago /opt/homebrew/bin/katago --model /opt/homebrew/share/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz --config crates/aji-engine/tests/fixtures/katago/record.cfg --out-dir crates/aji-engine/tests/fixtures/katago/1.18.2-metal`
 
@@ -144,12 +147,12 @@ The fake KataGo replays these files, and the parser tests assert their exact lin
   - `analysis.jsonl` ends with `exit code=0`.
   - `bad-model.jsonl`'s last `err` line starts `libc++abi: terminating`, and its `ctl` exit line shows signal `SIGABRT` (Node reports the signal by name).
   - If the ordering check failed (the `query_version` reply arrived before the ready line), stop: Aji's ready signal (Global Constraints) is wrong, and Task 4's state machine needs a ruling.
-- [ ] **Step 4: Check that no home path leaked**
+- [x] **Step 4: Check that no home path leaked**
 
   Run: `! grep -rqF "$HOME" crates/aji-engine/tests/fixtures`
 
   Expected: exit 0.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/record-katago-transcript.mjs crates/aji-engine/tests/fixtures
@@ -195,7 +198,7 @@ git commit -m "test: record KataGo 1.18.2 analysis transcripts on Apple Silicon"
   - `enum CoreError { BoardSizeOutOfRange(u8), KomiInvalid, PointOffBoard(Point), BadCoordinate(String) }`, which implements `std::error::Error`.
 - TypeScript export: `Color`, `Point`, `Move` and `PositionKey`.
 
-- [ ] **Step 1: Write the failing tests** (unit tests in each module)
+- [x] **Step 1: Write the failing tests** (unit tests in each module)
   - `gtp_round_trip` on 19×19:
     - (0,0) ↔ `A19`;
     - (18,18) ↔ `T1`;
@@ -221,11 +224,11 @@ git commit -m "test: record KataGo 1.18.2 analysis transcripts on Apple Silicon"
 
   - `setup_order_does_not_change_the_key`.
   - `validate_rejects_off_board`: a move at (19,0) on 19×19 gives `Err(PointOffBoard)`.
-- [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-core`. Expected: compile errors for the missing items.
-- [ ] **Step 3: Implement**, and add `"crates/aji-core"` to the workspace members.
-- [ ] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-core`. Expected: PASS, and `src/transport/generated/Move.ts` exists.
-- [ ] **Step 5: Lint.** Run `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings`. Expected: exit 0.
-- [ ] **Step 6: Commit**
+- [x] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-core`. Expected: compile errors for the missing items.
+- [x] **Step 3: Implement**, and add `"crates/aji-core"` to the workspace members.
+- [x] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-core`. Expected: PASS, and `src/transport/generated/Move.ts` exists.
+- [x] **Step 5: Lint.** Run `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings`. Expected: exit 0.
+- [x] **Step 6: Commit**
 
 ```bash
 git add Cargo.toml Cargo.lock crates/aji-core src/transport/generated
@@ -268,7 +271,7 @@ Everything here works on strings and values, with no process involved.
   - `struct AnalysisCache` with `fn offer(&mut self, update: AnalysisUpdate) -> bool` and `fn get(&self, key: PositionKey) -> Option<&AnalysisUpdate>`.
     - An offer is stored, returning `true`, when there is no entry, when the new `root_visits` is higher, or when visits are equal and only the new one is final.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `query_json_shape`: `analysis_query("aji-1", P1, 100_000, 100 ms)` parses to exactly `{"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1}`. The result contains no newline.
   - `initial_stones_are_sent_when_present`: a setup stone produces `"initialStones":[["B","D4"]]`.
   - In `tests/fixtures_parse.rs`, every `out` line of `analysis.jsonl` parses to a variant other than `Unrecognised`. Specific lines map to specific variants:
@@ -284,11 +287,11 @@ Everything here works on strings and values, with no process involved.
   - `pv_is_converted`: candidate 0's `pv[0]` equals its own move.
   - `throttle`: a non-final at 0 ms passes, one at 50 ms is rejected, one at 120 ms passes, and a final at 121 ms passes.
   - `cache_keeps_the_most_visited`: offer 300 visits (true), then 200 (false), then 300 final (true), then 300 final again (false).
-- [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine`. Expected: compile errors.
-- [ ] **Step 3: Implement.** Dependencies: `aji-core`, `serde`, `serde_json`, `ts-rs`.
-- [ ] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-engine`. Expected: PASS.
-- [ ] **Step 5: Lint**, as in Task 1.
-- [ ] **Step 6: Commit**
+- [x] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine`. Expected: compile errors.
+- [x] **Step 3: Implement.** Dependencies: `aji-core`, `serde`, `serde_json`, `ts-rs`.
+- [x] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-engine`. Expected: PASS.
+- [x] **Step 5: Lint**, as in Task 1.
+- [x] **Step 6: Commit**
 
 ```bash
 git add Cargo.toml Cargo.lock crates/aji-engine src/transport/generated
@@ -325,16 +328,16 @@ git commit -m "feat(engine): parse KataGo analysis lines into throttled, cached 
     - **`terminate` and `terminate_all`.** It echoes the query as the acknowledgement. Then, for each matching replay in progress, it writes a final: the last report sent, with `"isDuringSearch":false`, or `{"id":…,"isDuringSearch":false,"noResults":true,"turnNumber":…}` if none was sent.
     - **stdin EOF.** With `onEof: "exit"` it exits with code 0 within 200 ms. With `"ignore"` it sleeps forever.
 
-- [ ] **Step 1: Write the failing tests** in `tests/fake_katago.rs`. Each one spawns the binary directly with `std::process::Command`.
+- [x] **Step 1: Write the failing tests** in `tests/fake_katago.rs`. Each one spawns the binary directly with `std::process::Command`.
   - `answers_query_version_after_the_ready_line`: the version is `1.18.2`, and stderr contains the ready line before the reply arrives.
   - `replays_p1_with_reports_then_a_final`: there are ≥ 3 lines with `isDuringSearch:true` and then exactly one final, all with the query's `id`.
   - `terminate_returns_partial_final`: P2, then `terminate` after the first report. The acknowledgement comes first, then a final with `isDuringSearch:false`.
   - `exits_on_eof`: closing stdin gives exit code 0 within 1 s.
   - `startup_failure_aborts`: the exit is not a success, and the last stderr line starts `libc++abi`.
-- [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine --test fake_katago`. Expected: the binary is missing.
-- [ ] **Step 3: Implement**, using only `std`, `serde` and `serde_json`.
-- [ ] **Step 4: Run them to verify they pass.** Same command. Expected: PASS, in under 10 s in total.
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine --test fake_katago`. Expected: the binary is missing.
+- [x] **Step 3: Implement**, using only `std`, `serde` and `serde_json`.
+- [x] **Step 4: Run them to verify they pass.** Same command. Expected: PASS, in under 10 s in total.
+- [x] **Step 5: Lint and commit**
 
 ```bash
 git add crates/aji-engine
@@ -418,7 +421,7 @@ git commit -m "test(engine): add a fake KataGo that replays recorded transcripts
   - A `QueryError` for one of Aji's ids ends that query. Neither errors nor warnings are shown in M2; KataGo already writes both to stderr because of `logToStderr=true`.
 - **Shutdown.** Close stdin, wait up to `shutdown_grace`, then kill. The app calls this on exit.
 
-- [ ] **Step 1: Write the failing tests** in `tests/engine.rs`.
+- [x] **Step 1: Write the failing tests** in `tests/engine.rs`.
   - Use `EngineOptions` with `ping_every` 50 ms, `ping_timeout` 400 ms, `startup_timeout` 5 s, `shutdown_grace` 500 ms and `throttle` 0. At `speed` 20, P1's reports arrive about 12 ms apart, and the default 100 ms throttle would swallow them.
   - `throttle` itself is tested in Task 2.
   - The pause, resume and position-change tests use scenario `slow`; the others use `normal`.
@@ -443,17 +446,17 @@ git commit -m "test(engine): add a fake KataGo that replays recorded transcripts
     - Spawn `engine-host` with scenario `normal` on macOS, and `ignore-eof` on Linux and Windows, which proves the OS mechanism rather than the fake's EOF handling.
     - Read the KataGo pid from its output, then kill the host with `Child::kill`.
     - Expected: the pid is gone within 5 s. Check with `kill(pid, 0)` on Unix and `OpenProcess` plus `GetExitCodeProcess` on Windows.
-- [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine --test engine`. Expected: compile errors.
-- [ ] **Step 3: Implement.** Dependencies:
+- [x] **Step 2: Run them to verify they fail.** Run `cargo test -p aji-engine --test engine`. Expected: compile errors.
+- [x] **Step 3: Implement.** Dependencies:
   - `tokio`, with `rt`, `macros`, `process`, `io-util`, `sync` and `time`;
   - on Linux, `libc`;
   - on Windows, `windows-sys` with `Win32_Foundation`, `Win32_System_JobObjects` and `Win32_System_Threading`;
   - as a dev-dependency, `tempfile`.
-- [ ] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-engine`. Expected: PASS. Run the whole suite three times in a row to shake out timing flakes.
-- [ ] **Step 5: Compile-check the other OSes locally** (optional; the owner approves the target download)
+- [x] **Step 4: Run them to verify they pass.** Run `cargo test -p aji-engine`. Expected: PASS. Run the whole suite three times in a row to shake out timing flakes.
+- [x] **Step 5: Compile-check the other OSes locally** (optional; the owner approves the target download)
 
   Run `rustup target add x86_64-pc-windows-msvc x86_64-unknown-linux-gnu`, then `cargo check -p aji-engine --all-targets --target x86_64-pc-windows-msvc` and the same for `x86_64-unknown-linux-gnu`. Expected: no errors. CI in Task 7 is the real check.
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 git add Cargo.lock crates/aji-engine src/transport/generated
@@ -498,7 +501,7 @@ git commit -m "feat(engine): run KataGo with crash, hang and orphan protection"
   - `setup` applies it to the main window from `current_monitor()`'s work area divided by its scale factor, and centres the window when the size changed. If `work_area()` is unavailable in the Tauri version in use, use the monitor size; record that choice in the ledger.
 - Capability (deferred finding 9): `"permissions": ["core:event:default"]` replaces `core:default`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `protocol.rs`: JSON shapes for each new request, `Response::EngineStatus`, `Response::Ok`, both `AppEvent` variants, and both new error codes.
   - `service.rs`, with an `Engine` spawned with `None`:
     - `engineStatus` → `notConfigured`;
@@ -519,9 +522,9 @@ git commit -m "feat(engine): run KataGo with crash, hang and orphan protection"
     - `rpc` with `{"request":{"type":"engineStatus"}}` against a not-configured engine returns `{"type":"engineStatus","engine":{"state":"notConfigured"}}`;
     - `engine_events_reach_the_webview_channel`: emitting through `TauriEventSink` reaches a listener on `aji://event` with the JSON payload.
   - `tests/capabilities.rs`: the main window's permissions are exactly `["core:event:default"]`.
-- [ ] **Step 2: Run them to verify they fail.** Run `cargo test -p aji`. Expected: compile errors.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Write `docs/development.md`.** It covers:
+- [x] **Step 2: Run them to verify they fail.** Run `cargo test -p aji`. Expected: compile errors.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Write `docs/development.md`.** It covers:
   - where `settings.json` lives on each OS (`app_config_dir` of `io.github.reallxuan.aji`);
   - the `devEngine` JSON, and that paths must be absolute;
   - on the Mac, `brew install katago` and the b18 network path;
@@ -529,8 +532,8 @@ git commit -m "feat(engine): run KataGo with crash, hang and orphan protection"
   - that Aji forces `-quit-without-waiting` and `reportAnalysisWinratesAs=BLACK,logToStderr=true`;
   - on Windows, unzipping a KataGo release and a network by hand;
   - that the setting goes away once M5's wizard exists.
-- [ ] **Step 5: Run them to verify they pass.** Run `cargo test --workspace`. Expected: PASS. `src/transport/generated/` gains `AppEvent.ts`, `EngineState.ts`, `AnalysisUpdate.ts`, `Candidate.ts` and the related types.
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 5: Run them to verify they pass.** Run `cargo test --workspace`. Expected: PASS. `src/transport/generated/` gains `AppEvent.ts`, `EngineState.ts`, `AnalysisUpdate.ts`, `Candidate.ts` and the related types.
+- [x] **Step 6: Lint and commit**
 
 ```bash
 git add src-tauri Cargo.lock docs/development.md src/transport/generated
@@ -609,7 +612,7 @@ git commit -m "feat: expose engine state, analysis events and engine controls ov
   | `errors.engineNotConfigured` | No engine is set up. | 尚未设置引擎。 |
   | `errors.engineNotRunning` | KataGo is not running. | KataGo 未在运行。 |
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `tauri.test.ts`:
     - with `mockIPC(…, { shouldMockEvents: true })`, an `emit('aji://event', payload)` reaches the listener;
     - unsubscribing before `listen` resolves delivers nothing afterwards.
@@ -627,10 +630,10 @@ git commit -m "feat: expose engine state, analysis events and engine controls ov
     - `notConfigured` in `zh-CN` shows "尚未设置引擎。".
   - `CandidateList.test.tsx`: an update whose candidate 0 is Q16 with winrate 0.3721, scoreLead -0.95 and 1234 visits shows `Q16`, `37.2%`, `-1.0` and `1,234` (en). The list stops at 10 rows when there are 20 candidates.
   - The locale parity test passes with the new keys.
-- [ ] **Step 2: Run them to verify they fail.** Run `pnpm test`. Expected: failures for the missing modules.
-- [ ] **Step 3: Implement.** Add `zustand`. In `App.tsx`, the panel holds the header (indicator), then the status line, then the candidate list, then the version line in the footer.
-- [ ] **Step 4: Run them to verify they pass.** Run `pnpm lint && pnpm typecheck && pnpm test && node scripts/check-npm-licenses.mjs`. Expected: all pass.
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run them to verify they fail.** Run `pnpm test`. Expected: failures for the missing modules.
+- [x] **Step 3: Implement.** Add `zustand`. In `App.tsx`, the panel holds the header (indicator), then the status line, then the candidate list, then the version line in the footer.
+- [x] **Step 4: Run them to verify they pass.** Run `pnpm lint && pnpm typecheck && pnpm test && node scripts/check-npm-licenses.mjs`. Expected: all pass.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src package.json pnpm-lock.yaml
@@ -642,14 +645,14 @@ git commit -m "feat(ui): show engine state and live candidates"
 **Files:**
 - Modify: `.github/workflows/ci.yml`.
 
-- [ ] **Step 1: Matrix the `rust` job**
+- [x] **Step 1: Matrix the `rust` job**
   - `strategy.matrix.os: [ubuntu-24.04, macos-15, windows-latest]`, with `fail-fast: false`.
   - The Tauri Linux prerequisites step runs only on Linux.
   - `cargo fmt --all --check` runs only on Linux.
   - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` run on all three. Clippy runs per OS because the Windows and Linux process code compiles only there.
-- [ ] **Step 2: Fix the generated-bindings gate** (deferred finding 4). On Linux only, run `rm -rf src/transport/generated` before `cargo test --workspace`, then keep the existing `git diff --exit-code` and porcelain checks, so orphaned files fail too.
-- [ ] **Step 3: Check the workflow locally.** Run `pnpm exec prettier --check .github/workflows/ci.yml`, and read the matrix back. Expected: valid YAML; the `bundle` job still `needs: [frontend, rust, licenses]`.
-- [ ] **Step 4: Commit**
+- [x] **Step 2: Fix the generated-bindings gate** (deferred finding 4). On Linux only, run `rm -rf src/transport/generated` before `cargo test --workspace`, then keep the existing `git diff --exit-code` and porcelain checks, so orphaned files fail too.
+- [x] **Step 3: Check the workflow locally.** Run `pnpm exec prettier --check .github/workflows/ci.yml`, and read the matrix back. Expected: valid YAML; the `bundle` job still `needs: [frontend, rust, licenses]`.
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -660,25 +663,25 @@ git commit -m "ci: run Rust checks and tests on Windows, macOS and Linux"
 
 ### Task 8: Exit check on the real machines
 
-- [ ] **Step 1: Mac setup**
+- [x] **Step 1: Mac setup**
   - Copy `analysis_example.cfg` to `~/Aji-dev/analysis.cfg`.
   - Write `settings.json` per `docs/development.md`, pointing at `/opt/homebrew/bin/katago`, the b18 network and that config.
-- [ ] **Step 2: Build locally**, as the owner prefers. Run `pnpm tauri build --bundles app`, then open `target/release/bundle/macos/Aji.app`.
+- [x] **Step 2: Build locally**, as the owner prefers. Run `pnpm tauri build --bundles app`, then open `target/release/bundle/macos/Aji.app`.
 
   Expected:
   - The indicator turns green within a minute, after the Metal warm-up.
   - The candidate list for the empty board updates several times a second, with win rates near 37% (the recorded value for Black with komi 7.5).
   - The top rows are the four 4-4 points (Q16, Q4, D16, D4) and then the 3-4 points, all showing the same numbers within each group. KataGo copies symmetric moves (`isSymmetryOf`); this is not a bug. M7 decides how to draw them.
-- [ ] **Step 3: Controls**
+- [x] **Step 3: Controls**
   - Click the indicator: `Analysis paused`, and the numbers freeze.
   - Click again: it resumes. The visits restart from a low number and climb, because KataGo starts every query from zero.
-- [ ] **Step 4: Crash.** Run `pkill -9 katago`. Expected: the crashed state appears, with `Ended by signal 9` and the stderr tail. Restart returns to analysing.
-- [ ] **Step 5: Quit and force-quit**
+- [x] **Step 4: Crash.** Run `pkill -9 katago`. Expected: the crashed state appears, with `Ended by signal 9` and the stderr tail. Restart returns to analysing.
+- [x] **Step 5: Quit and force-quit**
   - Quit Aji with ⌘Q. `pgrep -x katago` prints nothing within 3 s.
   - Force-quit Aji while the indicator still shows "Starting KataGo…". `pgrep -x katago` prints nothing within 3 s.
   - Reopen it, then run `pkill -9 -f 'Aji.app/Contents/MacOS/'`. `pgrep -x katago` prints nothing within 3 s.
 - [ ] **Step 6: Windows PC (the owner may skip, as in M1).** Repeat Steps 2 to 5 with a manual-dispatch CI installer and a hand-unzipped KataGo, using Task Manager instead of `pgrep`.
-- [ ] **Step 7: Update the docs**
+- [x] **Step 7: Update the docs**
   - Mark M2 done in this plan and in the roadmap, with the date and what was checked.
   - Record anything learned that M3 to M5 need, such as the real Metal warm-up time inside the app.
   - Commit: `docs: mark M2 analysis skeleton done`.

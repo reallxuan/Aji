@@ -143,6 +143,8 @@ Detailed plan: [2026-11-19-phase-1-m1-foundation.md](2026-11-19-phase-1-m1-found
 
 Detailed plan: [2026-11-19-phase-1-m2-analysis-skeleton.md](2026-11-19-phase-1-m2-analysis-skeleton.md).
 
+**Status:** done on 2026-11-19. The Mac exit check passed on a local build; the Windows PC check moves to M8. The `main` CI run failed on Windows before the engine tests ran, so it built no installers (details in the M2 plan). The fix is in M3.
+
 - Engine lifecycle (audit G1, approved by the owner on 2026-11-19): the protocol also gets `engine.restart` and `engine.stop`, and a watchdog treats an engine that stops answering like a crash, restarting it once. The settings buttons for these come in M5.
 - `aji-core` (first types only): colour, point, move, GTP coordinates (no I column), rules, komi, `Position`, and a `PositionKey` hash for the cache.
 - `aji-engine`: an analysis-engine process wrapper. It spawns KataGo as in 3.3 (with `CREATE_NO_WINDOW` on Windows), reads line-delimited JSON, routes responses by query id, terminates stale queries, keeps the last 50 lines of stderr, detects exits, throttles updates and caches results in memory.
