@@ -33,6 +33,7 @@ struct Scenario {
     crash_after_reports: Option<u64>,
     crash_stderr_lines: u64,
     hang_after_ready: bool,
+    stall_after_reports: Option<u64>,
 }
 
 #[derive(Deserialize, PartialEq)]
@@ -52,6 +53,7 @@ impl Default for Scenario {
             crash_after_reports: None,
             crash_stderr_lines: 0,
             hang_after_ready: false,
+            stall_after_reports: None,
         }
     }
 }
@@ -257,6 +259,7 @@ struct Config {
     speed: f64,
     crash_after_reports: Option<u64>,
     crash_stderr_lines: u64,
+    stall_after_reports: Option<u64>,
 }
 
 fn crash(config: &Config) -> ! {
@@ -293,8 +296,13 @@ fn start_replay(
     let shared = Arc::clone(shared);
     let config = Arc::clone(config);
     thread::spawn(move || {
+        // Reports this replay has written, and when the previous line was recorded.
+        let mut written = 0;
+        let mut previous_t = recorded.t_in;
         for (t, line) in &recorded.outs {
             sleep_until(started + scaled(t - recorded.t_in, config.speed));
+            let interval = scaled(t - previous_t, config.speed);
+            previous_t = *t;
             let mut line = line.clone();
             line["id"] = Value::String(id.clone());
             let is_report = line["isDuringSearch"] == true;
@@ -318,6 +326,12 @@ fn start_replay(
                 if config.crash_after_reports == Some(state.reports_written) {
                     crash(&config);
                 }
+                written += 1;
+                if config.stall_after_reports == Some(written) {
+                    drop(state);
+                    stall(&line, interval, &id, generation, &shared);
+                    return;
+                }
             }
         }
         let mut state = shared.lock().unwrap();
@@ -329,6 +343,24 @@ fn start_replay(
             state.replays.remove(&id);
         }
     });
+}
+
+/// Re-sends `report` every `interval`, with the same visits and never a final, for as long
+/// as its replay is live. A terminate ends the replay and writes the final itself.
+fn stall(report: &Value, interval: Duration, id: &str, generation: u64, shared: &Mutex<Shared>) {
+    let interval = interval.max(Duration::from_millis(1));
+    loop {
+        thread::sleep(interval);
+        let state = shared.lock().unwrap();
+        if !state
+            .replays
+            .get(id)
+            .is_some_and(|r| r.generation == generation)
+        {
+            return;
+        }
+        emit(report);
+    }
 }
 
 fn terminate(query: &Value, raw: &Value, shared: &Arc<Mutex<Shared>>) {
@@ -388,6 +420,7 @@ fn main() {
         speed: scenario.speed,
         crash_after_reports: scenario.crash_after_reports,
         crash_stderr_lines: scenario.crash_stderr_lines,
+        stall_after_reports: scenario.stall_after_reports,
     });
     let shared = Arc::new(Mutex::new(Shared {
         replays: HashMap::new(),

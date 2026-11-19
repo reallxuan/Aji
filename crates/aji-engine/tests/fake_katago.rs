@@ -304,3 +304,38 @@ fn terminate_after_natural_completion_writes_no_second_final() {
     assert_eq!(fake.recv()["action"], "terminate_all");
     assert!(fake.recv_within(300).is_none(), "no second final");
 }
+
+#[test]
+fn stall_repeats_the_nth_report_until_terminated() {
+    let mut fake = Fake::spawn("stall");
+    fake.send(&p1("s1"));
+    let visits = |v: &Value| v["rootInfo"]["visits"].as_u64().unwrap();
+    let first = fake.recv();
+    let second = fake.recv();
+    assert!(visits(&second) > visits(&first));
+    for _ in 0..5 {
+        let again = fake.recv();
+        assert_eq!(during_search(&again), Some(true), "no final while stalled");
+        assert_eq!(visits(&again), visits(&second), "visits stay frozen");
+    }
+    fake.send(r#"{"id":"v","action":"query_version"}"#);
+    let reply = loop {
+        let v = fake.recv();
+        if v.get("action").is_some() {
+            break v;
+        }
+    };
+    assert_eq!(reply["id"], "v", "query_version is still answered");
+    fake.send(r#"{"id":"t","action":"terminate","terminateId":"s1"}"#);
+    let fin = loop {
+        let v = fake.recv();
+        if during_search(&v) == Some(false) {
+            break v;
+        }
+    };
+    assert_eq!(visits(&fin), visits(&second));
+    assert!(
+        fake.recv_within(300).is_none(),
+        "the stalled replay stops after terminate"
+    );
+}
