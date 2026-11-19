@@ -2,9 +2,10 @@
 
 use minisign_verify::PublicKey;
 
-/// Minisign public keys in base64. It stays empty until the release key exists, so until then
-/// every fetched or cached copy is rejected and the bundled one is used.
-pub const TRUSTED_KEYS: &[&str] = &[];
+/// Minisign public keys in base64.
+///
+/// Key id ABDFEC3DB730B0C2: `keys/aji-manifest.pub` in the `reallxuan/aji-manifest` repository.
+pub const TRUSTED_KEYS: &[&str] = &["RWTCsDC3Pezfq26GP5M7KIYhmFd7TMMUXag4lxVzJb+IQqfahCp1fMDh"];
 
 /// Parses [`TRUSTED_KEYS`].
 ///
@@ -21,6 +22,11 @@ pub fn trusted_keys() -> Vec<PublicKey> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trusted_keys_decode() {
+        assert_eq!(trusted_keys().len(), 1);
+    }
 
     #[test]
     fn every_trusted_key_parses() {

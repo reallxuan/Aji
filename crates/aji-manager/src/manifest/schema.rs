@@ -458,7 +458,23 @@ mod tests {
     }
 
     #[test]
-    fn bundled_manifest_parses() {
-        assert!(parse_manifest(BUNDLED).is_ok());
+    fn bundled_manifest_covers_phase_1() {
+        let m = parse_manifest(BUNDLED).expect("the bundled manifest parses");
+        let has = |platform: Platform, backend: Backend| {
+            m.engines
+                .iter()
+                .any(|e| e.platform == platform && e.backend == backend)
+        };
+        assert!(has(Platform::WindowsX64, Backend::Cuda));
+        assert!(has(Platform::WindowsX64, Backend::Directml));
+        assert!(has(Platform::MacosArm64, Backend::Metal));
+        assert!(has(Platform::LinuxX64, Backend::Eigenavx2));
+        let main = m
+            .networks
+            .iter()
+            .filter(|n| n.kind == NetworkKind::Main)
+            .count();
+        assert_eq!(main, 8);
+        assert_eq!(m.runtimes.len(), 2);
     }
 }

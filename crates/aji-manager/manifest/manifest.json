@@ -1,139 +1,1155 @@
 {
-  "schema": 1,
-  "sequence": 1763500000,
-  "generated": "2025-11-18T21:06:40Z",
   "engines": [
     {
-      "id": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64",
-      "version": "1.18.2",
-      "released": "2026-08-30",
-      "platform": "windows-x64",
-      "backend": "cuda",
-      "variant": "cuda13.2-cudnn9.24.0",
-      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "backend": "eigen",
       "config": {},
       "file": {
-        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip",
-        "size": 9825374,
-        "digest": "sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514",
+        "digest": "sha256:993b642601e806037003d11e43775e7b4fc65281aed9b9469b7122f18fc16811",
+        "name": "katago-v1.18.1-eigen-linux-x64.zip",
+        "size": 41780528,
         "urls": [
-          "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip"
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-linux-x64.zip"
         ]
-      }
-    },
-    {
-      "id": "katago-v1.18.2-metal-macos-arm64",
-      "version": "1.18.2",
-      "released": "2026-08-30",
-      "platform": "macos-arm64",
-      "backend": "metal",
-      "variant": "metal",
-      "config": {},
-      "file": {
-        "name": "katago-v1.18.2-metal-macos-arm64.zip",
-        "size": 8123456,
-        "digest": "sha256:a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
-        "urls": [
-          "https://github.com/reallxuan/aji-manifest/releases/download/katago-v1.18.2-metal/katago-v1.18.2-metal-macos-arm64.zip"
-        ]
-      }
-    },
-    {
-      "id": "katago-v1.18.1-eigenavx2-linux-x64",
-      "version": "1.18.1",
-      "released": "2026-06-15",
+      },
+      "id": "katago-v1.18.1-eigen-linux-x64",
       "platform": "linux-x64",
-      "backend": "eigenavx2",
-      "variant": "eigenavx2",
+      "released": "2026-08-24",
+      "variant": "eigen",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "eigen",
       "config": {},
       "file": {
+        "digest": "sha256:3e062b4ba90d5a2d986bc0312a61e6b7abdf92235e59db13f1febb30f643297d",
+        "name": "katago-v1.18.0-eigen-linux-x64.zip",
+        "size": 41693965,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-eigen-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-08-22",
+      "variant": "eigen",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:cca71fff39abd19bd9acfc17750025d4bb0ee6adbad99d7513a2c6401b0a7af3",
+        "name": "katago-v1.17.1-eigen-linux-x64.zip",
+        "size": 39132330,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-eigen-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-07-31",
+      "variant": "eigen",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:0ae933c4da837e348583b4f3744f347a2b442c22b0bb9980b5b4f53f8760e1c2",
+        "name": "katago-v1.17.0-eigen-linux-x64.zip",
+        "size": 39132195,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-eigen-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-07-29",
+      "variant": "eigen",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:33e79780dbe3bf6ee859e16f64952cdfc90f7210c8f71ad978ffcba85ad20d79",
         "name": "katago-v1.18.1-eigenavx2-linux-x64.zip",
-        "size": 7345678,
-        "digest": "sha256:0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+        "size": 41821245,
         "urls": [
           "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-linux-x64.zip"
         ]
-      }
-    }
-  ],
-  "runtimes": [
+      },
+      "id": "katago-v1.18.1-eigenavx2-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-08-24",
+      "variant": "eigenavx2",
+      "version": "1.18.1"
+    },
     {
-      "id": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:a98c0a2d8f76fcf06722b7fb789b47df2b21dd2255e72c62735f88ddcbd90bc5",
+        "name": "katago-v1.18.0-eigenavx2-linux-x64.zip",
+        "size": 41740115,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-eigenavx2-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-08-22",
+      "variant": "eigenavx2",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:234bf7866bc26f37baaeed60dc358b821bafc8e73e9bc50cb2d2a1cf51502d44",
+        "name": "katago-v1.17.1-eigenavx2-linux-x64.zip",
+        "size": 39180735,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-eigenavx2-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-07-31",
+      "variant": "eigenavx2",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:ee01d50a7e925bfb24f30446551d74b4427d45fc99b1c34bad6faa0dbff8c34c",
+        "name": "katago-v1.17.0-eigenavx2-linux-x64.zip",
+        "size": 39180757,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-eigenavx2-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-07-29",
+      "variant": "eigenavx2",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:81ecea81526adb412a392ec728dbdf9627e754df7cf1a7a3dbb8ef220182184a",
+        "name": "katago-v1.18.1-opencl-linux-x64.zip",
+        "size": 41325151,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-opencl-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-08-24",
+      "variant": "opencl",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:efb913fce8088e77867d890fc05b127cbb375f18fd1cf6636db4ee65d49a31a2",
+        "name": "katago-v1.18.0-opencl-linux-x64.zip",
+        "size": 41218436,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-opencl-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-08-22",
+      "variant": "opencl",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:be537295868c0b8ff6985e62e411fff67cbba2dc872343c74896063de1ef51e9",
+        "name": "katago-v1.17.1-opencl-linux-x64.zip",
+        "size": 38644908,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-linux-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-opencl-linux-x64",
+      "platform": "linux-x64",
+      "released": "2026-07-31",
+      "variant": "opencl",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "metal",
+      "config": {},
+      "file": {
+        "digest": "sha256:b307bc8c285e9cc9adff506519925dc2ed4453bf3bc8f52c47dd97104d1f26ea",
+        "name": "katago-v1.18.2-metal-macos-arm64.zip",
+        "size": 3934477,
+        "urls": [
+          "https://github.com/reallxuan/aji-manifest/releases/download/katago-v1.18.2-metal/katago-v1.18.2-metal-macos-arm64.zip"
+        ]
+      },
+      "id": "katago-v1.18.2-metal-macos-arm64",
+      "platform": "macos-arm64",
+      "released": "2026-11-19",
+      "variant": "metal",
+      "version": "1.18.2"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:69a94227afaaf268634134805b9469f9f482760ee6c986d315d89525de0eefa2",
+        "name": "katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10173580,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.2-cuda12.8-cudnn9.8.0-windows-x64",
       "platform": "windows-x64",
-      "minDriver": "580.00",
-      "minComputeCapability": "7.5",
-      "components": [
-        {
-          "product": "CUDA Toolkit",
-          "name": "CUDA cuBLAS",
-          "version": "13.4.1.3",
-          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.2.2.json",
-          "archive": {
-            "path": "compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-13.4.1.3-archive.zip",
-            "size": 388113288,
-            "digest": "sha256:bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a"
-          },
-          "hosts": [
-            "https://developer.download.nvidia.com/",
-            "https://developer.download.nvidia.cn/"
-          ],
-          "extract": [
-            "cublas64_13.dll",
-            "cublasLt64_13.dll"
-          ],
-          "licence": {
-            "name": "NVIDIA CUDA Toolkit EULA",
-            "url": "https://docs.nvidia.com/cuda/eula/index.html",
-            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/LICENSE.txt",
-            "textSha256": "1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd",
-            "requiresAcceptance": true
-          }
-        }
-      ],
-      "notice": "NVIDIA CUDA cuBLAS 13.4.1.3, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence."
+      "released": "2026-08-30",
+      "runtime": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "variant": "cuda12.8-cudnn9.8.0",
+      "version": "1.18.2"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:8caabc5675950f52d285a686c19727f7a56a982313a7f055ade060ba78df552e",
+        "name": "katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10135501,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-cuda12.8-cudnn9.8.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "runtime": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "variant": "cuda12.8-cudnn9.8.0",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:6a3e2602d70e8c7fbcc6d5b914f5a2465a1bf0d030df99e6832ee7da28ec4d8d",
+        "name": "katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 10129879,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-cuda12.8-cudnn9.8.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "runtime": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "variant": "cuda12.8-cudnn9.8.0",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:476a35c0b43cc937906d4313acaf592a97a30775ec51d37f5401a284ad9fa0f9",
+        "name": "katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 9213749,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-cuda12.8-cudnn9.8.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-31",
+      "runtime": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "variant": "cuda12.8-cudnn9.8.0",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:6b84485bd5d0eff3bd1f9f76add5ac0f989f8f940206ced1d99dbb841f143387",
+        "name": "katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64.zip",
+        "size": 9214114,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-cuda12.8-cudnn9.8.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-29",
+      "runtime": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "variant": "cuda12.8-cudnn9.8.0",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:4b26f1889bed56b91964aa565f324eeab816e77f2ee79197be04f7291a2e7514",
+        "name": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9825374,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.2/katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.2-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-30",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "version": "1.18.2"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:7dcb2427726aaa2a47322a1f44759eeb0ab8125f5dc7a15f478736df1837d99c",
+        "name": "katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9784089,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:8406aeb855bfe9c70ac6b9e07651849bc15864aef415e60af84bd4961a25b5b5",
+        "name": "katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 9779228,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:df0ec60476dd231356d1de2adc0e118ff372639b6d02b24492e82e1a6be8a7d0",
+        "name": "katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 8658330,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-31",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "cuda",
+      "config": {},
+      "file": {
+        "digest": "sha256:f94ca9066a6b80a6f3c00aa483c41963f94a46c970ec82f7f3d12d2a110034e7",
+        "name": "katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64.zip",
+        "size": 8657854,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-cuda13.2-cudnn9.24.0-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-29",
+      "runtime": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "variant": "cuda13.2-cudnn9.24.0",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "directml",
+      "config": {
+        "onnxProvider": "directml"
+      },
+      "file": {
+        "digest": "sha256:cc5ab3923344a2c35b023307794850b5453f1f7ebbd80b7372bf4485d9ce37ee",
+        "name": "katago-v1.18.1-onnx1.24.4-directml-windows-x64.zip",
+        "size": 23584379,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx1.24.4-directml-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-onnx1.24.4-directml-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "onnx1.24.4-directml",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "directml",
+      "config": {
+        "onnxProvider": "directml"
+      },
+      "file": {
+        "digest": "sha256:94b9100a167d6c68c58647c26a0b73cecfed3a59a6e707fca053be80d619aa27",
+        "name": "katago-v1.18.0-onnx1.24.4-directml-windows-x64.zip",
+        "size": 23578481,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx1.24.4-directml-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-onnx1.24.4-directml-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "onnx1.24.4-directml",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:074485cf150c38aa3bb14ac9f54f2952ffefbceb44673709bbb8a83650bf95d6",
+        "name": "katago-v1.18.1-eigen-windows-x64.zip",
+        "size": 5903072,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigen-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-eigen-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "eigen",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:d89c7cddc2c5543b6316d9094b7748cbc28ddddf8aa4dc4304a5b78032476221",
+        "name": "katago-v1.18.0-eigen-windows-x64.zip",
+        "size": 5897043,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigen-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-eigen-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "eigen",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:3a7538ecb6facefcfe16d649fd695c29e44f8372cb7de8c316eee5779865f379",
+        "name": "katago-v1.17.1-eigen-windows-x64.zip",
+        "size": 5246691,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-eigen-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-31",
+      "variant": "eigen",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "eigen",
+      "config": {},
+      "file": {
+        "digest": "sha256:20b02914048d18c8f5a761571317923caf6c9ffb79bf07201bcc52c1979f0ffb",
+        "name": "katago-v1.17.0-eigen-windows-x64.zip",
+        "size": 5246760,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigen-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-eigen-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-29",
+      "variant": "eigen",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:0d62ffa41ee04dd89dd1b80fe45e306c837231cb1e2dccb4f5780d0ca7c313db",
+        "name": "katago-v1.18.1-eigenavx2-windows-x64.zip",
+        "size": 5899607,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-eigenavx2-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "eigenavx2",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:6b861f7391efa3381218d5fbd227c44d3065d9fb38cf4b315e1b5dee9f3ac13f",
+        "name": "katago-v1.18.0-eigenavx2-windows-x64.zip",
+        "size": 5893172,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-eigenavx2-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-eigenavx2-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "eigenavx2",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:f13f1126575a22dc728e931011b1b2e404ce2d02b566876a44a01aea3d27e293",
+        "name": "katago-v1.17.1-eigenavx2-windows-x64.zip",
+        "size": 5245487,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigenavx2-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-eigenavx2-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-31",
+      "variant": "eigenavx2",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "eigenavx2",
+      "config": {},
+      "file": {
+        "digest": "sha256:d1aac273140b1223a44f34e8d3694d07691d3da7915d599891c517ed20e97618",
+        "name": "katago-v1.17.0-eigenavx2-windows-x64.zip",
+        "size": 5244223,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.0-eigenavx2-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-29",
+      "variant": "eigenavx2",
+      "version": "1.17.0"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:1710db1903ab921aa6837a9599c8474f8a59f057650217c5d9bc125ee393a9ff",
+        "name": "katago-v1.18.1-opencl-windows-x64.zip",
+        "size": 6004137,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-opencl-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-opencl-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "opencl",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:2224a32cb1cf9960d9b7caf9a53f049ccab7c7c822023171bd526fae120d7b54",
+        "name": "katago-v1.18.0-opencl-windows-x64.zip",
+        "size": 5998887,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-opencl-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-opencl-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "opencl",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "opencl",
+      "config": {},
+      "file": {
+        "digest": "sha256:68d0a9b11ef7e3c1ddfc5bcd400306ca66c3770dd67a22cb377d3aaaf32e8c66",
+        "name": "katago-v1.17.1-opencl-windows-x64.zip",
+        "size": 5347873,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-opencl-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.17.1-opencl-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-07-31",
+      "variant": "opencl",
+      "version": "1.17.1"
+    },
+    {
+      "backend": "openvino",
+      "config": {
+        "onnxProvider": "openvino"
+      },
+      "file": {
+        "digest": "sha256:3bde52d034e59949d8527cfafdff5a854425048faca0a448788766dfd79bd039",
+        "name": "katago-v1.18.1-onnx-openvino2026.2.1-windows-x64.zip",
+        "size": 86695392,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-onnx-openvino2026.2.1-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.1-onnx-openvino2026.2.1-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "onnx-openvino2026.2.1",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "openvino",
+      "config": {
+        "onnxProvider": "openvino"
+      },
+      "file": {
+        "digest": "sha256:0b472fe3f7c43f87509a514c4f86ee7482602f791c53b85274a227a4449a126c",
+        "name": "katago-v1.18.0-onnx-openvino2026.2.1-windows-x64.zip",
+        "size": 86689235,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-onnx-openvino2026.2.1-windows-x64.zip"
+        ]
+      },
+      "id": "katago-v1.18.0-onnx-openvino2026.2.1-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "onnx-openvino2026.2.1",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:1786cf55cd474cc240c12f65ba2d9971e35f8d057bd019ae570ec615476c9d59",
+        "name": "katago-v1.18.1-rocm7.13-gfx103X-windows-x64.zip",
+        "size": 217380864,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx103X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx103X",
+      "id": "katago-v1.18.1-rocm7.13-gfx103X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "rocm7.13-gfx103X",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:7bcd6d5ef265b32ff1eaf8aab1d3bd159a60d0b836558813fe7e1072885bea31",
+        "name": "katago-v1.18.0-rocm7.13-gfx103X-windows-x64.zip",
+        "size": 217370664,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx103X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx103X",
+      "id": "katago-v1.18.0-rocm7.13-gfx103X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "rocm7.13-gfx103X",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:2b89770a36dafe66ed90731aceb7f6f84ba082f50da39b9ef0d606c4d2af481a",
+        "name": "katago-v1.18.1-rocm7.13-gfx110X-windows-x64.zip",
+        "size": 221478994,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx110X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx110X",
+      "id": "katago-v1.18.1-rocm7.13-gfx110X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "rocm7.13-gfx110X",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:17bf8a8304eae7edcaed867ee67444d2a572cf369d18786713cfd70c8ec7a238",
+        "name": "katago-v1.18.0-rocm7.13-gfx110X-windows-x64.zip",
+        "size": 221468794,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx110X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx110X",
+      "id": "katago-v1.18.0-rocm7.13-gfx110X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "rocm7.13-gfx110X",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:e9c7496825ed88c8312191e6df4ae185e0363014fe6e689856da2144743ec142",
+        "name": "katago-v1.18.1-rocm7.13-gfx1151-windows-x64.zip",
+        "size": 176153193,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx1151-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx1151",
+      "id": "katago-v1.18.1-rocm7.13-gfx1151-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "rocm7.13-gfx1151",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:b5858457cbeb6f439c1c300cbc6f16b6ee0836b489b7b632cfb42fbc36c0108e",
+        "name": "katago-v1.18.0-rocm7.13-gfx1151-windows-x64.zip",
+        "size": 176142993,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx1151-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx1151",
+      "id": "katago-v1.18.0-rocm7.13-gfx1151-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "rocm7.13-gfx1151",
+      "version": "1.18.0"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:f98f20b204d2ebb996959764e94453ccf996099ea6f46f377d6649180c5c38b3",
+        "name": "katago-v1.18.1-rocm7.13-gfx120X-windows-x64.zip",
+        "size": 556862129,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-rocm7.13-gfx120X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx120X",
+      "id": "katago-v1.18.1-rocm7.13-gfx120X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-24",
+      "variant": "rocm7.13-gfx120X",
+      "version": "1.18.1"
+    },
+    {
+      "backend": "rocm",
+      "config": {},
+      "file": {
+        "digest": "sha256:1ea8e68e3d7d767ace51e2f12015aadf0a6991f4737ec144c1875b71b3386779",
+        "name": "katago-v1.18.0-rocm7.13-gfx120X-windows-x64.zip",
+        "size": 556851929,
+        "urls": [
+          "https://github.com/lightvector/KataGo/releases/download/v1.18.0/katago-v1.18.0-rocm7.13-gfx120X-windows-x64.zip"
+        ]
+      },
+      "gpuFamily": "gfx120X",
+      "id": "katago-v1.18.0-rocm7.13-gfx120X-windows-x64",
+      "platform": "windows-x64",
+      "released": "2026-08-22",
+      "variant": "rocm7.13-gfx120X",
+      "version": "1.18.0"
     }
   ],
+  "generated": "2026-11-19T15:55:30Z",
   "networks": [
     {
-      "id": "kata1-tf3-b11c768-s12382M-d6533M",
+      "elo": 14638.2,
+      "eloGames": 2848,
       "family": "tf3-b11c768",
-      "kind": "main",
-      "elo": 14639.0,
-      "eloGames": 2833,
-      "uploaded": "2026-11-01",
-      "minEngineVersion": "1.17.0",
       "file": {
+        "digest": "md5:db954878202524766e2f75ac61ae34c3",
         "name": "kata1-tf3-b11c768-s12382M-d6533M.bin.gz",
         "size": 262041254,
-        "digest": "md5:db954878202524766e2f75ac61ae34c3",
         "urls": [
           "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b11c768-s12382M-d6533M.bin.gz"
         ]
       },
+      "id": "kata1-tf3-b11c768-s12382M-d6533M",
+      "kind": "main",
       "licence": {
         "name": "KataGo network license",
         "url": "https://katagotraining.org/network_license/"
-      }
+      },
+      "minEngineVersion": "1.17.0",
+      "uploaded": "2026-11-01"
     },
     {
-      "id": "kata1-b18c384nbt-s9996604416-d4316597426",
-      "family": "b18c384nbt",
-      "kind": "main",
-      "elo": 13629.0,
-      "eloGames": 3991,
-      "uploaded": "2024-05-26",
+      "elo": 14523.8,
+      "eloGames": 7194,
+      "family": "zhizi-b40c768nbt",
       "file": {
+        "digest": "md5:bfc0e6de4e21fef617c1fe6d332e341c",
+        "name": "kata1-zhizi-b40c768nbt-s11272M-d5935M.bin.gz",
+        "size": 863210287,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b40c768nbt-s11272M-d5935M.bin.gz"
+        ]
+      },
+      "id": "kata1-zhizi-b40c768nbt-s11272M-d5935M",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "uploaded": "2026-06-06"
+    },
+    {
+      "elo": 14175.2,
+      "eloGames": 4320,
+      "family": "tf3-b10c512",
+      "file": {
+        "digest": "md5:991c1e06764931ef797ad3098675b981",
+        "name": "kata1-tf3-b10c512-s3203M-d5937M.bin.gz",
+        "size": 94281753,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b10c512-s3203M-d5937M.bin.gz"
+        ]
+      },
+      "id": "kata1-tf3-b10c512-s3203M-d5937M",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "minEngineVersion": "1.17.0",
+      "uploaded": "2026-08-25"
+    },
+    {
+      "elo": 14164.6,
+      "eloGames": 5062,
+      "family": "zhizi-b28c512nbt",
+      "file": {
+        "digest": "md5:e575a5337a21fb4718eebcee7405c090",
+        "name": "kata1-zhizi-b28c512nbt-muonfd2.bin.gz",
+        "size": 271447864,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz"
+        ]
+      },
+      "id": "kata1-zhizi-b28c512nbt-muonfd2",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "uploaded": "2026-03-22"
+    },
+    {
+      "elo": 14111.4,
+      "eloGames": 4315,
+      "family": "b28c512nbt",
+      "file": {
+        "digest": "md5:8fe2de3e7aa676ea5e6875b8771e4108",
+        "name": "kata1-b28c512nbt-s13255194368-d5935380940.bin.gz",
+        "size": 271440852,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz"
+        ]
+      },
+      "id": "kata1-b28c512nbt-s13255194368-d5935380940",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "uploaded": "2026-06-07"
+    },
+    {
+      "elo": 13715.8,
+      "eloGames": 4072,
+      "family": "tf2-b10c384",
+      "file": {
+        "digest": "md5:f181ed7ef23134bb5b6c9bf27e5235ce",
+        "name": "kata1-tf2-b10c384-s2941M-d5872M.bin.gz",
+        "size": 38245507,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf2-b10c384-s2941M-d5872M.bin.gz"
+        ]
+      },
+      "id": "kata1-tf2-b10c384-s2941M-d5872M",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "minEngineVersion": "1.17.0",
+      "uploaded": "2026-08-25"
+    },
+    {
+      "elo": 13629.1,
+      "eloGames": 3991,
+      "family": "b18c384nbt",
+      "file": {
+        "digest": "md5:efc406f90990b1fb96034f426e9965fe",
         "name": "kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
         "size": 97898094,
-        "digest": "md5:efc406f90990b1fb96034f426e9965fe",
         "urls": [
           "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz"
         ]
       },
+      "id": "kata1-b18c384nbt-s9996604416-d4316597426",
+      "kind": "main",
       "licence": {
         "name": "KataGo network license",
         "url": "https://katagotraining.org/network_license/"
-      }
+      },
+      "uploaded": "2024-05-26"
+    },
+    {
+      "elo": 13557.6,
+      "eloGames": 3220,
+      "family": "b60c320",
+      "file": {
+        "digest": "md5:8116b4d9ecdf28851a9ae8247a3465c5",
+        "name": "kata1-b60c320-s9356080896-d3824355768.bin.gz",
+        "size": 403507095,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b60c320-s9356080896-d3824355768.bin.gz"
+        ]
+      },
+      "id": "kata1-b60c320-s9356080896-d3824355768",
+      "kind": "main",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "uploaded": "2023-11-17"
+    },
+    {
+      "family": "b18c384nbt-humanv0",
+      "file": {
+        "digest": "md5:dc7ce241411b05ef2a5416d6406313a4",
+        "name": "b18c384nbt-humanv0.bin.gz",
+        "size": 99066230,
+        "urls": [
+          "https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz"
+        ]
+      },
+      "id": "b18c384nbt-humanv0",
+      "kind": "humanSl",
+      "licence": {
+        "name": "KataGo network license",
+        "url": "https://katagotraining.org/network_license/"
+      },
+      "uploaded": "2025-04-22"
     }
-  ]
+  ],
+  "runtimes": [
+    {
+      "components": [
+        {
+          "archive": {
+            "digest": "sha256:57a470112cec7e112c95253dde8b3c7184d795dbd92b0bde77a4cb7f8c94c8aa",
+            "path": "compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-12.8.4.1-archive.zip",
+            "size": 563660944
+          },
+          "extract": [
+            "cublas64_12.dll",
+            "cublasLt64_12.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA CUDA Toolkit EULA",
+            "requiresAcceptance": true,
+            "textSha256": "e2c71babfd18a8e69542dd7e9ca018f9caa438094001a58e6bc4d8c999bf0d07",
+            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/LICENSE.txt",
+            "url": "https://docs.nvidia.com/cuda/eula/index.html"
+          },
+          "name": "CUDA cuBLAS",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.8.1.json",
+          "product": "CUDA Toolkit",
+          "version": "12.8.4.1"
+        },
+        {
+          "archive": {
+            "digest": "sha256:a63302a077f0248a743a1a7caa7dbd80d0fac56c6cfa9c41fa05fac9b7e5eda5",
+            "path": "compute/cuda/redist/cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-12.8.93-archive.zip",
+            "size": 305588898
+          },
+          "extract": [
+            "nvrtc64_120_0.dll",
+            "nvrtc-builtins64_128.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA CUDA Toolkit EULA",
+            "requiresAcceptance": true,
+            "textSha256": "e2c71babfd18a8e69542dd7e9ca018f9caa438094001a58e6bc4d8c999bf0d07",
+            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/LICENSE.txt",
+            "url": "https://docs.nvidia.com/cuda/eula/index.html"
+          },
+          "name": "CUDA NVRTC",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.8.1.json",
+          "product": "CUDA Toolkit",
+          "version": "12.8.93"
+        },
+        {
+          "archive": {
+            "digest": "sha256:d8a23705e3884b137b7e05449fb2b61bfa524e7cfc3fda80743d633f423c6ce4",
+            "path": "compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.8.0.87_cuda12-archive.zip",
+            "size": 675349654
+          },
+          "extract": [
+            "cudnn*64_9.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA cuDNN Software License Agreement",
+            "requiresAcceptance": true,
+            "textSha256": "4fce5a3b1ecaf4d7d202478e969e4563c7220db2718a76067e286c0202e1195f",
+            "textUrl": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/LICENSE.txt",
+            "url": "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html"
+          },
+          "name": "NVIDIA CUDA Deep Neural Network library",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_9.8.0.json",
+          "product": "cuDNN",
+          "version": "9.8.0.87"
+        }
+      ],
+      "id": "nvidia-cuda12.8-cudnn9.8.0-windows-x64",
+      "minComputeCapability": "5.0",
+      "minDriver": "572.61",
+      "notice": "NVIDIA CUDA cuBLAS 12.8.4.1, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence.\nNVIDIA CUDA NVRTC 12.8.93, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence.\nNVIDIA CUDA Deep Neural Network library 9.8.0.87, © NVIDIA Corporation. Licensed under the NVIDIA cuDNN Software License Agreement. Not covered by Aji's AGPL licence.",
+      "platform": "windows-x64"
+    },
+    {
+      "components": [
+        {
+          "archive": {
+            "digest": "sha256:bc6f590490134f4dbe29672b72e536c44362cc5f738a0f7e48c8c3c141e9b24a",
+            "path": "compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-13.4.1.3-archive.zip",
+            "size": 388113288
+          },
+          "extract": [
+            "cublas64_13.dll",
+            "cublasLt64_13.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA CUDA Toolkit EULA",
+            "requiresAcceptance": true,
+            "textSha256": "e2c71babfd18a8e69542dd7e9ca018f9caa438094001a58e6bc4d8c999bf0d07",
+            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/LICENSE.txt",
+            "url": "https://docs.nvidia.com/cuda/eula/index.html"
+          },
+          "name": "CUDA cuBLAS",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.2.2.json",
+          "product": "CUDA Toolkit",
+          "version": "13.4.1.3"
+        },
+        {
+          "archive": {
+            "digest": "sha256:c8d4254c51bfa3fa982bd40bf36de9800d4c65211945e8393fbf4c310ef9232a",
+            "path": "compute/cuda/redist/cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-13.2.86-archive.zip",
+            "size": 288218786
+          },
+          "extract": [
+            "nvrtc64_130_0.dll",
+            "nvrtc-builtins64_132.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA CUDA Toolkit EULA",
+            "requiresAcceptance": true,
+            "textSha256": "e2c71babfd18a8e69542dd7e9ca018f9caa438094001a58e6bc4d8c999bf0d07",
+            "textUrl": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/LICENSE.txt",
+            "url": "https://docs.nvidia.com/cuda/eula/index.html"
+          },
+          "name": "CUDA NVRTC",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.2.2.json",
+          "product": "CUDA Toolkit",
+          "version": "13.2.86"
+        },
+        {
+          "archive": {
+            "digest": "sha256:88f72bd1ce384197cedbc68496c6052d7ff0bd9fd0b3c74470402cf737507e06",
+            "path": "compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.24.0.43_cuda13-archive.zip",
+            "size": 1274017601
+          },
+          "extract": [
+            "cudnn*64_9.dll"
+          ],
+          "hosts": [
+            "https://developer.download.nvidia.com/",
+            "https://developer.download.nvidia.cn/"
+          ],
+          "licence": {
+            "name": "NVIDIA cuDNN Software License Agreement",
+            "requiresAcceptance": true,
+            "textSha256": "4fce5a3b1ecaf4d7d202478e969e4563c7220db2718a76067e286c0202e1195f",
+            "textUrl": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/LICENSE.txt",
+            "url": "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html"
+          },
+          "name": "NVIDIA CUDA Deep Neural Network library",
+          "nvidiaManifest": "https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_9.24.0.json",
+          "product": "cuDNN",
+          "version": "9.24.0.43"
+        }
+      ],
+      "id": "nvidia-cuda13.2-cudnn9.24.0-windows-x64",
+      "minComputeCapability": "7.5",
+      "minDriver": "580.00",
+      "notice": "NVIDIA CUDA cuBLAS 13.4.1.3, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence.\nNVIDIA CUDA NVRTC 13.2.86, © NVIDIA Corporation. Licensed under the NVIDIA CUDA Toolkit EULA. Not covered by Aji's AGPL licence.\nNVIDIA CUDA Deep Neural Network library 9.24.0.43, © NVIDIA Corporation. Licensed under the NVIDIA cuDNN Software License Agreement. Not covered by Aji's AGPL licence.",
+      "platform": "windows-x64"
+    }
+  ],
+  "schema": 1,
+  "sequence": 1795103730
 }
