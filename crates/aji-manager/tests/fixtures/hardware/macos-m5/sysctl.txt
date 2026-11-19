@@ -1,0 +1,10 @@
+hw.memsize: 25769803776
+hw.ncpu: 10
+hw.physicalcpu: 10
+hw.nperflevels: 2
+hw.perflevel0.physicalcpu: 4
+hw.perflevel1.physicalcpu: 6
+hw.optional.arm64: 1
+machdep.cpu.brand_string: Apple M5
+kern.osproductversion: 27.2
+kern.osversion: 26B123
