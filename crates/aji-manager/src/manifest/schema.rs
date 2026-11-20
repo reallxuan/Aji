@@ -255,7 +255,16 @@ fn validate(m: &Manifest) -> Result<(), String> {
     unique("runtime", m.runtimes.iter().map(|r| &r.id))?;
     unique("network", m.networks.iter().map(|n| &n.id))?;
     for e in &m.engines {
+        plain("an engine", "id", &e.id)?;
         file(&e.id, &e.file)?;
+        for (key, value) in &e.config {
+            if !is_config_key(key) || value.contains(['\r', '\n', '#']) {
+                return Err(format!(
+                    "engine {} has an unsafe config entry {key:?}",
+                    e.id
+                ));
+            }
+        }
         if let Some(rt) = &e.runtime
             && !m.runtimes.iter().any(|r| &r.id == rt)
         {
@@ -263,13 +272,30 @@ fn validate(m: &Manifest) -> Result<(), String> {
         }
     }
     for n in &m.networks {
+        plain("a network", "id", &n.id)?;
         file(&n.id, &n.file)?;
     }
     for r in &m.runtimes {
+        plain("a runtime", "id", &r.id)?;
         for c in &r.components {
             let who = format!("runtime {} component {}", r.id, c.name);
             if c.extract.is_empty() {
                 return Err(format!("{who} extracts nothing"));
+            }
+            for pattern in &c.extract {
+                plain(&who, "extract pattern", pattern)?;
+            }
+            if !is_relative_url_path(&c.archive.path) {
+                return Err(format!(
+                    "{who} has an unsafe archive path {:?}",
+                    c.archive.path
+                ));
+            }
+            let hash = &c.licence.text_sha256;
+            if hash.len() != 64 || !hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+                return Err(format!(
+                    "{who} licence textSha256 must be 64 lowercase hex digits"
+                ));
             }
             if c.hosts.is_empty() || !c.hosts.iter().all(|h| h.starts_with("https://")) {
                 return Err(format!("{who} needs at least one host, all https"));
@@ -282,7 +308,38 @@ fn validate(m: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
+/// True for a name that can be a file or folder name on every OS and stays inside its folder:
+/// not empty, not `.` or `..`, and without `/`, `\`, `:` (a Windows drive prefix) or NUL.
+pub fn is_plain_name(s: &str) -> bool {
+    !s.is_empty() && s != "." && s != ".." && !s.contains(['/', '\\', ':', '\0'])
+}
+
+/// The last `/` component of an `archive.path`: the archive's file name.
+pub fn archive_file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// A relative URL path whose every `/` component is a plain name.
+fn is_relative_url_path(path: &str) -> bool {
+    path.split('/').all(is_plain_name)
+}
+
+fn is_config_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn plain(who: &str, what: &str, name: &str) -> Result<(), String> {
+    if is_plain_name(name) {
+        Ok(())
+    } else {
+        Err(format!("{who} has an unsafe {what} {name:?}"))
+    }
+}
+
 fn file(who: &str, f: &FileRef) -> Result<(), String> {
+    plain(who, "file name", &f.name)?;
     if f.size == 0 {
         return Err(format!("{who} file size is 0"));
     }
@@ -447,6 +504,132 @@ mod tests {
             edit(&mut v);
             assert!(parse(&v).is_err(), "case should be rejected: {name}");
         }
+    }
+
+    fn rejected(v: &Value) -> bool {
+        matches!(parse(v), Err(ManifestError::Invalid(_)))
+    }
+
+    const UNSAFE: [&str; 9] = [
+        "../x.zip", "a/b.zip", "a\\b.zip", "/x.zip", "C:x.zip", "..", ".", "", "a\0b",
+    ];
+
+    #[test]
+    fn unsafe_names_are_rejected() {
+        for bad in UNSAFE {
+            for field in [
+                "/engines/0/file/name",
+                "/networks/0/file/name",
+                "/engines/0/id",
+                "/networks/0/id",
+            ] {
+                let mut v = sample();
+                *v.pointer_mut(field).unwrap() = json!(bad);
+                assert!(rejected(&v), "{field} = {bad:?}");
+            }
+            // A runtime id is referenced by its engine, so both change together.
+            let mut v = sample();
+            v["runtimes"][0]["id"] = json!(bad);
+            v["engines"][0]["runtime"] = json!(bad);
+            assert!(rejected(&v), "runtime id = {bad:?}");
+        }
+    }
+
+    #[test]
+    fn archive_paths_keep_their_slashes() {
+        let set = |path: &str| {
+            let mut v = sample();
+            v["runtimes"][0]["components"][0]["archive"]["path"] = json!(path);
+            v
+        };
+        assert!(
+            parse(&set(
+                "compute/cuda/redist/libcublas/windows-x86_64/x-archive.zip"
+            ))
+            .is_ok()
+        );
+        for bad in [
+            "../x.zip",
+            "/x.zip",
+            "a//b.zip",
+            "a/./b.zip",
+            "a\\b.zip",
+            "a/../b.zip",
+            "",
+            "a/",
+            "C:/x.zip",
+        ] {
+            assert!(rejected(&set(bad)), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn archive_file_name_is_the_last_component() {
+        assert_eq!(
+            archive_file_name("compute/cuda/x-archive.zip"),
+            "x-archive.zip"
+        );
+        assert_eq!(archive_file_name("x.zip"), "x.zip");
+    }
+
+    #[test]
+    fn extract_patterns_are_plain_names() {
+        let set = |pattern: &str| {
+            let mut v = sample();
+            v["runtimes"][0]["components"][0]["extract"] = json!([pattern]);
+            v
+        };
+        assert!(parse(&set("cudnn*64_9.dll")).is_ok());
+        for bad in ["bin/x.dll", "..", "a\\b.dll", ""] {
+            assert!(rejected(&set(bad)), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn licence_text_hash_must_be_hex() {
+        for bad in ["xyz".to_string(), "a".repeat(63), "A".repeat(64)] {
+            let mut v = sample();
+            v["runtimes"][0]["components"][0]["licence"]["textSha256"] = json!(bad);
+            assert!(rejected(&v), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn config_overrides_are_single_lines() {
+        let set = |config: Value| {
+            let mut v = sample();
+            v["engines"][0]["config"] = config;
+            v
+        };
+        assert!(parse(&set(json!({"onnxProvider": "directml"}))).is_ok());
+        for bad in [
+            json!({"onnxProvider": "directml\nlogDir = /tmp"}),
+            json!({"onnxProvider": "directml\r"}),
+            json!({"onnxProvider": "directml # x"}),
+            json!({"bad key": "x"}),
+            json!({"1key": "x"}),
+            json!({"": "x"}),
+        ] {
+            assert!(rejected(&set(bad.clone())), "{bad}");
+        }
+    }
+
+    #[test]
+    fn plain_names() {
+        assert!(is_plain_name("katago-v1.18.2-metal-macos-arm64.zip"));
+        assert!(is_plain_name("cudnn*64_9.dll"));
+        for bad in UNSAFE {
+            assert!(!is_plain_name(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_bundled_manifest_still_parses() {
+        let m = parse_manifest(BUNDLED).unwrap();
+        assert_eq!(
+            (m.engines.len(), m.runtimes.len(), m.networks.len()),
+            (45, 2, 9)
+        );
     }
 
     #[test]
