@@ -5,6 +5,7 @@
 // Ids, sizes, dates and driver versions are copied from the bundled manifest
 // (crates/aji-manager/manifest/manifest.json).
 
+import { makeSnapshot } from '../game/testing';
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import type { Backend } from '../transport/generated/Backend';
@@ -595,6 +596,9 @@ export function scenarioTransport(
         settings = request.settings;
         transport.emit({ type: 'settingsChanged', settings });
         return { type: 'settings', settings };
+      case 'gameSnapshot':
+        // An empty 19×19 board, as Aji starts.
+        return { type: 'game', snapshot: makeSnapshot({ revision: 0 }), warnings: [] };
       default: {
         // Every request type is answered today; this catches one added to the protocol later.
         const type = (request as { type: string }).type;

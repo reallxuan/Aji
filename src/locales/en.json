@@ -267,5 +267,22 @@
     "confirmBody": "This deletes {{size}} of files the current engine does not use. They cannot be restored; Aji downloads them again if needed.",
     "cancel": "Cancel",
     "about": "About Aji"
+  },
+  "game": {
+    "players": "{{black}} vs {{white}}"
+  },
+  "notice": {
+    "openFailed": "Couldn't open {{name}}",
+    "saveFailed": "Couldn't save the game",
+    "gameFailed": "The game could not be changed",
+    "dismiss": "Dismiss",
+    "warning": {
+      "truncated": "The record is incomplete; its first {{moves}} moves are open",
+      "extraGames": "The file holds {{count}} more games; only the first is open, and saving keeps them all",
+      "encodingGuessed": "The file names no encoding; it was read as {{encoding}}",
+      "repaired": "Damaged parts of the record were repaired where possible",
+      "illegalMoves": "Some moves break the rules; they are marked where they occur",
+      "komiUnreadable": "The file's komi could not be read; the rules shown are used instead"
+    }
   }
 }

@@ -267,5 +267,22 @@
     "confirmBody": "将删除 {{size}} 当前引擎用不到的文件，删除后无法恢复。以后需要时 Aji 会重新下载。",
     "cancel": "取消",
     "about": "关于 Aji"
+  },
+  "game": {
+    "players": "{{black}} 对 {{white}}"
+  },
+  "notice": {
+    "openFailed": "无法打开 {{name}}",
+    "saveFailed": "无法保存棋谱",
+    "gameFailed": "棋局未能更改",
+    "dismiss": "关闭",
+    "warning": {
+      "truncated": "棋谱不完整，已打开前 {{moves}} 手",
+      "extraGames": "文件里还有 {{count}} 盘棋，只打开了第一盘，保存时会一并保留",
+      "encodingGuessed": "未声明编码，已按 {{encoding}} 读取",
+      "repaired": "棋谱有损坏之处，已尽量修复",
+      "illegalMoves": "棋谱里有不合规则的着手，已在对应位置标出",
+      "komiUnreadable": "棋谱中的贴目无法读取，已按当前显示的规则分析"
+    }
   }
 }
