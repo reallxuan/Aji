@@ -34,6 +34,11 @@
   - Item 9: every scenario of section 7 was walked in `pnpm dev` in the browser pane, against the mockups; the layout faults found there were fixed in `a5907c3`.
   - `settings.json` was restored from its backup after item 7.
 - **After the exit check began** (owner, 2026-11-20): the detect step and the backend step are one page, so the wizard has four steps. Detection fills four compact rows above the backend list, which appears once detection answers; "重新检测" refreshes the rows too. Design 5 and interface design 7 follow; the task and Review Focus text below keeps the five-step numbering it was written with.
+- **Later in the exit check** (owner, 2026-11-20), while testing the built app on the Mac:
+  - a download row shows its amount, total, speed and time left, and a benchmark row says what it is doing;
+  - versions and networks already on disk are tagged "已下载";
+  - the install no longer runs the benchmark, which held a b40 network install for about five minutes: a new set gets the backend's default thread count (Metal 6, other GPUs 16, CPU one per core), and settings has a "测速" button that measures the active set in place, with its progress there.
+  Design 3, 5.1, 5.2, 5.4 and 5.8 and interface design 7 follow. Tasks below that mention the install's benchmark row describe the plan as it was written.
 - **Outstanding.**
   - Items 3 to 6 in the native window: the wizard on empty data folders (`AJI_DATA_ROOT`), "暂不设置" at step 1 and the next launch, quitting during the network download and resuming, and the settings round trip (language and theme live, the visit limit stopping and resuming analysis, restart, stop, set up again, deleting unused files). They need clicks in the window, which the author's session could not make.
   - Item 2 (a new macOS user) and item 8 (an external screen of a different scale), the owner's steps.

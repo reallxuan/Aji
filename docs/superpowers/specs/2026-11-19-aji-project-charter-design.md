@@ -171,7 +171,7 @@ This is the core of Phase 1 and Aji's largest difference from LizzieYzy.
 - The NVIDIA defaults are provisional until R4's benchmarks on the RTX 5070 arrive; their results are written back here.
 - The Metal build is self-contained (static protobuf and abseil), targets macOS 13 (minos 13.0; not yet run there), and benchmarked within 1% of Homebrew's KataGo on the M5 (R2 done).
 
-**Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, runs KataGo's `benchmark` to obtain thread counts and related settings and writes them into a generated config, then sends a minimal analysis query to confirm results come back. If any step fails, Aji explains the cause in plain language and offers the fallback backend, which it installs only if the user agrees.
+**Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, writes a generated config with the backend's default thread count, then sends a minimal analysis query to confirm results come back. KataGo's `benchmark`, which measures the thread count, runs from settings on request: it took minutes on the Mac and held the install with nothing for the user to do. **[Decided 2026-11-20]** (M5 design 5.4) If any step fails, Aji explains the cause in plain language and offers the fallback backend, which it installs only if the user agrees.
 
 **Network choice.** Aji lists the networks in katagotraining.org Elo order and preselects the highest-rated one the chosen engine can load, the same on every machine, with no GPU tiers and no local measurement (roadmap O4). The user can pick another row. The human-style network (human SL) is an optional download.
 

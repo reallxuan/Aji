@@ -190,11 +190,12 @@ A four-segment progress line sits at the top of the panel on every step. Each st
 | 1. Hardware and backend | Under a small "本机硬件" label, four compact rows: graphics card, memory, operating system, driver, each a spinner while checking and a tick when found. Below them, once detection finishes, a radio list: CUDA, TensorRT, DirectML, OpenCL. Each row is a name and a tag of a few characters (`最快`, `启动较慢`, `免运行库`, `兼容性最好，最慢`). **[Decided 2026-11-20]** one page, replacing a detect step that advanced on its own | Next |
 | 2. KataGo version | A list of releases, newest first: version and release date. The newest is selected and tagged `最新`. The chosen backend and platform are one small line under the title **[Decided]** that the step exists | Next |
 | 3. Network | A list ranked by Elo: rank, name, Elo, release date. The top row is selected **[Decided]** | Import network file; Start install |
-| 4. Install | One row per task: engine, runtime, network, benchmark, test query. Done, already there, running with a percentage and a bar, waiting, or failed | Cancel |
+| 4. Install | One row per task: engine, runtime, network, test query. Done, already there, running with a percentage and a bar, waiting, or failed. A download shows its amount, total, speed and time left: "604 MB / 1000 MB（2 MB/s，还需 4 分钟）". **[Decided 2026-11-20]** no benchmark: the backend's default thread count, measured later from settings | Cancel |
 
 - No explanatory paragraphs, no "recommended configuration" summary, no "recommended" badge. **[Decided]** The default option is simply preselected.
 - The backend list depends on detected hardware (charter section 6.3). The four options above are what an NVIDIA card on Windows shows.
 - The version step comes after the backend step because the available versions depend on the backend. **[Proposed]** At the time of writing the newest CUDA build is 1.18.2 while every other backend stops at 1.18.1, and 1.17.2 exists for TensorRT only. The list shows only versions that ship the chosen backend for the detected platform. The versions and dates in the mockup are real, read from the KataGo releases on 2026-11-19.
+- Versions and networks already on disk carry a muted "已下载" (downloaded) tag. **[Decided 2026-11-20]**
 - The network list comes from Aji's manifest, which is built from katagotraining.org. The names, ratings and dates in the mockup are real values read from that page on 2026-11-19.
 - There is no download-source selector in the wizard. **[Decided 2026-11-20]** (M5): the owner set mirrors aside for now; the `downloadSource` setting remains for development.
 - Every step has "暂不设置" (set up later) on the left of the footer, "取消" (cancel) when setup was opened again over a working engine. While a job runs, Cancel is the only control. The title row has a compact `中文 · EN` switch. When CUDA's licences have not been accepted, a licence panel comes before the install (M5 design 5.2).
@@ -205,7 +206,7 @@ A four-segment progress line sits at the top of the panel on every step. Each st
 ## 8. Not designed yet
 
 - The opened game library.
-- Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎").
+- Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎"). The engine section's "搜索线程" line and its "测速" button run the benchmark in place (M5 design 5.4).
 - Hover preview of a candidate's continuation, and the right-click menus of section 6.
 - Ownership and territory display, policy heatmap, move-quality marks on stones.
 - Playing against the AI.

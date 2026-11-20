@@ -53,6 +53,8 @@ When something goes wrong, Aji says what happened in plain words. When the user 
 | M4 minors #9, #10 | **[Decided]** A "reused" state on install rows; no engine restart or resume while a job benchmarks. |
 | Failure panels | **[Decided]** Mockups A1, A2, B, C and D (section 5.3). When the user can fix the failure, Retry is the main button and the fallback is the second; otherwise the fallback is the main button and Retry the second. The fallback is never the only button. |
 | Settings, About, no-engine screen | **[Decided]** Mockups S, About and No engine (section 5.4), including the "unused downloaded files" row. |
+| Benchmark (exit check) | **[Decided]** The install no longer runs the benchmark: on the Mac it held the install for about five minutes with little to show. A new set gets the backend's default thread count, and settings runs the benchmark on request (5.2, 5.4). |
+| Install progress (exit check) | **[Decided]** A download row shows how much has arrived, the total, the speed and the time left, in brackets; a benchmark row says what it is doing. Versions and networks already on disk are tagged "已下载" (downloaded). |
 
 ## 4. Approaches considered
 
@@ -85,7 +87,7 @@ A is chosen because the only state worth surviving a reload, the running job, al
 - **Quitting during setup.** Quitting cancels a running job, as M4 does, and the job is not remembered. The next launch starts the wizard at step 1 with the usual preselections. Detection is quick, and every verified component (an engine package, a runtime, the network) is reused, so nothing finished is downloaded again, and a `.part` file resumes. **[Proposed]** Remembering the interrupted choices would need a record on disk and a new startup path, and would only save three clicks on the default rows.
 - **The wizard comes back** at the next launch until an engine is active. "暂不设置" closes it for this run only. The next launch with no active engine shows the wizard again, still with "暂不设置" on every step. **[Proposed]** This keeps the roadmap's "comes back until an engine is active" and still never traps the user (G2).
 - **No engine.** After "暂不设置", the analysis panel shows the no-engine state (mockup "No engine"). The engine dot is grey, and clicking it or "设置引擎" opens the wizard.
-- **Set up again.** "重新设置引擎" in settings or on the crashed state (mockup D) opens the wizard over the analysis panel. The running engine keeps analysing until the new set's benchmark starts (M4 5.9 stops it then, and restarts it if the job fails). Leaving the wizard with "返回" before step 5 returns to the analysis panel with nothing changed. On a re-run, "暂不设置" reads "取消" (cancel).
+- **Set up again.** "重新设置引擎" in settings or on the crashed state (mockup D) opens the wizard over the analysis panel. The running engine keeps analysing until the downloads finish (M4 5.9 stops it before the test query, or before the benchmark when one runs, and restarts it if the job fails). Leaving the wizard with "返回" before step 5 returns to the analysis panel with nothing changed. On a re-run, "暂不设置" reads "取消" (cancel).
 
 ### 5.2 The wizard
 
@@ -100,12 +102,16 @@ The layout follows interface design 7 and the mockups in `docs/design/mockups/se
   - Hardware detection, held once per process today (`Setup.hardware`), becomes refreshable for this.
   - With R20, GPU machines list the CPU build last.
 - **Step 2, version.** The list from `setupVersions`, newest first, newest preselected and tagged "最新" (latest).
+- **Downloaded tag (steps 2 and 3).** A version or network already installed on disk carries a muted "已下载" (downloaded) tag, so the user can see which choice costs no download. The lists' `installed` flag comes from the installer's records. **[Decided 2026-11-20]**
 - **Step 3, network.** The list from `setupNetworks`, in Elo order, top row preselected **[Decided]**. "导入权重文件" (import network file) calls `setupImportNetwork`, and the imported network joins the top of the list, selected. "开始安装" (start install) moves on.
 - **Licence step (mockup C).** If `setupLicences` lists a licence not yet accepted, step 4 first shows the licence panel:
   - each component's name, its size and a "查看 ↗" (view) link that opens the licence URL in the system browser;
   - an unticked box: "我已年满法定年龄，并接受以上 NVIDIA 许可条款" (I am of legal age and accept the NVIDIA licence terms above); "接受并安装" (accept and install) is disabled until it is ticked;
   - "不接受" (decline) does not download anything. It shows panel A2 with the fallback offer for `licenceNotAccepted`, using the next backend from the recommendation. **[Proposed]** The mockup drew no box; R1 requires one.
-- **Step 4, install (mockup `setup-5-install.jpg`).** One row per task from `setupProgress`: waiting, running with a percentage and a bar, done, reused (new state, section 6), or failed. Cancel calls `setupCancel`, and the step then shows "已取消" (cancelled) with Retry, Back and "暂不设置". There is no download-source selector (section 2).
+- **Step 4, install (mockup `setup-5-install.jpg`).** One row per task from `setupProgress`: waiting, running with a percentage and a bar, done, reused (new state, section 6), or failed.
+  - **No benchmark.** **[Decided 2026-11-20]** The rows are the engine, the runtime, the network and the test query. The new set gets the backend's default thread count: Metal 6, the other GPU backends 16, and the CPU builds one thread per core. Settings measures it on request (5.4).
+  - **Download line.** A running download shows "已下载 / 总大小（速度/s，还需 时间）" (done / total (speed, time left)), for example "604 MB / 1000 MB（2 MB/s，还需 4 分钟）". The speed is the average over the last three seconds and the line samples on its own each second, so a stalled download falls to 0 B/s and the time left goes. The time left reads in seconds under a minute, whole minutes rounded up under an hour, then hours and minutes.
+  - **Benchmark line.** When a job measures (from settings), its row says what KataGo is doing: "正在启动 KataGo，加载权重" (starting, loading the network), then "正在测试 N 个搜索线程" (testing N search threads) with each finished count's speed under it, then "正在选出最合适的线程数" (choosing the best count). The bar counts positions across all thread counts. These come from `JobSnapshot.benchmark`, parsed from KataGo's progress lines. Cancel calls `setupCancel`, and the step then shows "已取消" (cancelled) with Retry, Back and "暂不设置". There is no download-source selector (section 2).
   - While a job runs, Cancel is the footer's only control, so "暂不设置" never leaves a job running unseen. It returns once the job is cancelled, has failed or has finished. **[Proposed]** The user is still never trapped, because Cancel is always there.
 - **Success.** When the job outcome is `installed`, the panel becomes the analysis panel in place (interface design 7 **[Decided]**). The engine starts from the new set (M4 5.9).
 
@@ -142,7 +148,8 @@ The gear in the panel header swaps the panel body for settings; "←" returns. T
     - **Raised or removed:** a search that had stopped at the old limit continues.
     - Section 5.9 has the engine side.
 - **Engine.**
-  - One line: KataGo version and backend. A second line: network name and thread count. Both come from the active set.
+  - One line: KataGo version and backend. A second line: the network name. Both come from the active set.
+  - **Search threads.** **[Decided 2026-11-20]** A third line, "搜索线程：6（默认值，未测速）" (search threads: 6, default, not measured) or "搜索线程：10（已测速，25 次/秒）" (measured, 25 visits per second), with a "测速" (measure speed) button. The button runs the benchmark on the active set (`setupInstall` with `benchmark: true`): everything is reused, the engine stops, KataGo measures, the test query runs and the engine restarts on the chosen count. The rows and the benchmark line of 5.2 show here, the button becomes "取消" (cancel), and the wizard never opens. A failure reads "测速失败：<reason>" (speed test failed) and leaves the previous set active. While it runs, restart, stop, set up again and delete are disabled, as the backend would refuse them.
   - Buttons: 重启引擎 (restart, `engineRestart`), 停止引擎 (stop, `engineStop`), 重新设置引擎 (set up again, section 5.1). While a job benchmarks or runs its test query, restart and resume are refused with a new error code `engineBusy` (M4 minor #10), and the buttons are disabled.
   - **Unused downloaded files**, with the total size and "删除" (delete). "Unused" means every recorded engine, runtime, network and usable set that is not part of the active set, plus leftover `staging/` folders and `.part` files (M4 minor #2). Delete asks for confirmation and is refused while a job runs. With no active engine, everything installed counts as unused. **[Proposed]**
 - **About (G4).** The version line, the AGPL-3.0-or-later notice, and the source link `https://github.com/reallxuan/Aji`. Below that, one row each for KataGo, the KataGo networks, Inter, LXGW WenKai and "other open-source components". Each row opens the licence text, which ships inside Aji so it works offline. The other components' list is generated from the Rust and npm dependency licences at build time, not written by hand. The generator is left to the plan; it must pass `cargo deny`. **[Proposed]**
@@ -172,7 +179,9 @@ Requests:
 
 - `settingsGet` → the stored settings that the UI owns: `language`, `theme`, `discLines`, `visitLimit` (`null` for none).
 - `settingsSet { patch }` writes the given fields and returns the new settings. A `visitLimit` change reaches the engine side for the next query.
-- `setupInstalled` → the active set's summary (engine version, backend, network name, threads) or none, and the unused size in bytes.
+- `setupInstalled` → the active set's summary (engine version, backend, network name, threads, and the measured visits per second when the count was measured) or none, and the unused size in bytes.
+- `setupInstall` gains `benchmark` (default `false`). The wizard leaves it off; settings sets it. The `JobSnapshot` says whether the job `measures`, so the interface sends its progress to settings and not to the wizard, and carries `benchmark` progress (the thread count under test, positions done, the speeds found).
+- `setupVersions` and `setupNetworks` mark each entry `installed`.
 - `setupRemoveUnused` deletes the unused files of 5.4 and returns the bytes freed. It is refused with `setupBusy` while a job runs.
 - `setupLicences` gains each component's download size, as R1 section 6 requires.
 - The recommendation and the `gpuDriverTooOld` outcome carry the current and the required driver version (5.3).
