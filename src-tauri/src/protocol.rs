@@ -388,6 +388,7 @@ mod tests {
                 default: None,
                 fallbacks: vec![],
                 notes: vec![],
+                driver: None,
             },
         })
         .unwrap();
