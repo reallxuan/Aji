@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BoardCanvas } from '../board/BoardCanvas';
 import { computeFrame } from './frame';
 import { useWindowSize } from './useWindowSize';
 
@@ -9,11 +10,9 @@ export function MainFrame({ panel }: { panel: ReactNode }) {
 
   return (
     <div className="relative h-full w-full">
-      {/* Placeholder for the board canvas, which arrives in M5. */}
-      <div
-        className="absolute bg-board-base"
-        style={{ left: board.x, top: board.y, width: board.size, height: board.size }}
-      />
+      <div className="absolute" style={{ left: board.x, top: board.y }}>
+        <BoardCanvas cssSize={board.size} boardSize={19} />
+      </div>
       <aside
         className="absolute inset-y-0 flex flex-col border-l border-hairline bg-panel"
         style={{ left: panelBox.x, width: panelBox.width }}
