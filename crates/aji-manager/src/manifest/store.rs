@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use minisign_verify::PublicKey;
 
-use super::{Selected, Source, fetch, load_cache, select, store_cache};
+use super::{FetchError, Selected, Source, fetch, load_cache, select, store_cache};
 
 pub struct ManifestStore {
     bundled: &'static [u8],
@@ -35,14 +35,21 @@ impl ManifestStore {
     }
 
     /// Fetches the published copy and selects again, with the copy in use as a rival. A fetched
-    /// winner is cached and swapped in. Returns the source in use afterwards, so a failed fetch
-    /// leaves it unchanged.
-    pub async fn refresh(&self, client: &reqwest::Client, bases: &[&str]) -> Source {
-        let before = self.current();
-        let Ok(fetched) = fetch(client, bases).await else {
-            return before.source;
-        };
-        let mut candidates: Vec<_> = before.candidate().cloned().into_iter().collect();
+    /// winner is cached and swapped in. Returns the source in use afterwards, or the fetch error,
+    /// in which case nothing changes.
+    ///
+    /// The rival is the copy current when the fetch returns, not when it started, and the
+    /// selection, the cache write and the swap happen under one lock. A slow refresh therefore
+    /// never replaces a newer copy that a faster one swapped in meanwhile, and the cache on disk
+    /// always holds the copy in use.
+    pub async fn refresh(
+        &self,
+        client: &reqwest::Client,
+        bases: &[&str],
+    ) -> Result<Source, FetchError> {
+        let fetched = fetch(client, bases).await?;
+        let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+        let mut candidates: Vec<_> = current.candidate().cloned().into_iter().collect();
         candidates.push(fetched);
         let after = select(self.bundled, candidates, &self.keys);
         if after.source == Source::Fetched
@@ -52,7 +59,7 @@ impl ManifestStore {
             let _ = store_cache(&self.cache_dir, candidate);
         }
         let source = after.source;
-        *self.current.lock().unwrap_or_else(|e| e.into_inner()) = Arc::new(after);
-        source
+        *current = Arc::new(after);
+        Ok(source)
     }
 }

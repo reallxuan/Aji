@@ -105,11 +105,18 @@ fn start_setup(app: &tauri::App, version: &str) -> Arc<Setup> {
     let refreshing = Arc::clone(&setup);
     let client = http_client(&format!("Aji/{version}"), ClientOptions::default());
     tauri::async_runtime::spawn(async move {
-        let source = refreshing.manifest().refresh(&client, MANIFEST_BASES).await;
+        let refreshed = match client {
+            Ok(client) => refreshing.manifest().refresh(&client, MANIFEST_BASES).await,
+            Err(e) => Err(e),
+        };
+        // A failed fetch leaves the bundled or cached copy in use.
+        if let Err(e) = refreshed {
+            eprintln!("aji: manifest fetch failed: {e}");
+        }
         let current = refreshing.manifest().current();
         eprintln!(
-            "aji: manifest {source:?} sequence {}",
-            current.manifest.sequence
+            "aji: manifest {:?} sequence {}",
+            current.source, current.manifest.sequence
         );
         for (source, rejection) in &current.rejected {
             eprintln!("aji: manifest {source:?} rejected: {rejection:?}");

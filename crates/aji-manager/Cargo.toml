@@ -22,5 +22,7 @@ sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 windows = { version = "0.62", features = ["Win32_Graphics_Dxgi", "Win32_Foundation"] }
 
 [dev-dependencies]
+ct-codecs = "1"
 minisign = "0.10"
+ring = "0.17"
 tempfile = "3.27.0"

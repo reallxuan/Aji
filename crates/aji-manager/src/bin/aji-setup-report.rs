@@ -66,11 +66,15 @@ async fn main() -> ExitCode {
     };
     let store = ManifestStore::open(BUNDLED, cache.clone(), trusted_keys());
     if args.fetch {
-        let client = http_client(
-            &format!("Aji/{}", env!("CARGO_PKG_VERSION")),
-            ClientOptions::default(),
-        );
-        store.refresh(&client, MANIFEST_BASES).await;
+        let agent = format!("Aji/{}", env!("CARGO_PKG_VERSION"));
+        let refreshed = match http_client(&agent, ClientOptions::default()) {
+            Ok(client) => store.refresh(&client, MANIFEST_BASES).await,
+            Err(e) => Err(e),
+        };
+        // The report still shows the copy in use, so a failed fetch is logged, not fatal.
+        if let Err(e) = refreshed {
+            eprintln!("aji: manifest fetch failed: {e}");
+        }
     }
     let setup = match args.hardware {
         Some(report) => Setup::with_hardware(store, report),
@@ -106,7 +110,7 @@ async fn main() -> ExitCode {
         .collect();
     let report = json!({
         "manifest": {
-            "source": format!("{:?}", current.source),
+            "source": current.source,
             "sequence": current.manifest.sequence,
             "rejected": rejected,
         },

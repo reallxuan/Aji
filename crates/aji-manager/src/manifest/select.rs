@@ -1,11 +1,13 @@
 //! Choosing between the bundled, cached and fetched copies of the manifest.
 
 use minisign_verify::PublicKey;
+use serde::Serialize;
 
 use super::{Manifest, ManifestError, parse_manifest, verify};
 
 /// Where a copy of the manifest came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Source {
     Bundled,
     Cache,

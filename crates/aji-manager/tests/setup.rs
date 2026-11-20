@@ -39,9 +39,11 @@ async fn setup_requests_do_not_wait_for_the_fetch() {
     let client = http_client(
         "Aji/test",
         ClientOptions {
-            timeout: Duration::from_secs(30),
+            timeout: Some(Duration::from_secs(30)),
+            ..ClientOptions::default()
         },
-    );
+    )
+    .expect("the client builds");
     let refreshing = Arc::clone(&setup);
     let fetch = tokio::spawn(async move {
         refreshing

@@ -40,17 +40,16 @@ struct Live {
 }
 
 impl Live {
-    fn new() -> Live {
+    fn new() -> Result<Live, String> {
         let agent = concat!("aji-manifest/", env!("CARGO_PKG_VERSION"));
-        Live {
-            client: http_client(
-                agent,
-                ClientOptions {
-                    timeout: Duration::from_secs(60),
-                },
-            ),
+        let options = ClientOptions {
+            timeout: Some(Duration::from_secs(60)),
+            ..ClientOptions::default()
+        };
+        Ok(Live {
+            client: http_client(agent, options).map_err(|e| e.to_string())?,
             token: std::env::var("GH_TOKEN").ok().filter(|t| !t.is_empty()),
-        }
+        })
     }
 
     async fn text(&self, url: &str) -> Result<String, String> {
@@ -119,7 +118,7 @@ fn read(path: &Path) -> Result<String, String> {
 
 /// Builds the manifest and returns its bytes: pretty JSON with sorted keys.
 pub async fn generate(options: &Options) -> Result<Vec<u8>, String> {
-    let live = Live::new();
+    let live = Live::new()?;
 
     let katago = match &options.katago_releases {
         Some(p) => read(p)?,

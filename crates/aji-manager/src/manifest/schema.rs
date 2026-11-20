@@ -36,6 +36,7 @@ pub enum Platform {
     LinuxX64,
     /// A platform added after this build. Entries carrying it are dropped.
     #[serde(other)]
+    #[ts(skip)]
     Unknown,
 }
 
@@ -53,6 +54,7 @@ pub enum Backend {
     Eigen,
     /// A backend added after this build (for example `tensorrt`). Entries carrying it are dropped.
     #[serde(other)]
+    #[ts(skip)]
     Unknown,
 }
 
@@ -499,10 +501,28 @@ mod tests {
                 v["engines"][0]["runtime"] = json!("nope")
             }),
         ];
+        // A malformed digest fails while the JSON is read; the rest fail validation.
+        let read_errors = [
+            "uppercase sha256",
+            "63-digit sha256",
+            "31-digit md5",
+            "sha1",
+        ];
         for (name, edit) in cases {
             let mut v = sample();
             edit(&mut v);
-            assert!(parse(&v).is_err(), "case should be rejected: {name}");
+            let result = parse(&v);
+            if read_errors.contains(&name) {
+                assert!(
+                    matches!(result, Err(ManifestError::Json(_))),
+                    "{name}: {result:?}"
+                );
+            } else {
+                assert!(
+                    matches!(result, Err(ManifestError::Invalid(_))),
+                    "{name}: {result:?}"
+                );
+            }
         }
     }
 
