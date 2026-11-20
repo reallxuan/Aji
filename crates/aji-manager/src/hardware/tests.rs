@@ -214,9 +214,9 @@ fn failed_compute_cap_query_keeps_the_base_data() {
     let data = smi_from_outputs(&base, failure()).unwrap();
     assert_eq!(data.gpus.len(), 1);
     assert!(data.caps.is_empty());
-    assert!(!data.caps_ok);
+    assert!(data.caps_error.is_some());
     let data = smi_from_outputs(&base, Ok("index, compute_cap\n0, 12.0\n".into())).unwrap();
-    assert!(data.caps_ok);
+    assert!(data.caps_error.is_none());
     assert_eq!(data.caps, vec![(0, "12.0".to_string())]);
     assert!(smi_from_outputs(&read("nvidia-smi/driver-failure.txt"), Ok(String::new())).is_err());
 }
@@ -292,4 +292,86 @@ async fn detect_live_sanity() {
     assert!(report.cpu.threads >= report.cpu.cores);
     assert!(report.memory_bytes > 0);
     assert_eq!(report.os.kind, OsKind::current());
+}
+
+#[test]
+fn system32_retry_only_on_not_found() {
+    use super::windows::should_retry_in_system32;
+    use std::io::{Error, ErrorKind};
+    assert!(should_retry_in_system32(&Error::from(ErrorKind::NotFound)));
+    assert!(!should_retry_in_system32(&Error::from(
+        ErrorKind::PermissionDenied
+    )));
+}
+
+/// A temporary `/sys` holding PCI functions, each `(address, class, vendor, device)`. A colon is
+/// not allowed in a Windows file name, so the folder names there use a dash.
+fn pci_root(name: &str, functions: &[(&str, &str, &str, &str)]) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("aji-sysfs-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (address, class, vendor, device) in functions {
+        let address = if cfg!(windows) {
+            address.replace(':', "-")
+        } else {
+            address.to_string()
+        };
+        let dir = root.join("bus/pci/devices").join(address);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("class"), format!("{class}\n")).unwrap();
+        std::fs::write(dir.join("vendor"), format!("{vendor}\n")).unwrap();
+        std::fs::write(dir.join("device"), format!("{device}\n")).unwrap();
+    }
+    root
+}
+
+#[test]
+fn linux_finds_nvidia_by_pci_class_without_drm() {
+    // The proprietary driver without nvidia-drm loaded leaves no class/drm entry. The GPU's
+    // HDMI audio function shares its vendor but is not a display controller.
+    let root = pci_root(
+        "pci-only",
+        &[
+            ("0000:01:00.0", "0x030000", "0x10de", "0x2f04"),
+            ("0000:01:00.1", "0x040300", "0x10de", "0x2f80"),
+            ("0000:00:1f.6", "0x020000", "0x8086", "0x15bc"),
+        ],
+    );
+    let gpus = gpus_from_sysfs(&root);
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(gpus.len(), 1, "{gpus:?}");
+    assert_eq!(gpus[0].vendor, GpuVendor::Nvidia);
+    assert_eq!(gpus[0].name, "NVIDIA GPU 0x2f04");
+    assert_eq!(gpus[0].pci_device_id, Some(0x2f04));
+    assert!(!gpus[0].software);
+}
+
+#[test]
+fn a_3d_controller_counts_as_a_gpu() {
+    // Data-centre and some laptop NVIDIA GPUs report class 0x0302, not 0x0300.
+    let root = pci_root("3d", &[("0000:01:00.0", "0x030200", "0x10de", "0x2330")]);
+    let gpus = gpus_from_sysfs(&root);
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(gpus.len(), 1);
+}
+
+/// In a real sysfs, `class/drm/cardN/device` and `bus/pci/devices/<address>` are links to the
+/// same device folder, so a card found through DRM is not counted again.
+#[cfg(unix)]
+#[test]
+fn a_card_in_drm_and_pci_is_counted_once() {
+    use std::os::unix::fs::symlink;
+    let root = std::env::temp_dir().join(format!("aji-sysfs-both-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let device = root.join("devices/pci0000:00/0000:00:01.0/0000:01:00.0");
+    std::fs::create_dir_all(&device).unwrap();
+    std::fs::write(device.join("class"), "0x030000\n").unwrap();
+    std::fs::write(device.join("vendor"), "0x10de\n").unwrap();
+    std::fs::write(device.join("device"), "0x2f04\n").unwrap();
+    std::fs::create_dir_all(root.join("class/drm/card0")).unwrap();
+    std::fs::create_dir_all(root.join("bus/pci/devices")).unwrap();
+    symlink(&device, root.join("class/drm/card0/device")).unwrap();
+    symlink(&device, root.join("bus/pci/devices/0000:01:00.0")).unwrap();
+    let gpus = gpus_from_sysfs(&root);
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(gpus.len(), 1, "{gpus:?}");
 }

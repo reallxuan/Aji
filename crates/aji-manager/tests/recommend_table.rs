@@ -667,3 +667,133 @@ fn a_network_without_elo_sorts_last() {
     assert_eq!(list.networks.last().unwrap().network, m.networks[0].id);
     assert_ne!(list.preselected.as_deref(), Some(m.networks[0].id.as_str()));
 }
+
+// The CUDA limits on the bundled manifest: the thresholds come from each runtime's `minDriver`
+// and `minComputeCapability`, so these pin the published values at their boundaries.
+
+const CUDA13: &str = "cuda13.2-cudnn9.24.0";
+const CUDA12: &str = "cuda12.8-cudnn9.8.0";
+const CUDA13_RUNTIME: &str = "nvidia-cuda13.2-cudnn9.24.0-windows-x64";
+const CUDA12_RUNTIME: &str = "nvidia-cuda12.8-cudnn9.8.0-windows-x64";
+
+fn bundled() -> Manifest {
+    parse_manifest(aji_manager::manifest::BUNDLED).unwrap()
+}
+
+fn rtx(driver: &str, cc: Option<&str>) -> HardwareReport {
+    win(vec![nvidia("NVIDIA GeForce RTX 5070", Some(driver), cc)])
+}
+
+/// The CUDA variant offered for this hardware, or `None` when CUDA is not offered.
+fn cuda_variant(h: &HardwareReport, m: &Manifest) -> Option<String> {
+    let variants = cuda_variants(h, m);
+    assert!(
+        variants.iter().all(|(_, v)| *v == variants[0].1),
+        "one variant"
+    );
+    variants.first().map(|(_, v)| v.clone())
+}
+
+fn runtime<'m>(m: &'m mut Manifest, id: &str) -> &'m mut aji_manager::manifest::Runtime {
+    m.runtimes.iter_mut().find(|r| r.id == id).unwrap()
+}
+
+#[test]
+fn cuda13_needs_driver_580_00() {
+    let m = bundled();
+    let at = |driver| cuda_variant(&rtx(driver, Some("12.0")), &m);
+    assert_eq!(at("580.00").as_deref(), Some(CUDA13));
+    assert_eq!(at("579.99").as_deref(), Some(CUDA12));
+}
+
+#[test]
+fn cuda12_needs_driver_572_61() {
+    let m = bundled();
+    assert_eq!(
+        cuda_variant(&rtx("572.61", Some("12.0")), &m).as_deref(),
+        Some(CUDA12)
+    );
+    let h = rtx("572.60", Some("12.0"));
+    let r = recommend_backends(&h, &m);
+    assert_eq!(r.default, Some(Directml));
+    assert_eq!(r.notes, [Note::DriverTooOldForCuda]);
+    assert_eq!(cuda_variant(&h, &m), None);
+}
+
+#[test]
+fn cuda13_needs_compute_capability_7_5() {
+    let m = bundled();
+    let at = |cc| cuda_variant(&rtx("591.44", Some(cc)), &m);
+    assert_eq!(at("7.5").as_deref(), Some(CUDA13));
+    assert_eq!(at("7.4").as_deref(), Some(CUDA12));
+}
+
+#[test]
+fn cuda12_needs_compute_capability_5_0() {
+    let m = bundled();
+    let h = rtx("591.44", Some("3.7"));
+    assert_eq!(recommend_backends(&h, &m).default, Some(Directml));
+    assert_eq!(
+        cuda_variant(&rtx("591.44", Some("5.0")), &m).as_deref(),
+        Some(CUDA12)
+    );
+}
+
+#[test]
+fn thresholds_come_from_the_manifest() {
+    let mut m = bundled();
+    runtime(&mut m, CUDA13_RUNTIME).min_driver = Some("600.00".into());
+    assert_eq!(
+        cuda_variant(&rtx("591.44", Some("12.0")), &m).as_deref(),
+        Some(CUDA12)
+    );
+    let mut m = bundled();
+    runtime(&mut m, CUDA13_RUNTIME).min_compute_capability = Some("12.1".into());
+    assert_eq!(
+        cuda_variant(&rtx("591.44", Some("12.0")), &m).as_deref(),
+        Some(CUDA12)
+    );
+    let mut m = bundled();
+    runtime(&mut m, CUDA12_RUNTIME).min_driver = Some("500.00".into());
+    assert_eq!(
+        cuda_variant(&rtx("566.03", Some("8.6")), &m).as_deref(),
+        Some(CUDA12)
+    );
+}
+
+#[test]
+fn a_runtime_without_min_driver_is_unusable() {
+    let mut m = bundled();
+    runtime(&mut m, CUDA13_RUNTIME).min_driver = None;
+    let h = rtx("591.44", Some("12.0"));
+    assert_eq!(cuda_variant(&h, &m).as_deref(), Some(CUDA12));
+    runtime(&mut m, CUDA12_RUNTIME).min_driver = None;
+    let r = recommend_backends(&h, &m);
+    assert_eq!(r.default, Some(Directml));
+    assert_eq!(r.notes, [Note::DriverTooOldForCuda]);
+}
+
+/// Without nvidia-smi the compute capability is unknown, so Aji takes the CUDA runtime that runs
+/// on the most cards: a Pascal card must not get CUDA 13, which dropped it.
+#[test]
+fn an_unknown_compute_capability_takes_the_most_compatible_cuda() {
+    let m = bundled();
+    assert_eq!(
+        cuda_variant(&rtx("591.44", None), &m).as_deref(),
+        Some(CUDA12)
+    );
+    assert_eq!(
+        cuda_variant(&rtx("591.44", Some("N/A")), &m).as_deref(),
+        Some(CUDA12),
+        "an unreadable capability counts as unknown"
+    );
+}
+
+#[test]
+fn a_missing_cuda13_build_falls_back_to_cuda12() {
+    let mut m = bundled();
+    m.engines.retain(|e| e.variant != CUDA13);
+    let h = rtx("591.44", Some("12.0"));
+    assert_eq!(cuda_variant(&h, &m).as_deref(), Some(CUDA12));
+    assert!(recommend_backends(&h, &m).notes.is_empty());
+}

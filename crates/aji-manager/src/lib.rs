@@ -1,6 +1,9 @@
-//! Aji's engine manager. It depends on no other crate in the workspace.
+//! Aji's engine manager: the manifest, hardware detection, the recommendation and the install
+//! pipeline. It runs KataGo through `aji-engine`.
 
+mod atomic;
 pub mod hardware;
+pub mod install;
 pub mod manifest;
 pub mod recommend;
 pub mod setup;

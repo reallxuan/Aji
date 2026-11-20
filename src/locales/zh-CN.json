@@ -12,7 +12,11 @@
     "internal": "Aji 内部出错。",
     "engineNotConfigured": "尚未设置引擎。",
     "engineNotRunning": "KataGo 未在运行。",
-    "setupUnknownEngine": "列表中没有这个引擎。"
+    "setupUnknownEngine": "列表中没有这个引擎。",
+    "setupBusy": "已有安装正在进行。",
+    "setupUnknownNetwork": "列表中没有这个网络。",
+    "setupImportFailed": "该文件不是 KataGo 网络文件。",
+    "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。"
   },
   "engine": {
     "state": {
@@ -46,5 +50,21 @@
       "visits": "计算量"
     },
     "pass": "停一手"
+  },
+  "setup": {
+    "failure": {
+      "downloadFailed": "所有下载源都下载失败。请检查网络连接，或换一个下载源。",
+      "checksumMismatch": "所有下载源给出的文件都已损坏或被改动，Aji 没有使用它。",
+      "notEnoughSpace": "磁盘空间不足，无法完成安装。",
+      "unpackFailed": "下载的安装包无法解压。",
+      "missingLibrary": "KataGo 找不到所需的运行库。",
+      "gpuDriverTooOld": "显卡驱动版本过旧，无法使用此后端。更新驱动可能解决这个问题。",
+      "gpuError": "KataGo 无法通过此后端使用显卡。",
+      "outOfMemory": "显卡内存不足。",
+      "openclNoDevice": "没有可以通过 OpenCL 使用的显卡。",
+      "licenceNotAccepted": "此后端需要的许可协议尚未接受。",
+      "timedOut": "KataGo 响应超时。",
+      "crashed": "KataGo 出错退出。"
+    }
   }
 }

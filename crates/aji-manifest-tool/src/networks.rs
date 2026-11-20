@@ -17,6 +17,10 @@ pub const HUMAN_SL_URL: &str =
     "https://media.katagotraining.org/uploaded/networks/models_extra/b18c384nbt-humanv0.bin.gz";
 const HUMAN_SL_ID: &str = "b18c384nbt-humanv0";
 
+/// Where every listed main network must live. The human SL network, a constant above, is the
+/// one file under `models_extra/`.
+const MODELS_PREFIX: &str = "https://media.katagotraining.org/uploaded/networks/models/";
+
 const LICENCE_NAME: &str = "KataGo network license";
 const LICENCE_URL: &str = "https://katagotraining.org/network_license/";
 
@@ -84,6 +88,12 @@ fn rows(html: &str) -> Result<Vec<Row>, String> {
         else {
             continue;
         };
+        // A link the page points elsewhere would send every user to that host.
+        if !url.starts_with(MODELS_PREFIX) {
+            return Err(format!(
+                "network {name}: its link {url} is not under {MODELS_PREFIX}"
+            ));
+        }
         let elo_text = cells[2].text().collect::<String>();
         let c = ELO
             .captures(elo_text.trim())

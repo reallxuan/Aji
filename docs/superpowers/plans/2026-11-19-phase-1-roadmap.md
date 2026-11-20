@@ -5,7 +5,7 @@
 - Specs: [project charter](../specs/2026-11-19-aji-project-charter-design.md) (source of truth), [interface design](../specs/2026-11-19-aji-ui-design.md)
 - Markers follow the charter: **[Decided]**, **[Proposed]**, **[To verify]**.
 
-This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md), [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md) and [M3 Manifest, hardware detection, recommendation](2026-11-19-phase-1-m3-manifest-hardware.md).
+This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md), [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md), [M3 Manifest, hardware detection, recommendation](2026-11-19-phase-1-m3-manifest-hardware.md) and [M4 Install pipeline](2026-11-20-phase-1-m4-install-pipeline.md).
 
 ## 1. What Phase 1 must deliver
 
@@ -90,7 +90,7 @@ The alternative (O2) is `aji-core` compiled to WebAssembly, with the tree held i
 | M1 | Foundation | Installers from CI open on the PC and the Mac; the transport works end to end | — |
 | M2 | Analysis walking skeleton | KataGo, placed by hand, streams candidates into the installed app on both machines | M1 |
 | M3 | Manifest, hardware detection, recommendation | Aji knows what the machine is and what to install | M2, S1, S2, S3 |
-| M4 | Install pipeline | Download, verify, unpack, benchmark, config, smoke test and fallback work unattended | M3 |
+| M4 | Install pipeline | Download, verify, unpack, benchmark, config and smoke test work unattended; a failure offers the next backend | M3 |
 | M5 | First-run wizard and settings | Phase 1 acceptance for setup, from a clean user account | M4 |
 | M6 | Game records and board | SGF files open, render and navigate correctly | M1 (core work can start after M2) |
 | M7 | Analysis on the board | Candidate discs, table, win-rate bar and hover variations | M5, M6 |
@@ -176,21 +176,31 @@ Detailed plan: [2026-11-19-phase-1-m3-manifest-hardware.md](2026-11-19-phase-1-m
 
 ### M4. Install pipeline
 
+Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-install-pipeline-design.md), approved by the owner on 2026-11-20. It decides two things: on NVIDIA, CUDA is installed straight, with no DirectML bootstrap; and the pipeline lives in `aji-manager`, which now depends on `aji-engine`.
+
+**Status:** done on 2026-11-20. Detailed plan: [2026-11-20-phase-1-m4-install-pipeline.md](2026-11-20-phase-1-m4-install-pipeline.md). The Mac exit check passed on the M5: `AJI_DEV_INSTALL=recommended` installed the Metal engine and the preselected network, a download killed midway resumed, and analysis started from the installed engine. Still outstanding (details in the M4 plan):
+- the owner's look at the panel;
+- the Metal benchmark counts;
+- the optional PC run;
+- D1;
+- the first CI run on all three OSes;
+- M3's manifest publishing steps.
+
 - Downloader:
   - Tries the URLs in order, with the mirror prefix or custom mirror from settings applied.
   - Resumes `.part` files with HTTP Range, and starts over cleanly when the server ignores Range.
   - Verifies the digest (SHA-256, or MD5 for networks) while streaming and moves to the next URL on a mismatch.
   - Throttles progress events, supports cancellation, and checks free disk space before starting.
-- Unpacks zip and tar.gz into a staging folder and moves it into place in one rename. A half-installed engine is never marked usable. On Windows, runtime DLLs are found through the child process's `PATH`, not by copying. On macOS, Aji checks that downloaded binaries carry no quarantine flag **[To verify]** and sets the executable bit.
-- Benchmark: runs KataGo's `benchmark` and parses the visits per second for each thread count. It picks the smallest thread count that reaches 95% of the best **[Proposed]**. OpenCL tuning happens here, so the first analysis is not slow.
+- Unpacks zip (every archive in the manifest is a zip) into a staging folder and moves it into place in one rename. A half-installed engine is never marked usable. On Windows, runtime DLLs are found through the child process's `PATH`, not by copying. On macOS, Aji checks that downloaded binaries carry no quarantine flag **[To verify]** and sets the executable bit.
+- Benchmark: runs KataGo's `benchmark` and parses the visits per second for each thread count. It picks the smallest thread count that reaches 95% of the best **[Proposed]**. The run is shorter than KataGo's default of 800 visits × 10 positions: about 2 minutes on the M5 with the preselected network **[Proposed]**. OpenCL tuning happens here, so the first analysis is not slow.
 - Config generation from Aji's own template, not a copy of KataGo's example configs.
 - Smoke test: a 50-visit query on the empty 19×19 board must return candidates within a timeout that allows for TensorRT engine builds.
-- Fallback: failures are classified from exit status and stderr (missing DLL, CUDA or driver error, out of memory, OpenCL failure) into a code with plain-language text. The next backend in the recommendation's fallback list is offered.
-- Engine registry in settings: the installed engines and the active one. The active engine starts with the app.
-- Protocol: `setup.install`, `setup.cancel`, `setup.importNetwork` (the backend opens the file dialog), and `setup.progress` events.
+- Fallback: failures are classified from exit status and stderr (missing DLL, CUDA or driver error, out of memory, OpenCL failure) into a code with plain-language text. The next backend in the recommendation's fallback list is offered, with its download size, and installed only if the user agrees (owner decision, 2026-11-20).
+- Installed-engines record: `installed.json` in the local data folder, not in settings, because the settings folder roams on Windows. It holds verified components (engine packages, runtimes, networks), usable engine sets, and the active one. The active engine starts with the app.
+- Protocol: `setup.licences`, `setup.install`, `setup.cancel`, `setup.status`, `setup.setDownloadSource`, `setup.importNetwork` (the backend opens the file dialog), and `setup.progress` events.
 - Integration tests run against a local HTTP server with Range support: resume, bad checksum, 404 on the first URL, cancellation, and not enough disk space.
 
-**Exit:** on the PC and the Mac, a development trigger installs an engine with no manual step, and analysis starts. Owner measures download speeds on a mainland network (D1).
+**Exit:** on the Mac, and optionally on the PC, a development trigger installs an engine with no manual step, and analysis starts. Owner measures download speeds on a mainland network (D1).
 
 ### M5. First-run wizard and settings
 
@@ -245,7 +255,7 @@ These are the inputs most likely to break Phase 1 for a real user, each with the
 
 1. **A Windows user name with Chinese characters**, so every Aji path contains them. Engine launch, model loading and downloads must still work. The fake KataGo is run from a CJK-named folder in Windows CI. (M2, M4)
 2. **Slow, dropped or blocked downloads on a mainland network.** Aji resumes, moves to the next URL, honours the mirror, and never leaves a half-installed engine marked active. (M4)
-3. **A GPU that looks usable but is not, or that Aji does not know by name.** Examples: an old driver, an RTX 50-series card with a pre-12.8 CUDA build, a remote-desktop session, a laptop whose integrated GPU is listed first, or an Apple chip newer than any in Aji's tests (the M5 today). Aji must detect the problem, fall back, and explain it in plain words, and it must not mistake a new chip for no GPU. (M3, M4)
+3. **A GPU that looks usable but is not, or that Aji does not know by name.** Examples: an old driver, an RTX 50-series card with a pre-12.8 CUDA build, a remote-desktop session, a laptop whose integrated GPU is listed first, or an Apple chip newer than any in Aji's tests (the M5 today). Aji must detect the problem, offer a fallback, and explain it in plain words, and it must not mistake a new chip for no GPU. (M3, M4; the laptop case is left to M8, because M4 sets no GPU device)
 4. **Holding an arrow key or spinning the wheel during analysis.** The engine is not flooded, and no update for an earlier position is painted on the current one. (M7)
 5. **Non-conforming SGF.** Cases: GBK without `CA`, truncated files, sizes other than 19, large comments. Aji either opens the file or says why, and unknown properties survive a save. (M6)
 6. **KataGo crashes or runs out of memory mid-analysis.** Aji shows the crashed state with stderr and lets the user restart; nothing hangs. (M2)

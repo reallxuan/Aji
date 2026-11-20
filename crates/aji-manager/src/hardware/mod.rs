@@ -129,6 +129,40 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+/// Why running a program failed.
+#[derive(Debug)]
+pub(crate) enum CommandError {
+    /// The program could not be started, for example because it is not installed.
+    NotRun(String, std::io::Error),
+    /// It timed out, exited non-zero, or printed something that does not parse.
+    Failed(ParseError),
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotRun(program, e) => write!(f, "{program} did not run: {e}"),
+            Self::Failed(e) => e.fmt(f),
+        }
+    }
+}
+
+impl From<ParseError> for CommandError {
+    fn from(e: ParseError) -> Self {
+        Self::Failed(e)
+    }
+}
+
+/// Logs a failed probe, then records it in `problems`.
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "windows", target_os = "linux")),
+    allow(dead_code)
+)]
+fn record_problem(problems: &mut Vec<Probe>, probe: Probe, error: &dyn std::fmt::Display) {
+    eprintln!("aji: hardware probe {probe:?} failed: {error}");
+    problems.push(probe);
+}
+
 impl GpuReport {
     pub(crate) fn new(vendor: GpuVendor, name: String) -> Self {
         Self {
@@ -256,11 +290,12 @@ fn has_avx2() -> bool {
 
 /// Runs a program to completion within `limit` and returns its stdout. A non-zero exit is an
 /// error carrying whatever the program printed, since nvidia-smi explains its failures on stdout.
+/// A program that cannot be started is [`CommandError::NotRun`], with the OS error kept.
 pub(crate) async fn run_command(
     program: &std::path::Path,
     args: &[&str],
     limit: Duration,
-) -> Result<String, ParseError> {
+) -> Result<String, CommandError> {
     let mut command = tokio::process::Command::new(program);
     command
         .args(args)
@@ -271,7 +306,7 @@ pub(crate) async fn run_command(
     let output = tokio::time::timeout(limit, command.output())
         .await
         .map_err(|_| ParseError(format!("{} timed out", program.display())))?
-        .map_err(|e| ParseError(format!("{} did not run: {e}", program.display())))?;
+        .map_err(|e| CommandError::NotRun(program.display().to_string(), e))?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
         Ok(stdout)
@@ -283,6 +318,7 @@ pub(crate) async fn run_command(
             output.status,
             stdout.trim(),
             stderr.trim()
-        )))
+        ))
+        .into())
     }
 }

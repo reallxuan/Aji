@@ -38,6 +38,7 @@ async fn main() {
         model: PathBuf::from("model.bin.gz"),
         config: scenario.clone(),
         working_dir,
+        path_prepend: Vec::new(),
     };
     let (tx, mut states) = mpsc::unbounded_channel();
     let engine = Engine::spawn(Some(files), p1(), EngineOptions::default(), move |event| {

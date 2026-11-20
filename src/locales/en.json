@@ -12,7 +12,11 @@
     "internal": "Aji ran into an internal error.",
     "engineNotConfigured": "No engine is set up.",
     "engineNotRunning": "KataGo is not running.",
-    "setupUnknownEngine": "That engine is not in the list."
+    "setupUnknownEngine": "That engine is not in the list.",
+    "setupBusy": "An install is already running.",
+    "setupUnknownNetwork": "That network is not in the list.",
+    "setupImportFailed": "That file is not a KataGo network.",
+    "setupInvalidSource": "A download source must be a web address starting with http:// or https://."
   },
   "engine": {
     "state": {
@@ -46,5 +50,21 @@
       "visits": "Visits"
     },
     "pass": "Pass"
+  },
+  "setup": {
+    "failure": {
+      "downloadFailed": "The download failed from every source. Check the network connection, or try another download source.",
+      "checksumMismatch": "Every source gave a damaged or altered file, so Aji did not use it.",
+      "notEnoughSpace": "There is not enough free disk space for this install.",
+      "unpackFailed": "A downloaded package could not be unpacked.",
+      "missingLibrary": "KataGo could not find a library it needs.",
+      "gpuDriverTooOld": "The graphics driver is too old for this backend. Updating the driver may fix this.",
+      "gpuError": "KataGo could not use the graphics card with this backend.",
+      "outOfMemory": "The graphics card ran out of memory.",
+      "openclNoDevice": "No graphics card could be used through OpenCL.",
+      "licenceNotAccepted": "This backend needs a licence that has not been accepted.",
+      "timedOut": "KataGo took too long to answer.",
+      "crashed": "KataGo stopped with an error."
+    }
   }
 }

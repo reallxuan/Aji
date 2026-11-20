@@ -130,16 +130,31 @@ fn smi_from_capture(
     (smi.unwrap_or_default(), caps.unwrap_or_default())
 }
 
+/// Only an `nvidia-smi.exe` missing from the PATH sends Aji to the copy in System32. A copy that
+/// started and then failed is not run a second time from elsewhere.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(super) fn should_retry_in_system32(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::NotFound
+}
+
 /// DXGI, then `nvidia-smi` when an NVIDIA adapter exists. Not compiled on this development Mac.
 #[cfg(target_os = "windows")]
 pub(super) async fn probe() -> (Vec<super::GpuReport>, Vec<Probe>) {
     use std::path::PathBuf;
 
-    let adapters = match tokio::task::spawn_blocking(super::dxgi::enumerate).await {
-        Ok(Ok(adapters)) => adapters,
-        _ => return (Vec::new(), vec![Probe::Dxgi]),
-    };
     let mut problems = Vec::new();
+    let enumerated = match tokio::task::spawn_blocking(super::dxgi::enumerate).await {
+        Ok(Ok(adapters)) => Ok(adapters),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(e) => Err(e.to_string()),
+    };
+    let adapters = match enumerated {
+        Ok(adapters) => adapters,
+        Err(e) => {
+            super::record_problem(&mut problems, Probe::Dxgi, &e);
+            return (Vec::new(), problems);
+        }
+    };
     let (mut smi, mut caps) = (Vec::new(), Vec::new());
     if adapters
         .iter()
@@ -151,17 +166,21 @@ pub(super) async fn probe() -> (Vec<super::GpuReport>, Vec<Probe>) {
             .join("System32")
             .join("nvidia-smi.exe");
         let mut result = super::nvidia_smi::query(&from_path).await;
-        if result.is_err() {
+        let retry = matches!(
+            &result,
+            Err(super::CommandError::NotRun(_, e)) if should_retry_in_system32(e)
+        );
+        if retry {
             result = super::nvidia_smi::query(&from_system).await;
         }
         match result {
             Ok(data) => {
-                (smi, caps) = (data.gpus, data.caps);
-                if !data.caps_ok {
-                    problems.push(Probe::NvidiaSmi);
+                if let Some(e) = &data.caps_error {
+                    super::record_problem(&mut problems, Probe::NvidiaSmi, e);
                 }
+                (smi, caps) = (data.gpus, data.caps);
             }
-            Err(_) => problems.push(Probe::NvidiaSmi),
+            Err(e) => super::record_problem(&mut problems, Probe::NvidiaSmi, &e),
         }
     }
     (gpus_from_dxgi(&adapters, &smi, &caps), problems)

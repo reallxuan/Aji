@@ -3,7 +3,8 @@
 mod common;
 
 use aji_manager::manifest::{
-    BUNDLED, Candidate, ManifestStore, Rejection, Source, load_cache, select, store_cache,
+    BUNDLED, Candidate, ManifestStore, Rejection, Source, load_cache, parse_manifest, select,
+    store_cache,
 };
 use common::{TestKey, bundled_sequence, edited, manifest_with_sequence, signed};
 
@@ -202,4 +203,57 @@ fn the_cache_is_verified_again_on_load() {
     let current = store.current();
     assert_eq!(current.source, Source::Bundled);
     assert_eq!(rejected(&current), vec![Rejection::BadSignature]);
+}
+
+#[test]
+fn a_legacy_signature_is_rejected() {
+    let key = TestKey::generate();
+    let bytes = manifest_with_sequence(bundled_sequence() + 1);
+    let legacy = key.sign_legacy(&bytes);
+    // The signature is genuine: it verifies once legacy signatures are allowed.
+    let decoded = minisign_verify::Signature::decode(&legacy).expect("a legacy signature");
+    assert!(key.public().verify(&bytes, &decoded, true).is_ok());
+
+    let candidate = Candidate {
+        bytes,
+        signature: Some(legacy),
+        source: Source::Fetched,
+    };
+    let selected = select(BUNDLED, vec![candidate], &[key.public()]);
+    assert_eq!(selected.source, Source::Bundled);
+    assert_eq!(rejected(&selected), vec![Rejection::BadSignature]);
+}
+
+#[test]
+fn unknown_runtime_platform_and_network_kind_are_dropped() {
+    let bytes = edited(|v| {
+        let mut runtime = v["runtimes"][0].clone();
+        runtime["id"] = "x-runtime".into();
+        runtime["platform"] = "freebsd-x64".into();
+        v["runtimes"].as_array_mut().unwrap().push(runtime);
+        let mut network = v["networks"][0].clone();
+        network["id"] = "x-network".into();
+        network["kind"] = "future".into();
+        v["networks"].as_array_mut().unwrap().push(network);
+    });
+    let manifest = parse_manifest(&bytes).expect("still parses");
+    let bundled = parse_manifest(BUNDLED).expect("bundled parses");
+    assert_eq!(manifest.runtimes.len(), bundled.runtimes.len());
+    assert_eq!(manifest.networks.len(), bundled.networks.len());
+    assert!(manifest.runtimes.iter().all(|r| r.id != "x-runtime"));
+    assert!(manifest.networks.iter().all(|n| n.id != "x-network"));
+}
+
+#[test]
+fn source_serialises_in_lowercase() {
+    for (source, text) in [
+        (Source::Bundled, "bundled"),
+        (Source::Cache, "cache"),
+        (Source::Fetched, "fetched"),
+    ] {
+        assert_eq!(
+            serde_json::to_value(source).unwrap(),
+            serde_json::json!(text)
+        );
+    }
 }

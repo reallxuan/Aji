@@ -35,6 +35,8 @@ export function createEngineStore(): EngineStore {
     applyEvent: (event) =>
       set((state) => {
         if (event.type === 'engineState') return { engine: event.engine, sawEvent: true };
+        // Install progress is for the setup screens, not the engine store.
+        if (event.type !== 'analysisUpdate') return state;
         if (state.position !== null && event.analysis.position !== state.position) return state;
         return { analysis: event.analysis, sawAnalysis: true };
       }),

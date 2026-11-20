@@ -5,6 +5,9 @@ import type { BackendRecommendation } from "./BackendRecommendation";
 import type { EngineState } from "./EngineState";
 import type { EngineVersionChoice } from "./EngineVersionChoice";
 import type { HardwareReport } from "./HardwareReport";
+import type { ImportedNetwork } from "./ImportedNetwork";
+import type { JobSnapshot } from "./JobSnapshot";
+import type { LicenceInfo } from "./LicenceInfo";
 import type { NetworkList } from "./NetworkList";
 import type { PositionKey } from "./PositionKey";
 
@@ -19,4 +22,12 @@ position: PositionKey,
 /**
  * The latest analysis of that position, if any has arrived.
  */
-analysis: AnalysisUpdate | null, } | { "type": "setupDetect", hardware: HardwareReport, } | { "type": "setupBackends", recommendation: BackendRecommendation, } | { "type": "setupVersions", versions: Array<EngineVersionChoice>, } | { "type": "setupNetworks", networks: NetworkList, } | { "type": "ok" };
+analysis: AnalysisUpdate | null, } | { "type": "setupDetect", hardware: HardwareReport, } | { "type": "setupBackends", recommendation: BackendRecommendation, } | { "type": "setupVersions", versions: Array<EngineVersionChoice>, } | { "type": "setupNetworks", networks: NetworkList, } | { "type": "setupLicences", licences: Array<LicenceInfo>, 
+/**
+ * The hashes among `licences` that were accepted before.
+ */
+accepted: Array<string>, } | { "type": "setupStatus", job: JobSnapshot | null, } | { "type": "setupImportNetwork", 
+/**
+ * `None` when the user cancelled the file dialog.
+ */
+network: ImportedNetwork | null, } | { "type": "ok" };

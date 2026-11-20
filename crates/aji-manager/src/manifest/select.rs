@@ -1,11 +1,13 @@
 //! Choosing between the bundled, cached and fetched copies of the manifest.
 
 use minisign_verify::PublicKey;
+use serde::Serialize;
 
 use super::{Manifest, ManifestError, parse_manifest, verify};
 
 /// Where a copy of the manifest came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Source {
     Bundled,
     Cache,
@@ -44,6 +46,16 @@ pub struct Selected {
 impl Selected {
     pub(super) fn candidate(&self) -> Option<&Candidate> {
         self.candidate.as_ref()
+    }
+
+    /// `manifest` as given, reported as bundled.
+    pub(super) fn fixed(manifest: Manifest) -> Selected {
+        Selected {
+            manifest,
+            source: Source::Bundled,
+            rejected: Vec::new(),
+            candidate: None,
+        }
     }
 }
 

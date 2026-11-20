@@ -12,32 +12,47 @@ pub const MANIFEST_BASES: &[&str] = &["https://reallxuan.github.io/aji-manifest/
 const MAX_BODY: usize = 4 * 1024 * 1024;
 
 pub struct ClientOptions {
-    /// The limit for one whole request, body included.
-    pub timeout: Duration,
+    /// The limit for one whole request, body included. `None` sets no limit, for downloads whose
+    /// size makes any fixed limit wrong; their stalls are caught by the caller.
+    pub timeout: Option<Duration>,
+    /// The limit for opening the connection.
+    pub connect_timeout: Duration,
 }
 
 impl Default for ClientOptions {
+    /// The manifest's limits.
     fn default() -> Self {
         ClientOptions {
-            timeout: Duration::from_secs(10),
+            timeout: Some(Duration::from_secs(10)),
+            connect_timeout: Duration::from_secs(15),
         }
     }
 }
 
 /// Builds the HTTP client: rustls on the `ring` provider, the system proxy, and the given user
-/// agent (`Aji/<version>`; it must carry no personal data).
-pub fn http_client(user_agent: &str, options: ClientOptions) -> reqwest::Client {
+/// agent (`Aji/<version>`; it must carry no personal data). A user agent that is not a valid
+/// header value, or a TLS setup that fails, is an error rather than a panic at launch.
+pub fn http_client(
+    user_agent: &str,
+    options: ClientOptions,
+) -> Result<reqwest::Client, FetchError> {
     // `Err` means a provider is already installed, which is what we want.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .user_agent(user_agent)
-        .timeout(options.timeout)
+        .connect_timeout(options.connect_timeout);
+    if let Some(timeout) = options.timeout {
+        builder = builder.timeout(timeout);
+    }
+    builder
         .build()
-        .expect("the HTTP client builds")
+        .map_err(|e| FetchError::Client(e.to_string()))
 }
 
 #[derive(Debug)]
 pub enum FetchError {
+    /// The HTTP client could not be built.
+    Client(String),
     /// No base URL was given.
     NoBases,
     /// The request failed, timed out or the connection broke.
@@ -50,6 +65,7 @@ pub enum FetchError {
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            FetchError::Client(m) => write!(f, "cannot set up the HTTP client: {m}"),
             FetchError::NoBases => write!(f, "no manifest URL to fetch"),
             FetchError::Request(m) => write!(f, "request failed: {m}"),
             FetchError::Status(s) => write!(f, "the server answered {s}"),

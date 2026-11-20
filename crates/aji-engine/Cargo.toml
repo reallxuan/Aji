@@ -25,7 +25,13 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_Threading",
 ] }
 
+[features]
+# Hooks the integration tests use to imitate a stuck process. Never enabled in a build of Aji.
+test-seams = []
+
 [dev-dependencies]
+# Turns the test seams on for this crate's own tests.
+aji-engine = { path = ".", features = ["test-seams"] }
 tempfile = "3.27.0"
 
 [target.'cfg(unix)'.dev-dependencies]

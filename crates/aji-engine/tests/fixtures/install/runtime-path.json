@@ -1,0 +1,4 @@
+{
+  "requirePathEntry": "运行库 x",
+  "benchmark": { "visitsPerSecond": { "8": 100.0, "16": 180.0 } }
+}
