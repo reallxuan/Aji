@@ -343,6 +343,8 @@ fn request(engine: &str, network: &str, accepted: &[&str]) -> InstallRequest {
         engine: engine.into(),
         network: network.into(),
         accepted_licences: accepted.iter().map(|s| s.to_string()).collect(),
+        // Most tests here cover the benchmark; the wizard's installs skip it.
+        benchmark: true,
     }
 }
 
@@ -806,6 +808,37 @@ async fn an_imported_network_can_be_installed_with() {
             engine: EIGEN.into(),
             network: imported.id.clone(),
         })
+    );
+}
+
+#[tokio::test]
+async fn an_install_without_the_benchmark_uses_the_default_thread_count() {
+    let w = world(Spec::default());
+    w.installer
+        .start(InstallRequest {
+            benchmark: false,
+            ..request(OPENCL, NET, &[])
+        })
+        .unwrap();
+    let job = w.finished().await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert!(!kinds(&job).contains(&TaskKind::Benchmark), "{job:?}");
+    assert!(
+        w.snapshots
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|s| s.benchmark.is_none())
+    );
+    let record = w.record();
+    let set = record.active_set().expect("an active set");
+    assert_eq!(set.threads, 16);
+    assert!(set.benchmark.is_empty());
+    assert!(
+        !w.root
+            .root()
+            .join(w.root.benchmark_config_rel(OPENCL, NET))
+            .exists()
     );
 }
 

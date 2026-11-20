@@ -150,6 +150,7 @@ describe('M5 helpers', () => {
     });
     await expect(getLicences(t, 'e')).resolves.toEqual({ licences: [], accepted: [] });
     await startInstall(t, 'e', 'n', ['h']);
+    await startInstall(t, 'e', 'n', [], { benchmark: true });
     await cancelInstall(t);
     await expect(getInstallStatus(t)).resolves.toEqual(job);
     await expect(importNetwork(t)).resolves.toBeNull();
@@ -164,7 +165,8 @@ describe('M5 helpers', () => {
       { type: 'setupVersions', backend: 'metal' },
       { type: 'setupNetworks', engine: 'e' },
       { type: 'setupLicences', engine: 'e' },
-      { type: 'setupInstall', engine: 'e', network: 'n', acceptLicences: ['h'] },
+      { type: 'setupInstall', engine: 'e', network: 'n', acceptLicences: ['h'], benchmark: false },
+      { type: 'setupInstall', engine: 'e', network: 'n', acceptLicences: [], benchmark: true },
       { type: 'setupCancel' },
       { type: 'setupStatus' },
       { type: 'setupImportNetwork' },

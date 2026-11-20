@@ -49,6 +49,22 @@ pub fn benchmark_plan(backend: Backend, cpu_cores: u32) -> BenchmarkPlan {
     }
 }
 
+/// The thread count used when no benchmark has run: 6 on Metal (the fastest of 6, 10 and 16
+/// on an Apple M-series with b11 and close to it with b40), 16 on other GPUs (the middle of the
+/// benchmark's 8, 16 and 32), and one per physical core on the CPU.
+pub fn default_threads(backend: Backend, cpu_cores: u32) -> u32 {
+    match backend {
+        Backend::Eigen | Backend::Eigenavx2 => cpu_cores.max(1),
+        Backend::Metal => 6,
+        Backend::Cuda
+        | Backend::Rocm
+        | Backend::Directml
+        | Backend::Openvino
+        | Backend::Opencl
+        | Backend::Unknown => 16,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BenchmarkParseError {
     /// No thread count finished its positions.
@@ -317,6 +333,15 @@ mod tests {
             parse_benchmark("visits/s = 12\nnumSearchThreads = x: 1 / 1 positions"),
             Err(BenchmarkParseError::NoResults)
         );
+    }
+
+    #[test]
+    fn default_threads_without_a_benchmark() {
+        assert_eq!(default_threads(Backend::Metal, 12), 6);
+        assert_eq!(default_threads(Backend::Opencl, 12), 16);
+        assert_eq!(default_threads(Backend::Cuda, 12), 16);
+        assert_eq!(default_threads(Backend::Eigenavx2, 8), 8);
+        assert_eq!(default_threads(Backend::Eigen, 0), 1);
     }
 
     /// The fixture up to and including the first line that contains `marker`.

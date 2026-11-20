@@ -7,4 +7,9 @@ import type { UiSettings } from "./UiSettings";
  * A request from the UI. Serialised as `{"type": "<camelCase variant>", ...fields}`, with
  * camelCase field names.
  */
-export type Request = { "type": "appInfo" } | { "type": "engineStatus" } | { "type": "engineRestart" } | { "type": "engineStop" } | { "type": "analysisPause" } | { "type": "analysisResume" } | { "type": "setupDetect", refresh: boolean, } | { "type": "setupBackends" } | { "type": "setupVersions", backend: Backend, } | { "type": "setupNetworks", engine: string, } | { "type": "setupLicences", engine: string, } | { "type": "setupInstall", engine: string, network: string, acceptLicences: Array<string>, } | { "type": "setupCancel" } | { "type": "setupStatus" } | { "type": "setupSetDownloadSource", source: DownloadSource, } | { "type": "setupImportNetwork" } | { "type": "setupInstalled" } | { "type": "setupRemoveUnused" } | { "type": "settingsGet" } | { "type": "settingsSet", settings: UiSettings, };
+export type Request = { "type": "appInfo" } | { "type": "engineStatus" } | { "type": "engineRestart" } | { "type": "engineStop" } | { "type": "analysisPause" } | { "type": "analysisResume" } | { "type": "setupDetect", refresh: boolean, } | { "type": "setupBackends" } | { "type": "setupVersions", backend: Backend, } | { "type": "setupNetworks", engine: string, } | { "type": "setupLicences", engine: string, } | { "type": "setupInstall", engine: string, network: string, acceptLicences: Array<string>, 
+/**
+ * Measure the thread count with KataGo's benchmark. Settings asks for it; the wizard
+ * installs with the backend's default.
+ */
+benchmark: boolean, } | { "type": "setupCancel" } | { "type": "setupStatus" } | { "type": "setupSetDownloadSource", source: DownloadSource, } | { "type": "setupImportNetwork" } | { "type": "setupInstalled" } | { "type": "setupRemoveUnused" } | { "type": "settingsGet" } | { "type": "settingsSet", settings: UiSettings, };

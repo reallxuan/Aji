@@ -108,12 +108,14 @@ export async function getLicences(
   return { licences, accepted };
 }
 
+/** Installs an engine set. The wizard installs without the benchmark; settings asks for it. */
 export const startInstall = (
   transport: Transport,
   engine: string,
   network: string,
   acceptLicences: string[],
-) => expectOk(transport, { type: 'setupInstall', engine, network, acceptLicences });
+  { benchmark = false }: { benchmark?: boolean } = {},
+) => expectOk(transport, { type: 'setupInstall', engine, network, acceptLicences, benchmark });
 
 export const cancelInstall = (transport: Transport) => expectOk(transport, { type: 'setupCancel' });
 

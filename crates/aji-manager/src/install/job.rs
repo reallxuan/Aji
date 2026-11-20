@@ -19,10 +19,10 @@ use super::unused::{ActiveSummary, RemoveError};
 use super::{
     BenchmarkProgress, DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader,
     EngineSet, FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed,
-    InstalledEngine, InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, UnpackError,
-    analysis_config, benchmark_config, benchmark_plan, check_space, choose_threads, engine_files,
-    extract_size, load_installed, run_benchmark, run_test_query, runtime_is_complete,
-    unpack_engine, unpack_runtime, update_installed,
+    InstalledEngine, InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, ThreadSpeed,
+    UnpackError, analysis_config, benchmark_config, benchmark_plan, check_space, choose_threads,
+    default_threads, engine_files, extract_size, load_installed, run_benchmark, run_test_query,
+    runtime_is_complete, unpack_engine, unpack_runtime, update_installed,
 };
 use crate::atomic::write_atomically;
 use crate::manifest::{self, Backend, Network, Platform, Runtime, archive_file_name};
@@ -37,6 +37,9 @@ pub struct InstallRequest {
     pub network: String,
     /// The `textSha256` of every licence the user has accepted.
     pub accepted_licences: BTreeSet<String>,
+    /// Run KataGo's benchmark to choose the thread count. The wizard does not: it uses the
+    /// backend's default, and settings measures on request.
+    pub benchmark: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +242,7 @@ struct Job {
     runtime: Option<Runtime>,
     network: JobNetwork,
     accepted: BTreeSet<String>,
+    benchmark: bool,
     cancel: CancellationToken,
 }
 
@@ -384,7 +388,7 @@ impl Installer {
                 engine: engine.id.clone(),
                 backend: engine.backend,
                 network: network.id().to_string(),
-                tasks: rows(runtime.is_some()),
+                tasks: rows(runtime.is_some(), request.benchmark),
                 outcome: None,
                 benchmark: None,
             };
@@ -406,6 +410,7 @@ impl Installer {
             runtime,
             network,
             accepted: request.accepted_licences,
+            benchmark: request.benchmark,
             cancel,
         };
         self.runtime.spawn(Arc::clone(self).run(job));
@@ -862,56 +867,25 @@ impl Installer {
         Ok(())
     }
 
-    /// The benchmark, then the test query; gives the set to activate.
+    /// The benchmark when the request asked for one, else the backend's default thread count,
+    /// then the test query; gives the set to activate.
     async fn measure_and_test(&self, job: &Job) -> Result<EngineSet, Stop> {
         let (engine, network) = (job.engine.id.as_str(), job.network.id());
         let installed = self.installed();
         let cores = self.setup.hardware().await.cpu.cores;
-        let plan = benchmark_plan(job.engine.backend, cores);
-        // Positions across every count, so the bar moves while KataGo measures.
-        let positions = u64::from(plan.positions);
-        let total = plan.threads.len() as u64 * positions;
-        self.set_row(TaskKind::Benchmark, TaskState::Running { done: 0, total });
-        let fail = |task: TaskKind, failure: FailureCode, line: String| {
-            Stop::failed(failure, line, true, Some(task))
-        };
-        let benchmark_rel = self.root.benchmark_config_rel(engine, network);
-        self.write_config(&benchmark_rel, &benchmark_config(&plan, &job.engine.config))
-            .map_err(|line| disk_stop(line, Some(TaskKind::Benchmark)))?;
         let mut set = EngineSet {
             engine: engine.to_string(),
             network: network.to_string(),
             runtime: job.runtime.as_ref().map(|r| r.id.clone()),
-            config: slashed(&benchmark_rel),
+            config: String::new(),
             threads: 0,
             benchmark: Vec::new(),
         };
-        let unrecorded = |task| {
-            fail(
-                task,
-                FailureCode::Crashed,
-                "aji: the engine set names a component that is not recorded".into(),
-            )
+        let (threads, speeds) = if job.benchmark {
+            self.measure(job, &installed, &set, cores).await?
+        } else {
+            (default_threads(job.engine.backend, cores), Vec::new())
         };
-        let files = engine_files(&self.root, &installed, &set)
-            .ok_or_else(|| unrecorded(TaskKind::Benchmark))?;
-        let mut on_progress =
-            |progress: BenchmarkProgress| self.benchmark_progress(progress, positions, total);
-        let speeds = tokio::select! {
-            biased;
-            () = job.cancel.cancelled() => return Err(Stop::Cancelled),
-            result = run_benchmark(&files, &plan, self.options.benchmark_stall, &mut on_progress) => {
-                result.map_err(|f| Stop::Failed {
-                    failure: f.code,
-                    stderr_tail: f.stderr_tail,
-                    offer: true,
-                    task: Some(TaskKind::Benchmark),
-                })?
-            }
-        };
-        let threads = choose_threads(&speeds).unwrap_or(plan.threads[0]);
-        eprintln!("aji: {engine} runs {threads} threads: {speeds:?}");
-        self.set_row(TaskKind::Benchmark, TaskState::Done);
 
         self.set_row(
             TaskKind::TestQuery,
@@ -941,6 +915,50 @@ impl Installer {
         }
         self.set_row(TaskKind::TestQuery, TaskState::Done);
         Ok(set)
+    }
+
+    /// KataGo's benchmark over the plan's thread counts, with its progress in the snapshots;
+    /// gives the chosen count and every speed measured.
+    async fn measure(
+        &self,
+        job: &Job,
+        installed: &Installed,
+        set: &EngineSet,
+        cores: u32,
+    ) -> Result<(u32, Vec<ThreadSpeed>), Stop> {
+        let (engine, network) = (set.engine.as_str(), set.network.as_str());
+        let plan = benchmark_plan(job.engine.backend, cores);
+        // Positions across every count, so the bar moves while KataGo measures.
+        let positions = u64::from(plan.positions);
+        let total = plan.threads.len() as u64 * positions;
+        self.set_row(TaskKind::Benchmark, TaskState::Running { done: 0, total });
+        let benchmark_rel = self.root.benchmark_config_rel(engine, network);
+        self.write_config(&benchmark_rel, &benchmark_config(&plan, &job.engine.config))
+            .map_err(|line| disk_stop(line, Some(TaskKind::Benchmark)))?;
+        let measured = EngineSet {
+            config: slashed(&benchmark_rel),
+            ..set.clone()
+        };
+        let files = engine_files(&self.root, installed, &measured)
+            .ok_or_else(|| unrecorded(TaskKind::Benchmark))?;
+        let mut on_progress =
+            |progress: BenchmarkProgress| self.benchmark_progress(progress, positions, total);
+        let speeds = tokio::select! {
+            biased;
+            () = job.cancel.cancelled() => return Err(Stop::Cancelled),
+            result = run_benchmark(&files, &plan, self.options.benchmark_stall, &mut on_progress) => {
+                result.map_err(|f| Stop::Failed {
+                    failure: f.code,
+                    stderr_tail: f.stderr_tail,
+                    offer: true,
+                    task: Some(TaskKind::Benchmark),
+                })?
+            }
+        };
+        let threads = choose_threads(&speeds).unwrap_or(plan.threads[0]);
+        eprintln!("aji: {engine} runs {threads} threads: {speeds:?}");
+        self.set_row(TaskKind::Benchmark, TaskState::Done);
+        Ok((threads, speeds))
     }
 
     /// Records the set as active, then switches the running engine to it. Past the test query
@@ -1193,12 +1211,22 @@ fn non_empty_file(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() > 0)
 }
 
-fn rows(runtime: bool) -> Vec<TaskRow> {
+/// A set naming a component the record does not have: a fault in Aji, not in the download.
+fn unrecorded(task: TaskKind) -> Stop {
+    Stop::failed(
+        FailureCode::Crashed,
+        "aji: the engine set names a component that is not recorded".into(),
+        true,
+        Some(task),
+    )
+}
+
+fn rows(runtime: bool, benchmark: bool) -> Vec<TaskRow> {
     [
         Some(TaskKind::Engine),
         runtime.then_some(TaskKind::Runtime),
         Some(TaskKind::Network),
-        Some(TaskKind::Benchmark),
+        benchmark.then_some(TaskKind::Benchmark),
         Some(TaskKind::TestQuery),
     ]
     .into_iter()
@@ -1311,7 +1339,7 @@ mod tests {
     #[test]
     fn rows_follow_the_job_order() {
         let kinds = |runtime| {
-            rows(runtime)
+            rows(runtime, true)
                 .into_iter()
                 .map(|r| r.task)
                 .collect::<Vec<_>>()
@@ -1327,6 +1355,11 @@ mod tests {
             ]
         );
         assert!(!kinds(false).contains(&TaskKind::Runtime));
+        assert!(
+            !rows(true, false)
+                .iter()
+                .any(|r| r.task == TaskKind::Benchmark)
+        );
     }
 
     #[test]

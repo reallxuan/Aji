@@ -47,6 +47,7 @@ describe('FailurePanel', () => {
       engine: chosen.engine,
       network: chosen.network,
       acceptLicences: [],
+      benchmark: false,
     });
   });
 
@@ -76,6 +77,7 @@ describe('FailurePanel', () => {
         engine: 'katago-v1.18.2-directml-windows-x64',
         network: chosen.network,
         acceptLicences: [],
+        benchmark: false,
       }),
     );
     expect(useWizardStore.getState().backend).toBe('directml');

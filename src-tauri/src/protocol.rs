@@ -56,6 +56,10 @@ pub enum Request {
         engine: String,
         network: String,
         accept_licences: Vec<String>,
+        /// Measure the thread count with KataGo's benchmark. Settings asks for it; the wizard
+        /// installs with the backend's default.
+        #[serde(default)]
+        benchmark: bool,
     },
     SetupCancel,
     /// The running install job, or the last one.
@@ -353,6 +357,17 @@ mod tests {
                     engine: "e".into(),
                     network: "n".into(),
                     accept_licences: vec![],
+                    benchmark: false,
+                },
+            ),
+            (
+                json!({"type": "setupInstall", "engine": "e", "network": "n",
+                       "acceptLicences": [], "benchmark": true}),
+                Request::SetupInstall {
+                    engine: "e".into(),
+                    network: "n".into(),
+                    accept_licences: vec![],
+                    benchmark: true,
                 },
             ),
             (json!({"type": "setupCancel"}), Request::SetupCancel),

@@ -143,7 +143,8 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
             engine,
             network,
             accept_licences,
-        } => return setup_install(ctx, engine, network, accept_licences),
+            benchmark,
+        } => return setup_install(ctx, engine, network, accept_licences, benchmark),
         Request::SetupCancel => {
             ctx.installer.cancel();
             Ok(Response::Ok)
@@ -256,6 +257,7 @@ fn setup_install(
     engine: String,
     network: String,
     accept_licences: Vec<String>,
+    benchmark: bool,
 ) -> Result<Response, ProtocolError> {
     let licences = ctx
         .installer
@@ -275,6 +277,7 @@ fn setup_install(
         engine,
         network,
         accepted_licences: accepted,
+        benchmark,
     };
     match ctx.installer.start(request.clone()) {
         Ok(()) => Ok(Response::Ok),
@@ -431,6 +434,7 @@ mod tests {
                 engine: "nope".into(),
                 network: NETWORK.into(),
                 accept_licences: vec![CUDA_EULA.into()],
+                benchmark: false,
             },
         )
         .await
@@ -456,6 +460,7 @@ mod tests {
                 engine: CUDA_ENGINE.into(),
                 network: "nope".into(),
                 accept_licences: vec![],
+                benchmark: false,
             },
         )
         .await
@@ -538,6 +543,7 @@ mod tests {
                 network: NETWORK.into(),
                 // A hash that is not one of this engine's licences is not recorded.
                 accept_licences: vec![CUDA_EULA.into(), "not-a-licence".into()],
+                benchmark: false,
             },
         )
         .await;
@@ -590,6 +596,7 @@ mod tests {
                 engine: CUDA_ENGINE.into(),
                 network: NETWORK.into(),
                 accept_licences: vec![],
+                benchmark: false,
             },
         )
         .await;

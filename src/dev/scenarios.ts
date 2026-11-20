@@ -288,7 +288,8 @@ const SCRIPTS: Record<ScenarioName, Script> = {
     failure: (engine) =>
       isCuda(engine)
         ? {
-            task: 'benchmark',
+            // The wizard installs without the benchmark, so KataGo first runs for the test query.
+            task: 'testQuery',
             outcome: failed(
               'gpuDriverTooOld',
               ['CUDA Error: CUDA driver version is insufficient for CUDA runtime version'],
@@ -303,7 +304,8 @@ const SCRIPTS: Record<ScenarioName, Script> = {
     failure: (engine) =>
       isCuda(engine)
         ? {
-            task: 'benchmark',
+            // The wizard installs without the benchmark, so KataGo first runs for the test query.
+            task: 'testQuery',
             outcome: failed(
               'gpuError',
               [
@@ -406,12 +408,14 @@ export function scenarioTransport(
       list.some((v) => v.engine === id),
     );
 
-  function runJob(engineId: string, networkId: string) {
+  function runJob(engineId: string, networkId: string, benchmark: boolean) {
     const [backend, list] = backendOf(engineId)!;
     const version = list.find((v) => v.engine === engineId)!;
     const kinds: TaskKind[] = ['engine'];
     if (version.runtimeBytes) kinds.push('runtime');
-    kinds.push('network', 'benchmark', 'testQuery');
+    kinds.push('network');
+    if (benchmark) kinds.push('benchmark');
+    kinds.push('testQuery');
     const failure = script.failure(engineId);
     job = {
       id: nextJob++,
@@ -560,7 +564,7 @@ export function scenarioTransport(
       case 'setupInstall':
         if (job && job.outcome === null) throw new TransportError('setupBusy', 'a job is running');
         request.acceptLicences.forEach((hash) => accepted.add(hash));
-        runJob(request.engine, request.network);
+        runJob(request.engine, request.network, request.benchmark);
         return { type: 'ok' };
       case 'setupCancel':
         if (timer) clearTimeout(timer);

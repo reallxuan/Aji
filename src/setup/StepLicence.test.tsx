@@ -75,6 +75,7 @@ describe('StepLicence', () => {
         engine: chosen.engine,
         network: chosen.network,
         acceptLicences: ['aa'.repeat(32), 'bb'.repeat(32)],
+        benchmark: false,
       },
     ]);
   });
