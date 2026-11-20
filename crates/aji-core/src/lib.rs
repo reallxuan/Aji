@@ -3,6 +3,7 @@
 
 mod coords;
 mod position;
+pub mod sgf;
 
 pub use coords::*;
 pub use position::*;
