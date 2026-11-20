@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Response } from '../transport/generated/Response';
 import { chosen, renderSetup, runningJob, setupTransport } from './testing';
 import { useWizardStore } from './wizardStore';
@@ -17,6 +17,50 @@ describe('StepInstall', () => {
     expect(within(row('运行库')).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '62');
     expect(within(row('权重')).getByText('已有')).toBeInTheDocument();
     expect(within(row('测速')).queryByText('完成')).not.toBeInTheDocument();
+  });
+
+  it('shows how much of a download has arrived, its total size and its speed', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      const MiB = 1024 * 1024;
+      const at = (done: number) => ({
+        ...runningJob,
+        tasks: runningJob.tasks.map((task) =>
+          task.task === 'runtime'
+            ? {
+                task: 'runtime' as const,
+                state: { state: 'running' as const, done, total: 1000 * MiB },
+              }
+            : task.task === 'benchmark'
+              ? {
+                  task: 'benchmark' as const,
+                  state: { state: 'running' as const, done: 1, total: 3 },
+                }
+              : task,
+        ),
+      });
+      vi.setSystemTime(0);
+      renderSetup(setupTransport(), { step: 'install', ...chosen, job: at(600 * MiB) });
+      expect(within(row('运行库')).getByText('600 MB / 1000 MB')).toBeInTheDocument();
+      expect(within(row('运行库')).queryByText(/\/s/)).not.toBeInTheDocument();
+      // Counts are not sizes: the benchmark row shows no amounts.
+      expect(within(row('测速')).queryByText(/MB/)).not.toBeInTheDocument();
+
+      vi.setSystemTime(2000);
+      act(() => useWizardStore.setState({ job: at(604 * MiB) }));
+      // One line: the speed and the time left in brackets after the amount. 396 MB at 2 MB/s
+      // is 198 s, shown as 4 minutes.
+      expect(
+        within(row('运行库')).getByText('604 MB / 1000 MB（2 MB/s，还需 4 分钟）'),
+      ).toBeInTheDocument();
+
+      // A stalled download sends no snapshots. The line samples on its own each second, so the
+      // speed falls to nothing and the time left goes.
+      act(() => vi.advanceTimersByTime(4000));
+      expect(within(row('运行库')).getByText('604 MB / 1000 MB（0 B/s）')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('offers only Cancel while the job runs, and Cancel sends setupCancel', async () => {

@@ -166,6 +166,14 @@
         "benchmark": "测速",
         "testQuery": "试算一步"
       },
+      "amount": "{{done}} / {{total}}",
+      "amountSpeed": "{{done}} / {{total}}（{{speed}}/s）",
+      "amountSpeedLeft": "{{done}} / {{total}}（{{speed}}/s，还需 {{remaining}}）",
+      "timeLeft": {
+        "seconds": "{{n}} 秒",
+        "minutes": "{{n}} 分钟",
+        "hours": "{{hours}} 小时 {{minutes}} 分钟"
+      },
       "done": "完成",
       "reused": "已有",
       "failed": "失败",

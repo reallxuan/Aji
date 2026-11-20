@@ -166,6 +166,14 @@
         "benchmark": "Benchmark",
         "testQuery": "Test query"
       },
+      "amount": "{{done}} / {{total}}",
+      "amountSpeed": "{{done}} / {{total}} ({{speed}}/s)",
+      "amountSpeedLeft": "{{done}} / {{total}} ({{speed}}/s, {{remaining}} left)",
+      "timeLeft": {
+        "seconds": "{{n}} s",
+        "minutes": "{{n}} min",
+        "hours": "{{hours}} h {{minutes}} min"
+      },
       "done": "Done",
       "reused": "Already there",
       "failed": "Failed",

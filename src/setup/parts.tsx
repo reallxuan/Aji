@@ -1,11 +1,13 @@
 import { cn } from 'cn';
 import { CheckIcon, LoaderCircleIcon, XIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { TaskRow } from '../transport/generated/TaskRow';
 import { toTransportError } from '../transport/transport';
+import { formatBytes } from './format';
+import { addSample, timeLeft, transferRate, type Sample } from './transferRate';
 import { useWizardStore } from './wizardStore';
 
 /** A step's title, optional subtitle and body, with the footer pinned to the bottom of the panel. */
@@ -142,6 +144,45 @@ export function TaskRows({ tasks }: { tasks: TaskRow[] }) {
   );
 }
 
+/** The rows whose `done` and `total` are bytes; the benchmark and the test query count steps. */
+const DOWNLOADS = new Set<TaskRow['task']>(['engine', 'runtime', 'network']);
+
+/**
+ * "620 MB / 1000 MB" under a download's bar, then in brackets its speed and the time left once a
+ * second of samples is in.
+ */
+function TransferLine({ done, total }: { done: number; total: number }) {
+  const { t, i18n } = useTranslation();
+  const [samples, setSamples] = useState<Sample[]>([]);
+  const [seen, setSeen] = useState<number | null>(null);
+  // Each new count is a sample, taken while rendering the snapshot that brought it.
+  if (done !== seen) {
+    setSeen(done);
+    setSamples((current) => addSample(current, { at: Date.now(), done }));
+  }
+  // Snapshots come only when bytes arrive, so a stalled download would keep its last speed.
+  // Sampling each second lets the speed fall to nothing instead.
+  useEffect(() => {
+    const timer = setInterval(
+      () => setSamples((current) => addSample(current, { at: Date.now(), done })),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [done]);
+  const rate = transferRate(samples);
+  const bytes = (value: number) => formatBytes(value, i18n.language);
+  const amount = { done: bytes(done), total: bytes(total) };
+  let text = t('setup.install.amount', amount);
+  if (rate !== null && rate > 0) {
+    const left = timeLeft(Math.max(0, total - done) / rate);
+    const remaining = t(`setup.install.timeLeft.${left.unit}`, left);
+    text = t('setup.install.amountSpeedLeft', { ...amount, speed: bytes(rate), remaining });
+  } else if (rate !== null) {
+    text = t('setup.install.amountSpeed', { ...amount, speed: bytes(rate) });
+  }
+  return <p className="mt-1.5 ml-7 text-[12px] text-text-muted tabular-nums">{text}</p>;
+}
+
 function TaskRowView({ row }: { row: TaskRow }) {
   const { t } = useTranslation();
   const label = t(`setup.install.tasks.${row.task}`);
@@ -170,6 +211,7 @@ function TaskRowView({ row }: { row: TaskRow }) {
         >
           <div className="h-full bg-text" style={{ width: `${percent ?? 0}%` }} />
         </div>
+        {DOWNLOADS.has(row.task) && <TransferLine done={state.done} total={state.total} />}
       </li>
     );
   }
