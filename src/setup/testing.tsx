@@ -77,6 +77,7 @@ export const versions: EngineVersionChoice[] = [
     downloadBytes: 9_000_000,
     runtimeBytes: 1_200_000_000,
     latest: true,
+    installed: false,
   },
   {
     engine: 'katago-v1.18.1-cuda13.2-windows-x64',
@@ -85,6 +86,7 @@ export const versions: EngineVersionChoice[] = [
     downloadBytes: 9_000_000,
     runtimeBytes: 1_200_000_000,
     latest: false,
+    installed: false,
   },
 ];
 
@@ -96,6 +98,7 @@ export const networks: NetworkList = {
       elo: 14640,
       uploaded: '2026-11-01',
       sizeBytes: 180_000_000,
+      installed: false,
     },
     {
       network: 'zhizi-b40c768nbt-s11272M-d5935M',
@@ -103,6 +106,7 @@ export const networks: NetworkList = {
       elo: 14523,
       uploaded: '2026-06-06',
       sizeBytes: 600_000_000,
+      installed: false,
     },
   ],
   preselected: 'tf3-b11c768-s12382M-d6533M',

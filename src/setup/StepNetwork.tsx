@@ -104,6 +104,11 @@ export function StepNetwork() {
                 <span className="min-w-0 flex-1 truncate font-medium" title={item.network}>
                   {item.network}
                 </span>
+                {item.installed && (
+                  <span className="shrink-0 text-[13px] whitespace-nowrap text-text-muted">
+                    {t('setup.downloaded')}
+                  </span>
+                )}
                 <span className="w-12 text-right font-medium tabular-nums">
                   {item.elo === null ? '' : Math.round(item.elo)}
                 </span>

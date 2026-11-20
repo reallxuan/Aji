@@ -89,6 +89,7 @@
     "later": "Set up later",
     "cancel": "Cancel",
     "next": "Next",
+    "downloaded": "Downloaded",
     "back": "Back",
     "retry": "Retry",
     "loadFailed": "The list could not be loaded: {{reason}}",

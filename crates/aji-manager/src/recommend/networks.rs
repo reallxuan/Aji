@@ -55,5 +55,6 @@ fn choice(n: &Network) -> NetworkChoice {
         elo: n.elo,
         uploaded: n.uploaded.clone(),
         size_bytes: n.file.size,
+        installed: false,
     }
 }

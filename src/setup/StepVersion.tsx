@@ -78,6 +78,9 @@ export function StepVersion() {
                 {version.latest && (
                   <span className="text-[13px] text-text-muted">{t('setup.version.latest')}</span>
                 )}
+                {version.installed && (
+                  <span className="text-[13px] text-text-muted">{t('setup.downloaded')}</span>
+                )}
                 <span className="ml-auto text-[13px] text-text-muted tabular-nums">
                   {formatDate(version.released, i18n.language)}
                 </span>

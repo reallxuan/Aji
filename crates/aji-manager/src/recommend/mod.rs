@@ -88,6 +88,9 @@ pub struct EngineVersionChoice {
     #[ts(type = "number | null")]
     pub runtime_bytes: Option<u64>,
     pub latest: bool,
+    /// Already in the install record, so choosing it downloads nothing. The service fills it in.
+    #[serde(default)]
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -100,6 +103,9 @@ pub struct NetworkChoice {
     pub uploaded: String,
     #[ts(type = "number")]
     pub size_bytes: u64,
+    /// Already in the install record, so choosing it downloads nothing. The service fills it in.
+    #[serde(default)]
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -190,6 +196,7 @@ pub fn versions(
                     .map(|r| r.components.iter().map(|c| c.archive.size).sum())
             }),
             latest: i == 0,
+            installed: false,
         })
         .collect()
 }

@@ -120,14 +120,23 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::SetupBackends => Ok(Response::SetupBackends {
             recommendation: ctx.setup.backends().await,
         }),
-        Request::SetupVersions { backend } => Ok(Response::SetupVersions {
-            versions: ctx.setup.versions(backend).await,
-        }),
+        Request::SetupVersions { backend } => {
+            let installed = ctx.installer.installed();
+            let mut versions = ctx.setup.versions(backend).await;
+            for choice in &mut versions {
+                choice.installed = installed.engines.contains_key(&choice.engine);
+            }
+            Ok(Response::SetupVersions { versions })
+        }
         Request::SetupNetworks { engine } => {
-            return match ctx.setup.networks(&engine).await {
-                Some(networks) => Ok(Response::SetupNetworks { networks }),
-                None => Err(unknown_engine(&engine)),
+            let Some(mut networks) = ctx.setup.networks(&engine).await else {
+                return Err(unknown_engine(&engine));
             };
+            let installed = ctx.installer.installed();
+            for choice in networks.networks.iter_mut().chain(networks.human.as_mut()) {
+                choice.installed = installed.networks.contains_key(&choice.network);
+            }
+            Ok(Response::SetupNetworks { networks })
         }
         Request::SetupLicences { engine } => return setup_licences(ctx, &engine),
         Request::SetupInstall {
@@ -339,6 +348,7 @@ mod tests {
     use aji_engine::EngineState;
     use aji_manager::install::{
         EngineSet, FailureCode, InstalledEngine, InstalledNetwork, JobOutcome, engine_files,
+        save_installed,
     };
     use aji_manager::manifest::Backend;
 
@@ -732,6 +742,74 @@ mod tests {
         };
         assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].version, "1.18.2");
+    }
+
+    async fn metal_versions(ctx: &AppContext) -> Vec<aji_manager::recommend::EngineVersionChoice> {
+        let Ok(Response::SetupVersions { versions }) = handle(
+            ctx,
+            Request::SetupVersions {
+                backend: Backend::Metal,
+            },
+        )
+        .await
+        else {
+            panic!("expected setupVersions");
+        };
+        versions
+    }
+
+    #[tokio::test]
+    async fn setup_lists_mark_what_is_already_downloaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        let engine = metal_versions(&ctx).await[0].engine.clone();
+        let Ok(Response::SetupNetworks { networks }) = handle(
+            &ctx,
+            Request::SetupNetworks {
+                engine: engine.clone(),
+            },
+        )
+        .await
+        else {
+            panic!("expected setupNetworks");
+        };
+        assert!(networks.networks.len() > 1);
+        assert!(networks.networks.iter().all(|n| !n.installed));
+        let network = networks.networks[1].network.clone();
+
+        let root = InstallRoot::new(dir.path().join("data"));
+        let mut installed = Installed::default();
+        installed.engines.insert(
+            engine.clone(),
+            InstalledEngine {
+                backend: Backend::Metal,
+                version: "1.18.2".into(),
+                binary: "katago".into(),
+            },
+        );
+        installed.networks.insert(
+            network.clone(),
+            InstalledNetwork {
+                file: format!("{network}.bin.gz"),
+                name: network.clone(),
+                imported: false,
+            },
+        );
+        save_installed(&root.record_file(), &installed).unwrap();
+
+        assert!(metal_versions(&ctx).await[0].installed);
+        let Ok(Response::SetupNetworks { networks }) =
+            handle(&ctx, Request::SetupNetworks { engine }).await
+        else {
+            panic!("expected setupNetworks");
+        };
+        let marked: Vec<&str> = networks
+            .networks
+            .iter()
+            .filter(|n| n.installed)
+            .map(|n| n.network.as_str())
+            .collect();
+        assert_eq!(marked, [network.as_str()]);
     }
 
     #[tokio::test]

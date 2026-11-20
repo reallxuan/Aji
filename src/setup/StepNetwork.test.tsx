@@ -1,7 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Response } from '../transport/generated/Response';
-import { renderSetup, setupTransport } from './testing';
+import { networks, renderSetup, setupTransport } from './testing';
 import { useWizardStore } from './wizardStore';
 
 const atNetwork = {
@@ -28,6 +28,22 @@ describe('StepNetwork', () => {
     });
   });
 
+  it('marks a network that is already downloaded', async () => {
+    const transport = setupTransport({
+      setupNetworks: () => ({
+        type: 'setupNetworks',
+        networks: {
+          ...networks,
+          networks: networks.networks.map((n, i) => ({ ...n, installed: i === 1 })),
+        },
+      }),
+    });
+    renderSetup(transport, atNetwork);
+    const radios = await screen.findAllByRole('radio');
+    expect(radios[1].closest('label')).toHaveTextContent('已下载');
+    expect(radios[0].closest('label')).not.toHaveTextContent('已下载');
+  });
+
   it('shows Elo as a whole number, as the mockup does', async () => {
     const transport = setupTransport({
       setupNetworks: () => ({
@@ -40,6 +56,7 @@ describe('StepNetwork', () => {
               elo: 14638.2,
               uploaded: '2026-11-01',
               sizeBytes: 1,
+              installed: false,
             },
           ],
           preselected: 'kata1-tf3',

@@ -17,6 +17,7 @@ import type { HardwareReport } from '../transport/generated/HardwareReport';
 import type { JobOutcome } from '../transport/generated/JobOutcome';
 import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import type { LicenceInfo } from '../transport/generated/LicenceInfo';
+import type { NetworkChoice } from '../transport/generated/NetworkChoice';
 import type { NetworkList } from '../transport/generated/NetworkList';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
@@ -130,6 +131,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 9_825_374,
       runtimeBytes: CUDA_RUNTIME,
       latest: true,
+      installed: false,
     },
     {
       engine: 'katago-v1.18.1-cuda13.2-cudnn9.24.0-windows-x64',
@@ -138,6 +140,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 9_784_089,
       runtimeBytes: CUDA_RUNTIME,
       latest: false,
+      installed: false,
     },
   ],
   directml: [
@@ -148,6 +151,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 23_584_379,
       runtimeBytes: null,
       latest: true,
+      installed: false,
     },
   ],
   opencl: [
@@ -158,6 +162,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 6_004_137,
       runtimeBytes: null,
       latest: true,
+      installed: false,
     },
   ],
   eigenavx2: [
@@ -168,6 +173,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 5_899_607,
       runtimeBytes: null,
       latest: true,
+      installed: false,
     },
   ],
   metal: [
@@ -178,6 +184,7 @@ const VERSIONS: Partial<Record<Backend, EngineVersionChoice[]>> = {
       downloadBytes: 3_934_477,
       runtimeBytes: null,
       latest: true,
+      installed: false,
     },
   ],
 };
@@ -188,6 +195,7 @@ const network = (id: string, elo: number | null, uploaded: string, sizeBytes: nu
   elo,
   uploaded,
   sizeBytes,
+  installed: false,
 });
 
 const NETWORKS: NetworkList = {
@@ -526,10 +534,23 @@ export function scenarioTransport(
           type: 'setupBackends',
           recommendation: script.recommendation(hardware, refreshed),
         };
-      case 'setupVersions':
-        return { type: 'setupVersions', versions: VERSIONS[request.backend] ?? [] };
-      case 'setupNetworks':
-        return { type: 'setupNetworks', networks: NETWORKS };
+      case 'setupVersions': {
+        // What an earlier install in this scenario downloaded is marked, as the service does.
+        const versions = (VERSIONS[request.backend] ?? []).map((v) => ({
+          ...v,
+          installed: installed.has(v.engine),
+        }));
+        return { type: 'setupVersions', versions };
+      }
+      case 'setupNetworks': {
+        const mark = (n: NetworkChoice) => ({ ...n, installed: installed.has(n.network) });
+        const networks = {
+          ...NETWORKS,
+          networks: NETWORKS.networks.map(mark),
+          human: NETWORKS.human && mark(NETWORKS.human),
+        };
+        return { type: 'setupNetworks', networks };
+      }
       case 'setupLicences':
         return {
           type: 'setupLicences',
