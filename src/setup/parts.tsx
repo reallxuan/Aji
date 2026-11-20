@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import type { BenchmarkProgress } from '../transport/generated/BenchmarkProgress';
 import type { TaskRow } from '../transport/generated/TaskRow';
 import { toTransportError } from '../transport/transport';
 import { formatBytes } from './format';
@@ -134,13 +135,48 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry(): void 
 }
 
 /** The install tasks, one row each, as the job snapshot reports them (mockup setup-5). */
-export function TaskRows({ tasks }: { tasks: TaskRow[] }) {
+export function TaskRows({
+  tasks,
+  benchmark = null,
+}: {
+  tasks: TaskRow[];
+  /** The job's benchmark progress, shown under the benchmark row while it runs. */
+  benchmark?: BenchmarkProgress | null;
+}) {
   return (
     <ul className="border-t border-hairline">
       {tasks.map((row) => (
-        <TaskRowView key={row.task} row={row} />
+        <TaskRowView key={row.task} row={row} benchmark={benchmark} />
       ))}
     </ul>
+  );
+}
+
+/**
+ * What the benchmark is doing: starting KataGo and loading the network until the first count
+ * begins, then the count under test, with a line for each count already measured.
+ */
+function BenchmarkLines({ progress }: { progress: BenchmarkProgress | null }) {
+  const { t } = useTranslation();
+  const tested = progress?.tested ?? [];
+  const stage =
+    progress?.testing != null
+      ? t('setup.install.benchmark.testing', { threads: progress.testing })
+      : tested.length > 0
+        ? t('setup.install.benchmark.choosing')
+        : t('setup.install.benchmark.starting');
+  return (
+    <div className="mt-1.5 ml-7 text-[12px] text-text-muted tabular-nums">
+      <p>{stage}</p>
+      {tested.map((speed) => (
+        <p key={speed.threads}>
+          {t('setup.install.benchmark.result', {
+            threads: speed.threads,
+            speed: Math.round(speed.visitsPerSecond),
+          })}
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -183,7 +219,7 @@ function TransferLine({ done, total }: { done: number; total: number }) {
   return <p className="mt-1.5 ml-7 text-[12px] text-text-muted tabular-nums">{text}</p>;
 }
 
-function TaskRowView({ row }: { row: TaskRow }) {
+function TaskRowView({ row, benchmark }: { row: TaskRow; benchmark: BenchmarkProgress | null }) {
   const { t } = useTranslation();
   const label = t(`setup.install.tasks.${row.task}`);
   const state = row.state;
@@ -212,6 +248,7 @@ function TaskRowView({ row }: { row: TaskRow }) {
           <div className="h-full bg-text" style={{ width: `${percent ?? 0}%` }} />
         </div>
         {DOWNLOADS.has(row.task) && <TransferLine done={state.done} total={state.total} />}
+        {row.task === 'benchmark' && <BenchmarkLines progress={benchmark} />}
       </li>
     );
   }

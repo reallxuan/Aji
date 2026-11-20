@@ -810,6 +810,37 @@ async fn an_imported_network_can_be_installed_with() {
 }
 
 #[tokio::test]
+async fn the_benchmark_reports_its_progress() {
+    let w = world(Spec::default());
+    let job = w.install(OPENCL).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    let snapshots = w.snapshots.lock().unwrap().clone();
+    // The OpenCL plan: 8, 16 and 32 threads, 5 positions each. The fake KataGo writes each
+    // count's lines at once, so which count is under test is pinned by the unit tests on a
+    // real recording; here the progress reaches the snapshots while the row runs.
+    // The row counts positions across all the counts, so its bar moves during the run.
+    assert!(
+        snapshots.iter().any(|s| matches!(
+            state_of(s, TaskKind::Benchmark),
+            Some(TaskState::Running { done, total: 15 }) if done > 0
+        )),
+        "{snapshots:#?}"
+    );
+    let last = snapshots
+        .iter()
+        .rev()
+        .find_map(|s| s.benchmark.clone())
+        .expect("benchmark progress");
+    assert_eq!(last.testing, None);
+    let tested: Vec<(u32, f64)> = last
+        .tested
+        .iter()
+        .map(|s| (s.threads, s.visits_per_second))
+        .collect();
+    assert_eq!(tested, [(8, 100.0), (16, 180.0), (32, 185.0)]);
+}
+
+#[tokio::test]
 async fn progress_is_throttled_and_ends_with_the_outcome() {
     let w = world(Spec {
         progress_every: Duration::from_secs(3600),

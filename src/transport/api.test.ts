@@ -84,6 +84,7 @@ describe('M5 helpers', () => {
     network: 'n',
     tasks: [],
     outcome: null,
+    benchmark: null,
   } as const;
 
   function answering(): { t: ReturnType<typeof createFakeTransport>; sent: unknown[] } {

@@ -13,6 +13,7 @@ const job = (outcome: JobSnapshot['outcome']): JobSnapshot => ({
   network: 'n',
   tasks: [],
   outcome,
+  benchmark: null,
 });
 
 describe('panelMode (M5 design 5.1)', () => {

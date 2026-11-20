@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use aji_engine::{
     EngineFiles, RunLimits, RunOutput, katago_benchmark_launch, katago_launch, run_to_end,
+    run_to_end_watching,
 };
 use tokio::time::Instant;
 
@@ -173,6 +174,20 @@ async fn run_to_end_collects_benchmark_output() {
         output.stdout.contains('\r'),
         "progress lines keep their \\r"
     );
+}
+
+#[tokio::test]
+async fn run_to_end_watching_sees_stdout_as_it_arrives() {
+    let install = Install::new("benchmark", BENCHMARK_CONFIG);
+    let spec = katago_benchmark_launch(&install.files, 100, 5, &[8, 16]);
+    let mut seen = Vec::new();
+    let output = run_to_end_watching(spec, limits(Duration::from_secs(10)), &mut |chunk| {
+        seen.extend_from_slice(chunk)
+    })
+    .await
+    .unwrap();
+    assert_eq!(output.exit.code, Some(0), "{output:?}");
+    assert_eq!(String::from_utf8(seen).unwrap(), output.stdout);
 }
 
 #[tokio::test]

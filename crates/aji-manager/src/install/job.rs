@@ -17,12 +17,12 @@ use ts_rs::TS;
 
 use super::unused::{ActiveSummary, RemoveError};
 use super::{
-    DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader, EngineSet,
-    FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed, InstalledEngine,
-    InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, UnpackError, analysis_config,
-    benchmark_config, benchmark_plan, check_space, choose_threads, engine_files, extract_size,
-    load_installed, run_benchmark, run_test_query, runtime_is_complete, unpack_engine,
-    unpack_runtime, update_installed,
+    BenchmarkProgress, DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader,
+    EngineSet, FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed,
+    InstalledEngine, InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, UnpackError,
+    analysis_config, benchmark_config, benchmark_plan, check_space, choose_threads, engine_files,
+    extract_size, load_installed, run_benchmark, run_test_query, runtime_is_complete,
+    unpack_engine, unpack_runtime, update_installed,
 };
 use crate::atomic::write_atomically;
 use crate::manifest::{self, Backend, Network, Platform, Runtime, archive_file_name};
@@ -96,6 +96,8 @@ pub struct JobSnapshot {
     pub network: String,
     pub tasks: Vec<TaskRow>,
     pub outcome: Option<JobOutcome>,
+    /// Where the benchmark is, once it has started: the count under test and those measured.
+    pub benchmark: Option<Box<BenchmarkProgress>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -126,7 +128,8 @@ pub enum TaskKind {
 #[ts(export)]
 pub enum TaskState {
     Waiting,
-    /// Bytes for downloads, thread counts for the benchmark, 0 of 1 for the test query.
+    /// Bytes for downloads, positions across every thread count for the benchmark, 0 of 1 for
+    /// the test query.
     Running {
         #[ts(type = "number")]
         done: u64,
@@ -383,6 +386,7 @@ impl Installer {
                 network: network.id().to_string(),
                 tasks: rows(runtime.is_some()),
                 outcome: None,
+                benchmark: None,
             };
             jobs.current = Some(Current {
                 snapshot: snapshot.clone(),
@@ -864,14 +868,10 @@ impl Installer {
         let installed = self.installed();
         let cores = self.setup.hardware().await.cpu.cores;
         let plan = benchmark_plan(job.engine.backend, cores);
-        let counts = plan.threads.len() as u64;
-        self.set_row(
-            TaskKind::Benchmark,
-            TaskState::Running {
-                done: 0,
-                total: counts,
-            },
-        );
+        // Positions across every count, so the bar moves while KataGo measures.
+        let positions = u64::from(plan.positions);
+        let total = plan.threads.len() as u64 * positions;
+        self.set_row(TaskKind::Benchmark, TaskState::Running { done: 0, total });
         let fail = |task: TaskKind, failure: FailureCode, line: String| {
             Stop::failed(failure, line, true, Some(task))
         };
@@ -895,10 +895,12 @@ impl Installer {
         };
         let files = engine_files(&self.root, &installed, &set)
             .ok_or_else(|| unrecorded(TaskKind::Benchmark))?;
+        let mut on_progress =
+            |progress: BenchmarkProgress| self.benchmark_progress(progress, positions, total);
         let speeds = tokio::select! {
             biased;
             () = job.cancel.cancelled() => return Err(Stop::Cancelled),
-            result = run_benchmark(&files, &plan, self.options.benchmark_stall) => {
+            result = run_benchmark(&files, &plan, self.options.benchmark_stall, &mut on_progress) => {
                 result.map_err(|f| Stop::Failed {
                     failure: f.code,
                     stderr_tail: f.stderr_tail,
@@ -1083,6 +1085,40 @@ impl Installer {
     /// Bytes or counts done: reported at most once per `progress_every`.
     fn progress(&self, task: TaskKind, done: u64, total: u64) {
         self.update(task, TaskState::Running { done, total }, false);
+    }
+
+    /// The benchmark's progress and its row. A new count under test, or a new result, always
+    /// goes out; positions within a count follow `progress_every`.
+    fn benchmark_progress(&self, progress: BenchmarkProgress, positions: u64, total: u64) {
+        let done = (progress.tested.len() as u64 * positions + u64::from(progress.positions_done))
+            .min(total);
+        let emit = {
+            let mut jobs = lock(&self.jobs);
+            let Some(current) = jobs.current.as_mut() else {
+                return;
+            };
+            let snapshot = &mut current.snapshot;
+            // A new count under test, or a count just measured, is a change of stage.
+            let always = snapshot
+                .benchmark
+                .as_ref()
+                .is_none_or(|b| b.testing != progress.testing || b.tested != progress.tested);
+            if let Some(row) = snapshot
+                .tasks
+                .iter_mut()
+                .find(|r| r.task == TaskKind::Benchmark)
+            {
+                row.state = TaskState::Running { done, total };
+            }
+            snapshot.benchmark = Some(Box::new(progress));
+            current
+                .throttle
+                .admit(Instant::now(), always)
+                .then(|| current.snapshot.clone())
+        };
+        if let Some(snapshot) = emit {
+            (self.on_progress)(snapshot);
+        }
     }
 
     fn update(&self, task: TaskKind, state: TaskState, always: bool) {

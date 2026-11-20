@@ -412,6 +412,7 @@ export function scenarioTransport(
       network: networkId,
       tasks: kinds.map((task) => ({ task, state: { state: 'waiting' } })),
       outcome: null,
+      benchmark: null,
     };
     publish();
 
@@ -424,8 +425,35 @@ export function scenarioTransport(
         steps.push(() => (row().state = { state: 'reused' }));
         continue;
       }
-      for (const done of [0, 25, 50, 75]) {
-        steps.push(() => (row().state = { state: 'running', done, total: 100 }));
+      if (task === 'benchmark') {
+        // As the real benchmark reports it: starting, then each thread count, 5 positions each.
+        const speeds = [
+          { threads: 8, visitsPerSecond: 412.6 },
+          { threads: 16, visitsPerSecond: 598.1 },
+          { threads: 32, visitsPerSecond: 611.9 },
+        ];
+        steps.push(() => {
+          row().state = { state: 'running', done: 0, total: 15 };
+          job!.benchmark = { testing: null, positionsDone: 0, tested: [] };
+        });
+        for (const [n, speed] of speeds.entries()) {
+          for (const positionsDone of [0, 3]) {
+            steps.push(() => {
+              row().state = { state: 'running', done: n * 5 + positionsDone, total: 15 };
+              job!.benchmark = {
+                testing: speed.threads,
+                positionsDone,
+                tested: speeds.slice(0, n),
+              };
+            });
+          }
+        }
+      } else {
+        // Downloads count bytes, so the line under the bar shows sizes and a speed.
+        const total = 240 * 1024 * 1024;
+        for (const share of [0, 0.25, 0.5, 0.75]) {
+          steps.push(() => (row().state = { state: 'running', done: total * share, total }));
+        }
       }
       if (failure?.task === task) {
         steps.push(() => {

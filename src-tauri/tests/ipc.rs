@@ -227,6 +227,7 @@ fn setup_progress_events_reach_the_webview_channel() {
         network: "n".into(),
         tasks: vec![],
         outcome: None,
+        benchmark: None,
     };
     TauriEventSink(app.handle().clone()).emit(AppEvent::SetupProgress { job });
     let payloads = received.lock().unwrap();

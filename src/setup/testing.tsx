@@ -144,6 +144,7 @@ export const runningJob: JobSnapshot = {
     { task: 'testQuery', state: { state: 'waiting' } },
   ],
   outcome: null,
+  benchmark: null,
 };
 
 const failedTasks: JobSnapshot['tasks'] = [

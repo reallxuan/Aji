@@ -55,7 +55,7 @@ export function StepInstall() {
   if (job?.outcome?.outcome === 'cancelled') {
     return (
       <StepLayout title={t('setup.install.cancelled')} actions={retryActions}>
-        <TaskRows tasks={job.tasks} />
+        <TaskRows tasks={job.tasks} benchmark={job.benchmark} />
       </StepLayout>
     );
   }
@@ -91,7 +91,7 @@ export function StepInstall() {
         </Button>
       }
     >
-      <TaskRows tasks={job?.tasks ?? PENDING} />
+      <TaskRows tasks={job?.tasks ?? PENDING} benchmark={job?.benchmark} />
     </StepLayout>
   );
 }

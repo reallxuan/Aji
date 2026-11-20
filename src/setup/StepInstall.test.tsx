@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Response } from '../transport/generated/Response';
+import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import { chosen, renderSetup, runningJob, setupTransport } from './testing';
 import { useWizardStore } from './wizardStore';
 
@@ -61,6 +62,40 @@ describe('StepInstall', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('says what the benchmark is doing: starting, then each thread count and its result', () => {
+    const benchmarking = (done: number, benchmark: JobSnapshot['benchmark']): JobSnapshot => ({
+      ...runningJob,
+      tasks: runningJob.tasks.map((task) =>
+        task.task === 'benchmark'
+          ? { task: 'benchmark', state: { state: 'running', done, total: 15 } }
+          : task.task === 'testQuery'
+            ? task
+            : { task: task.task, state: { state: 'done' } },
+      ),
+      benchmark,
+    });
+    renderSetup(setupTransport(), {
+      step: 'install',
+      ...chosen,
+      job: benchmarking(0, { testing: null, positionsDone: 0, tested: [] }),
+    });
+    expect(within(row('测速')).getByText('正在启动 KataGo，加载权重')).toBeInTheDocument();
+
+    act(() =>
+      useWizardStore.setState({
+        job: benchmarking(7, {
+          testing: 16,
+          positionsDone: 2,
+          tested: [{ threads: 8, visitsPerSecond: 100.4 }],
+        }),
+      }),
+    );
+    const benchmark = row('测速');
+    expect(within(benchmark).getByText('正在测试 16 个搜索线程')).toBeInTheDocument();
+    expect(within(benchmark).getByText('8 个线程：100 次/秒')).toBeInTheDocument();
+    expect(within(benchmark).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '46');
   });
 
   it('offers only Cancel while the job runs, and Cancel sends setupCancel', async () => {

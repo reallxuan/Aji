@@ -18,7 +18,7 @@ pub use cache::*;
 pub use engine::*;
 pub use process::{
     EngineFiles, LaunchSpec, MAX_RUN_STDOUT, RunLimits, RunOutput, katago_benchmark_launch,
-    katago_launch, run_to_end,
+    katago_launch, run_to_end, run_to_end_watching,
 };
 pub use query::*;
 pub use response::*;

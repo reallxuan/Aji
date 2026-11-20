@@ -57,8 +57,9 @@ pub struct InstalledNetwork {
     pub imported: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct ThreadSpeed {
     pub threads: u32,
     pub visits_per_second: f64,
