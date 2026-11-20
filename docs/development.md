@@ -272,3 +272,13 @@ Options:
   PC's recommendation can be checked on another machine. Give at most one of the two options.
 
 The program keeps no cache: it uses a temporary folder that it removes at the end.
+
+## SGF fixtures
+
+`crates/aji-core/tests/fixtures/sgf/` holds the game records the SGF tests read. `SOURCES.md` there says where each file comes from. Five are public-domain Samsung Cup finals; the rest are written by `make.py` from one of them:
+
+```bash
+python3 -I crates/aji-core/tests/fixtures/sgf/make.py
+```
+
+Run it after changing `make.py`, then `cargo test -p aji-core --test sgf_fixtures`. The tests check that every fixture opens or fails as it should, that names in every encoding read correctly, and that saving a saved file gives the same bytes.
