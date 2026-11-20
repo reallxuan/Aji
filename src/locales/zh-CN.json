@@ -132,6 +132,39 @@
       "import": "导入权重文件",
       "imported": "已导入",
       "start": "开始安装"
+    },
+    "licence": {
+      "title": "需要接受许可协议",
+      "intro": "以下组件由 NVIDIA 提供，从 NVIDIA 的服务器下载。",
+      "view": "查看",
+      "accept": "我已年满法定年龄，并接受以上 NVIDIA 许可条款",
+      "acceptInstall": "接受并安装",
+      "decline": "不接受"
+    },
+    "install": {
+      "tasks": {
+        "engine": "KataGo 引擎",
+        "runtime": "运行库",
+        "network": "权重",
+        "benchmark": "测速",
+        "testQuery": "试算一步"
+      },
+      "done": "完成",
+      "reused": "已有",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "notFinished": "安装没有完成",
+      "backendFailed": "{{backend}} 无法使用",
+      "lastOutput": "KataGo 最后的输出",
+      "back": "返回",
+      "backToBackends": "返回选择后端",
+      "switchTo": "改用 {{backend}}（{{size}}）",
+      "offer": "可以改用 {{backend}}，需要再下载 {{size}}，已下载的权重会保留。",
+      "driver": "当前驱动 {{current}}，CUDA 需要 {{required}} 或更新版本。",
+      "driverUnknown": "无法读取当前驱动版本，CUDA 需要 {{required}} 或更新版本。",
+      "downloadDriver": "下载 NVIDIA 驱动",
+      "retryReuses": "更新驱动后点“重试”，已下载的文件不会重新下载。",
+      "startFailed": "安装无法开始：{{reason}}"
     }
   },
   "common": {

@@ -8,11 +8,13 @@ import { EngineStatus } from './panel/EngineStatus';
 import { VersionLine } from './panel/VersionLine';
 import { useSettingsSync } from './settings/useSettingsSync';
 import { SetupPanel } from './setup/SetupPanel';
+import { useSetupProgress } from './setup/useSetupProgress';
 import { useWizardStore } from './setup/wizardStore';
 
 export default function App() {
   useSettingsSync();
   useEngineSync();
+  useSetupProgress();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);
   const dismissed = useWizardStore((s) => s.dismissed);

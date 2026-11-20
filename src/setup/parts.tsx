@@ -1,9 +1,10 @@
 import { cn } from 'cn';
-import { CheckIcon, LoaderCircleIcon } from 'lucide-react';
+import { CheckIcon, LoaderCircleIcon, XIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import type { TaskRow } from '../transport/generated/TaskRow';
 import { toTransportError } from '../transport/transport';
 import { useWizardStore } from './wizardStore';
 
@@ -11,11 +12,14 @@ import { useWizardStore } from './wizardStore';
 export function StepLayout({
   title,
   subtitle,
+  left,
   actions,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** The footer's left side: "set up later" unless given, nothing when `false`. */
+  left?: ReactNode | false;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
@@ -27,7 +31,7 @@ export function StepLayout({
         <div className="mt-5">{children}</div>
       </div>
       <footer className="flex items-center gap-2 border-t border-hairline px-7 py-4">
-        <LaterButton />
+        {left === undefined ? <LaterButton /> : left}
         <div className="ml-auto flex items-center gap-2">{actions}</div>
       </footer>
     </>
@@ -35,7 +39,7 @@ export function StepLayout({
 }
 
 /** "Set up later" on a first run, "Cancel" on a re-run: both close the wizard for this run. */
-function LaterButton() {
+export function LaterButton() {
   const { t } = useTranslation();
   const rerun = useWizardStore((s) => s.rerun);
   return (
@@ -124,5 +128,77 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry(): void 
         {t('setup.retry')}
       </Button>
     </div>
+  );
+}
+
+/** The install tasks, one row each, as the job snapshot reports them (mockup setup-5). */
+export function TaskRows({ tasks }: { tasks: TaskRow[] }) {
+  return (
+    <ul className="border-t border-hairline">
+      {tasks.map((row) => (
+        <TaskRowView key={row.task} row={row} />
+      ))}
+    </ul>
+  );
+}
+
+function TaskRowView({ row }: { row: TaskRow }) {
+  const { t } = useTranslation();
+  const label = t(`setup.install.tasks.${row.task}`);
+  const state = row.state;
+  const line = 'flex items-center gap-3 py-3.5 text-[14px]';
+
+  if (state.state === 'running') {
+    const percent =
+      state.total > 0 ? Math.min(100, Math.floor((state.done * 100) / state.total)) : null;
+    return (
+      <li className="border-b border-hairline pb-3">
+        <div className={line}>
+          <LoaderCircleIcon className="size-4 animate-spin text-text-muted" aria-hidden />
+          <span className="font-medium">{label}</span>
+          {percent !== null && (
+            <span className="ml-auto font-medium tabular-nums">{`${percent}%`}</span>
+          )}
+        </div>
+        <div
+          role="progressbar"
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent ?? undefined}
+          className="ml-7 h-0.5 overflow-hidden rounded-full bg-hairline"
+        >
+          <div className="h-full bg-text" style={{ width: `${percent ?? 0}%` }} />
+        </div>
+      </li>
+    );
+  }
+  if (state.state === 'failed') {
+    return (
+      <li className={cn(line, 'border-b border-hairline text-engine-error')}>
+        <XIcon className="size-4" aria-hidden />
+        <span>{label}</span>
+        <span className="ml-auto text-[13px] text-engine-error">{t('setup.install.failed')}</span>
+      </li>
+    );
+  }
+  if (state.state === 'done' || state.state === 'reused') {
+    return (
+      <li className={cn(line, 'border-b border-hairline')}>
+        <CheckIcon className="size-4 text-text-muted" aria-hidden />
+        <span>{label}</span>
+        <span className="ml-auto text-[13px] text-text-muted">
+          {t(state.state === 'done' ? 'setup.install.done' : 'setup.install.reused')}
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className={cn(line, 'border-b border-hairline text-text-muted')}>
+      <span className="flex size-4 items-center justify-center" aria-hidden>
+        <span className="size-1 rounded-full bg-text-muted" />
+      </span>
+      <span>{label}</span>
+    </li>
   );
 }

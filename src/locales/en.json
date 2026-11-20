@@ -132,6 +132,39 @@
       "import": "Import network file",
       "imported": "Imported",
       "start": "Start install"
+    },
+    "licence": {
+      "title": "Licence agreements needed",
+      "intro": "These components come from NVIDIA and download from NVIDIA's servers.",
+      "view": "View",
+      "accept": "I am of legal age and accept the NVIDIA licence terms above",
+      "acceptInstall": "Accept and install",
+      "decline": "Decline"
+    },
+    "install": {
+      "tasks": {
+        "engine": "KataGo engine",
+        "runtime": "Runtime",
+        "network": "Network",
+        "benchmark": "Benchmark",
+        "testQuery": "Test query"
+      },
+      "done": "Done",
+      "reused": "Already there",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "notFinished": "The install did not finish",
+      "backendFailed": "{{backend}} cannot be used",
+      "lastOutput": "KataGo's last output",
+      "back": "Back",
+      "backToBackends": "Back to backends",
+      "switchTo": "Use {{backend}} ({{size}})",
+      "offer": "You can use {{backend}} instead: {{size}} more to download, and the network already downloaded is kept.",
+      "driver": "The current driver is {{current}}; CUDA needs {{required}} or newer.",
+      "driverUnknown": "The current driver version could not be read; CUDA needs {{required}} or newer.",
+      "downloadDriver": "Download the NVIDIA driver",
+      "retryReuses": "After updating the driver, press Retry; files already downloaded are not downloaded again.",
+      "startFailed": "The install could not start: {{reason}}"
     }
   },
   "common": {

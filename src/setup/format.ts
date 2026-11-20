@@ -12,6 +12,7 @@ export function formatBytes(bytes: number, locale: string): string {
   const text = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,
+    useGrouping: false,
   }).format(value);
   return `${text} ${UNITS[unit]}`;
 }

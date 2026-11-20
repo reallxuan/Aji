@@ -4,9 +4,10 @@ import type { Language } from '../i18n/language';
 import { useSettingsStore } from '../settings/settingsStore';
 import { getSettings } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
-import { StepLayout } from './parts';
 import { StepBackend } from './StepBackend';
 import { StepDetect } from './StepDetect';
+import { StepInstall } from './StepInstall';
+import { StepLicence } from './StepLicence';
 import { StepNetwork } from './StepNetwork';
 import { StepVersion } from './StepVersion';
 import { useWizardStore, type WizardStep } from './wizardStore';
@@ -37,9 +38,8 @@ export function SetupPanel() {
       {step === 'backend' && <StepBackend />}
       {step === 'version' && <StepVersion />}
       {step === 'network' && <StepNetwork />}
-      {(step === 'licence' || step === 'install') && (
-        <StepLayout title={t('setup.steps.install')} />
-      )}
+      {step === 'licence' && <StepLicence />}
+      {step === 'install' && <StepInstall />}
     </div>
   );
 }
