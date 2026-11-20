@@ -67,3 +67,24 @@ describe('useSettingsSync', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 });
+
+describe('useSettingsSync before the settings arrive', () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ settings: null });
+    systemPrefersDark();
+  });
+
+  it('keeps the language the app started with', async () => {
+    const transport = createFakeTransport(() => new Promise<never>(() => {}));
+    const i18n = createI18n('zh-CN');
+    render(
+      <I18nextProvider i18n={i18n}>
+        <TransportProvider transport={transport}>
+          <Probe />
+        </TransportProvider>
+      </I18nextProvider>,
+    );
+    await act(async () => {});
+    expect(screen.getByText('KataGo 已就绪。')).toBeInTheDocument();
+  });
+});

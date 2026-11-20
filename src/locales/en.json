@@ -67,9 +67,79 @@
       "timedOut": "KataGo took too long to answer.",
       "crashed": "KataGo stopped with an error.",
       "diskError": "Aji could not write to its own folder. Check that the disk is not full and that Aji may write there."
+    },
+    "title": "Prepare the AI engine",
+    "later": "Set up later",
+    "cancel": "Cancel",
+    "next": "Next",
+    "back": "Back",
+    "retry": "Retry",
+    "loadFailed": "The list could not be loaded: {{reason}}",
+    "steps": {
+      "detect": "Detecting hardware",
+      "backend": "Choose a backend",
+      "version": "Choose a KataGo version",
+      "network": "Choose a network",
+      "install": "Installing"
+    },
+    "detect": {
+      "gpu": "Graphics",
+      "gpuMemory": "Video memory",
+      "memory": "Memory",
+      "system": "System",
+      "driver": "Driver",
+      "detecting": "Detecting",
+      "notFound": "Not found",
+      "driverBuiltIn": "Included with the system",
+      "done": "Done"
+    },
+    "backend": {
+      "names": {
+        "cuda": "CUDA",
+        "directml": "DirectML",
+        "openvino": "OpenVINO",
+        "rocm": "ROCm",
+        "opencl": "OpenCL",
+        "metal": "Metal",
+        "eigenavx2": "CPU (AVX2)",
+        "eigen": "CPU"
+      },
+      "tags": {
+        "fastest": "Fastest",
+        "noRuntimeDownload": "No runtime download",
+        "mostCompatible": "Most compatible",
+        "slowest": "Slowest",
+        "mostCompatibleSlowest": "Most compatible, slowest",
+        "cpuOnly": "Processor only",
+        "needsDriver": "Needs a driver update"
+      },
+      "driverAdvice": "The current driver is {{current}}; CUDA needs {{required}} or newer.",
+      "driverUnknown": "The current driver version could not be read; CUDA needs {{required}} or newer.",
+      "downloadDriver": "Download driver",
+      "detectAgain": "Detect again",
+      "unsupported": "Aji has no KataGo build for this system."
+    },
+    "version": {
+      "latest": "Latest",
+      "columnVersion": "Version",
+      "columnReleased": "Released"
+    },
+    "network": {
+      "columnIndex": "#",
+      "columnName": "Name",
+      "columnElo": "Elo",
+      "columnReleased": "Released",
+      "import": "Import network file",
+      "imported": "Imported",
+      "start": "Start install"
     }
   },
   "common": {
     "close": "Close"
+  },
+  "languageName": {
+    "zh": "中文",
+    "en": "English",
+    "enShort": "EN"
   }
 }

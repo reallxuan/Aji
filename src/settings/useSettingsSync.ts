@@ -8,12 +8,12 @@ import { useSettingsStore } from './settingsStore';
 
 /**
  * Loads the stored settings, follows `settingsChanged`, and keeps the interface language and the
- * theme in step with them. Until the settings arrive, both follow the system.
+ * theme in step with them. Until the settings arrive, both stay as main.tsx set them from the system.
  */
 export function useSettingsSync(): void {
   const transport = useTransport();
   const { i18n } = useTranslation();
-  const language = useSettingsStore((state) => state.settings?.language ?? 'system');
+  const language = useSettingsStore((state) => state.settings?.language ?? null);
   const theme = useSettingsStore((state) => state.settings?.theme ?? 'system');
 
   useEffect(() => {
@@ -38,6 +38,8 @@ export function useSettingsSync(): void {
   }, [transport]);
 
   useEffect(() => {
+    // Until the stored preference arrives, the language main.tsx chose from the system stands.
+    if (language === null) return;
     const resolved = resolveLanguage(language, navigator.languages);
     if (i18n.language !== resolved) void i18n.changeLanguage(resolved);
     document.documentElement.lang = resolved;

@@ -44,6 +44,7 @@ export default defineConfig([
               'width',
               'height',
               'data-slot',
+              'role',
               'variant',
               'size',
               'orientation',
