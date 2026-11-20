@@ -68,5 +68,8 @@
       "crashed": "KataGo 出错退出。",
       "diskError": "Aji 无法写入自己的文件夹。请检查磁盘是否已满，以及 Aji 是否有写入权限。"
     }
+  },
+  "common": {
+    "close": "关闭"
   }
 }

@@ -68,5 +68,8 @@
       "crashed": "KataGo stopped with an error.",
       "diskError": "Aji could not write to its own folder. Check that the disk is not full and that Aji may write there."
     }
+  },
+  "common": {
+    "close": "Close"
   }
 }

@@ -4,10 +4,10 @@ import { CandidateList } from './panel/CandidateList';
 import { EngineIndicator } from './panel/EngineIndicator';
 import { EngineStatus } from './panel/EngineStatus';
 import { VersionLine } from './panel/VersionLine';
-import { useThemeSync } from './theme/useThemeSync';
+import { useSettingsSync } from './settings/useSettingsSync';
 
 export default function App() {
-  useThemeSync();
+  useSettingsSync();
   useEngineSync();
   return (
     <MainFrame
