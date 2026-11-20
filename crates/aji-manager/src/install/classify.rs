@@ -21,6 +21,9 @@ pub enum FailureCode {
     LicenceNotAccepted,
     TimedOut,
     Crashed,
+    /// Writing, renaming or creating inside Aji's own folders failed: another backend would
+    /// hit the same disk, so nothing is offered.
+    DiskError,
 }
 
 /// A failed step: its code and the last lines KataGo printed, for display only.
@@ -40,9 +43,14 @@ pub const WINDOWS_DLL_NOT_FOUND: i32 = 0xC000_0135_u32 as i32;
 const PATTERNS: &[(FailureCode, &[&str])] = &[
     // missingLibrary has no text: the OS loader fails before `main` (findings 1). It is the
     // Windows exit code above.
-    // gpuDriverTooOld has none yet: KataGo prints nothing of its own for an old driver
-    // (`cudaandrocmbackend.inc:5099-5102`) and CUDA's text comes from NVIDIA's library. It waits
-    // for a recording.
+    // gpuDriverTooOld: KataGo prints nothing of its own for an old driver
+    // (`cudaandrocmbackend.inc:5099-5102`), but its `CUDA Error, for …` line ends with CUDA's
+    // `cudaGetErrorString`, whose text for `cudaErrorInsufficientDriver` NVIDIA documents in the
+    // CUDA Runtime API. It comes before gpuError, whose `CUDA Error, for ` matches the same line.
+    (
+        FailureCode::GpuDriverTooOld,
+        &["CUDA driver version is insufficient for CUDA runtime version"],
+    ),
     (
         FailureCode::OutOfMemory,
         &[
@@ -160,6 +168,15 @@ mod tests {
     }
 
     #[test]
+    fn insufficient_driver_text_is_gpu_driver_too_old() {
+        let line = "CUDA Error, for cudaMalloc file x.cu, line 1: CUDA driver version is insufficient for CUDA runtime version";
+        assert_eq!(
+            classify(exited(1), &lines(&[line])),
+            FailureCode::GpuDriverTooOld
+        );
+    }
+
+    #[test]
     fn unknown_output_is_crashed() {
         assert_eq!(
             classify(exited(1), &lines(&["something went wrong"])),
@@ -226,11 +243,5 @@ mod tests {
                 );
             }
         }
-        assert!(
-            PATTERNS
-                .iter()
-                .all(|(code, _)| *code != FailureCode::GpuDriverTooOld),
-            "gpuDriverTooOld waits for a recording"
-        );
     }
 }

@@ -64,7 +64,8 @@
       "openclNoDevice": "没有可以通过 OpenCL 使用的显卡。",
       "licenceNotAccepted": "此后端需要的许可协议尚未接受。",
       "timedOut": "KataGo 响应超时。",
-      "crashed": "KataGo 出错退出。"
+      "crashed": "KataGo 出错退出。",
+      "diskError": "Aji 无法写入自己的文件夹。请检查磁盘是否已满，以及 Aji 是否有写入权限。"
     }
   }
 }

@@ -341,12 +341,14 @@ mod tests {
                     name: "EULA".into(),
                     url: "https://example.com/eula".into(),
                     text_sha256: "ab".into(),
+                    components: vec![],
                 }],
                 accepted: vec!["ab".into()],
             })
             .unwrap(),
             json!({"type": "setupLicences", "accepted": ["ab"], "licences": [
-                {"name": "EULA", "url": "https://example.com/eula", "textSha256": "ab"}]})
+                {"name": "EULA", "url": "https://example.com/eula", "textSha256": "ab",
+                 "components": []}]})
         );
         assert_eq!(
             serde_json::to_value(Response::SetupImportNetwork { network: None }).unwrap(),

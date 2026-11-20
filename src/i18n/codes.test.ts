@@ -29,6 +29,7 @@ const FAILURE_CODES: Record<FailureCode, true> = {
   licenceNotAccepted: true,
   timedOut: true,
   crashed: true,
+  diskError: true,
 };
 
 type Tree = { [key: string]: unknown };

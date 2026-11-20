@@ -17,13 +17,14 @@ use ts_rs::TS;
 use super::{
     DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader, EngineSet,
     FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed, InstalledEngine,
-    InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, analysis_config, benchmark_config,
-    benchmark_plan, check_space, choose_threads, engine_files, extract_size, load_installed,
-    run_benchmark, run_test_query, runtime_is_complete, unpack_engine, unpack_runtime,
-    update_installed,
+    InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, UnpackError, analysis_config,
+    benchmark_config, benchmark_plan, check_space, choose_threads, engine_files, extract_size,
+    load_installed, run_benchmark, run_test_query, runtime_is_complete, unpack_engine,
+    unpack_runtime, update_installed,
 };
 use crate::atomic::write_atomically;
 use crate::manifest::{self, Backend, Network, Runtime, archive_file_name};
+use crate::recommend::DriverAdvice;
 use crate::setup::Setup;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +129,8 @@ pub enum TaskState {
         total: u64,
     },
     Done,
+    /// The component was already installed and verified, so nothing was downloaded.
+    Reused,
     Failed {
         failure: FailureCode,
     },
@@ -146,6 +149,8 @@ pub enum JobOutcome {
         failure: FailureCode,
         stderr_tail: Vec<String>,
         offer: Option<FallbackOffer>,
+        /// Set for `gpuDriverTooOld`: the GPU's driver and the runtime's `minDriver`.
+        driver: Option<DriverAdvice>,
     },
     Cancelled,
 }
@@ -170,6 +175,19 @@ pub struct LicenceInfo {
     pub name: String,
     pub url: String,
     pub text_sha256: String,
+    /// What the licence covers, so the user sees each component and its size (R1 section 6).
+    pub components: Vec<LicensedComponent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct LicensedComponent {
+    pub name: String,
+    pub version: String,
+    /// The archive's download size.
+    #[ts(type = "number")]
+    pub bytes: u64,
 }
 
 /// Runs install jobs, one at a time.
@@ -381,20 +399,31 @@ impl Installer {
             return Some(Vec::new());
         };
         let runtime = manifest.runtimes.iter().find(|r| &r.id == runtime)?;
-        let mut seen = BTreeSet::new();
-        Some(
-            runtime
-                .components
-                .iter()
-                .map(|c| &c.licence)
-                .filter(|l| l.requires_acceptance && seen.insert(l.text_sha256.clone()))
-                .map(|l| LicenceInfo {
-                    name: l.name.clone(),
-                    url: l.url.clone(),
-                    text_sha256: l.text_sha256.clone(),
-                })
-                .collect(),
-        )
+        let mut licences: Vec<LicenceInfo> = Vec::new();
+        for c in runtime
+            .components
+            .iter()
+            .filter(|c| c.licence.requires_acceptance)
+        {
+            let component = LicensedComponent {
+                name: c.name.clone(),
+                version: c.version.clone(),
+                bytes: c.archive.size,
+            };
+            match licences
+                .iter_mut()
+                .find(|l| l.text_sha256 == c.licence.text_sha256)
+            {
+                Some(licence) => licence.components.push(component),
+                None => licences.push(LicenceInfo {
+                    name: c.licence.name.clone(),
+                    url: c.licence.url.clone(),
+                    text_sha256: c.licence.text_sha256.clone(),
+                    components: vec![component],
+                }),
+            }
+        }
+        Some(licences)
     }
 
     /// See `import_network`. Blocking: call it off the async runtime.
@@ -439,10 +468,15 @@ impl Installer {
                     true => self.offer_after(job.engine.backend).await,
                     false => None,
                 };
+                let driver = match failure {
+                    FailureCode::GpuDriverTooOld => self.driver_advice(&job).await,
+                    _ => None,
+                };
                 JobOutcome::Failed {
                     failure,
                     stderr_tail,
                     offer,
+                    driver,
                 }
             }
         };
@@ -566,7 +600,7 @@ impl Installer {
     async fn install_engine(&self, job: &Job, installed: &Installed) -> Result<(), Stop> {
         let engine = &job.engine;
         if installed.engines.contains_key(&engine.id) {
-            self.set_row(TaskKind::Engine, TaskState::Done);
+            self.set_row(TaskKind::Engine, TaskState::Reused);
             return Ok(());
         }
         let item = DownloadItem {
@@ -579,18 +613,16 @@ impl Installer {
         let zip = self
             .download(job, TaskKind::Engine, &item, 0, item.size, true)
             .await?;
-        let disk = |line: String| {
-            Stop::failed(
-                FailureCode::UnpackFailed,
-                line,
-                true,
-                Some(TaskKind::Engine),
-            )
-        };
         let (root, id, from) = (self.root.clone(), engine.id.clone(), zip.clone());
         let binary = blocking(move || unpack_engine(&from, &root, &id))
             .await
-            .map_err(|e| disk(format!("aji: cannot unpack {}: {e:?}", item.name)))?;
+            .map_err(|e| {
+                unpack_stop(
+                    &e,
+                    format!("aji: cannot unpack {}: {e:?}", item.name),
+                    Some(TaskKind::Engine),
+                )
+            })?;
         self.write_record(|r| {
             r.engines.insert(
                 engine.id.clone(),
@@ -601,7 +633,7 @@ impl Installer {
                 },
             );
         })
-        .map_err(disk)?;
+        .map_err(|line| disk_stop(line, Some(TaskKind::Engine)))?;
         remove_download(&zip);
         self.set_row(TaskKind::Engine, TaskState::Done);
         Ok(())
@@ -612,7 +644,7 @@ impl Installer {
             return Ok(());
         };
         if installed.runtimes.contains_key(&runtime.id) {
-            self.set_row(TaskKind::Runtime, TaskState::Done);
+            self.set_row(TaskKind::Runtime, TaskState::Reused);
             return Ok(());
         }
         let total = runtime.components.iter().map(|c| c.archive.size).sum();
@@ -662,9 +694,10 @@ impl Installer {
         blocking(move || unpack_runtime(&list, &root, &id))
             .await
             .map_err(|e| {
-                fail(
-                    FailureCode::UnpackFailed,
+                unpack_stop(
+                    &e,
                     format!("aji: cannot unpack {}: {e:?}", runtime.id),
+                    Some(TaskKind::Runtime),
                 )
             })?;
         let names = archives
@@ -676,7 +709,7 @@ impl Installer {
             r.runtimes
                 .insert(runtime.id.clone(), InstalledRuntime { archives: names });
         })
-        .map_err(|line| fail(FailureCode::UnpackFailed, line))?;
+        .map_err(|line| disk_stop(line, Some(TaskKind::Runtime)))?;
         for (zip, _) in &archives {
             remove_download(zip);
         }
@@ -689,7 +722,7 @@ impl Installer {
         let network = match &job.network {
             JobNetwork::Manifest(n) if !installed.networks.contains_key(&n.id) => n,
             _ => {
-                self.set_row(TaskKind::Network, TaskState::Done);
+                self.set_row(TaskKind::Network, TaskState::Reused);
                 return Ok(());
             }
         };
@@ -706,14 +739,7 @@ impl Installer {
         let path = self
             .download(job, TaskKind::Network, &item, 0, item.size, false)
             .await?;
-        let fail = |line: String| {
-            Stop::failed(
-                FailureCode::DownloadFailed,
-                line,
-                false,
-                Some(TaskKind::Network),
-            )
-        };
+        let fail = |line: String| disk_stop(line, Some(TaskKind::Network));
         let dest = self.root.network_file(&network.file.name);
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)
@@ -754,7 +780,7 @@ impl Installer {
         };
         let benchmark_rel = self.root.benchmark_config_rel(engine, network);
         self.write_config(&benchmark_rel, &benchmark_config(&plan, &job.engine.config))
-            .map_err(|line| fail(TaskKind::Benchmark, FailureCode::UnpackFailed, line))?;
+            .map_err(|line| disk_stop(line, Some(TaskKind::Benchmark)))?;
         let mut set = EngineSet {
             engine: engine.to_string(),
             network: network.to_string(),
@@ -794,7 +820,7 @@ impl Installer {
         );
         let config_rel = self.root.config_rel(engine, network);
         self.write_config(&config_rel, &analysis_config(threads, &job.engine.config))
-            .map_err(|line| fail(TaskKind::TestQuery, FailureCode::UnpackFailed, line))?;
+            .map_err(|line| disk_stop(line, Some(TaskKind::TestQuery)))?;
         set.config = slashed(&config_rel);
         set.threads = threads;
         set.benchmark = speeds;
@@ -825,7 +851,7 @@ impl Installer {
                 r.put_set(set.clone());
                 r.active = Some(key);
             })
-            .map_err(|line| Stop::failed(FailureCode::UnpackFailed, line, false, None))?;
+            .map_err(|line| disk_stop(line, None))?;
         match engine_files(&self.root, &record, &set) {
             Some(files) => {
                 if let Err(e) = self.engine.set_files(Some(files)).await {
@@ -898,6 +924,18 @@ impl Installer {
             .map_err(|e| format!("aji: cannot write {}: {e}", path.display()))
     }
 
+    /// The GPU's driver and the job's runtime `minDriver`, when the runtime names one.
+    async fn driver_advice(&self, job: &Job) -> Option<DriverAdvice> {
+        let required = job.runtime.as_ref()?.min_driver.clone()?;
+        let current = self
+            .setup
+            .backends()
+            .await
+            .gpu
+            .and_then(|gpu| gpu.driver_version);
+        Some(DriverAdvice { current, required })
+    }
+
     /// The first backend after `failed` in the recommendation (`default`, then `fallbacks`)
     /// that has an engine. A backend the recommendation does not list is followed by every one
     /// it does.
@@ -952,6 +990,20 @@ impl Installer {
         if let Some(snapshot) = emit {
             (self.on_progress)(snapshot);
         }
+    }
+}
+
+/// A failed write inside the install root: no other backend would fare better.
+fn disk_stop(line: String, task: Option<TaskKind>) -> Stop {
+    Stop::failed(FailureCode::DiskError, line, false, task)
+}
+
+/// An unpack failure: a disk error when the file system refused, else the package's fault,
+/// which another backend's package may not share.
+fn unpack_stop(error: &UnpackError, line: String, task: Option<TaskKind>) -> Stop {
+    match error {
+        UnpackError::Io(_) => disk_stop(line, task),
+        _ => Stop::failed(FailureCode::UnpackFailed, line, true, task),
     }
 }
 
@@ -1060,6 +1112,10 @@ mod tests {
                 download_bytes: 1,
                 runtime_bytes: None,
             }),
+            driver: Some(DriverAdvice {
+                current: None,
+                required: "580.00".into(),
+            }),
         };
         assert_eq!(
             serde_json::to_value(&outcome).unwrap(),
@@ -1072,8 +1128,13 @@ mod tests {
                     "engine": "e",
                     "downloadBytes": 1,
                     "runtimeBytes": null
-                }
+                },
+                "driver": { "current": null, "required": "580.00" }
             })
+        );
+        assert_eq!(
+            serde_json::to_value(TaskState::Reused).unwrap(),
+            json!({"state": "reused"})
         );
         let row = TaskRow {
             task: TaskKind::TestQuery,

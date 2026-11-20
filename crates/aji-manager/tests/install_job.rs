@@ -16,13 +16,14 @@ use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsK
 use aji_manager::install::{
     DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace, ImportError,
     InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork, Installer,
-    InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, SPACE_MARGIN, SetKey, StartError,
-    TaskKind, TaskState, import_network, load_installed,
+    InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent, SPACE_MARGIN, SetKey,
+    StartError, TaskKind, TaskState, import_network, load_installed,
 };
 use aji_manager::manifest::{
     Archive, Backend, ClientOptions, Digest, Engine, FileRef, Licence, Manifest, ManifestStore,
     Network, NetworkKind, NetworkLicence, Platform, Runtime, RuntimeComponent, http_client,
 };
+use aji_manager::recommend::DriverAdvice;
 use common::engine_zip::{engine_zip, zip_of};
 use common::http::{FileMode, FileReply, TestServer, serve_files};
 use serde_json::{Value, json};
@@ -79,6 +80,8 @@ struct Spec {
     download_stall: Duration,
     progress_every: Duration,
     root_name: &'static str,
+    report: HardwareReport,
+    runtime_min_driver: Option<String>,
 }
 
 impl Default for Spec {
@@ -93,6 +96,8 @@ impl Default for Spec {
             download_stall: Duration::from_secs(10),
             progress_every: Duration::from_millis(250),
             root_name: "aji",
+            report: report(),
+            runtime_min_driver: None,
         }
     }
 }
@@ -232,7 +237,7 @@ fn world(spec: Spec) -> World {
     let runtime = Runtime {
         id: RT.into(),
         platform: Platform::LinuxX64,
-        min_driver: None,
+        min_driver: spec.runtime_min_driver.clone(),
         min_compute_capability: None,
         components: vec![RuntimeComponent {
             product: "cudnn".into(),
@@ -269,7 +274,7 @@ fn world(spec: Spec) -> World {
     let root = InstallRoot::new(dir.path().join(spec.root_name));
     let setup = Arc::new(Setup::with_hardware(
         ManifestStore::fixed(manifest),
-        report(),
+        spec.report.clone(),
     ));
     let komi = Komi::new(7.5).unwrap();
     let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
@@ -415,6 +420,7 @@ fn failed(snapshot: &JobSnapshot) -> (FailureCode, Vec<String>, Option<FallbackO
             failure,
             stderr_tail,
             offer,
+            ..
         }) => (*failure, stderr_tail.clone(), offer.clone()),
         other => panic!("not failed: {other:?} in {snapshot:?}"),
     }
@@ -510,7 +516,7 @@ async fn accepting_the_offer_reuses_the_network() {
     let (_, _, offer) = failed(&w.install(OPENCL).await);
     let job = w.install(&offer.unwrap().engine).await;
     assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
-    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Done));
+    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Reused));
     assert_eq!(w.requests_for("/net.bin.gz"), 1);
     assert_eq!(w.record().active, key(EIGEN));
 }
@@ -576,6 +582,12 @@ async fn an_unaccepted_licence_fails_before_downloading() {
             name: "NVIDIA Software License Agreement".into(),
             url: "https://docs.nvidia.com/cudnn/latest/reference/eula.html".into(),
             text_sha256: LICENCE_HASH.into(),
+            components: vec![LicensedComponent {
+                name: "cuDNN".into(),
+                version: "9.0.0".into(),
+                bytes: zip_of(&[("bin/x.dll", b"a runtime library"), ("bin/notes.txt", b"x")]).len()
+                    as u64,
+            }],
         }])
     );
     assert_eq!(w.installer.licences(EIGEN), Some(Vec::new()));
@@ -883,4 +895,133 @@ fn import_network_rejects_other_files() {
         "nothing is left in networks/"
     );
     assert!(load_installed(&root.record_file()).networks.is_empty());
+}
+
+// ---------------------------------------------------------------- M5: reused rows, disk errors, driver advice
+
+const INSUFFICIENT_DRIVER: &str = "ERROR: NN server thread failed: CUDA Error, for cudaMalloc file cudaandrocmbackend.inc, line 1: CUDA driver version is insufficient for CUDA runtime version";
+
+#[tokio::test]
+async fn a_verified_component_shows_reused() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    w.snapshots.lock().unwrap().clear();
+    let job = w.install(OPENCL).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert_eq!(state_of(&job, TaskKind::Engine), Some(TaskState::Reused));
+    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Reused));
+    for snapshot in w.snapshots.lock().unwrap().iter() {
+        for task in [TaskKind::Engine, TaskKind::Network] {
+            assert!(
+                !matches!(state_of(snapshot, task), Some(TaskState::Running { .. })),
+                "{snapshot:?}"
+            );
+        }
+    }
+}
+
+fn nvidia_report(driver: &str) -> HardwareReport {
+    let mut r = report();
+    r.gpus = vec![GpuReport {
+        vendor: GpuVendor::Nvidia,
+        name: "NVIDIA GeForce RTX 3060".into(),
+        memory_bytes: Some(12 << 30),
+        driver_version: Some(driver.into()),
+        pci_device_id: None,
+        apple_gpu_cores: None,
+        compute_capability: Some("8.6".into()),
+        software: false,
+    }];
+    r
+}
+
+fn failing_with(line: &str) -> Value {
+    json!({
+        "benchmark": { "visitsPerSecond": opencl_speeds() },
+        "failure": { "during": "benchmark", "stderr": [line], "exitCode": 1 }
+    })
+}
+
+#[tokio::test]
+async fn a_driver_failure_carries_the_advice() {
+    let w = world(Spec {
+        opencl: failing_with(INSUFFICIENT_DRIVER),
+        opencl_runtime: true,
+        runtime_min_driver: Some("580.00".into()),
+        report: nvidia_report("575.0"),
+        ..Spec::default()
+    });
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    let Some(JobOutcome::Failed {
+        failure,
+        offer,
+        driver,
+        ..
+    }) = &job.outcome
+    else {
+        panic!("{job:?}");
+    };
+    assert_eq!(*failure, FailureCode::GpuDriverTooOld);
+    assert_eq!(
+        driver,
+        &Some(DriverAdvice {
+            current: Some("575.0".into()),
+            required: "580.00".into()
+        })
+    );
+    assert_eq!(offer.as_ref().map(|o| o.backend), Some(Backend::Eigenavx2));
+}
+
+#[tokio::test]
+async fn other_failures_carry_no_driver() {
+    let w = world(Spec {
+        opencl: failing_benchmark(),
+        opencl_runtime: true,
+        runtime_min_driver: Some("580.00".into()),
+        report: nvidia_report("575.0"),
+        ..Spec::default()
+    });
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    let Some(JobOutcome::Failed {
+        failure, driver, ..
+    }) = &job.outcome
+    else {
+        panic!("{job:?}");
+    };
+    assert_eq!(*failure, FailureCode::OutOfMemory);
+    assert_eq!(driver, &None);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_write_failure_in_the_root_is_disk_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world(Spec::default());
+    let engines = w.root.root().join("engines");
+    std::fs::create_dir_all(&engines).unwrap();
+    std::fs::set_permissions(&engines, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let job = w.install(OPENCL).await;
+    std::fs::set_permissions(&engines, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (failure, _, offer) = failed(&job);
+    assert_eq!(failure, FailureCode::DiskError, "{job:?}");
+    assert_eq!(offer, None);
+}
+
+#[tokio::test]
+async fn licences_list_their_components() {
+    let w = world(Spec {
+        opencl_runtime: true,
+        ..Spec::default()
+    });
+    let licences: Vec<LicenceInfo> = w.installer.licences(OPENCL).unwrap();
+    assert_eq!(licences.len(), 1);
+    let runtime_zip = zip_of(&[("bin/x.dll", b"a runtime library"), ("bin/notes.txt", b"x")]);
+    assert_eq!(
+        licences[0].components,
+        vec![LicensedComponent {
+            name: "cuDNN".into(),
+            version: "9.0.0".into(),
+            bytes: runtime_zip.len() as u64,
+        }]
+    );
 }

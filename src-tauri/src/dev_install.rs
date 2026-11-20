@@ -120,6 +120,7 @@ pub fn progress_lines(before: Option<&JobSnapshot>, now: &JobSnapshot) -> Vec<St
             TaskState::Waiting => "waiting".to_string(),
             TaskState::Running { done, total } => format!("running ({done} of {total})"),
             TaskState::Done => "done".to_string(),
+            TaskState::Reused => "reused".to_string(),
             TaskState::Failed { failure } => format!("failed: {}", name(&failure)),
         };
         lines.push(format!("aji: install {}: {state}", name(&row.task)));
@@ -323,6 +324,7 @@ mod tests {
                 failure: FailureCode::OutOfMemory,
                 stderr_tail: vec!["CUDA error: out of memory".into()],
                 offer: Some(offer),
+                driver: None,
             }),
         );
         assert_eq!(
@@ -350,6 +352,7 @@ mod tests {
                 failure: FailureCode::Crashed,
                 stderr_tail: vec![],
                 offer: None,
+                driver: None,
             }),
         );
         assert_eq!(
