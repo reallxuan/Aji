@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M6 game records</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --board:#DDB067; }
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --ok:#1e8e5a; --err:#c62828; --warn:#b26a00; --pop:#ffffff; --shadow:0 12px 32px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.08); }
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --ok:#1e8e5a; --err:#e5484d; --warn:#e3a548; --pop:#26262a; --shadow:0 14px 36px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1240px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.6; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1240px; margin:0 auto 40px; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 10px; line-height:1.5; max-width:900px; }
+  .cap b { color:#ECEAE4; }
+  .row2 { display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start; }
+
+  /* A window at 1440 × 900, shown at 70 %. */
+  .win { width:1440px; height:900px; zoom:.7; display:flex; background:var(--ground); color:var(--text); position:relative; overflow:hidden; border-radius:10px; outline:1px solid #2a2a2e; }
+  .boardwrap { width:900px; height:900px; padding:16px; position:relative; }
+  .boardwrap canvas { width:868px; height:868px; display:block; border-radius:3px; }
+  .panel { flex:1; background:var(--panel); border-left:1px solid var(--hairline); display:flex; flex-direction:column; position:relative; }
+  /* Panel-only crops at 100 %. */
+  .crop { width:540px; background:var(--panel); color:var(--text); border-left:1px solid var(--hairline); position:relative; border-radius:8px; outline:1px solid #2a2a2e; display:flex; flex-direction:column; }
+
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; position:relative; }
+  .title { display:flex; align-items:center; gap:4px; min-width:0; flex:1; font-weight:500; }
+  .title .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .title .chev { color:var(--muted); flex:none; margin-left:2px; }
+  .title.open { }
+  .title.open .chev { color:var(--text); }
+  .title-hit { display:inline-flex; align-items:center; gap:4px; padding:4px 6px; margin-left:-6px; border-radius:5px; min-width:0; }
+  .title-hit.on { background:var(--soft); }
+  .chip { flex:none; font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .chip.on { background:var(--soft); color:var(--text); }
+  .chip.mod { color:var(--text); border-color:var(--line); }
+  .chip.mod:before { content:''; display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--warn); margin-right:6px; vertical-align:2px; }
+  .nav { display:flex; align-items:center; gap:2px; color:var(--muted); flex:none; }
+  .nav i { font-style:normal; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; }
+  .nav i.dis { opacity:.35; }
+  .count { font-size:13px; color:var(--text); padding:0 6px; white-space:nowrap; }
+  .count .cur { padding:1px 4px; border-radius:4px; }
+  .count .tot { color:var(--muted); }
+  .count input { width:44px; font:inherit; font-size:13px; text-align:center; color:var(--text); background:var(--panel); border:1px solid var(--text); border-radius:4px; padding:1px 2px; outline:2px solid color-mix(in srgb, var(--text) 18%, transparent); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); flex:none; margin:0 4px 0 6px; box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+  .gear { color:var(--muted); flex:none; font-size:15px; }
+
+  .status { padding:16px 24px 6px; font-size:13px; color:var(--muted); display:flex; justify-content:space-between; }
+  .cands { padding:2px 24px; }
+  .cand { display:flex; gap:16px; padding:9px 0; border-bottom:1px solid var(--soft); font-size:14px; }
+  .cand span:nth-child(1) { width:18px; color:var(--muted); }
+  .cand span:nth-child(2) { width:44px; font-weight:500; }
+  .cand span:nth-child(3), .cand span:nth-child(4), .cand span:nth-child(5) { width:70px; text-align:right; }
+  .cand span:nth-child(5) { color:var(--muted); }
+  .foot { margin-top:auto; padding:12px 24px; font-size:11.5px; color:var(--muted); }
+
+  .notice { display:flex; align-items:flex-start; gap:10px; padding:10px 18px 10px 24px; border-bottom:1px solid var(--hairline); font-size:13px; line-height:1.5; }
+  .notice .ic { flex:none; width:16px; height:16px; border-radius:50%; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; margin-top:1px; }
+  .notice.err { background:color-mix(in srgb, var(--err) 7%, var(--panel)); }
+  .notice.err .ic { background:var(--err); color:#fff; }
+  .notice.warn { background:color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+  .notice.warn .ic { background:var(--warn); color:#fff; }
+  .notice .msg { flex:1; }
+  .notice .msg b { font-weight:600; }
+  .notice .sub { color:var(--muted); display:block; font-size:12.5px; }
+  .notice .x { color:var(--muted); flex:none; }
+
+  /* Menus and popovers. */
+  .menu { position:absolute; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:var(--shadow); padding:5px; font-size:13.5px; z-index:5; }
+  .mi { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:5px; white-space:nowrap; }
+  .mi .ic { width:16px; color:var(--muted); text-align:center; font-size:13px; }
+  .mi .k { margin-left:auto; color:var(--muted); font-size:12px; padding-left:24px; letter-spacing:.5px; }
+  .mi.hl { background:var(--soft); }
+  .mi.dim { color:var(--muted); }
+  .sep { height:1px; background:var(--hairline); margin:5px 4px; }
+  .rec { padding:7px 10px; border-radius:5px; display:flex; gap:12px; }
+  .rec .a { flex:1; min-width:0; }
+  .rec .n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rec .f { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .rec .d { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .rec.hl { background:var(--soft); }
+  .rec.gone .n, .rec.gone .f { color:var(--line); }
+  .tip { position:absolute; background:var(--text); color:var(--panel); font-size:11.5px; padding:4px 8px; border-radius:4px; white-space:nowrap; z-index:6; }
+
+  .pop { width:340px; padding:0; }
+  .pop .sec { padding:14px 16px; }
+  .pop .sec + .sec { border-top:1px solid var(--hairline); }
+  .pop h4 { margin:0 0 10px; font-size:12px; color:var(--muted); font-weight:500; letter-spacing:1px; }
+  .player { display:flex; align-items:center; gap:10px; font-size:14px; padding:3px 0; }
+  .stone { width:14px; height:14px; border-radius:50%; flex:none; }
+  .stone.b { background:radial-gradient(circle at 35% 30%, #666, #111 60%); }
+  .stone.w { background:radial-gradient(circle at 35% 30%, #fff, #ddd8cc 80%); box-shadow:inset 0 0 0 1px rgba(0,0,0,.18); }
+  .player .r { color:var(--muted); font-size:12.5px; }
+  .meta { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:13px; margin-top:10px; }
+  .meta span:nth-child(odd) { color:var(--muted); }
+  .field { display:flex; align-items:center; gap:12px; margin:0 0 10px; font-size:13.5px; }
+  .field .k { width:34px; color:var(--muted); flex:none; }
+  .seg { display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; font-size:13px; }
+  .seg span { padding:5px 12px; color:var(--muted); border-left:1px solid var(--hairline); white-space:nowrap; }
+  .seg span:first-child { border-left:none; }
+  .seg span.on { background:var(--soft); color:var(--text); font-weight:500; }
+  .stepper { display:inline-flex; align-items:center; border:1px solid var(--hairline); border-radius:6px; font-size:13px; }
+  .stepper span { padding:5px 9px; color:var(--muted); }
+  .stepper b { font-weight:500; padding:4px 10px; min-width:52px; text-align:center; border-left:1px solid var(--hairline); border-right:1px solid var(--hairline); }
+  .stepper.edit b { outline:2px solid color-mix(in srgb, var(--text) 25%, transparent); border-color:var(--text); border-radius:2px; }
+  .fixed { font-size:13.5px; font-weight:500; }
+  .hint { font-size:12px; color:var(--muted); margin-left:4px; }
+  .src { font-size:12px; color:var(--muted); line-height:1.6; margin-top:4px; }
+  .src code { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; background:var(--soft); padding:0 4px; border-radius:3px; color:var(--text); }
+  .src a { color:var(--text); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line); }
+  .src .why { color:var(--warn); }
+
+  /* Drop overlay. */
+  .drop { position:absolute; inset:16px; border-radius:6px; background:rgba(20,16,10,.38); display:flex; align-items:center; justify-content:center; border:2px dashed rgba(255,255,255,.55); }
+  .drop div { background:rgba(22,22,24,.82); color:#ECEAE4; padding:16px 26px; border-radius:10px; font-size:20px; display:flex; align-items:center; gap:12px; }
+  .drop small { display:block; font-size:13px; color:#a3a19a; margin-top:4px; }
+
+  /* Settings crop. */
+  .sh { padding:14px 24px 4px; font-size:12px; color:var(--muted); letter-spacing:1px; }
+  .set { display:flex; align-items:center; padding:9px 24px; font-size:14.5px; min-height:40px; gap:12px; }
+  .set .k { flex:1; }
+  .note { font-size:12.5px; color:var(--muted); padding:0 24px 10px; line-height:1.5; }
+  .navrow { display:flex; align-items:center; gap:10px; padding:16px 24px; border-bottom:1px solid var(--hairline); font-size:15px; }
+  .navrow .back { color:var(--muted); }
+  .tag { font-size:11px; color:#E3A548; border:1px solid #6b5426; border-radius:3px; padding:0 5px; margin-left:8px; }
+  .mac { background:#ececec; color:#1d1d1b; font-family:-apple-system,Inter,'LXGW WenKai TC',sans-serif; font-size:13px; border-radius:8px; outline:1px solid #2a2a2e; width:560px; }
+  .mac .bar { display:flex; gap:18px; padding:5px 14px; border-bottom:1px solid #d0d0d0; }
+  .mac .bar b { font-weight:600; }
+  .mac .bar .on { background:#2f6fe4; color:#fff; border-radius:4px; padding:0 6px; margin:0 -6px; }
+  .mac .dd { margin:0 0 10px 66px; width:270px; background:#f6f6f6; border:1px solid #c8c8c8; border-radius:7px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  .mac .dd div { display:flex; justify-content:space-between; padding:3px 10px; border-radius:4px; }
+  .mac .dd .s { height:1px; background:#d6d6d6; margin:4px 6px; padding:0; }
+  .mac .dd span { color:#888; }
+</style></head>
+<body>
+
+<div class="intro">
+  <h1>M6: opening, reading and stepping through game records</h1>
+  Each frame below is drawn from real data: the board is the derived GBK fixture of the 2025 Samsung Cup final, game 2 (Ding Hao vs Liao Yuanhe). The full-window frames are 1440 × 900 shown at 70 %; panel crops are at 100 %. The stones are a first pass at interface design 5.2 (slate black, shell white, contact and soft shadows); the app draws them the same way.
+  <ul>
+    <li><b>The title</b> opens the game menu (new, open, recent, save as).</li>
+    <li><b>The chip beside it</b> always shows the rules and komi the engine is using, and opens the game's information and analysis rules. It gets a small amber dot when you have changed them from what the file says.</li>
+    <li><b>Problems</b> show as one line under the header; nothing pops up over the board.</li>
+  </ul>
+</div>
+
+<!-- A -->
+<div class="section">
+  <p class="cap"><b>A. A game open (light).</b> The title comes from the record's event and round. The chip reads 日韩 · 6.5: the file says KM[6.5] and names no rules, which matches the Japanese/Korean preset. Move 58: the last move carries the centre dot. The analysis area below the header is today's M2 list; M7 replaces it with the win-rate bar and candidate table.</p>
+  <div class="win light">
+    <div class="boardwrap"><canvas data-board data-upto="58"></canvas></div>
+    <div class="panel">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="status"><span>正在分析 · 第 58 手后，黑走</span><span>3.4k 计算量</span></div>
+      <div class="cands">
+        <div class="cand"><span>1</span><span>L18</span><span>51.8%</span><span>+0.6</span><span>1.9k</span></div>
+        <div class="cand"><span>2</span><span>M17</span><span>50.9%</span><span>+0.3</span><span>812</span></div>
+        <div class="cand"><span>3</span><span>K15</span><span>49.7%</span><span>−0.2</span><span>406</span></div>
+        <div class="cand"><span>4</span><span>R13</span><span>48.1%</span><span>−0.9</span><span>197</span></div>
+      </div>
+      <div class="foot">Aji 0.1.0 · macOS aarch64</div>
+    </div>
+  </div>
+</div>
+
+<!-- B -->
+<div class="section">
+  <p class="cap"><b>B. The game menu.</b> Clicking the title opens it; the shortcuts work without it. Recent files show the game's title over its file name; hovering shows the full path. A file that has been moved or deleted is greyed and says so, and clicking it removes it with a notice. New game asks for the size in a submenu.</p>
+  <div class="row2">
+    <div class="crop light" style="height:470px">
+      <div class="hdr">
+        <div class="title"><span class="title-hit on"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="menu" style="left:18px; top:50px; width:228px">
+        <div class="mi"><span class="ic">＋</span>新建棋局<span class="k">›</span></div>
+        <div class="mi"><span class="ic">↥</span>打开棋谱…<span class="k">⌘O</span></div>
+        <div class="mi hl"><span class="ic">◷</span>打开最近<span class="k">›</span></div>
+        <div class="sep"></div>
+        <div class="mi"><span class="ic">↧</span>另存为…<span class="k">⇧⌘S</span></div>
+      </div>
+      <div class="menu" style="left:240px; top:120px; width:286px">
+        <div class="rec hl"><div class="a"><div class="n">第30届三星杯决赛 第2局</div><div class="f">samsung-30-final-2.sgf</div></div><span class="d">今天</span></div>
+        <div class="rec"><div class="a"><div class="n">丁浩 对 谢尔豪</div><div class="f">第28届三星杯决赛第三局.sgf</div></div><span class="d">昨天</span></div>
+        <div class="rec"><div class="a"><div class="n">铁岭棋友 对 血战到底</div><div class="f">野狐 2020-12-25 对局.sgf</div></div><span class="d">11月18日</span></div>
+        <div class="rec gone"><div class="a"><div class="n">九路练习</div><div class="f">已移动或删除</div></div><span class="d">11月12日</span></div>
+        <div class="sep"></div>
+        <div class="mi dim" style="font-size:12.5px">清除最近记录</div>
+      </div>
+      <div class="tip" style="left:252px; top:176px">~/Downloads/棋谱/samsung-30-final-2.sgf</div>
+    </div>
+
+    <div class="crop light" style="height:300px">
+      <div class="hdr">
+        <div class="title"><span class="title-hit on"><span class="t">未命名棋局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">中国 · 7.5</span>
+        <div class="nav"><i class="dis">⏮</i><i class="dis">‹</i><span class="count"><span class="cur">0</span> <span class="tot">/ 0</span></span><i class="dis">›</i><i class="dis">⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="menu" style="left:18px; top:50px; width:228px">
+        <div class="mi hl"><span class="ic">＋</span>新建棋局<span class="k">›</span></div>
+        <div class="mi"><span class="ic">↥</span>打开棋谱…<span class="k">⌘O</span></div>
+        <div class="mi"><span class="ic">◷</span>打开最近<span class="k">›</span></div>
+        <div class="sep"></div>
+        <div class="mi dim"><span class="ic">↧</span>另存为…<span class="k">⇧⌘S</span></div>
+      </div>
+      <div class="menu" style="left:240px; top:56px; width:150px">
+        <div class="mi hl">19 路<span class="k">⌘N</span></div>
+        <div class="mi">13 路</div>
+        <div class="mi">9 路</div>
+      </div>
+      <p class="cap" style="position:absolute; left:24px; bottom:8px; color:var(--muted); font-size:12px; max-width:480px">With no file open: the counter is 0 / 0, the arrows are disabled, and save-as is greyed while the board is empty.</p>
+    </div>
+  </div>
+</div>
+
+<!-- C -->
+<div class="section">
+  <p class="cap"><b>C. Game information and analysis rules.</b> Clicking the chip opens this. The top half is the record's information. The bottom half sets what KataGo analyses with, for this game only. Chinese rules mean area scoring at 7.5; Japanese/Korean rules mean territory scoring at 6.5; neither lets the komi change. Custom (自定义) frees the komi (any value in steps of 0.5) and lets you choose area (数子) or territory (数目) scoring. A change re-analyses at once. The line under the controls says what the file wrote and how Aji read it, with a link back to that reading. Save as writes your choice into the file's RU and KM.</p>
+  <div class="row2">
+    <div class="crop light" style="height:470px">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip on">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="menu pop" style="left:150px; top:50px">
+        <div class="sec">
+          <h4>棋局信息</h4>
+          <div class="player"><span class="stone b"></span>丁浩 <span class="r">九段</span></div>
+          <div class="player"><span class="stone w"></span>廖元赫 <span class="r">九段</span></div>
+          <div class="meta"><span>结果</span><span>白中盘胜</span><span>日期</span><span>2025-11-17</span><span>赛事</span><span>第30届三星杯决赛 第2局</span></div>
+        </div>
+        <div class="sec">
+          <h4>分析规则</h4>
+          <div class="field"><span class="k">规则</span><span class="seg"><span>中国规则</span><span class="on">日韩规则</span><span>自定义</span></span></div>
+          <div class="field"><span class="k">贴目</span><span class="fixed">6.5 目</span><span class="hint">数目 · 由规则决定</span></div>
+          <div class="src">与棋谱一致：棋谱记载 <code>KM[6.5]</code>，没有写规则，按贴 6.5 目的日韩规则读取。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="crop light" style="height:470px">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">铁岭棋友 对 血战到底</span><span class="chev">⌄</span></span></div>
+        <span class="chip on mod">自定义 · 7</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">112</span> <span class="tot">/ 233</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="menu pop" style="left:150px; top:50px">
+        <div class="sec">
+          <h4>棋局信息</h4>
+          <div class="player"><span class="stone b"></span>铁岭棋友 <span class="r">9D</span></div>
+          <div class="player"><span class="stone w"></span>血战到底 <span class="r">9D</span></div>
+          <div class="meta"><span>结果</span><span>黑中盘胜</span><span>日期</span><span>2020-12-25</span><span>来源</span><span>野狐</span></div>
+        </div>
+        <div class="sec">
+          <h4>分析规则</h4>
+          <div class="field"><span class="k">规则</span><span class="seg"><span>中国规则</span><span>日韩规则</span><span class="on">自定义</span></span></div>
+          <div class="field"><span class="k">贴目</span><span class="stepper edit"><span>−</span><b>7</b><span>+</span></span><span class="hint">每次 0.5 目</span></div>
+          <div class="field"><span class="k">计分</span><span class="seg"><span>数子</span><span class="on">数目</span></span></div>
+          <div class="src">已改动。棋谱记载 <code>KM[0]</code> <code>RU[Japanese]</code>（野狐日韩规则），原按日韩规则读取。<a>恢复棋谱设定</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="cap" style="margin-top:12px">Left: a pro record, used as written. It gives komi 6.5 and no rules, which matches the Japanese/Korean preset, and the line says so. Right: a Fox record. Fox writes <code>KM[0]</code> for its Japanese-rule games, which Aji reads as the Japanese/Korean preset (6.5). Here the user has switched to Custom and typed 7; the scoring stays territory, carried over from the preset. The chip shows the change with an amber dot, and "恢复棋谱设定" goes back to the file's reading.</p>
+</div>
+
+<!-- D -->
+<div class="section">
+  <p class="cap"><b>D. Jumping to a move.</b> Clicking the move number turns it into a field with the number selected; type and press Enter. Escape or clicking away cancels. ← → (and ↑ ↓) step, Home and End jump to the ends, and the wheel or trackpad over the board steps one move at a time.</p>
+  <div class="row2">
+    <div class="crop light" style="height:56px">
+      <div class="hdr" style="border-bottom:none">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><input value="120"> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+    </div>
+    <div class="crop dark" style="height:56px">
+      <div class="hdr" style="border-bottom:none">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur" style="background:var(--soft)">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+    </div>
+  </div>
+  <p class="cap" style="margin-top:10px">Right (dark): the number's hover state, which hints that it can be clicked.</p>
+</div>
+
+<!-- E -->
+<div class="section">
+  <p class="cap"><b>E. When something is wrong.</b> One line under the header. Errors (red) stay until closed or replaced; warnings (amber) fade after 6 seconds. The file that failed stays out of the recent list.</p>
+  <div class="row2">
+    <div class="crop light" style="height:auto">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="notice err"><span class="ic">!</span><span class="msg"><b>无法打开 大棋盘练习.sgf</b><span class="sub">不支持 21 路棋盘。Aji 支持 5 到 19 路的方形棋盘。</span></span><span class="x">✕</span></div>
+      <div style="height:18px"></div>
+      <div class="notice warn" style="border-top:1px solid var(--hairline)"><span class="ic">!</span><span class="msg"><b>棋谱不完整，已打开前 183 手</b><span class="sub">文件在第 184 手处中断，可能没有下载完。</span></span><span class="x">✕</span></div>
+      <div style="height:18px"></div>
+      <div class="notice warn" style="border-top:1px solid var(--hairline)"><span class="ic">!</span><span class="msg"><b>棋谱未注明编码，已按 GBK 读取</b><span class="sub">如果名字显示不对，请告诉我们。</span></span><span class="x">✕</span></div>
+      <div style="height:18px"></div>
+      <div class="notice warn" style="border-top:1px solid var(--hairline)"><span class="ic">!</span><span class="msg"><b>这个文件里有 12 局棋，只打开了第一局</b><span class="sub">另存为时其余各局会原样保留。</span></span><span class="x">✕</span></div>
+    </div>
+    <div class="crop dark" style="height:auto">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">死活题 第 3 题</span><span class="chev">⌄</span></span></div>
+        <span class="chip">中国 · 7.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">7</span> <span class="tot">/ 12</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot" style="background:var(--muted);box-shadow:none"></span><span class="gear">⚙</span>
+      </div>
+      <div class="status" style="padding-bottom:16px"><span>这一步在棋谱中不合法（落在已有棋子上），无法分析这个局面。</span></div>
+      <div class="foot" style="margin-top:0;border-top:1px solid var(--hairline)">Next and previous still work; the following moves are analysed again.</div>
+    </div>
+  </div>
+</div>
+
+<!-- F -->
+<div class="section">
+  <p class="cap"><b>F. Dropping a file (dark).</b> While a file is dragged over the window, the board dims under a dashed outline. Dropping anything other than .sgf gives the error line instead.</p>
+  <div class="win dark">
+    <div class="boardwrap"><canvas data-board data-upto="58"></canvas>
+      <div class="drop"><div><span style="font-size:26px">↧</span><span>松开以打开棋谱<small>Samsung 30 final 2.sgf</small></span></div></div>
+    </div>
+    <div class="panel">
+      <div class="hdr">
+        <div class="title"><span class="title-hit"><span class="t">第30届三星杯决赛 第2局</span><span class="chev">⌄</span></span></div>
+        <span class="chip">日韩 · 6.5</span>
+        <div class="nav"><i>⏮</i><i>‹</i><span class="count"><span class="cur">58</span> <span class="tot">/ 171</span></span><i>›</i><i>⏭</i></div>
+        <span class="dot"></span><span class="gear">⚙</span>
+      </div>
+      <div class="status"><span>正在分析 · 第 58 手后，黑走</span><span>3.4k 计算量</span></div>
+      <div class="cands">
+        <div class="cand"><span>1</span><span>L18</span><span>51.8%</span><span>+0.6</span><span>1.9k</span></div>
+        <div class="cand"><span>2</span><span>M17</span><span>50.9%</span><span>+0.3</span><span>812</span></div>
+        <div class="cand"><span>3</span><span>K15</span><span>49.7%</span><span>−0.2</span><span>406</span></div>
+      </div>
+      <div class="foot">Aji 0.1.0 · macOS aarch64</div>
+    </div>
+  </div>
+</div>
+
+<!-- G -->
+<div class="section">
+  <p class="cap"><b>G. Defaults in settings, and the macOS menu.</b> Settings gains "新棋局默认规则": the rules (and, for Custom, the komi and scoring) for new games and for files that name neither rules nor komi. Changing the default never changes a game already open. On macOS the same file commands also live in the system menu bar; Windows and Linux have no menu bar, as the interface design asks.</p>
+  <div class="row2">
+    <div class="crop dark" style="height:auto; padding-bottom:10px">
+      <div class="navrow"><span class="back">←</span><span>设置</span></div>
+      <div class="sh">界面</div>
+      <div class="set"><span class="k">语言</span><span class="seg"><span class="on">跟随系统</span><span>简体中文</span><span>English</span></span></div>
+      <div class="sh" style="border-top:1px solid var(--hairline); margin-top:8px">分析</div>
+      <div class="set"><span class="k">新棋局默认规则 <span class="tag">new</span></span><span class="seg"><span class="on">中国规则</span><span>日韩规则</span><span>自定义</span></span></div>
+      <div class="set"><span class="k">贴目</span><span class="fixed">7.5 目</span><span class="hint" style="margin-left:0">数子 · 由规则决定</span></div>
+      <div class="note">用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。</div>
+      <div class="set"><span class="k">每步计算量上限</span><span style="border:1px solid var(--hairline);border-radius:6px;padding:5px 10px;font-size:13px;width:110px;color:var(--muted)">不限</span></div>
+    </div>
+    <div class="mac">
+      <div class="bar"><b></b><b>Aji</b><span class="on">文件</span><span>编辑</span><span>窗口</span><span>帮助</span></div>
+      <div class="dd">
+        <div>新建棋局 <span>⌘N</span></div>
+        <div>打开… <span>⌘O</span></div>
+        <div>打开最近 <span>▸</span></div>
+        <div class="s"></div>
+        <div>另存为… <span>⇧⌘S</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Moves of the 2025 Samsung Cup final, game 2 (public domain, CWI archive), first 80.
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19;
+
+function play(upto) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  let last = null;
+  for (let i = 0; i < upto; i++) {
+    const c = i % 2 === 0 ? 1 : 2, s = MOVES[i];
+    const x = s.charCodeAt(0) - 97, y = s.charCodeAt(1) - 97;
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+
+function wood(ctx, W) {
+  ctx.fillStyle = '#DDB067'; ctx.fillRect(0, 0, W, W);
+  const r = rand(7);
+  for (let i = 0; i < 260; i++) {
+    const x = r() * W, w = 0.6 + r() * 3.2, a = 0.02 + r() * 0.06;
+    ctx.fillStyle = r() > .5 ? `rgba(120,72,20,${a})` : `rgba(255,236,190,${a})`;
+    ctx.beginPath(); ctx.moveTo(x, 0);
+    for (let y = 0; y <= W; y += 40) ctx.lineTo(x + Math.sin(y / 180 + i) * 2.2, y);
+    ctx.lineTo(x + w, W); ctx.lineTo(x + w, 0); ctx.fill();
+  }
+  const top = ctx.createLinearGradient(0, 0, 0, 10); top.addColorStop(0, 'rgba(255,245,220,.45)'); top.addColorStop(1, 'rgba(255,245,220,0)');
+  ctx.fillStyle = top; ctx.fillRect(0, 0, W, 10);
+  const bot = ctx.createLinearGradient(0, W - 8, 0, W); bot.addColorStop(0, 'rgba(90,52,10,0)'); bot.addColorStop(1, 'rgba(90,52,10,.45)');
+  ctx.fillStyle = bot; ctx.fillRect(0, W - 8, W, 8);
+}
+
+function stone(ctx, cx, cy, r, color, seed) {
+  // Soft offset shadow, then tight contact shadow, both from a light at the upper left.
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .55; ctx.shadowOffsetX = r * .14; ctx.shadowOffsetY = r * .2;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.55)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  if (color === 1) {
+    const gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r);
+    gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a');
+    ctx.fillStyle = gr;
+  } else {
+    const gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa');
+    ctx.fillStyle = gr;
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1) {
+    const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5);
+    hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  } else {
+    // Faint diagonal shell grain, rotated per point.
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.clip();
+    ctx.translate(cx, cy); ctx.rotate(-0.7 + (seed % 4) * 0.12);
+    ctx.strokeStyle = 'rgba(150,135,110,.10)'; ctx.lineWidth = Math.max(.6, r * .035);
+    for (let k = -r; k < r; k += r * .16) { ctx.beginPath(); ctx.moveTo(-r, k); ctx.quadraticCurveTo(0, k + r*.08, r, k); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+function draw(canvas, upto) {
+  const css = 868, dpr = window.devicePixelRatio || 1, W = css * dpr;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  wood(ctx, W);
+  const margin = 42 * dpr, sp = (W - 2 * margin) / (N - 1);
+  const at = i => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N-1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N-1), at(i)); }
+  ctx.stroke();
+  ctx.lineWidth = Math.round(1.6 * dpr); ctx.strokeRect(at(0), at(0), at(N-1) - at(0), at(N-1) - at(0));
+  ctx.fillStyle = '#3A2A14';
+  for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .11, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${12 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const letters = 'ABCDEFGHJKLMNOPQRST';
+  for (let i = 0; i < N; i++) { ctx.fillText(letters[i], at(i), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i)); }
+  const { g, last } = play(upto);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3);
+  if (last) {
+    const c = g[last[1]][last[0]];
+    ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a';
+    ctx.beginPath(); ctx.arc(at(last[0]), at(last[1]), sp * .11, 0, 7); ctx.fill();
+  }
+}
+
+document.fonts.ready.then(() => document.querySelectorAll('canvas[data-board]').forEach(c => draw(c, +c.dataset.upto)));
+</script>
+</body></html>
