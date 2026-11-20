@@ -30,6 +30,10 @@ const KNOWN_CODES: Record<ErrorCode, true> = {
   engineNotConfigured: true,
   engineNotRunning: true,
   setupUnknownEngine: true,
+  setupBusy: true,
+  setupUnknownNetwork: true,
+  setupImportFailed: true,
+  setupInvalidSource: true,
 };
 
 function isKnownCode(value: unknown): value is ErrorCode {

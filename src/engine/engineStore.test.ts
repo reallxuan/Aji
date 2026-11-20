@@ -106,3 +106,14 @@ it('setPosition clears the analysis only when the key changes', () => {
   store.getState().setPosition(B);
   expect(store.getState().analysis).toBeNull();
 });
+
+it('a setup progress event leaves the engine store alone', () => {
+  const store = createEngineStore();
+  store.getState().applyStatus(status({ state: 'starting' }));
+  const before = store.getState();
+  store.getState().applyEvent({
+    type: 'setupProgress',
+    job: { id: 1, engine: 'e', backend: 'metal', network: 'n', tasks: [], outcome: null },
+  });
+  expect(store.getState()).toBe(before);
+});
