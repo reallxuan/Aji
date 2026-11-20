@@ -1,0 +1,9 @@
+{
+  "failure": {
+    "during": "startup",
+    "stderr": [
+      "Uncaught exception: ONNX backend: DirectML execution provider is not available in this build of ONNX Runtime"
+    ],
+    "exitCode": 1
+  }
+}

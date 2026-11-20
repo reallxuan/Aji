@@ -16,7 +16,10 @@ mod update;
 
 pub use cache::*;
 pub use engine::*;
-pub use process::{EngineFiles, LaunchSpec, katago_launch};
+pub use process::{
+    EngineFiles, LaunchSpec, MAX_RUN_STDOUT, RunLimits, RunOutput, katago_benchmark_launch,
+    katago_launch, run_to_end,
+};
 pub use query::*;
 pub use response::*;
 pub use state::*;

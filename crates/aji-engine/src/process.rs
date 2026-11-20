@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
 use std::thread;
 use std::time::Duration;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
 use tokio::runtime::Handle;
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
@@ -71,6 +71,43 @@ pub fn katago_launch(files: &EngineFiles) -> LaunchSpec {
             .map(|path| (OsString::from("PATH"), path))
             .into_iter()
             .collect(),
+    }
+}
+
+/// KataGo's `benchmark` command line: `visits` per search over `positions` positions, once per
+/// thread count. KataGo's extra tests after the main run (half batch size, two server
+/// threads) are skipped. The runtime folders go on `PATH` as for [`katago_launch`].
+pub fn katago_benchmark_launch(
+    files: &EngineFiles,
+    visits: u32,
+    positions: u32,
+    threads: &[u32],
+) -> LaunchSpec {
+    let threads = threads
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut args = vec![
+        OsString::from("benchmark"),
+        OsString::from("-config"),
+        files.config.clone().into_os_string(),
+        OsString::from("-model"),
+        files.model.clone().into_os_string(),
+    ];
+    for (flag, value) in [
+        ("-v", visits.to_string()),
+        ("-n", positions.to_string()),
+        ("-t", threads),
+    ] {
+        args.push(OsString::from(flag));
+        args.push(OsString::from(value));
+    }
+    args.push(OsString::from("-no-server-thread-test"));
+    args.push(OsString::from("-no-half-batch-size-test"));
+    LaunchSpec {
+        args,
+        ..katago_launch(files)
     }
 }
 
@@ -311,6 +348,197 @@ mod windows {
     }
 }
 
+// ------------------------------------------------------------- one-shot runs
+
+/// How long a one-shot run may stay silent, and how much of its stderr is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunLimits {
+    /// No byte on stdout or stderr for this long kills the process.
+    pub stall: Duration,
+    /// Lines of stderr kept, the last ones.
+    pub stderr_lines: usize,
+}
+
+/// What a one-shot run left behind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunOutput {
+    pub exit: ExitInfo,
+    /// Everything on stdout, as lossy UTF-8, `\r` kept; at most the last [`MAX_RUN_STDOUT`]
+    /// bytes.
+    pub stdout: String,
+    pub stderr_tail: Vec<String>,
+    /// Killed for staying silent longer than [`RunLimits::stall`].
+    pub stalled: bool,
+}
+
+/// The most of a run's stdout kept. A benchmark prints a few kilobytes.
+pub const MAX_RUN_STDOUT: usize = 1024 * 1024;
+/// How long a killed one-shot process has to exit before it is given up.
+const RUN_KILL_DEADLINE: Duration = Duration::from_secs(5);
+/// A spawn failing with "Text file busy" is retried this many times, this far apart: on Linux
+/// a binary written just before can be held open for a moment by another thread's fork.
+const BUSY_RETRIES: u32 = 3;
+const BUSY_PAUSE: Duration = Duration::from_millis(100);
+
+/// Runs `spec` to its end through the spawner thread (job object, parent-death signal), with
+/// stdin closed. Reads raw bytes, since KataGo's benchmark progress uses `\r`. No bytes on
+/// stdout or stderr for `limits.stall` kills the process and sets `stalled`. Dropping the
+/// future kills the process.
+pub async fn run_to_end(spec: LaunchSpec, limits: RunLimits) -> io::Result<RunOutput> {
+    let spawned = retry_busy(|| spawn_here(spec.clone())).await?;
+    let Spawned {
+        mut process,
+        stdin,
+        mut stdout,
+        mut stderr,
+        ..
+    } = spawned;
+    drop(stdin);
+
+    let mut out = Vec::new();
+    let mut err = LineTail::new(limits.stderr_lines);
+    let (mut out_open, mut err_open) = (true, true);
+    let (mut out_buf, mut err_buf) = ([0u8; 8192], [0u8; 8192]);
+    let mut stalled = false;
+    let mut quiet_until = tokio::time::Instant::now() + limits.stall;
+    let status = loop {
+        tokio::select! {
+            read = stdout.read(&mut out_buf), if out_open => match read {
+                Ok(n) if n > 0 => {
+                    keep_last(&mut out, &out_buf[..n], MAX_RUN_STDOUT);
+                    quiet_until = tokio::time::Instant::now() + limits.stall;
+                }
+                _ => out_open = false,
+            },
+            read = stderr.read(&mut err_buf), if err_open => match read {
+                Ok(n) if n > 0 => {
+                    err.push(&err_buf[..n]);
+                    quiet_until = tokio::time::Instant::now() + limits.stall;
+                }
+                _ => err_open = false,
+            },
+            status = process.child.wait() => break status,
+            () = tokio::time::sleep_until(quiet_until) => {
+                stalled = true;
+                let _ = process.child.start_kill();
+                break tokio::time::timeout(RUN_KILL_DEADLINE, process.child.wait())
+                    .await
+                    .unwrap_or_else(|_| Err(io::Error::other("KataGo did not exit after kill")));
+            }
+        }
+    };
+    // What is still in the pipes, for a bounded time: a grandchild may hold them open.
+    let _ = tokio::time::timeout(DRAIN_AFTER_EXIT, async {
+        while out_open || err_open {
+            tokio::select! {
+                read = stdout.read(&mut out_buf), if out_open => match read {
+                    Ok(n) if n > 0 => keep_last(&mut out, &out_buf[..n], MAX_RUN_STDOUT),
+                    _ => out_open = false,
+                },
+                read = stderr.read(&mut err_buf), if err_open => match read {
+                    Ok(n) if n > 0 => err.push(&err_buf[..n]),
+                    _ => err_open = false,
+                },
+            }
+        }
+    })
+    .await;
+    Ok(RunOutput {
+        exit: exit_info(status),
+        stdout: String::from_utf8_lossy(&out).into_owned(),
+        stderr_tail: err.finish(),
+        stalled,
+    })
+}
+
+/// Spawns on the spawner thread, inside the current runtime, and waits for the result. If
+/// this future is dropped first, the spawned process is dropped with the result, which kills
+/// it.
+async fn spawn_here(spec: LaunchSpec) -> io::Result<Spawned> {
+    let (tx, rx) = oneshot::channel();
+    request_spawn(spec, Handle::current(), move |result| {
+        let _ = tx.send(result);
+    });
+    rx.await
+        .unwrap_or_else(|_| Err(io::Error::other("the spawner thread dropped the request")))
+}
+
+/// Runs `attempt` again while it fails with "Text file busy", up to [`BUSY_RETRIES`] times.
+pub(crate) async fn retry_busy<T, F, Fut>(mut attempt: F) -> io::Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = io::Result<T>>,
+{
+    let mut retries = 0;
+    loop {
+        match attempt().await {
+            Err(e) if e.kind() == io::ErrorKind::ExecutableFileBusy && retries < BUSY_RETRIES => {
+                retries += 1;
+                tokio::time::sleep(BUSY_PAUSE).await;
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Appends `bytes`, keeping only the last `max` bytes.
+fn keep_last(buf: &mut Vec<u8>, bytes: &[u8], max: usize) {
+    buf.extend_from_slice(bytes);
+    if buf.len() > max {
+        buf.drain(..buf.len() - max);
+    }
+}
+
+/// The last lines of a byte stream, split on `\n`, without line endings.
+struct LineTail {
+    keep: usize,
+    lines: VecDeque<String>,
+    partial: Vec<u8>,
+}
+
+impl LineTail {
+    fn new(keep: usize) -> LineTail {
+        LineTail {
+            keep,
+            lines: VecDeque::new(),
+            partial: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            if byte == b'\n' {
+                let line = std::mem::take(&mut self.partial);
+                self.add(line);
+            } else {
+                self.partial.push(byte);
+            }
+        }
+    }
+
+    fn add(&mut self, mut line: Vec<u8>) {
+        while line.last() == Some(&b'\r') {
+            line.pop();
+        }
+        if self.keep == 0 {
+            return;
+        }
+        if self.lines.len() >= self.keep {
+            self.lines.pop_front();
+        }
+        self.lines
+            .push_back(String::from_utf8_lossy(&line).into_owned());
+    }
+
+    fn finish(mut self) -> Vec<String> {
+        if !self.partial.is_empty() {
+            let line = std::mem::take(&mut self.partial);
+            self.add(line);
+        }
+        self.lines.into()
+    }
+}
+
 // --------------------------------------------------------------------- pipes
 
 /// The last lines KataGo wrote to stderr, oldest first.
@@ -432,6 +660,57 @@ mod tests {
         })
         .await;
         assert_eq!(lines, ["one", "tw\u{fffd}o", "", "last"]);
+    }
+
+    #[tokio::test]
+    async fn busy_spawns_are_retried() {
+        let mut calls = 0;
+        let result = retry_busy(|| {
+            calls += 1;
+            let busy = calls < 3;
+            async move {
+                if busy {
+                    Err(io::Error::from(io::ErrorKind::ExecutableFileBusy))
+                } else {
+                    Ok(calls)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 3);
+
+        let mut calls = 0;
+        let result: io::Result<()> = retry_busy(|| {
+            calls += 1;
+            async { Err(io::Error::from(io::ErrorKind::ExecutableFileBusy)) }
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(calls, 1 + BUSY_RETRIES, "three retries, then the error");
+
+        let mut calls = 0;
+        let result: io::Result<()> = retry_busy(|| {
+            calls += 1;
+            async { Err(io::Error::from(io::ErrorKind::NotFound)) }
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(calls, 1, "only a busy binary is retried");
+    }
+
+    #[test]
+    fn the_stderr_tail_keeps_the_last_lines() {
+        let mut tail = LineTail::new(2);
+        tail.push(b"one\r\ntwo\nthr");
+        tail.push(b"ee\nfour");
+        assert_eq!(tail.finish(), ["three", "four"]);
+    }
+
+    #[test]
+    fn stdout_keeps_its_last_bytes() {
+        let mut out = b"abc".to_vec();
+        keep_last(&mut out, b"defg", 5);
+        assert_eq!(out, b"cdefg");
     }
 
     fn files(path_prepend: Vec<PathBuf>) -> EngineFiles {

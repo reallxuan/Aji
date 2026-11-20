@@ -1,0 +1,10 @@
+{
+  "benchmark": { "visitsPerSecond": { "8": 100.0, "16": 180.0 } },
+  "failure": {
+    "during": "benchmark",
+    "stderr": [
+      "ERROR: NN server thread failed: CUDA Error, for ScratchBuffers file cudaandrocmbackend.inc, func ScratchBuffers, line 868, error out of memory"
+    ],
+    "exitCode": 3
+  }
+}
