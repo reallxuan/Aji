@@ -5,7 +5,7 @@
 - Specs: [project charter](../specs/2026-11-19-aji-project-charter-design.md) (source of truth), [interface design](../specs/2026-11-19-aji-ui-design.md)
 - Markers follow the charter: **[Decided]**, **[Proposed]**, **[To verify]**.
 
-This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md), [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md) and [M3 Manifest, hardware detection, recommendation](2026-11-19-phase-1-m3-manifest-hardware.md).
+This is the phase-level plan. It splits Phase 1 into milestones, orders them, and names what each one must prove before the next starts. Each milestone gets its own detailed implementation plan (TDD steps, exact interfaces) when it starts, so that plan can use what earlier milestones and research spikes found. Written so far: [M1 Foundation](2026-11-19-phase-1-m1-foundation.md), [M2 Analysis walking skeleton](2026-11-19-phase-1-m2-analysis-skeleton.md), [M3 Manifest, hardware detection, recommendation](2026-11-19-phase-1-m3-manifest-hardware.md) and [M4 Install pipeline](2026-11-20-phase-1-m4-install-pipeline.md).
 
 ## 1. What Phase 1 must deliver
 
