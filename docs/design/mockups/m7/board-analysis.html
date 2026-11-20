@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 analysis on the board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --pop:#ffffff; --barblack:#1d1d1b; --barwhite:#ffffff; --baredge:#c9c9c4; --shadow:0 12px 32px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.08); }
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --pop:#2a2a2e; --barblack:#050506; --barwhite:#f4f2ec; --baredge:#3a3a40; --shadow:0 14px 36px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1240px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1240px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1000px; }
+  .cap b { color:#ECEAE4; }
+  .rec { color:#7fd1a8; font-weight:600; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+
+  .win { width:1440px; height:900px; zoom:.7; display:flex; background:var(--ground); color:var(--text); position:relative; overflow:hidden; border-radius:10px; outline:1px solid #2a2a2e; }
+  .boardwrap { width:900px; height:900px; padding:16px; position:relative; flex:none; }
+  .boardwrap canvas { width:868px; height:868px; display:block; border-radius:3px; }
+  .boardonly { width:868px; zoom:.5; border-radius:4px; overflow:hidden; }
+  .boardonly canvas { width:868px; height:868px; display:block; }
+  .panel { flex:1; background:var(--panel); border-left:1px solid var(--hairline); display:flex; flex-direction:column; position:relative; }
+  .crop { width:540px; background:var(--panel); color:var(--text); border-left:1px solid var(--hairline); border-radius:8px; outline:1px solid #2a2a2e; overflow:visible; position:relative; }
+
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; position:relative; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; align-items:center; font-size:13px; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .hdr .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); margin-left:4px; flex:none; }
+  .hdr .dot.limit { background:transparent; box-shadow:inset 0 0 0 2px var(--ok); }
+  .hdr .dot.hov { outline:1px solid var(--line); outline-offset:4px; }
+  .hdr .gear { color:var(--muted); }
+
+  .wr { display:flex; align-items:center; padding:16px 24px 6px; }
+  .bar { flex:1; height:26px; display:flex; border-radius:4px; overflow:hidden; box-shadow:inset 0 0 0 1px var(--baredge); font-size:13px; font-weight:600; }
+  .bar .b { background:var(--barblack); color:#f4f2ec; display:flex; align-items:center; gap:10px; padding-left:9px; }
+  .bar .w { background:var(--barwhite); color:#1d1d1b; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-right:9px; flex:1; box-shadow:inset 0 0 0 1px var(--baredge); }
+  .bar .ld { font-weight:400; opacity:.72; }
+  .graph svg { display:block; }
+  .legend { display:flex; gap:14px; padding:2px 24px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); }
+  .legend .k { display:inline-flex; align-items:center; gap:6px; }
+  .legend .sw { width:14px; height:2px; }
+  .legend .bar1 { width:2px; height:9px; background:var(--muted); opacity:.7; }
+
+  .tbl { padding:12px 24px 8px; font-size:14px; }
+  .tbl .th { display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-bottom:6px; }
+  .tr { display:grid; grid-template-columns:30px 62px 1fr 1fr 1fr 1.3fr; align-items:center; padding:9px 6px; margin:0 -6px; border-bottom:1px solid var(--soft); border-radius:4px; }
+  .tr span:nth-child(n+3) { text-align:right; }
+  .tr.head { font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); border-radius:0; padding-top:4px; padding-bottom:6px; }
+  .tr.hl { background:var(--soft); }
+  .tr .pt { font-weight:500; }
+  .tr .step { color:var(--muted); font-size:12px; font-weight:400; margin-left:6px; }
+  .tr .sc { color:var(--score); }
+  .tr .vis { color:var(--muted); }
+  .tr .act { font-weight:600; }
+  .rk { width:21px; height:21px; border-radius:50%; font-size:11px; display:inline-flex; align-items:center; justify-content:center; color:#2B1D0E; font-style:normal; }
+  .rk.best { background:#FDF6E3; box-shadow:inset 0 0 0 2.5px #B8321F; font-weight:700; }
+  .rk.close { background:#FBF1D9; box-shadow:inset 0 0 0 1.5px #B8321F; }
+  /* Off the board the translucent tiers are drawn as they look over the wood, so they do not turn grey on the panel. */
+  .rk.doubt { background:#F8EAC9; box-shadow:inset 0 0 0 1.5px #8A6A32; color:#4A3410; }
+  .rk.poor { background:#ECD0A0; box-shadow:inset 0 0 0 1px rgba(138,106,50,.6); color:#4A3410; }
+  .rk.played { outline:2px solid #2B1D0E; outline-offset:1px; }
+  .dark .rk.played { outline-color:#eceae4; }
+
+  .card { position:absolute; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:var(--shadow); padding:12px 14px; font-size:12.5px; line-height:1.7; z-index:5; white-space:nowrap; }
+  .card .k { color:var(--muted); display:inline-block; width:56px; }
+  .card .h { font-weight:600; font-size:13px; margin-bottom:4px; }
+  .card .hint { color:var(--muted); font-size:12px; margin-top:6px; border-top:1px solid var(--hairline); padding-top:6px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M7 · 棋盘上的分析 analysis on the board</h1>
+  Position: move 58 of the M6 sample game, Black to move. The record's next move is M13, which the engine ranks second.
+  Candidate data is made up. The trend graph and the win-rate bar follow the approved <a href="trend-graph.html" style="color:#c9c7c0">trend-graph.html</a>.
+  <ul>
+    <li>Discs follow interface design 5.3: tiers by win-rate loss against the best move (under 2 points, 2–4, over 4). Two lines per the settings (default: win rate over score lead).</li>
+    <li>The move actually played next in the record (M13) carries the extra dark outer ring, on the board and on its rank chip; the table labels it 实战.</li>
+    <li>At most 10 candidates, and only those with at least 2 % of the top candidate's visits, so a half-searched move does not show a noisy number. Table and board show the same set.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 · Candidates on the board and in the table</h2>
+  <p class="cap">Dark theme, Black to move.</p>
+  <div class="win dark" id="w1"><div class="boardwrap"><canvas data-board='{"mode":"discs"}'></canvas></div><div class="panel" data-panel='{}'></div></div>
+</div>
+
+<div class="section">
+  <h2>2 · Hovering a candidate: its variation</h2>
+  <p class="cap">Hovering the best disc (L14). The other discs step aside, the line is drawn as numbered stones with captures applied, and the line is frozen at the moment the hover started, so it does not jitter as KataGo updates. Leave and come back to see the newer line. The table row lights up, and hovering a <b>table row</b> shows the same line on the board. At most 20 moves of the line are shown.</p>
+  <div class="win dark"><div class="boardwrap"><canvas data-board='{"mode":"pv","upto":8}'></canvas></div><div class="panel" data-panel='{"hl":0}'></div></div>
+</div>
+
+<div class="section">
+  <h2>3 · How the variation's stones look</h2>
+  <p class="cap"><b>A · Solid stones with numbers</b> <span class="rec">recommended</span>: the same stones as the game, so captures and shape read exactly as they would. Numbers in Inter, white on black and black on white.
+  <b>B · Translucent stones</b>: makes it obvious the stones are hypothetical, but shape is harder to read and the wood grain shows through the numbers.</p>
+  <div class="row">
+    <div><div class="label">A · SOLID</div><div class="boardonly"><canvas data-board='{"mode":"pv","upto":8}'></canvas></div></div>
+    <div><div class="label">B · TRANSLUCENT</div><div class="boardonly"><canvas data-board='{"mode":"pv","upto":8,"ghost":true}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>4 · Stepping through the variation with the wheel</h2>
+  <p class="cap">While the pointer stays on the candidate, the wheel steps through the line: down adds the next move, up takes one back. Here, three moves in. Every stone keeps its number; the newest one gets a bold number and a thin ring so it is easy to find. The row shows <code>3 / 8</code>. Leaving the candidate resets the line.</p>
+  <div class="row">
+    <div><div class="label">STEP 3 OF 8</div><div class="boardonly"><canvas data-board='{"mode":"pv","upto":3}'></canvas></div></div>
+    <div><div class="label">TABLE ROW WHILE STEPPING</div><div class="crop dark" data-table='{"hl":0,"step":"3 / 8"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>5 · Engine indicator: hover details and the visit limit</h2>
+  <p class="cap">Hovering the dot shows a small card: engine version and backend, network, visits per second, and the visits so far. Clicking still pauses and resumes. When the position reaches the visit limit set in settings, the dot becomes a <b>hollow green ring</b> (stopped at the limit, not paused) and the card says so; clicking it continues the search for another round of the same size.</p>
+  <div class="row">
+    <div><div class="label">ANALYSING · HOVER</div><div class="crop dark" style="height:250px" data-header='{"card":"run"}'></div></div>
+    <div><div class="label">STOPPED AT THE LIMIT · HOVER · LIGHT</div><div class="crop light" style="height:250px" data-header='{"card":"limit","dot":"limit"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>6 · Light theme</h2>
+  <div class="win light"><div class="boardwrap"><canvas data-board='{"mode":"discs"}'></canvas></div><div class="panel" data-panel='{}'></div></div>
+</div>
+
+<script>
+// Moves of the 2025 Samsung Cup final, game 2 (public domain, CWI archive), as in the M6 mockup.
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58;
+const LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+
+function play(upto, extra) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, upto).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 }));
+  for (const m of (extra || [])) seq.push(m);
+  let last = null;
+  for (const {x, y, c} of seq) {
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+
+// Candidates for Black at move 59. Win rate and lead are Black's.
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8, v:1240, pv:['L14','M13','M14','N13','L12','M12','K12','N12'] },
+  { p:'M13', w:53.1, s:1.3, v:842,  pv:['M13','L14'], played:true },
+  { p:'K12', w:52.4, s:0.9, v:512,  pv:['K12'] },
+  { p:'Q10', w:50.9, s:0.2, v:203,  pv:['Q10'] },
+  { p:'C10', w:49.6, s:-0.4, v:96,  pv:['C10'] },
+  { p:'N11', w:48.8, s:-0.9, v:41,  pv:['N11'] },
+];
+const tier = (c) => { const loss = CANDS[0].w - c.w; return c === CANDS[0] ? 'best' : loss < 2 ? 'close' : loss <= 4 ? 'doubt' : 'poor'; };
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function wood(ctx, W) {
+  ctx.fillStyle = '#DDB067'; ctx.fillRect(0, 0, W, W);
+  const r = rand(7);
+  for (let i = 0; i < 260; i++) {
+    const x = r() * W, w = 0.6 + r() * 3.2, a = 0.02 + r() * 0.06;
+    ctx.fillStyle = r() > .5 ? `rgba(120,72,20,${a})` : `rgba(255,236,190,${a})`;
+    ctx.beginPath(); ctx.moveTo(x, 0);
+    for (let y = 0; y <= W; y += 40) ctx.lineTo(x + Math.sin(y / 180 + i) * 2.2, y);
+    ctx.lineTo(x + w, W); ctx.lineTo(x + w, 0); ctx.fill();
+  }
+  const top = ctx.createLinearGradient(0, 0, 0, 10); top.addColorStop(0, 'rgba(255,245,220,.45)'); top.addColorStop(1, 'rgba(255,245,220,0)');
+  ctx.fillStyle = top; ctx.fillRect(0, 0, W, 10);
+  const bot = ctx.createLinearGradient(0, W - 8, 0, W); bot.addColorStop(0, 'rgba(90,52,10,0)'); bot.addColorStop(1, 'rgba(90,52,10,.45)');
+  ctx.fillStyle = bot; ctx.fillRect(0, W - 8, W, 8);
+}
+function stone(ctx, cx, cy, r, color, seed) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .55; ctx.shadowOffsetX = r * .14; ctx.shadowOffsetY = r * .2;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.55)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  if (color === 1) {
+    const gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r);
+    gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a');
+    ctx.fillStyle = gr;
+  } else {
+    const gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa');
+    ctx.fillStyle = gr;
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1) {
+    const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5);
+    hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  } else {
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.clip();
+    ctx.translate(cx, cy); ctx.rotate(-0.7 + (seed % 4) * 0.12);
+    ctx.strokeStyle = 'rgba(150,135,110,.10)'; ctx.lineWidth = Math.max(.6, r * .035);
+    for (let k = -r; k < r; k += r * .16) { ctx.beginPath(); ctx.moveTo(-r, k); ctx.quadraticCurveTo(0, k + r*.08, r, k); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+function disc(ctx, cx, cy, r, c, dpr) {
+  const t = tier(c);
+  const px = (v) => v * dpr;
+  ctx.save();
+  if (t === 'best') { ctx.shadowColor = 'rgba(40,20,4,.35)'; ctx.shadowBlur = px(6); ctx.shadowOffsetY = px(2); }
+  ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1;
+  ctx.fillStyle = t === 'best' ? '#FDF6E3' : '#FBF1D9';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  const ring = { best:[3.5,'#B8321F',1], close:[1.5,'#B8321F',1], doubt:[1.5,'#8A6A32',1], poor:[1,'#8A6A32',.6] }[t];
+  ctx.save(); ctx.globalAlpha = ring[2]; ctx.lineWidth = px(ring[0]); ctx.strokeStyle = ring[1];
+  ctx.beginPath(); ctx.arc(cx, cy, r - px(ring[0]) / 2, 0, 7); ctx.stroke(); ctx.restore();
+  if (c.played) { ctx.lineWidth = px(2.5); ctx.strokeStyle = '#2B1D0E'; ctx.beginPath(); ctx.arc(cx, cy, r + px(2.5), 0, 7); ctx.stroke(); }
+  const ink = t === 'best' || t === 'close' ? '#2B1D0E' : '#4A3410';
+  ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`;
+  ctx.fillText(c.w.toFixed(1), cx, cy - r * .2);
+  ctx.font = `500 ${r * .48}px Inter`;
+  ctx.fillText((c.s > 0 ? '+' : c.s < 0 ? '−' : '') + Math.abs(c.s).toFixed(1), cx, cy + r * .36);
+}
+
+function draw(canvas, opt) {
+  const css = 868, dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  wood(ctx, W);
+  const margin = 42 * dpr, sp = (W - 2 * margin) / (N - 1);
+  const at = i => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N-1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N-1), at(i)); }
+  ctx.stroke();
+  ctx.lineWidth = Math.round(1.6 * dpr); ctx.strokeRect(at(0), at(0), at(N-1) - at(0), at(N-1) - at(0));
+  ctx.fillStyle = '#3A2A14';
+  for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .11, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${12 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i)); }
+
+  const base = play(UPTO);
+  let pvStones = [];
+  let g = base.g;
+  if (opt.mode === 'pv') {
+    const line = CANDS[0].pv.slice(0, opt.upto).map((p, i) => { const [x, y] = pt(p); return { x, y, c: i % 2 === 0 ? 1 : 2, n: i + 1 }; });
+    g = play(UPTO, line).g;
+    pvStones = line.filter((m) => g[m.y][m.x] === m.c);
+  }
+  const pvAt = new Map(pvStones.map((m) => [m.x + ',' + m.y, m]));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (!g[y][x]) continue;
+    const m = pvAt.get(x + ',' + y);
+    if (m && opt.ghost) { ctx.save(); ctx.globalAlpha = .55; stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3); ctx.restore(); }
+    else stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3);
+  }
+  if (opt.mode !== 'pv' && base.last) {
+    const c = g[base.last[1]][base.last[0]];
+    ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a';
+    ctx.beginPath(); ctx.arc(at(base.last[0]), at(base.last[1]), sp * .11, 0, 7); ctx.fill();
+  }
+  // Numbers on the variation's stones; the newest one bold, with a thin ring.
+  for (const m of pvStones) {
+    const newest = m.n === pvStones[pvStones.length - 1].n && opt.upto < CANDS[0].pv.length;
+    ctx.fillStyle = m.c === 1 ? '#f4f1ea' : '#1d1b17';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${newest ? 700 : 600} ${sp * .42}px Inter`;
+    ctx.fillText(String(m.n), at(m.x), at(m.y) + dpr);
+    if (newest) { ctx.strokeStyle = m.c === 1 ? 'rgba(244,241,234,.75)' : 'rgba(29,27,23,.6)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(at(m.x), at(m.y), sp * .37, 0, 7); ctx.stroke(); }
+  }
+  if (opt.mode === 'discs') for (const c of CANDS) { const [x, y] = pt(c.p); disc(ctx, at(x), at(y), sp * .47, c, dpr); }
+}
+
+// ---- Panel --------------------------------------------------------------------------
+function header(opt = {}) {
+  return `<div class="hdr"><span class="t">柯洁 九段 对 申真谞 九段</span><span class="chip">韩国 · 6.5</span>
+    <span class="nav">⏮ ‹ <b>58</b> / 214 › ⏭</span><span class="dot ${opt.dot || ''} ${opt.card ? 'hov' : ''}"></span><span class="gear">⚙</span></div>`;
+}
+function bar() {
+  const w = 54.2;
+  return `<div class="wr"><div class="bar"><div class="b" style="width:${w}%">${w}%<span class="ld">领先 1.8 目</span></div><div class="w">${(100 - w).toFixed(1)}%</div></div></div>`;
+}
+function graph() {
+  const W = 540, H = 150, L = 52, R = 44, T = 12, B = 22, gw = W - L - R, gh = H - T - B, TOTAL = 214, CUR = 58;
+  const r = rand(11); let l = 0.2; const lead = [];
+  for (let i = 0; i <= CUR; i++) { l += (r() - .5) * .7 + (i === 23 ? -1.8 : i === 41 ? 2.2 : 0); lead.push(l); }
+  lead[CUR] = 1.8;
+  const wr = lead.map((v) => 1 / (1 + Math.exp(-v / 6.5)));
+  const x = (i) => L + i / TOTAL * gw, yw = (w) => T + (1 - w) * gh, ys = (s) => T + (.5 - s / 20) * gh;
+  const has = (i) => i <= 30 || (i >= 44 && i <= CUR);
+  const runs = []; let cur = null;
+  for (let i = 0; i <= CUR; i++) { if (has(i)) { if (!cur) runs.push(cur = []); cur.push(i); } else cur = null; }
+  const path = (ids, f) => ids.map((i, k) => (k ? 'L' : 'M') + x(i).toFixed(1) + ' ' + f(i).toFixed(1)).join(' ');
+  let s = `<svg width="${W}" height="${H}">`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${yw(.5)}" y2="${yw(.5)}" stroke="var(--hairline)"/><line x1="${L}" x2="${W-R}" y1="${yw(1)}" y2="${yw(1)}" stroke="var(--soft)"/><line x1="${L}" x2="${W-R}" y1="${yw(0)}" y2="${yw(0)}" stroke="var(--soft)"/>`;
+  const lab = (t, xx, yy, a, c) => `<text x="${xx}" y="${yy + 4}" font-size="10.5" fill="${c}" text-anchor="${a}">${t}</text>`;
+  s += lab('100%', L - 8, yw(1), 'end', 'var(--muted)') + lab('50%', L - 8, yw(.5), 'end', 'var(--muted)') + lab('0%', L - 8, yw(0), 'end', 'var(--muted)');
+  s += lab('+10', W - R + 8, yw(1), 'start', 'var(--score)') + lab('0', W - R + 8, yw(.5), 'start', 'var(--score)') + lab('−10', W - R + 8, yw(0), 'start', 'var(--score)');
+  for (let m = 50; m < TOTAL; m += 50) s += `<text x="${x(m)}" y="${H - 4}" font-size="9.5" fill="var(--line)" text-anchor="middle">${m}</text>`;
+  for (const i of [23, 41]) s += `<rect x="${x(i) - 1}" y="${yw(0) - 9}" width="2" height="9" fill="var(--muted)" opacity=".7"/>`;
+  for (const run of runs) s += `<path d="${path(run, (i) => ys(lead[i]))}" fill="none" stroke="var(--score)" stroke-width="1.4"/><path d="${path(run, (i) => yw(wr[i]))}" fill="none" stroke="var(--text)" stroke-width="1.6"/>`;
+  s += `<line x1="${x(CUR)}" x2="${x(CUR)}" y1="${T - 4}" y2="${yw(0)}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  s += `<circle cx="${x(CUR)}" cy="${ys(lead[CUR])}" r="3" fill="var(--score)" stroke="var(--panel)" stroke-width="1.5"/><circle cx="${x(CUR)}" cy="${yw(wr[CUR])}" r="3.2" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5"/>`;
+  return `<div class="graph">${s}</svg></div><div class="legend"><span class="k"><span class="sw" style="background:var(--text)"></span>黑胜率</span><span class="k"><span class="sw" style="background:var(--score)"></span>黑领先目数</span><span class="k"><span class="bar1"></span>失误</span></div>`;
+}
+function table(opt = {}) {
+  const fmtV = (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
+  let s = `<div class="tbl"><div class="th"><span>候选点</span><span>总计算量 3.1k</span></div>
+    <div class="tr head"><span></span><span>落点</span><span>胜率</span><span>目差</span><span>计算量</span><span>与最佳相比</span></div>`;
+  CANDS.forEach((c, i) => {
+    const diff = i === 0 ? '最佳' : '−' + (CANDS[0].w - c.w).toFixed(1) + '%';
+    const last = c.played ? `<span class="act">实战 ${diff}</span>` : `<span class="${i === 0 ? 'act' : ''}">${diff}</span>`;
+    const step = opt.step && opt.hl === i ? `<span class="step">${opt.step}</span>` : '';
+    s += `<div class="tr ${opt.hl === i ? 'hl' : ''}"><span><i class="rk ${tier(c)} ${c.played ? 'played' : ''}">${i + 1}</i></span><span class="pt">${c.p}${step}</span><span>${c.w.toFixed(1)}%</span><span class="sc">${c.s > 0 ? '+' : c.s < 0 ? '−' : ''}${Math.abs(c.s).toFixed(1)}</span><span class="vis">${fmtV(c.v)}</span>${last}</div>`;
+  });
+  return s + '</div>';
+}
+function card(kind) {
+  const rows = kind === 'limit'
+    ? `<div class="h">已达到每步上限</div><div><span class="k">计算量</span>10,000 / 10,000</div><div><span class="k">引擎</span>KataGo 1.18.2 · Metal</div><div><span class="k">网络</span>kata1-b28c512nbt-s9…</div><div class="hint">点击继续计算 10,000 次</div>`
+    : `<div class="h">分析中</div><div><span class="k">速度</span>1,240 次/秒</div><div><span class="k">计算量</span>3,104</div><div><span class="k">引擎</span>KataGo 1.18.2 · Metal</div><div><span class="k">网络</span>kata1-b28c512nbt-s9…</div><div class="hint">点击暂停</div>`;
+  return `<div class="card" style="right:30px; top:50px">${rows}</div>`;
+}
+
+document.fonts.ready.then(() => {
+  document.querySelectorAll('canvas[data-board]').forEach((c) => draw(c, JSON.parse(c.dataset.board)));
+  document.querySelectorAll('[data-panel]').forEach((el) => { const o = JSON.parse(el.dataset.panel); el.innerHTML = header() + bar() + graph() + table(o); });
+  document.querySelectorAll('[data-table]').forEach((el) => { el.innerHTML = table(JSON.parse(el.dataset.table)); });
+  document.querySelectorAll('[data-header]').forEach((el) => { const o = JSON.parse(el.dataset.header); el.innerHTML = header(o) + bar() + card(o.card); });
+});
+</script>
+</body>
+</html>

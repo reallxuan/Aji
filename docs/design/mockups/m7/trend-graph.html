@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 trend graph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --pop:#ffffff; --barblack:#1d1d1b; --barwhite:#ffffff; --baredge:#c9c9c4; }
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --pop:#2a2a2e; --barblack:#050506; --barwhite:#f4f2ec; --baredge:#3a3a40; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1140px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1140px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:960px; }
+  .cap b { color:#ECEAE4; }
+  .rec { color:#7fd1a8; font-weight:600; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+
+  .crop { width:540px; background:var(--panel); color:var(--text); border-left:1px solid var(--hairline); border-radius:8px; outline:1px solid #2a2a2e; overflow:hidden; position:relative; }
+  .mini { width:540px; }
+
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; align-items:center; font-size:13px; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .hdr .nav .tot { color:var(--muted); }
+  .hdr .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); margin-left:4px; }
+
+  .wr { display:flex; align-items:center; gap:14px; padding:16px 24px 6px; }
+  .bar { flex:1; height:26px; display:flex; border-radius:4px; overflow:hidden; box-shadow:inset 0 0 0 1px var(--baredge); font-size:13px; font-weight:600; }
+  .bar .b { background:var(--barblack); color:#f4f2ec; display:flex; align-items:center; gap:10px; padding-left:9px; }
+  .bar .ld { font-weight:400; opacity:.72; }
+  .bar .w { background:var(--barwhite); color:#1d1d1b; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-right:9px; flex:1; box-shadow:inset 0 0 0 1px var(--baredge); }
+  .lead { font-size:13px; color:var(--muted); white-space:nowrap; }
+  .lead b { color:var(--text); font-weight:500; }
+
+  .graph { padding:4px 0 0; position:relative; }
+  .graph svg { display:block; }
+  .legend { display:flex; align-items:center; gap:14px; padding:2px 24px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); }
+  .legend .k { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .legend .sw { width:14px; height:2px; border-radius:1px; }
+  .legend .bar1 { width:2px; height:9px; background:var(--muted); opacity:.7; }
+  .legend .verdict { margin-left:auto; color:var(--text); white-space:nowrap; }
+  .legend .verdict .tag { color:var(--text); font-weight:600; }
+
+  .tbl { padding:10px 24px 8px; font-size:14px; }
+  .tbl .th { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .tr { display:grid; grid-template-columns:26px 54px 1fr 1fr 1fr 1.2fr; align-items:center; padding:8px 0; border-bottom:1px solid var(--soft); }
+  .tr span:nth-child(n+3) { text-align:right; }
+  .tr .muted { color:var(--muted); }
+  .rk { width:20px; height:20px; border-radius:50%; font-size:11px; display:inline-flex; align-items:center; justify-content:center; background:#FBF1D9; color:#2B1D0E; }
+  .rk.best { box-shadow:inset 0 0 0 2.5px #B8321F; font-weight:700; background:#FDF6E3; }
+  .rk.close { box-shadow:inset 0 0 0 1.5px #B8321F; }
+  .rk.doubt { box-shadow:inset 0 0 0 1.5px #8A6A32; opacity:.9; }
+
+  .tip { position:absolute; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:6px; font-size:12px; padding:6px 9px; line-height:1.55; box-shadow:0 6px 18px rgba(0,0,0,.22); white-space:nowrap; pointer-events:none; }
+  .tip .m { color:var(--muted); }
+  .tip .s { color:var(--score); }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M7 · 胜率走势图 trend graph</h1>
+  Made-up data for a 247-move game. The user stepped through moves 0–95 with analysis running, held → through 96–110 (each position had only a few visits, too few to plot),
+  stepped 111–130, and is now on move 130. Earlier they also jumped to the end and looked at moves 238–247. Everything else has no result yet.
+  <ul>
+    <li>x axis: the game's main line, move 0 to the last move, always the full length, so the graph does not rescale as more moves are analysed.</li>
+    <li>White line: Black's win rate on the left axis (0–100 %). Amber line: Black's score lead on the right axis, symmetric about 0 so that 0 points sits on 50 %.</li>
+    <li>Short bars along the bottom: mistakes, where both the position before and after a move have results.</li>
+    <li>Dashed line: the current move. Hover anywhere for that move's numbers; click to go there.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 · Win-rate bar, without 误差</h2>
+  <p class="cap"><b>Chosen: A</b>, and the lead hides itself when the leading segment is too narrow for both texts. The bar now runs the full width of the panel. <b>A · Lead inside the bar</b>: the lead sits in the leading side's segment, next to its percentage, in a lighter weight. That segment is always at least half the bar, so there is room. In the endgame the win rate sits at 99 % and the lead is the only number that still moves, so it earns a place at the top. <b>B · Percentages only</b>: the cleanest; the lead is read from the amber line and the 候选点 table.</p>
+  <div class="row">
+    <div><div class="label">A · LEAD INSIDE · BLACK LEADS</div><div class="crop dark mini" data-bar='{"w":69.0,"lead":3.5,"mode":"lead"}'></div></div>
+    <div><div class="label">A · LEAD INSIDE · WHITE LEADS</div><div class="crop light mini" data-bar='{"w":38.2,"lead":-2.1,"mode":"lead"}'></div></div>
+  </div>
+  <div class="row" style="margin-top:18px">
+    <div><div class="label">B · PERCENTAGES ONLY</div><div class="crop dark mini" data-bar='{"w":69.0,"lead":3.5,"mode":"plain"}'></div></div>
+    <div><div class="label">B · PERCENTAGES ONLY</div><div class="crop light mini" data-bar='{"w":38.2,"lead":-2.1,"mode":"plain"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 · Proposed design, both themes</h2>
+  <p class="cap"><b>Approved 2026-11-21.</b> Gaps are left empty (break), the lines carry no fill, there is no verdict line, and the score range is chosen from the data (here ±10 points). Dots mark the two values at the current move.</p>
+  <div class="row">
+    <div><div class="label">DARK</div><div class="crop dark" data-panel='{"gap":"break"}'></div></div>
+    <div><div class="label">LIGHT</div><div class="crop light" data-panel='{"gap":"break"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>3 · Moves with no result: how to draw the gaps</h2>
+  <p class="cap"><b>A · Dotted bridge for gaps up to 20 moves, empty beyond</b> <span class="rec">was recommended</span>: the shape of the game stays readable, you can still see which stretches were really analysed, and a jump to the end does not draw a line across 100 unseen moves.
+  <b>B · Break</b> <span class="rec">chosen by the owner</span>: honest; a stretch with no results shows as empty. <b>C · Solid line</b> (LizzieYzy): smoothest, but straight lines across unanalysed moves look like data, worst of all across the 108 moves between 130 and 238.</p>
+  <div class="row">
+    <div><div class="label">A · DOTTED BRIDGE</div><div class="crop dark mini" data-panel='{"gap":"dotted","only":"graph"}'></div></div>
+    <div><div class="label">B · BREAK</div><div class="crop dark mini" data-panel='{"gap":"break","only":"graph"}'></div></div>
+    <div><div class="label">C · SOLID LINE</div><div class="crop dark mini" data-panel='{"gap":"solid","only":"graph"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>4 · Fill under the win-rate line</h2>
+  <p class="cap"><b>A · Line only</b> <span class="rec">recommended</span>, as in the original main-screen design. <b>B · Soft fill</b> between the line and 50 %, which makes who is ahead readable at a glance but adds a grey mass to a panel that is otherwise only lines.</p>
+  <div class="row">
+    <div><div class="label">A · LINE ONLY</div><div class="crop dark mini" data-panel='{"gap":"dotted","only":"graph"}'></div></div>
+    <div><div class="label">B · SOFT FILL</div><div class="crop dark mini" data-panel='{"gap":"dotted","only":"graph","fill":true}'></div></div>
+    <div><div class="label">B · SOFT FILL, LIGHT</div><div class="crop light mini" data-panel='{"gap":"dotted","only":"graph","fill":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>5 · Hovering the graph</h2>
+  <p class="cap">A hairline follows the pointer and a small card gives that move's numbers. On a move with no result the card says so. Clicking jumps to the move; dragging scrubs.</p>
+  <div class="row">
+    <div><div class="label">ON AN ANALYSED MOVE</div><div class="crop dark mini" data-panel='{"gap":"break","only":"graph","hover":72}'></div></div>
+    <div><div class="label">IN A GAP</div><div class="crop light mini" data-panel='{"gap":"break","only":"graph","hover":104}'></div></div>
+  </div>
+</div>
+
+<script>
+// ---- Made-up game ---------------------------------------------------------------------
+const TOTAL = 247, CURRENT = 130;
+const BRIDGE_MAX = 20;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const r = rng(7);
+// Black's score lead drifts, with a few real swings (mistakes).
+const lead = [];
+let l = 0.4;
+// Black's mistakes lower the lead on odd moves; White's raise it on even moves.
+const swings = { 15: -2.4, 38: 2.8, 63: -2.6, 88: 3.4, 101: -2.0, 117: -1.6, 124: 2.6, 130: 2.3, 241: -3.0 };
+for (let i = 0; i <= TOTAL; i++) {
+  l += (r() - 0.5) * 0.7 + (swings[i] || 0);
+  if (i > 120) l -= 0.03;
+  lead.push(+l.toFixed(1));
+}
+// Win rate from the lead, steeper as the game goes on.
+const winrate = lead.map((v, i) => 1 / (1 + Math.exp(-v / (7 - 5 * i / TOTAL))));
+const analysed = new Set();
+for (let i = 0; i <= 95; i++) analysed.add(i);
+for (let i = 111; i <= CURRENT; i++) analysed.add(i);
+for (let i = 238; i <= TOTAL; i++) analysed.add(i);
+const moveName = ['Q16','D4','Q3','D16','C14','R6','O3','F17','E15','J16','R14','P16','C6','F3','H8','E5','D9','K3','N4','C10','F10','M8','J7','G13','N11','O16','R10','L17','Q8','H3','E12'];
+const nameAt = (i) => moveName[i % moveName.length];
+
+// ---- Rendering ------------------------------------------------------------------------
+const W = 540, H = 150, PADL = 52, PADR = 44, PADT = 12, PADB = 22;
+const gw = W - PADL - PADR, gh = H - PADT - PADB;
+const SCORE_RANGE = 10;
+const x = (i) => PADL + (i / TOTAL) * gw;
+const yWr = (w) => PADT + (1 - w) * gh;
+const ySc = (s) => PADT + (0.5 - s / (2 * SCORE_RANGE)) * gh;
+
+function runs() {
+  const out = []; let cur = null;
+  for (let i = 0; i <= TOTAL; i++) {
+    if (analysed.has(i)) { if (!cur) out.push(cur = []); cur.push(i); } else cur = null;
+  }
+  return out;
+}
+function path(ids, fy) { return ids.map((i, k) => (k ? 'L' : 'M') + x(i).toFixed(1) + ' ' + fy(i).toFixed(1)).join(' '); }
+
+function graphSvg(opt) {
+  const rs = runs();
+  const wr = (i) => yWr(winrate[i]), sc = (i) => ySc(lead[i]);
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  // Axes and gridlines
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(.5)}" y2="${yWr(.5)}" stroke="var(--hairline)" />`;
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(1)}" y2="${yWr(1)}" stroke="var(--soft)" />`;
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(0)}" y2="${yWr(0)}" stroke="var(--soft)" />`;
+  const lab = (t, xx, yy, anchor, col) => `<text x="${xx}" y="${yy + 4}" font-size="10.5" fill="${col}" text-anchor="${anchor}">${t}</text>`;
+  s += lab('100%', PADL - 8, yWr(1), 'end', 'var(--muted)') + lab('50%', PADL - 8, yWr(.5), 'end', 'var(--muted)') + lab('0%', PADL - 8, yWr(0), 'end', 'var(--muted)');
+  s += lab('+' + SCORE_RANGE, W - PADR + 8, yWr(1), 'start', 'var(--score)') + lab('0', W - PADR + 8, yWr(.5), 'start', 'var(--score)') + lab('−' + SCORE_RANGE, W - PADR + 8, yWr(0), 'start', 'var(--score)');
+  // Move ticks along the bottom: 50, 100, 150, 200
+  for (let m = 50; m < TOTAL; m += 50) s += `<text x="${x(m)}" y="${H - 4}" font-size="9.5" fill="var(--line)" text-anchor="middle">${m}</text>`;
+  // Fill
+  if (opt.fill) for (const run of rs) {
+    if (run.length < 2) continue;
+    const d = path(run, wr) + ` L${x(run[run.length - 1])} ${yWr(.5)} L${x(run[0])} ${yWr(.5)} Z`;
+    s += `<path d="${d}" fill="var(--text)" opacity=".10" />`;
+  }
+  // Mistake bars: loss for the side that moved, both ends analysed, ≥ 2 % win rate or ≥ 1 point.
+  for (let i = 1; i <= TOTAL; i++) {
+    if (!analysed.has(i) || !analysed.has(i - 1)) continue;
+    const blackMoved = i % 2 === 1;
+    const dw = (winrate[i] - winrate[i - 1]) * (blackMoved ? 1 : -1);
+    const ds = (lead[i] - lead[i - 1]) * (blackMoved ? 1 : -1);
+    const loss = Math.max(-dw * 100, -ds * 2);
+    if (loss < 2) continue;
+    const h = Math.min(18, 3 + loss * 1.2);
+    s += `<rect x="${x(i) - 1}" y="${yWr(0) - h}" width="2" height="${h}" fill="var(--muted)" opacity=".7" />`;
+  }
+  // Lines, run by run, then the bridges between runs.
+  const draw = (fy, col, width) => {
+    let t = '';
+    for (const run of rs) {
+      if (run.length === 1) t += `<circle cx="${x(run[0])}" cy="${fy(run[0])}" r="1.4" fill="${col}" />`;
+      else t += `<path d="${path(run, fy)}" fill="none" stroke="${col}" stroke-width="${width}" stroke-linejoin="round" />`;
+    }
+    for (let k = 1; k < rs.length; k++) {
+      const a = rs[k - 1][rs[k - 1].length - 1], b = rs[k][0];
+      if (b - a > BRIDGE_MAX) continue;
+      if (opt.gap === 'dotted') t += `<path d="M${x(a)} ${fy(a)} L${x(b)} ${fy(b)}" fill="none" stroke="${col}" stroke-width="1.2" stroke-dasharray="1.5 3" opacity=".55" />`;
+      if (opt.gap === 'solid') t += `<path d="M${x(a)} ${fy(a)} L${x(b)} ${fy(b)}" fill="none" stroke="${col}" stroke-width="${width}" />`;
+    }
+    return t;
+  };
+  s += draw(sc, 'var(--score)', 1.4);
+  s += draw(wr, 'var(--text)', 1.6);
+  // Current move
+  s += `<line x1="${x(CURRENT)}" x2="${x(CURRENT)}" y1="${PADT - 4}" y2="${yWr(0)}" stroke="var(--muted)" stroke-dasharray="3 3" />`;
+  s += `<circle cx="${x(CURRENT)}" cy="${sc(CURRENT)}" r="3" fill="var(--score)" stroke="var(--panel)" stroke-width="1.5" />`;
+  s += `<circle cx="${x(CURRENT)}" cy="${wr(CURRENT)}" r="3.2" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5" />`;
+  // Hover
+  if (opt.hover != null) {
+    const h = opt.hover;
+    s += `<line x1="${x(h)}" x2="${x(h)}" y1="${PADT - 4}" y2="${yWr(0)}" stroke="var(--text)" opacity=".35" />`;
+    if (analysed.has(h)) {
+      s += `<circle cx="${x(h)}" cy="${sc(h)}" r="2.6" fill="var(--score)" />`;
+      s += `<circle cx="${x(h)}" cy="${wr(h)}" r="2.8" fill="var(--text)" />`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function tipHtml(h) {
+  const col = h % 2 === 1 ? '黑' : '白';
+  if (!analysed.has(h)) return `<div>第 ${h} 手 ${col} ${nameAt(h)}</div><div class="m">尚未分析</div>`;
+  const w = (winrate[h] * 100).toFixed(1), sc = lead[h];
+  const leadText = sc >= 0 ? `黑领先 ${sc.toFixed(1)} 目` : `白领先 ${(-sc).toFixed(1)} 目`;
+  return `<div>第 ${h} 手 ${col} ${nameAt(h)}</div><div>黑胜率 ${w}% · <span class="s">${leadText}</span></div>`;
+}
+
+function legendHtml() {
+  return `<div class="legend">
+    <span class="k"><span class="sw" style="background:var(--text)"></span>黑胜率</span>
+    <span class="k"><span class="sw" style="background:var(--score)"></span>黑领先目数</span>
+    <span class="k"><span class="bar1"></span>失误</span>
+  </div>`;
+}
+
+function barHtml(wPct, ld, mode) {
+  const w = wPct.toFixed(1), b = (100 - wPct).toFixed(1);
+  const leadText = `领先 ${Math.abs(ld).toFixed(1)} 目`;
+  const bl = mode === 'lead' && ld > 0 ? `<span class="ld">${leadText}</span>` : '';
+  const wl = mode === 'lead' && ld < 0 ? `<span class="ld">${leadText}</span>` : '';
+  return `<div class="wr"><div class="bar"><div class="b" style="width:${w}%">${w}%${bl}</div><div class="w">${wl}${b}%</div></div></div>`;
+}
+
+function panelHtml(opt) {
+  const w = (winrate[CURRENT] * 100).toFixed(1), b = (100 - w).toFixed(1);
+  let s = '';
+  if (opt.only !== 'graph') {
+    s += `<div class="hdr"><span class="t">林清 五段 对 周野 五段</span><span class="chip">中国 · 7.5</span>
+      <span class="nav">⏮ ‹ <b>${CURRENT}</b><span class="tot">/ ${TOTAL}</span> › ⏭</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>`;
+    s += barHtml(+w, lead[CURRENT], opt.bar || 'lead');
+  }
+  s += `<div class="graph">${graphSvg(opt)}</div>`;
+  s += legendHtml();
+  if (opt.only !== 'graph') {
+    s += `<div class="tbl"><div class="th"><span>候选点</span><span>总计算量 3.1k</span></div>
+      <div class="tr muted" style="font-size:12px;border-bottom:1px solid var(--hairline)"><span></span><span>落点</span><span>胜率</span><span>目差</span><span>计算量</span><span>与最佳相比</span></div>
+      <div class="tr"><span><i class="rk best">1</i></span><span>J7</span><span>${w}%</span><span>+1.8</span><span>1.2k</span><span style="font-weight:600">最佳</span></div>
+      <div class="tr"><span><i class="rk close">2</i></span><span>M8</span><span>${(w - 1.1).toFixed(1)}%</span><span>+1.3</span><span>840</span><span>−1.1%</span></div>
+      <div class="tr"><span><i class="rk doubt">3</i></span><span>N5</span><span>${(w - 3.3).toFixed(1)}%</span><span>+0.2</span><span>203</span><span style="font-weight:600">实战 −3.3%</span></div>
+    </div>`;
+  }
+  return s;
+}
+
+for (const el of document.querySelectorAll('[data-bar]')) {
+  const o = JSON.parse(el.dataset.bar);
+  el.innerHTML = barHtml(o.w, o.lead, o.mode);
+  el.style.paddingBottom = '12px';
+}
+for (const el of document.querySelectorAll('[data-panel]')) {
+  const opt = JSON.parse(el.dataset.panel);
+  el.innerHTML = panelHtml(opt);
+  if (opt.hover != null) {
+    const t = document.createElement('div');
+    t.className = 'tip';
+    t.innerHTML = tipHtml(opt.hover);
+    t.style.left = (x(opt.hover) + 10) + 'px';
+    t.style.top = '18px';
+    el.appendChild(t);
+  }
+}
+</script>
+</body>
+</html>
