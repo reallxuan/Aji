@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>M5 settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground:#161618; --panel:#1E1E21; --hairline:#303035; --soft:#28282C;
+    --text:#ECEAE4; --muted:#A3A19A; --line:#5A5A61; --ok:#1E8E5A; --err:#E5484D;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:var(--text);
+         font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1180px; margin:0 auto 22px; color:#c9c7c0; font-size:14px; line-height:1.55; }
+  .intro h1 { font-size:20px; margin:0 0 6px; color:var(--text); font-weight:600; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, 560px); gap:28px 40px; justify-content:center; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 8px; line-height:1.45; }
+  .cap b { color:var(--text); }
+  .panel { width:560px; height:660px; background:var(--panel); border-left:1px solid var(--hairline);
+           display:flex; flex-direction:column; position:relative; outline:1px solid #2a2a2e; }
+  .top { padding:22px 28px 0; }
+  .toprow { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--muted); }
+  .lang { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:4px; padding:2px 8px; }
+  .progress { display:flex; gap:6px; margin-top:12px; }
+  .progress span { flex:1; height:3px; background:var(--text); border-radius:2px; }
+  .progress span.dim { background:var(--line); }
+  h2 { font-size:24px; font-weight:700; margin:34px 0 4px; letter-spacing:.5px; }
+  .sub { font-size:13px; color:var(--muted); }
+  .rows { padding:18px 28px 0; }
+  .row { display:flex; align-items:center; padding:13px 0; font-size:15px; }
+  .row .ic { width:34px; color:var(--muted); font-size:14px; }
+  .row .name { flex:1; }
+  .row .st { color:var(--muted); font-size:13px; }
+  .row.bad .ic, .row.bad .st { color:var(--err); }
+  .row.wait { color:var(--muted); }
+  .msg { margin:14px 28px 0; padding:16px 0 0; border-top:1px solid var(--hairline); }
+  .msg h3 { font-size:16px; margin:0 0 6px; font-weight:700; }
+  .msg p { font-size:14px; color:var(--muted); margin:0 0 10px; line-height:1.6; }
+  .details { font-size:13px; color:var(--muted); margin-top:4px; }
+  .details summary { cursor:pointer; }
+  .log { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8f8d87; background:#18181b;
+         padding:10px 12px; margin-top:8px; line-height:1.5; white-space:pre-wrap; border-left:2px solid var(--hairline); }
+  .lic { padding:0 28px; }
+  .lic .l { display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--soft); font-size:15px; }
+  .lic a { color:var(--text); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line); font-size:13px; }
+  .foot { margin-top:auto; border-top:1px solid var(--hairline); padding:18px 28px; display:flex; align-items:center; gap:12px; }
+  .foot .sp { flex:1; }
+  .btn { font:inherit; font-size:14px; padding:9px 18px; border-radius:6px; border:1px solid var(--hairline); background:transparent; color:var(--text); }
+  .btn.pri { background:var(--text); color:#161618; border-color:var(--text); font-weight:600; }
+  .link { font-size:13px; color:var(--muted); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--err); margin-right:8px; vertical-align:1px; }
+  .hdr { display:flex; align-items:center; gap:14px; padding:16px 28px; border-bottom:1px solid var(--hairline); font-size:14px; color:var(--muted); }
+  .hdr .title { color:var(--text); flex:1; }
+</style>
+<style>
+  .sh { padding:14px 28px 4px; font-size:12px; color:var(--muted); letter-spacing:1px; }
+  .sec { border-top:1px solid var(--hairline); padding-bottom:8px; }
+  .sec:first-of-type { border-top:none; }
+  .set { display:flex; align-items:center; padding:9px 28px; font-size:14.5px; min-height:40px; }
+  .set .k { flex:1; }
+  .seg { display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; font-size:13px; }
+  .seg span { padding:5px 12px; color:var(--muted); border-left:1px solid var(--hairline); }
+  .seg span:first-child { border-left:none; }
+  .seg span.on { background:var(--soft); color:var(--text); }
+  .sel { border:1px solid var(--hairline); border-radius:6px; padding:5px 10px; font-size:13px; min-width:92px; display:inline-flex; justify-content:space-between; gap:10px; }
+  .sel:after { content:'▾'; color:var(--muted); }
+  .inp { border:1px solid var(--hairline); border-radius:6px; padding:5px 10px; font-size:13px; width:110px; color:var(--muted); }
+  .note { font-size:12.5px; color:var(--muted); padding:0 28px 8px; line-height:1.5; }
+  .disc { width:46px; height:46px; border-radius:50%; background:#FDF6E3; border:3px solid #B8321F; color:#2B1D0E;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11.5px; font-weight:600; line-height:1.15; margin-left:14px;}
+  .wood { background:#DDB067; padding:10px 14px; border-radius:4px; display:flex; align-items:center; }
+  .eng { padding:4px 28px 6px; font-size:13.5px; color:var(--muted); line-height:1.7; }
+  .eng b { color:var(--text); font-weight:500; }
+  .btns { display:flex; gap:10px; padding:8px 28px 6px; flex-wrap:wrap; }
+  .btn.sm { padding:6px 13px; font-size:13px; }
+  .nav { display:flex; align-items:center; gap:10px; padding:16px 28px; border-bottom:1px solid var(--hairline); font-size:15px; }
+  .nav .back { color:var(--muted); }
+  .chev { color:var(--muted); }
+  .grey { background:var(--line) !important; }
+  .about p { font-size:13.5px; color:var(--muted); line-height:1.65; margin:0 0 10px; }
+  .about { padding:16px 28px; }
+  .about a { color:var(--text); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line); }
+  .tp { display:flex; justify-content:space-between; padding:10px 28px; border-top:1px solid var(--soft); font-size:14px; }
+  .tp span:last-child { color:var(--muted); font-size:12.5px; }
+  .tag { font-size:11px; color:#E3A548; border:1px solid #6b5426; border-radius:3px; padding:0 5px; margin-left:8px; }
+</style></head>
+<body>
+
+<div class="intro">
+  <h1>Settings, About, and the no-engine screen</h1>
+  The gear in the header swaps the panel body for settings, and the board stays where it is. Every change applies at once, with no Save button and no restart. The item marked <span class="tag">new</span> is my proposal and wasn't on your list.
+</div>
+<div class="grid">
+
+<div data-choice="s" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>S. Settings.</b> Four groups. The disc lines are any two of win rate, score lead and visits, with a live preview disc. The analysis limit is empty by default, meaning no limit. The engine group names what is installed and holds G1's restart and stop.</p>
+  <div class="panel" style="height:760px">
+    <div class="nav"><span class="back">←</span><span>设置</span></div>
+    <div class="sec">
+      <div class="sh">界面</div>
+      <div class="set"><span class="k">语言</span><span class="seg"><span class="on">跟随系统</span><span>简体中文</span><span>English</span></span></div>
+      <div class="set"><span class="k">主题</span><span class="seg"><span class="on">跟随系统</span><span>深色</span><span>浅色</span></span></div>
+    </div>
+    <div class="sec">
+      <div class="sh">分析</div>
+      <div class="set"><span class="k">选点第一行</span><span class="sel">胜率</span><span class="wood" style="margin-left:14px;padding:4px 8px"><span class="disc" style="margin:0">54.2<br>+1.8</span></span></div>
+      <div class="set"><span class="k">选点第二行</span><span class="sel">目差</span><span style="width:76px"></span></div>
+      <div class="set"><span class="k">每步计算量上限</span><span class="inp">不限</span></div>
+      <div class="note">达到上限后停止分析，显卡空闲；换一步时重新开始。</div>
+    </div>
+    <div class="sec">
+      <div class="sh">引擎</div>
+      <div class="eng"><b>KataGo 1.18.2 · Metal</b><br>权重 kata1-tf3-b11c768-s12382M · 4 线程</div>
+      <div class="btns"><button class="btn sm">重启引擎</button><button class="btn sm">停止引擎</button><button class="btn sm">重新设置引擎</button></div>
+      <div class="set"><span class="k">未使用的已下载文件 <span class="tag">new</span></span><span style="color:var(--muted);font-size:13px;margin-right:12px">1.3 GB</span><button class="btn sm">删除</button></div>
+    </div>
+    <div class="sec">
+      <div class="set"><span class="k">关于 Aji</span><span class="chev">›</span></div>
+    </div>
+  </div>
+</div>
+
+<div data-choice="ab" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>About (G4).</b> The version, the AGPL notice and source link, then one row per bundled or downloaded third-party item. Each row opens its licence text, which ships inside Aji, so it works offline.</p>
+  <div class="panel" style="height:560px">
+    <div class="nav"><span class="back">←</span><span>关于 Aji</span></div>
+    <div class="about">
+      <p style="color:var(--text);font-size:15px">Aji 0.1.0 · macOS aarch64</p>
+      <p>Aji 是自由软件，按 GNU Affero 通用公共许可证第 3 版或更高版本发布。<br>源代码：<a>github.com/reallxuan/aji</a></p>
+    </div>
+    <div class="sh" style="padding-top:4px">第三方软件</div>
+    <div class="tp"><span>KataGo</span><span>KataGo 许可 ›</span></div>
+    <div class="tp"><span>KataGo 权重（katagotraining.org）</span><span>权重许可 ›</span></div>
+    <div class="tp"><span>Inter</span><span>SIL OFL 1.1 ›</span></div>
+    <div class="tp"><span>霞鹜文楷 LXGW WenKai</span><span>SIL OFL 1.1 ›</span></div>
+    <div class="tp"><span>其他开源组件</span><span>列表 ›</span></div>
+  </div>
+</div>
+
+<div data-choice="ne" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>No engine (G2).</b> After "Set up later", the main screen opens with an empty board and a grey dot. The panel body says there is no engine and offers one button. Clicking the grey dot does the same. Once M6 lands, games open and navigate here as usual.</p>
+  <div class="panel" style="height:420px">
+    <div class="hdr"><span class="title">未命名棋局</span><span>⏮ ◀ 0 / 0 ▶ ⏭</span><span><span class="dot grey"></span></span><span>⚙</span></div>
+    <div class="top">
+      <h2 style="margin-top:30px;font-size:20px">尚未设置引擎</h2>
+      <div class="sub" style="margin-top:8px">设置好 KataGo 后才能分析。</div>
+    </div>
+    <div class="btns" style="margin-top:18px"><button class="btn pri">设置引擎</button></div>
+  </div>
+</div>
+
+</div></body></html>
