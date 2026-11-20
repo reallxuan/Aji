@@ -89,6 +89,28 @@ describe('SettingsPanel', () => {
     }));
   });
 
+  it('saves the default rules for new games, and leaves the open game alone', async () => {
+    const transport = mount();
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    const rules = screen.getByRole('radiogroup', { name: '新棋局默认规则' });
+    expect(within(rules).getByRole('radio', { name: '中国规则' })).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+    expect(
+      screen.getByText('用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。'),
+    ).toBeInTheDocument();
+    await act(async () => fireEvent.click(within(rules).getByRole('radio', { name: '自定义' })));
+    expect(sets(transport.requests).at(-1)?.defaultRules).toEqual({
+      kind: 'custom',
+      komi: 7.5,
+      scoring: 'area',
+    });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '增加贴目' })));
+    expect(sets(transport.requests).at(-1)?.defaultRules).toMatchObject({ komi: 8 });
+    expect(transport.requests.some((r) => r.type === 'gameSetRules')).toBe(false);
+  });
+
   it('switches language and theme at once', async () => {
     const transport = mount();
     const language = await screen.findByRole('radiogroup', { name: '语言' });

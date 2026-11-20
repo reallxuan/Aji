@@ -43,7 +43,8 @@ export function createTauriFiles(): PlatformFiles {
     onDrag: (handler) =>
       listening(() =>
         getCurrentWebview().onDragDropEvent(({ payload }) => {
-          if (payload.type === 'enter' || payload.type === 'over') handler({ kind: 'over' });
+          if (payload.type === 'enter') handler({ kind: 'over', paths: payload.paths });
+          else if (payload.type === 'over') handler({ kind: 'over' });
           else if (payload.type === 'leave') handler({ kind: 'leave' });
           else handler({ kind: 'drop', paths: payload.paths });
         }),

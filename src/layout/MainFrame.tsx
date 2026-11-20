@@ -8,8 +8,11 @@ import { useWindowSize } from './useWindowSize';
 /** An empty 19×19 board, until the first game snapshot arrives. */
 const EMPTY_19 = Array.from({ length: 19 * 19 }, () => null);
 
-/** The main screen: a square board area on the left, one panel running the full height on the right. */
-export function MainFrame({ panel }: { panel: ReactNode }) {
+/**
+ * The main screen: a square board area on the left, one panel running the full height on the
+ * right. `boardOverlay` lies over the board (the drop target).
+ */
+export function MainFrame({ panel, boardOverlay }: { panel: ReactNode; boardOverlay?: ReactNode }) {
   const { width, height } = useWindowSize();
   const { board, panel: panelBox } = computeFrame(width, height);
   const snapshot = useGameStore((s) => s.snapshot);
@@ -25,6 +28,7 @@ export function MainFrame({ panel }: { panel: ReactNode }) {
           stones={snapshot?.stones ?? EMPTY_19}
           lastMove={snapshot?.lastMove ?? null}
         />
+        {boardOverlay}
       </div>
       <aside
         className="absolute inset-y-0 flex flex-col border-l border-hairline bg-panel"

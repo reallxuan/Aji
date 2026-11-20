@@ -12,9 +12,10 @@ import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import type { NavTarget } from '../transport/generated/NavTarget';
-import { toTransportError, type Transport } from '../transport/transport';
+import type { Transport } from '../transport/transport';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
+import { errorNotice, warningNotice } from './notices';
 import { fileNameFor, gameTitle } from './title';
 
 export interface ActionContext {
@@ -25,47 +26,13 @@ export interface ActionContext {
 
 const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
-/** The text for a failed request, from its code. */
-function errorText(error: unknown, t: TFunction): string {
-  const { code, detail } = toTransportError(error);
-  return t(`errors.${code}`, { size: detail ?? '' });
-}
-
 function fail(t: TFunction, title: string, error: unknown): void {
-  useNoticeStore.getState().show({ kind: 'error', title, detail: errorText(error, t) });
-}
-
-/** Most important first: what the user sees in the one notice line. */
-const WARNING_ORDER: GameWarning['code'][] = [
-  'truncated',
-  'extraGames',
-  'encodingGuessed',
-  'repaired',
-  'illegalMoves',
-  'komiUnreadable',
-];
-
-function warningText(warning: GameWarning, snapshot: GameSnapshot, t: TFunction): string {
-  switch (warning.code) {
-    case 'truncated':
-      return t('notice.warning.truncated', { moves: snapshot.mainLineLength });
-    case 'extraGames':
-      return t('notice.warning.extraGames', { count: warning.count });
-    case 'encodingGuessed':
-      return t('notice.warning.encodingGuessed', { encoding: warning.encoding });
-    default:
-      return t(`notice.warning.${warning.code}`);
-  }
+  useNoticeStore.getState().show(errorNotice(title, error, t));
 }
 
 function showWarnings(warnings: GameWarning[], snapshot: GameSnapshot, t: TFunction): void {
-  if (warnings.length === 0) return;
-  const [first, ...rest] = [...warnings]
-    .sort((a, b) => WARNING_ORDER.indexOf(a.code) - WARNING_ORDER.indexOf(b.code))
-    .map((w) => warningText(w, snapshot, t));
-  useNoticeStore
-    .getState()
-    .show({ kind: 'warning', title: first, detail: rest.length ? rest.join(' · ') : undefined });
+  const notice = warningNotice(warnings, snapshot, t);
+  if (notice) useNoticeStore.getState().show(notice);
 }
 
 function apply(reply: GameReply): GameSnapshot {

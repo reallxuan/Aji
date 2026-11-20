@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useEngineStore } from '../engine/engineStore';
+import { useGameStore } from '../game/gameStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { restartEngine } from '../transport/api';
@@ -8,13 +9,26 @@ import { useTransport } from '../transport/TransportProvider';
 
 const setUpAgain = () => useWizardStore.getState().openWizard(true);
 
-/** The status line under the header: shown for every state except analysing and paused. */
+/**
+ * The status line under the header: shown for every state except analysing and paused, and in
+ * any running state on a node whose move breaks the rules, which KataGo does not analyse.
+ */
 export function EngineStatus() {
   const transport = useTransport();
   const { t } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
   const rootVisits = useEngineStore((s) => s.analysis?.rootVisits ?? null);
   const visitLimit = useSettingsStore((s) => s.settings?.visitLimit ?? null);
+  const illegal = useGameStore((s) => s.snapshot?.illegal ?? null);
+  const running =
+    engine?.state === 'ready' || engine?.state === 'analysing' || engine?.state === 'paused';
+  if (illegal && running) {
+    return (
+      <div className="px-6 py-3 text-sm text-text-muted">
+        <p>{t('engine.illegal', { reason: t(`engine.illegalReason.${illegal}`) })}</p>
+      </div>
+    );
+  }
   if (!engine || engine.state === 'analysing' || engine.state === 'paused') return null;
 
   const crashed = engine.state === 'crashed' ? engine : null;

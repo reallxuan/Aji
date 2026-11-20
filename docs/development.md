@@ -192,6 +192,11 @@ and extra games, `truncated.sgf` cut at move 183, `illegal-ko.sgf` a 9×9 game w
 an occupied point, and `size-19x13.sgf` fails as a non-square board. `moved-away.sgf` is in the
 recent list but not on the fake disk.
 
+Dragging a file from the desktop onto the page goes through the same path as a drop on the
+desktop app (`src/dev/browserDrops.ts`): the board dims while the file is over the window, and
+the drop opens it, so dropping the samples' names (any file called `illegal-ko.sgf`, say) shows
+each notice. A browser gives no file name until the drop, so the overlay shows none.
+
 The language follows the browser until you switch it in the title row or in settings. Reload
 the page to start a scenario again. Scenarios exist only in a development build: `main.tsx`
 loads them behind `import.meta.env.DEV`, so `pnpm build` leaves them out, and an unknown name

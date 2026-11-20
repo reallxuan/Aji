@@ -32,6 +32,7 @@ import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
 import { PanelTitle } from './NoticeView';
+import { RulesControl } from './RulesControl';
 import { useSettingsStore } from './settingsStore';
 
 /** What the controls show before the stored settings arrive; they stay disabled until then. */
@@ -43,6 +44,8 @@ const DEFAULTS: UiSettings = {
   defaultRules: { kind: 'chinese' },
 };
 const FIELDS: DiscField[] = ['winrate', 'scoreLead', 'visits'];
+/** The rules control with the settings page's label column. */
+const RULES_LAYOUT = 'settings';
 
 const toMain = () => usePanelStore.getState().show('main');
 const toAbout = () => usePanelStore.getState().show('about');
@@ -147,6 +150,13 @@ export function SettingsPanel() {
             </div>
             <DiscPreview lines={settings.discLines} />
           </div>
+          <RulesControl
+            layout={RULES_LAYOUT}
+            ruleLabel={t('settings.defaultRules')}
+            value={settings.defaultRules}
+            onChange={(defaultRules) => save({ defaultRules })}
+          />
+          <p className="text-[12px] text-text-muted">{t('settings.defaultRulesNote')}</p>
           <Row label={t('settings.visitLimit')}>
             <VisitLimit
               value={settings.visitLimit}

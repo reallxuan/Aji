@@ -8,10 +8,26 @@ import type { Scoring } from '../transport/generated/Scoring';
 
 type Kind = AnalysisRules['kind'];
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+type Layout = 'popover' | 'settings';
+
+/** Short muted labels in the popover; the settings page's wide label column elsewhere. */
+const FIELD = {
+  popover: { row: 'gap-3 text-[13.5px]', label: 'w-9 text-text-muted' },
+  settings: { row: 'gap-x-4 gap-y-2 text-[14px] flex-wrap', label: 'w-36' },
+} as const;
+
+function Field({
+  label,
+  layout,
+  children,
+}: {
+  label: string;
+  layout: Layout;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex min-h-8 items-center gap-3 text-[13.5px]">
-      <span className="w-9 flex-none text-text-muted">{label}</span>
+    <div className={`flex min-h-8 items-center ${FIELD[layout].row}`}>
+      <span className={`flex-none ${FIELD[layout].label}`}>{label}</span>
       {children}
     </div>
   );
@@ -108,9 +124,14 @@ function KomiStepper({ komi, onChange }: { komi: number; onChange(komi: number):
 export function RulesControl({
   value,
   onChange,
+  layout = 'popover',
+  ruleLabel,
 }: {
   value: AnalysisRules;
   onChange(rules: AnalysisRules): void;
+  layout?: Layout;
+  /** The first row's label; 规则 by default. */
+  ruleLabel?: string;
 }) {
   const { t } = useTranslation();
   const komi = komiOf(value);
@@ -128,15 +149,15 @@ export function RulesControl({
   ];
   return (
     <div className="flex flex-col gap-2.5">
-      <Field label={t('rules.rule')}>
+      <Field label={ruleLabel ?? t('rules.rule')} layout={layout}>
         <Segmented<Kind>
-          label={t('rules.rule')}
+          label={ruleLabel ?? t('rules.rule')}
           value={value.kind}
           options={kinds}
           onChange={choose}
         />
       </Field>
-      <Field label={t('rules.komi')}>
+      <Field label={t('rules.komi')} layout={layout}>
         {value.kind === 'custom' ? (
           <>
             <KomiStepper komi={komi} onChange={(next) => onChange({ ...value, komi: next })} />
@@ -152,7 +173,7 @@ export function RulesControl({
         )}
       </Field>
       {value.kind === 'custom' && (
-        <Field label={t('rules.scoring')}>
+        <Field label={t('rules.scoring')} layout={layout}>
           <Segmented<Scoring>
             label={t('rules.scoring')}
             value={scoring}

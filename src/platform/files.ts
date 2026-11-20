@@ -4,7 +4,9 @@ import type { RecentEntry } from '../transport/generated/RecentEntry';
 
 export type { MenuAction as MenuCommand, OpenedFile, RecentEntry };
 
-export type DragEvent = { kind: 'over' | 'leave' } | { kind: 'drop'; paths: string[] };
+/** A drag over the window. `over` carries the paths when the system gives them (on entering). */
+export type DragEvent =
+  { kind: 'over'; paths?: string[] } | { kind: 'leave' } | { kind: 'drop'; paths: string[] };
 
 /**
  * What the interface needs from the system to open and save game files. The desktop app does it

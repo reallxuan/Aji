@@ -35,7 +35,7 @@
     "invalidPosition": "局面里有棋盘外的点，无法分析。",
     "sgfNotAGame": "文件里没有棋谱。",
     "sgfNotGo": "这不是围棋棋谱。",
-    "sgfUnsupportedSize": "Aji 只能打开 5 到 19 路的方形棋盘，此棋盘为 {{size}}。",
+    "sgfUnsupportedSize": "不支持 {{size}} 的棋盘。Aji 支持 5 到 19 路的方形棋盘。",
     "sgfTooLarge": "文件超过 20 MB。",
     "gameEmpty": "棋局里还没有着手，无可保存。",
     "fileReadFailed": "无法读取文件。",
@@ -68,7 +68,14 @@
       "stop": "停止引擎",
       "setupAgain": "重新设置引擎"
     },
-    "limitReached": "已达到每步上限"
+    "limitReached": "已达到每步上限",
+    "illegal": "这一步在棋谱中不合法（{{reason}}），无法分析这个局面。",
+    "illegalReason": {
+      "occupied": "落在已有棋子上",
+      "suicide": "自填最后一口气",
+      "ko": "立即提回劫",
+      "offBoard": "落在棋盘之外"
+    }
   },
   "analysis": {
     "columns": {
@@ -268,7 +275,9 @@
     "confirmTitle": "删除未使用的文件？",
     "confirmBody": "将删除 {{size}} 当前引擎用不到的文件，删除后无法恢复。以后需要时 Aji 会重新下载。",
     "cancel": "取消",
-    "about": "关于 Aji"
+    "about": "关于 Aji",
+    "defaultRules": "新棋局默认规则",
+    "defaultRulesNote": "用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。"
   },
   "game": {
     "players": "{{black}} 对 {{white}}"
@@ -279,13 +288,32 @@
     "gameFailed": "棋局未能更改",
     "dismiss": "关闭",
     "warning": {
-      "truncated": "棋谱不完整，已打开前 {{moves}} 手",
-      "extraGames": "文件里还有 {{count}} 盘棋，只打开了第一盘，保存时会一并保留",
-      "encodingGuessed": "未声明编码，已按 {{encoding}} 读取",
-      "repaired": "棋谱有损坏之处，已尽量修复",
-      "illegalMoves": "棋谱里有不合规则的着手，已在对应位置标出",
-      "komiUnreadable": "棋谱中的贴目无法读取，已按当前显示的规则分析"
-    }
+      "truncated": {
+        "title": "棋谱不完整，已打开前 {{moves}} 手",
+        "detail": "文件在第 {{next}} 手处中断，可能没有下载完。"
+      },
+      "extraGames": {
+        "title": "这个文件里有 {{total}} 局棋，只打开了第一局",
+        "detail": "另存为时其余各局会原样保留。"
+      },
+      "encodingGuessed": {
+        "title": "棋谱未注明编码，已按 {{encoding}} 读取",
+        "detail": "如果名字显示不对，请告诉我们。"
+      },
+      "repaired": {
+        "title": "棋谱有损坏之处，已尽量修复",
+        "detail": "另存为会写出修复后的棋谱。"
+      },
+      "illegalMoves": {
+        "title": "棋谱里有不合规则的着手",
+        "detail": "走到这些着手时无法分析，其余局面照常分析。"
+      },
+      "komiUnreadable": {
+        "title": "棋谱中的贴目无法读取",
+        "detail": "已按新棋局默认规则分析，可点击规则标签更改。"
+      }
+    },
+    "dropHere": "松开以打开棋谱"
   },
   "rules": {
     "title": "分析规则",

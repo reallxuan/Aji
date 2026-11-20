@@ -3,10 +3,12 @@ import { usePanelStore } from './app/panelStore';
 import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
 import { useGameSync } from './game/useGameSync';
+import { DropOverlay } from './board/DropOverlay';
 import { MainFrame } from './layout/MainFrame';
 import { CandidateList } from './panel/CandidateList';
 import { EngineStatus } from './panel/EngineStatus';
 import { NoEngine } from './panel/NoEngine';
+import { NoticeLine } from './panel/NoticeLine';
 import { PanelHeader } from './panel/PanelHeader';
 import { VersionLine } from './panel/VersionLine';
 import { usePlatformSync } from './platform/usePlatformSync';
@@ -32,6 +34,7 @@ export default function App() {
 
   return (
     <MainFrame
+      boardOverlay={<DropOverlay />}
       panel={
         // The first frame waits for both the engine status and the game, so neither flashes.
         !ready ? null : mode === 'wizard' ? (
@@ -45,6 +48,7 @@ export default function App() {
         ) : (
           <>
             <PanelHeader />
+            <NoticeLine />
             {engine?.state === 'notConfigured' ? (
               <NoEngine />
             ) : (

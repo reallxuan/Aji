@@ -18,6 +18,8 @@ export interface FakeFiles extends PlatformFiles {
   saveRequests: string[];
   titles: string[];
   menuLanguages: string[];
+  /** Puts a file on the fake disk (a file dropped into the browser, in development). */
+  put(path: string, text: string): void;
   emitDrag(event: DragEvent): void;
   emitMenu(command: MenuCommand): void;
 }
@@ -109,6 +111,9 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
     onMenu(handler) {
       menus.add(handler);
       return () => menus.delete(handler);
+    },
+    put(path, text) {
+      disk.set(path, text);
     },
     emitDrag(event) {
       for (const handler of [...drags]) handler(event);

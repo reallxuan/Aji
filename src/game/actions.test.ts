@@ -81,7 +81,7 @@ describe('opening', () => {
       { files: { '/a.sgf': '(;SZ[19:13])' }, pick: '/a.sgf' },
     );
     await openFromPicker(ctx);
-    expect(useNoticeStore.getState().notice?.detail).toContain('19x13');
+    expect(useNoticeStore.getState().notice?.detail).toContain('19×13');
   });
 
   it('does nothing when the dialog is cancelled', async () => {
@@ -120,7 +120,8 @@ describe('opening', () => {
       { files: { '/a.sgf': '(;' }, pick: '/a.sgf' },
     );
     await openFromPicker(ctx);
-    expect(useNoticeStore.getState().notice?.title).toContain('2');
+    // Two more games besides the open one: three in the file.
+    expect(useNoticeStore.getState().notice?.title).toBe('这个文件里有 3 局棋，只打开了第一局');
   });
 
   it('refuses a dropped file that is not .sgf without reading it', async () => {
