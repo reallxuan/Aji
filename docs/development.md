@@ -182,6 +182,20 @@ emits install progress on timers. Nothing is downloaded and no KataGo runs.
 | `d-crashed` | The analysis panel with a crashed engine, and "set up again" |
 | `no-engine` | Choose "set up later" to see the no-engine panel |
 | `mac` | The Metal path on Apple silicon |
+| `game` | A ready engine and a game to step through: open the samples from the title menu |
+
+Every scenario plays games through a stand-in for the backend's game session
+(`src/dev/fakeGame.ts`): it knows one record, the 2025 Samsung Cup final's second game, and
+picks a canned result by the file's name. The open dialog and the recent list offer samples
+for each case: `samsung-30-final-2.sgf` opens cleanly, `野狐-gbk.sgf` with a guessed encoding
+and extra games, `truncated.sgf` cut at move 183, `illegal-ko.sgf` a 9×9 game with a move onto
+an occupied point, and `size-19x13.sgf` fails as a non-square board. `moved-away.sgf` is in the
+recent list but not on the fake disk.
+
+Dragging a file from the desktop onto the page goes through the same path as a drop on the
+desktop app (`src/dev/browserDrops.ts`): the board dims while the file is over the window, and
+the drop opens it, so dropping the samples' names (any file called `illegal-ko.sgf`, say) shows
+each notice. A browser gives no file name until the drop, so the overlay shows none.
 
 The language follows the browser until you switch it in the title row or in settings. Reload
 the page to start a scenario again. Scenarios exist only in a development build: `main.tsx`
@@ -218,7 +232,7 @@ the time it was accepted.
 
 ## Interface preferences
 
-The settings page writes four more fields. Each is read on its own: a value Aji cannot read is
+The settings page writes five more fields. Each is read on its own: a value Aji cannot read is
 logged and that field alone takes its default.
 
 ```json
@@ -226,13 +240,29 @@ logged and that field alone takes its default.
   "language": "system",
   "theme": "system",
   "discLines": ["winrate", "scoreLead"],
-  "visitLimit": null
+  "visitLimit": null,
+  "defaultRules": { "kind": "chinese" }
 }
 ```
 
 `language` is `system`, `zh-CN` or `en`; `theme` is `system`, `dark` or `light`; `discLines` is two
 different values of `winrate`, `scoreLead` and `visits`; `visitLimit` is a positive number of visits
-per position, or `null` for no limit.
+per position, or `null` for no limit. `defaultRules` is what new games, and files that name neither
+rules nor komi, are analysed with: `{ "kind": "chinese" }`, `{ "kind": "japaneseKorean" }`, or
+`{ "kind": "custom", "komi": 7, "scoring": "area" }` (`scoring` is `area` or `territory`; `komi` is a
+multiple of 0.5 from -150 to 150).
+
+## Recent files and the macOS menu
+
+`recent.json`, beside `settings.json`, lists the last 10 game files opened or saved, newest first,
+with their full paths. Deleting it empties the list; an unreadable one is ignored and replaced on
+the next open.
+
+All interface text lives in `src/locales/`, with one exception: the macOS menu bar is built in
+Rust, which cannot read those files, so its labels are a table in `src-tauri/src/platform/menu.rs`
+with both languages. When a menu label changes, change both languages there; the locale parity
+tests do not see it. The interface tells Rust which language it resolved (`menu_set_language`), so
+the menu follows the language setting, including `system`.
 
 ## What Aji forces on the command line
 
@@ -272,3 +302,27 @@ Options:
   PC's recommendation can be checked on another machine. Give at most one of the two options.
 
 The program keeps no cache: it uses a temporary folder that it removes at the end.
+
+## SGF fixtures
+
+`crates/aji-core/tests/fixtures/sgf/` holds the game records the SGF tests read. `SOURCES.md` there says where each file comes from. Five are public-domain Samsung Cup finals; the rest are written by `make.py` from one of them:
+
+```bash
+python3 -I crates/aji-core/tests/fixtures/sgf/make.py
+```
+
+Run it after changing `make.py`, then `cargo test -p aji-core --test sgf_fixtures`. The tests check that every fixture opens or fails as it should, that names in every encoding read correctly, and that saving a saved file gives the same bytes.
+
+## Board screenshots
+
+`src/board/screenshots.test.ts` draws empty 9×9, 13×13 and 19×19 boards and a game position with
+Skia (`@napi-rs/canvas`, no browser) and compares each with its PNG in `src/board/__screenshots__/`.
+A test fails when more than 0.1% of the pixels differ. After an intended change to the board's
+drawing, write new baselines and look at each before committing:
+
+```bash
+UPDATE_SCREENSHOTS=1 pnpm test src/board/screenshots
+```
+
+Skia draws a little differently from WebKit and WebView2, so these guard against regressions in
+the drawing code, not against the WebView; the exit check looks at the real app.

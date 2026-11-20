@@ -5,7 +5,11 @@ import { createEngineStore } from './engineStore';
 const A = 'aaaaaaaaaaaaaaaa';
 const B = 'bbbbbbbbbbbbbbbb';
 
-function status(engine: EngineState, position = A, analysis: AnalysisUpdate | null = null) {
+function status(
+  engine: EngineState,
+  position: string | null = A,
+  analysis: AnalysisUpdate | null = null,
+) {
   return { engine, position, analysis };
 }
 
@@ -38,6 +42,7 @@ it('applyStatus before any event applies', () => {
 
 it('keeps the latest analysis update', () => {
   const store = createEngineStore();
+  store.getState().setPosition('ab');
   const analysis = {
     position: 'ab',
     boardSize: 19,
@@ -53,6 +58,7 @@ it('keeps the latest analysis update', () => {
 
 it('an analysis update does not block the status reply', () => {
   const store = createEngineStore();
+  store.getState().setPosition('ab');
   const analysis = {
     position: 'ab',
     boardSize: 19,
@@ -85,6 +91,7 @@ it('status reply shows the latest analysis', () => {
 
 it('status analysis never overwrites a newer update', () => {
   const store = createEngineStore();
+  store.getState().setPosition(A);
   store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 500) });
   store.getState().applyStatus(status({ state: 'analysing', version: '1' }, A, update(A, 300)));
   expect(store.getState().analysis?.rootVisits).toBe(500);
@@ -125,4 +132,37 @@ it('a setup progress event leaves the engine store alone', () => {
     },
   });
   expect(store.getState()).toBe(before);
+});
+
+it('no update is accepted before a position is known', () => {
+  const store = createEngineStore();
+  store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 5) });
+  expect(store.getState().analysis).toBeNull();
+  store.getState().applyStatus(status({ state: 'analysing', version: '1' }, A));
+  store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 6) });
+  expect(store.getState().analysis?.rootVisits).toBe(6);
+});
+
+it('clearPosition drops the analysis and ignores late updates', () => {
+  const store = createEngineStore();
+  store.getState().setPosition(A);
+  store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 5) });
+  store.getState().clearPosition();
+  expect(store.getState().position).toBeNull();
+  expect(store.getState().analysis).toBeNull();
+  store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 9) });
+  expect(store.getState().analysis).toBeNull();
+  // A status reply that still names the old position does not bring it back.
+  store.getState().applyStatus(status({ state: 'ready', version: '1' }, A, update(A, 9)));
+  expect(store.getState().position).toBeNull();
+  expect(store.getState().analysis).toBeNull();
+  store.getState().setPosition(A);
+  store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 10) });
+  expect(store.getState().analysis?.rootVisits).toBe(10);
+});
+
+it('a status reply with no position sets none', () => {
+  const store = createEngineStore();
+  store.getState().applyStatus(status({ state: 'ready', version: '1' }, null));
+  expect(store.getState().position).toBeNull();
 });

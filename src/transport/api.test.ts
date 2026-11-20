@@ -69,6 +69,7 @@ describe('M5 helpers', () => {
     theme: 'light',
     discLines: ['winrate', 'visits'],
     visitLimit: null,
+    defaultRules: { kind: 'chinese' },
   };
   const hardware = {
     os: { kind: 'macos', version: '27', arch: 'aarch64' },

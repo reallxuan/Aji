@@ -10,6 +10,8 @@ import type { Request } from '../transport/generated/Request';
 import { TransportProvider } from '../transport/TransportProvider';
 import { EngineIndicator } from './EngineIndicator';
 import { initialWizard, useWizardStore } from '../setup/wizardStore';
+import { resetGameStore, useGameStore } from '../game/gameStore';
+import { makeSnapshot } from '../game/testing';
 
 function renderWith(engine: EngineState, requests: Request[] = []) {
   const store = createEngineStore();
@@ -58,4 +60,14 @@ it('is grey with no engine, and clicking it opens the wizard', () => {
   expect(dot).toHaveClass('bg-line');
   fireEvent.click(dot);
   expect(useWizardStore.getState()).toMatchObject({ open: true, rerun: false });
+});
+
+it('turns grey while the open game’s position cannot be analysed', () => {
+  useGameStore.getState().apply(makeSnapshot({ illegal: 'occupied', positionKey: null }));
+  try {
+    renderWith({ state: 'analysing', version: '1' });
+    expect(screen.getByRole('button', { name: 'Pause analysis' })).toHaveClass('bg-line');
+  } finally {
+    resetGameStore();
+  }
 });

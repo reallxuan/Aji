@@ -249,8 +249,6 @@ fn io_error(path: &Path, e: io::Error) -> UnpackError {
     UnpackError::Io(format!("{}: {e}", path.display()))
 }
 
-/// Removes `com.apple.quarantine` from everything under `dir`. Returns how many carried it.
-#[cfg(target_os = "macos")]
 /// Whether `dir` still holds a runtime: each pattern matches at least one file in it that is
 /// not empty. That is what `unpack_runtime` left there.
 pub(crate) fn runtime_is_complete<'p>(
@@ -270,6 +268,8 @@ pub(crate) fn runtime_is_complete<'p>(
         .all(|pattern| files.iter().any(|name| pattern_matches(pattern, name)))
 }
 
+/// Removes `com.apple.quarantine` from everything under `dir`. Returns how many carried it.
+#[cfg(target_os = "macos")]
 pub fn clear_quarantine(dir: &Path) -> io::Result<usize> {
     let mut count = usize::from(clear_quarantine_on(dir)?);
     for entry in fs::read_dir(dir)? {

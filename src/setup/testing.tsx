@@ -223,6 +223,7 @@ export const storedSettings: UiSettings = {
   theme: 'system',
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
+  defaultRules: { kind: 'chinese' },
 };
 
 /** Answers every setup request from the fixtures; `overrides` replace single request types. */

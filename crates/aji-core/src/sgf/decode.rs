@@ -1,0 +1,233 @@
+//! Turns a file's bytes into text before any SGF syntax is read (design 5.1).
+//!
+//! Decoding comes first because a trail byte of GBK, Big5 or Shift-JIS can be `\` or `]`, which
+//! a byte-level tokeniser would take for SGF syntax.
+
+use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
+use encoding_rs::{Encoding, GB18030, GBK, UTF_8};
+
+/// Why a file was read in the encoding it was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncodingSource {
+    /// A UTF-8 byte order mark.
+    Bom,
+    /// The bytes are valid UTF-8.
+    Utf8,
+    /// The file's `CA` property.
+    Declared,
+    /// A guess from the bytes.
+    Detected,
+}
+
+/// A file's text and how it was read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decoded {
+    pub text: String,
+    /// The `encoding_rs` name of the encoding the file is in. A file detected as GBK says `GBK`,
+    /// though it is decoded as GB18030, the superset Windows writes as "GBK".
+    pub encoding: &'static str,
+    pub source: EncodingSource,
+    /// Invalid byte sequences became U+FFFD.
+    pub replaced: bool,
+}
+
+/// Decodes an SGF file: a BOM, else valid UTF-8, else a declared multi-byte `CA` that decodes
+/// cleanly, else a guess. A declared single-byte charset is used only when the guess is
+/// single-byte too, since single-byte charsets never fail to decode.
+pub fn decode(bytes: &[u8]) -> Decoded {
+    if let Some(rest) = bytes.strip_prefix(b"\xEF\xBB\xBF") {
+        return with(UTF_8, rest, EncodingSource::Bom);
+    }
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return Decoded {
+            text: text.to_owned(),
+            encoding: UTF_8.name(),
+            source: EncodingSource::Utf8,
+            replaced: false,
+        };
+    }
+    let declared = declared_charset(bytes);
+    if let Some(encoding) = declared.filter(|e| !e.is_single_byte())
+        && let Some(text) = encoding.decode_without_bom_handling_and_without_replacement(bytes)
+    {
+        return Decoded {
+            text: text.into_owned(),
+            encoding: encoding.name(),
+            source: EncodingSource::Declared,
+            replaced: false,
+        };
+    }
+    let mut detector = EncodingDetector::new(Iso2022JpDetection::Deny);
+    detector.feed(bytes, true);
+    let guess = detector.guess(None, Utf8Detection::Allow);
+    if guess.is_single_byte() && mostly_utf8(bytes) {
+        // A UTF-8 file cut off mid-character, or with a stray byte, is not windows-1252: keep
+        // what is valid and replace the rest.
+        return with(UTF_8, bytes, EncodingSource::Utf8);
+    }
+    if guess.is_single_byte() {
+        // A declared charset beats a single-byte guess: a multi-byte one with a few bad bytes
+        // is still closer than mojibake, and a single-byte one agrees with the guess's kind.
+        if let Some(encoding) = declared {
+            return with(encoding, bytes, EncodingSource::Declared);
+        }
+    }
+    let decoded = with(
+        if guess == GBK { GB18030 } else { guess },
+        bytes,
+        EncodingSource::Detected,
+    );
+    Decoded {
+        encoding: guess.name(),
+        ..decoded
+    }
+}
+
+/// More valid UTF-8 multi-byte characters than broken sequences. Damaged UTF-8 text in Chinese,
+/// Japanese or Korean passes; single-byte text (`Müller` in Latin-1) has no valid multi-byte
+/// characters and fails.
+fn mostly_utf8(bytes: &[u8]) -> bool {
+    let (mut valid, mut broken) = (0usize, 0usize);
+    for chunk in bytes.utf8_chunks() {
+        valid += chunk.valid().chars().filter(|c| c.len_utf8() > 1).count();
+        broken += usize::from(!chunk.invalid().is_empty());
+    }
+    valid > 0 && broken <= valid
+}
+
+fn with(encoding: &'static Encoding, bytes: &[u8], source: EncodingSource) -> Decoded {
+    let (text, replaced) = encoding.decode_without_bom_handling(bytes);
+    Decoded {
+        text: text.into_owned(),
+        encoding: encoding.name(),
+        source,
+        replaced,
+    }
+}
+
+/// The encoding named by the first `CA[...]` in the raw bytes, if `encoding_rs` knows the label.
+fn declared_charset(bytes: &[u8]) -> Option<&'static Encoding> {
+    let at = bytes
+        .windows(3)
+        .enumerate()
+        .find(|&(i, w)| w == b"CA[" && (i == 0 || !bytes[i - 1].is_ascii_uppercase()))?
+        .0;
+    let value = &bytes[at + 3..];
+    let end = value.iter().position(|&b| b == b']')?;
+    Encoding::for_label(value[..end].trim_ascii())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn gbk(s: &str) -> Vec<u8> {
+        let (bytes, _, unmappable) = encoding_rs::GBK.encode(s);
+        assert!(!unmappable, "{s} is not GBK");
+        bytes.into_owned()
+    }
+
+    #[test]
+    fn bom_wins() {
+        let d = decode(b"\xEF\xBB\xBF(;PB[x])");
+        assert_eq!(d.source, EncodingSource::Bom);
+        assert_eq!(d.text, "(;PB[x])");
+    }
+
+    #[test]
+    fn valid_utf8_beats_a_stale_declaration() {
+        let d = decode("(;CA[gb2312]PB[丁浩])".as_bytes());
+        assert_eq!(d.source, EncodingSource::Utf8);
+        assert!(d.text.contains("丁浩"));
+    }
+
+    #[test]
+    fn declared_gbk_is_used_when_it_decodes() {
+        let d = decode(&gbk("(;CA[GB2312]PB[丁浩]C[打劫])"));
+        assert_eq!(d.source, EncodingSource::Declared);
+        assert!(d.text.contains("丁浩"), "{}", d.text);
+        assert!(d.text.contains("打劫"));
+    }
+
+    #[test]
+    fn undeclared_gbk_is_detected() {
+        let text = "(;PB[丁浩]PW[廖元赫]C[黑棋在右上角走出了新手，白棋应对稳健，局面依然两分，双方进入中盘战斗])";
+        let d = decode(&gbk(text));
+        assert_eq!(d.source, EncodingSource::Detected);
+        assert_eq!(d.encoding, "GBK");
+        assert_eq!(d.text, text);
+    }
+
+    #[test]
+    fn gbk_mislabelled_latin1_still_reads_as_gbk() {
+        let text = "(;CA[ISO-8859-1]PB[丁浩]PW[廖元赫]C[黑棋在右上角走出了新手，局面两分])";
+        let d = decode(&gbk(text));
+        assert_eq!(d.text, text);
+    }
+
+    #[test]
+    fn shift_jis_and_euc_kr_are_detected() {
+        let jp = "(;PB[井山裕太]PW[一力遼]C[黒番の井山が序盤から積極的に打ち進めた一局です])";
+        let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(jp);
+        assert_eq!(decode(&bytes).text, jp);
+        let ko = "(;PB[신진서]PW[박정환]C[흑이 초반부터 적극적으로 둔 대국입니다])";
+        let (bytes, _, _) = encoding_rs::EUC_KR.encode(ko);
+        assert_eq!(decode(&bytes).text, ko);
+    }
+
+    /// A GBK character whose encoding ends in `trail`.
+    fn gbk_char_with_trail(trail: u8) -> char {
+        ('一'..='龥')
+            .find(|c| {
+                let bytes = gbk(&c.to_string());
+                bytes.len() == 2 && bytes[1] == trail
+            })
+            .expect("such a character exists")
+    }
+
+    #[test]
+    fn trail_byte_5c_survives() {
+        let c = gbk_char_with_trail(0x5C);
+        let text = format!("(;PB[{c}浩]C[打劫是围棋中的常见手段])");
+        let d = decode(&gbk(&text));
+        assert_eq!(d.text, text);
+    }
+
+    const NAMES: &str = "(;GM[1]SZ[19]PB[丁浩]PW[廖元赫]EV[第30届三星杯决赛]C[白中盘胜，黑败着]";
+
+    #[test]
+    fn utf8_cut_off_mid_character_stays_utf8() {
+        let bytes = NAMES.as_bytes();
+        // The last character, 着, loses its last byte; `]` goes with it.
+        let cut = &bytes[..bytes.len() - 2];
+        let d = decode(cut);
+        assert!(d.text.contains("丁浩"), "{}", d.text);
+        assert!(d.text.contains("廖元赫"));
+        assert_eq!((d.encoding, d.source), ("UTF-8", EncodingSource::Utf8));
+        assert!(d.replaced);
+    }
+
+    #[test]
+    fn utf8_with_a_stray_byte_stays_utf8() {
+        let mut bytes = NAMES.as_bytes().to_vec();
+        bytes.insert(20, 0xFF);
+        let d = decode(&bytes);
+        assert!(d.text.contains("廖元赫"), "{}", d.text);
+        assert!(d.text.contains("三星杯"));
+        assert_eq!(d.source, EncodingSource::Utf8);
+        assert!(d.replaced);
+    }
+
+    #[test]
+    fn latin1_is_not_taken_for_damaged_utf8() {
+        let d = decode(b"(;PB[M\xFCller]PW[Ren\xE9e])");
+        assert_eq!(d.text, "(;PB[Müller]PW[Renée])");
+    }
+
+    #[test]
+    fn invalid_bytes_are_replaced() {
+        let d = decode(b"(;CA[UTF-8]PB[a\xFFb])");
+        assert!(d.replaced);
+        assert!(d.text.contains('\u{FFFD}'));
+    }
+}

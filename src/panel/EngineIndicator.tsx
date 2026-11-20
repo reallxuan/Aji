@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useEngineStore } from '../engine/engineStore';
+import { useGameStore } from '../game/gameStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { pauseAnalysis, resumeAnalysis } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
@@ -10,6 +11,8 @@ export function EngineIndicator() {
   const { t } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
   const state = engine?.state ?? null;
+  // On an illegal node KataGo has no position: the dot greys out, whatever the state.
+  const illegal = useGameStore((s) => s.snapshot?.illegal ?? null);
 
   const stateText = state ? t(`engine.state.${state}`) : '';
   const action =
@@ -21,7 +24,11 @@ export function EngineIndicator() {
           ? 'setUp'
           : null;
   const colour =
-    state === 'analysing' ? 'bg-engine-ok' : state === 'crashed' ? 'bg-engine-error' : 'bg-line';
+    state === 'crashed'
+      ? 'bg-engine-error'
+      : state === 'analysing' && !illegal
+        ? 'bg-engine-ok'
+        : 'bg-line';
 
   const onClick = () => {
     if (action === 'setUp') {
@@ -36,7 +43,7 @@ export function EngineIndicator() {
   return (
     <button
       type="button"
-      className={`size-2.5 rounded-full ${colour} disabled:cursor-default`}
+      className={`size-2.5 flex-none rounded-full ${colour} disabled:cursor-default`}
       data-state={state ?? 'unknown'}
       aria-label={
         action === 'setUp' ? t('noEngine.setup') : action ? t(`engine.action.${action}`) : stateText

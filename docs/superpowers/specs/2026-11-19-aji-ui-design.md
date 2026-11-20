@@ -84,8 +84,9 @@ Reference size 1440 × 900.
 
 Left to right:
 
-- **Game title**, with a chevron. Clicking it opens the game library. **[Proposed]** The library is not a permanent sidebar; an earlier mockup with one cost the board too much room. The opened state is not designed yet. **[Open]**
-- **Navigation**: first move, previous, `38 / 247`, next, last move.
+- **Game title**, with a chevron. Clicking it opens the **game menu**: 新建棋局 (19, 13 or 9 路), 打开棋谱…, 打开最近 and 另存为…. **[Decided in M6]** The game library stays closed in Phase 1; an earlier mockup with a permanent sidebar cost the board too much room.
+- **Rules chip** beside the title: the rules and komi KataGo analyses with (`中国 · 7.5`), with an amber dot when they differ from the file's reading. Clicking it opens the game information and the analysis rules. **[Decided in M6]**
+- **Navigation**: first move, previous, `38 / 247`, next, last move. In a narrow panel (under 500 px) the chip shows only the komi and the first and last buttons step aside, so the title keeps room. **[Decided in M6]**
 - **Engine indicator**: a green dot when analysis is running. Clicking it pauses and resumes analysis; details such as version and visits per second appear on hover. **[Proposed]**
 - **Settings**.
 

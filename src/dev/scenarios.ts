@@ -6,6 +6,7 @@
 // (crates/aji-manager/manifest/manifest.json).
 
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
+import { createFakeGame } from './fakeGame';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import type { Backend } from '../transport/generated/Backend';
 import type { BackendRecommendation } from '../transport/generated/BackendRecommendation';
@@ -35,6 +36,7 @@ export const SCENARIOS = [
   'd-crashed',
   'no-engine',
   'mac',
+  'game',
 ] as const;
 
 export type ScenarioName = (typeof SCENARIOS)[number];
@@ -352,6 +354,24 @@ const SCRIPTS: Record<ScenarioName, Script> = {
     active: null,
     failure: () => null,
   },
+  // A Mac with the engine running, for the game header, navigation and file commands. The open
+  // dialog, drops and recent list offer the sample files in `fakeGame.ts`.
+  game: {
+    hardware: () => mac,
+    recommendation: () => macRecommendation,
+    accepted: [],
+    engine: { state: 'ready', version: '1.18.2' },
+    active: {
+      engine: 'katago-v1.18.2-metal-macos-arm64',
+      version: '1.18.2',
+      backend: 'metal',
+      network: 'kata1-tf3-b11c768-s12382M-d6533M',
+      networkName: 'kata1-tf3-b11c768-s12382M-d6533M',
+      threads: 12,
+      visitsPerSecond: null,
+    },
+    failure: () => null,
+  },
 };
 
 // --- The scripted engine side -----------------------------------------------------------------
@@ -381,6 +401,7 @@ export function scenarioTransport(
     theme: 'system',
     discLines: ['winrate', 'scoreLead'],
     visitLimit: null,
+    defaultRules: { kind: 'chinese' },
   };
   const accepted = new Set(script.accepted);
   const installed = new Set<string>();
@@ -391,6 +412,7 @@ export function scenarioTransport(
 
   const transport = createFakeTransport((request) => handle(request)) as ScenarioTransport;
   transport.unhandled = unhandled;
+  const game = createFakeGame((event) => transport.emit(event));
 
   const setEngine = (state: EngineState) => {
     engine = state;
@@ -595,6 +617,8 @@ export function scenarioTransport(
         transport.emit({ type: 'settingsChanged', settings });
         return { type: 'settings', settings };
       default: {
+        const answer = game(request);
+        if (answer) return answer;
         // Every request type is answered today; this catches one added to the protocol later.
         const type = (request as { type: string }).type;
         unhandled.push(type);

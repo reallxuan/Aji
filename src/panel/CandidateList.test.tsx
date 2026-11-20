@@ -21,6 +21,7 @@ function candidate(order: number, overrides: Partial<Candidate> = {}): Candidate
 
 function renderWith(candidates: Candidate[]) {
   const store = createEngineStore();
+  store.getState().setPosition('ab');
   store.getState().applyEvent({
     type: 'analysisUpdate',
     analysis: {

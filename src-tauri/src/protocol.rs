@@ -4,7 +4,8 @@
 //! `src/transport/generated/` from them. They cross a process or network boundary, so they never
 //! carry file paths, and errors carry a code rather than user-facing text.
 
-use aji_core::PositionKey;
+use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview};
+use aji_core::{Color, Move, PositionKey};
 use aji_engine::{AnalysisUpdate, EngineState};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
@@ -16,6 +17,7 @@ use aji_manager::recommend::{BackendRecommendation, EngineVersionChoice, Network
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::game::{GameWarning, NavTarget, RulesState};
 use crate::settings::UiSettings;
 
 /// A request from the UI. Serialised as `{"type": "<camelCase variant>", ...fields}`, with
@@ -78,6 +80,30 @@ pub enum Request {
     SettingsSet {
         settings: UiSettings,
     },
+    /// Replaces the game with an empty board of `size` lines and the default rules.
+    GameNew {
+        size: u8,
+    },
+    /// Opens a file's first game. `bytes` is the file, base64-encoded.
+    GameOpen {
+        name: String,
+        bytes: String,
+    },
+    GameNavigate {
+        to: NavTarget,
+    },
+    /// The board after `moves` from the current node, colours alternating from the player to
+    /// move. Changes nothing.
+    GamePreview {
+        moves: Vec<Move>,
+    },
+    /// The rules KataGo analyses this game with; `null` goes back to the file's reading.
+    GameSetRules {
+        rules: Option<AnalysisRules>,
+    },
+    GameSnapshot,
+    /// The game as UTF-8 SGF text, with a file name to suggest.
+    GameExport,
 }
 
 /// The answer to a [`Request`], tagged the same way.
@@ -92,8 +118,8 @@ pub enum Response {
     AppInfo(AppInfo),
     EngineStatus {
         engine: EngineState,
-        /// The position the engine is analysing.
-        position: PositionKey,
+        /// The position the engine is analysing; `null` when it has none (an illegal position).
+        position: Option<PositionKey>,
         /// The latest analysis of that position, if any has arrived.
         analysis: Option<AnalysisUpdate>,
     },
@@ -133,6 +159,20 @@ pub enum Response {
     Settings {
         settings: UiSettings,
     },
+    /// The game after a `game*` request. `warnings` are what opening the file reported; only
+    /// `gameOpen` and `gameSnapshot` carry them.
+    Game {
+        /// Boxed: a snapshot is far larger than any other reply.
+        snapshot: Box<GameSnapshot>,
+        warnings: Vec<GameWarning>,
+    },
+    GamePreview {
+        preview: Preview,
+    },
+    GameExport {
+        name: String,
+        text: String,
+    },
     Ok,
 }
 
@@ -155,6 +195,42 @@ pub enum AppEvent {
     SettingsChanged {
         settings: UiSettings,
     },
+    /// The game changed, here or in another client.
+    GameSnapshot {
+        snapshot: GameSnapshot,
+    },
+}
+
+/// Everything the UI shows about the open game at its current node (design 5.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameSnapshot {
+    /// Increases on every change; a client ignores a snapshot older than the one it has.
+    #[ts(type = "number")]
+    pub revision: u64,
+    /// The file name without `.sgf`; `null` for a new game. The UI composes the title.
+    pub name: Option<String>,
+    pub info: GameInfo,
+    pub rules: RulesState,
+    pub size: u8,
+    /// Every point, row by row (`y * size + x`).
+    pub stones: Vec<Option<Color>>,
+    pub last_move: Option<Move>,
+    pub next_color: Color,
+    pub move_number: u32,
+    /// The move number at the end of the main line.
+    pub main_line_length: u32,
+    pub at_start: bool,
+    pub at_end: bool,
+    /// The current node's move breaks the rules; KataGo does not analyse it.
+    pub illegal: Option<Illegal>,
+    /// Stones captured by Black, then by White.
+    pub captures: [u32; 2],
+    /// The position KataGo analyses; `null` on an illegal node.
+    pub position_key: Option<PositionKey>,
+    /// The game holds a move or a setup stone, so it can be saved.
+    pub has_moves: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -171,6 +247,10 @@ pub struct AppInfo {
 pub struct ProtocolError {
     pub code: ErrorCode,
     pub message: String,
+    /// A value the UI puts in the text: only `sgfUnsupportedSize`'s size, as `19x13`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -189,6 +269,24 @@ pub enum ErrorCode {
     SetupInvalidSource,
     /// An install job has the engine for its benchmark and test query.
     EngineBusy,
+    /// A position with a point off the board.
+    InvalidPosition,
+    /// No game starts anywhere in the file.
+    SgfNotAGame,
+    /// The file records a game other than Go.
+    SgfNotGo,
+    /// The board is not square, or not 5 to 19 lines; `detail` is the size.
+    SgfUnsupportedSize,
+    /// The file is over 20 MB.
+    SgfTooLarge,
+    /// The game holds nothing to save.
+    GameEmpty,
+    FileReadFailed,
+    FileWriteFailed,
+    /// The file's name does not end in `.sgf`.
+    FileNotSgf,
+    /// A recent file that no longer exists.
+    FileMissing,
 }
 
 #[cfg(test)]
@@ -239,7 +337,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
             })
             .unwrap(),
@@ -253,7 +351,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
             })
             .unwrap(),
@@ -320,7 +418,8 @@ mod tests {
             (json!({"type": "settingsGet"}), Request::SettingsGet),
             (
                 json!({"type": "settingsSet", "settings": {"language": "en", "theme": "light",
-                       "discLines": ["visits", "scoreLead"], "visitLimit": null}}),
+                       "discLines": ["visits", "scoreLead"], "visitLimit": null,
+                       "defaultRules": {"kind": "japaneseKorean"}}}),
                 Request::SettingsSet {
                     settings: UiSettings {
                         language: crate::settings::LanguagePreference::En,
@@ -330,6 +429,7 @@ mod tests {
                             crate::settings::DiscField::ScoreLead,
                         ],
                         visit_limit: None,
+                        default_rules: AnalysisRules::JapaneseKorean,
                     },
                 },
             ),
@@ -495,6 +595,7 @@ mod tests {
         let e = ProtocolError {
             code: ErrorCode::Internal,
             message: "boom".into(),
+            detail: None,
         };
         assert_eq!(
             serde_json::to_value(e).unwrap(),
@@ -523,7 +624,8 @@ mod tests {
             })
             .unwrap(),
             json!({"type": "settings", "settings": {"language": "system", "theme": "system",
-                   "discLines": ["winrate", "scoreLead"], "visitLimit": null}})
+                   "discLines": ["winrate", "scoreLead"], "visitLimit": null,
+                   "defaultRules": {"kind": "chinese"}}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::SettingsChanged { settings }).unwrap()["type"],

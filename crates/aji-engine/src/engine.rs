@@ -121,7 +121,7 @@ impl std::error::Error for EngineError {}
 struct Snapshot {
     state: EngineState,
     pid: Option<u32>,
-    position: PositionKey,
+    position: Option<PositionKey>,
     analysis: Option<AnalysisUpdate>,
 }
 
@@ -129,7 +129,8 @@ struct Snapshot {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EngineStatus {
     pub state: EngineState,
-    pub position: PositionKey,
+    /// `None` after `clear_position`, until the next `set_position`.
+    pub position: Option<PositionKey>,
     /// The last update emitted for `position`. On `set_position` it becomes the cached entry
     /// shown at once, or `None`. Otherwise only a newer emitted update replaces it, so
     /// pause, resume and restart keep it until the next report.
@@ -141,6 +142,7 @@ type Outcome = Result<(), EngineError>;
 
 enum Command {
     SetPosition(Position, Reply<Outcome>),
+    ClearPosition(Reply<Outcome>),
     Pause(Reply<Outcome>),
     Resume(Reply<Outcome>),
     Restart(Reply<Outcome>),
@@ -187,7 +189,7 @@ impl Engine {
         let snapshot = Arc::new(Mutex::new(Snapshot {
             state: state.clone(),
             pid: None,
-            position: position.key(),
+            position: Some(position.key()),
             analysis: None,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
@@ -206,6 +208,7 @@ impl Engine {
             report_tx,
             state,
             position,
+            cleared: false,
             paused: false,
             cache,
             queries: HashMap::new(),
@@ -246,6 +249,13 @@ impl Engine {
     pub async fn set_position(&self, position: Position) -> Result<(), EngineError> {
         self.outcome(|reply| Command::SetPosition(position, reply))
             .await
+    }
+
+    /// Stops analysing: the running query is terminated and nothing is analysed until the next
+    /// `set_position`, which analyses even the same position again. The state stays `ready`
+    /// (or `paused`). Used for a position KataGo cannot take, such as an illegal one in a file.
+    pub async fn clear_position(&self) -> Result<(), EngineError> {
+        self.outcome(Command::ClearPosition).await
     }
 
     pub async fn pause(&self) -> Result<(), EngineError> {
@@ -413,6 +423,8 @@ struct Actor {
 
     state: EngineState,
     position: Position,
+    /// `clear_position` was called: `position` is not analysed or shown.
+    cleared: bool,
     paused: bool,
     cache: AnalysisCache,
     throttle: Throttle,
@@ -466,6 +478,9 @@ impl Actor {
             Command::SetPosition(position, reply) => {
                 let _ = reply.send(self.set_position(position));
             }
+            Command::ClearPosition(reply) => {
+                let _ = reply.send(self.clear_position());
+            }
             Command::Pause(reply) => {
                 let _ = reply.send(self.pause());
             }
@@ -491,20 +506,38 @@ impl Actor {
         if position.validate().is_err() {
             return Err(EngineError::InvalidPosition);
         }
-        if position == self.position {
+        if position == self.position && !self.cleared {
             return Ok(());
         }
         self.terminate_current();
         self.position = position;
+        self.cleared = false;
         self.throttle = Throttle::new(self.options.throttle);
         {
             let mut snapshot = lock(&self.snapshot);
-            snapshot.position = self.position.key();
+            snapshot.position = Some(self.position.key());
             snapshot.analysis = None;
         }
         if let Some(cached) = self.cache.get(self.position.key()).cloned() {
             self.throttle.admit(std::time::Instant::now(), true);
             self.emit(EngineEvent::Analysis(cached));
+        }
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
+        Ok(())
+    }
+
+    fn clear_position(&mut self) -> Outcome {
+        if self.cleared {
+            return Ok(());
+        }
+        self.terminate_current();
+        self.cleared = true;
+        {
+            let mut snapshot = lock(&self.snapshot);
+            snapshot.position = None;
+            snapshot.analysis = None;
         }
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
@@ -986,6 +1019,7 @@ impl Actor {
         let live = self.is_active(&raw.id) || self.current.is_none();
         self.cache.offer(update.clone());
         if live
+            && !self.cleared
             && key == self.position.key()
             && self.throttle.admit(std::time::Instant::now(), is_final)
         {
@@ -1030,7 +1064,8 @@ impl Actor {
 
     fn wants_analysis(&mut self) -> bool {
         // The position given at spawn is not validated; `analysis_query` would refuse it.
-        self.position.validate().is_ok()
+        !self.cleared
+            && self.position.validate().is_ok()
             && self.cache.get(self.position.key()).is_none_or(|cached| {
                 self.options
                     .visit_limit

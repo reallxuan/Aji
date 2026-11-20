@@ -45,6 +45,9 @@ pub struct Position {
     pub komi: Komi,
     pub setup: Vec<(Color, Point)>,
     pub moves: Vec<(Color, Move)>,
+    /// Who moves first, when not Black: sent as KataGo's `initialPlayer` (handicap games, `PL`,
+    /// and positions re-based on setup stones).
+    pub initial_player: Option<Color>,
 }
 
 fn color_byte(c: Color) -> u8 {
@@ -71,6 +74,7 @@ impl Position {
             komi,
             setup: Vec::new(),
             moves: Vec::new(),
+            initial_player: None,
         }
     }
 
@@ -118,6 +122,11 @@ impl Position {
                 Move::Play(p) => buf.extend_from_slice(&[p.x, p.y]),
                 Move::Pass => buf.extend_from_slice(&[0xFF, 0xFF]),
             }
+        }
+
+        // Appended only when set, so every key from before this field stays the same.
+        if let Some(c) = self.initial_player {
+            buf.extend_from_slice(&[0xFE, color_byte(c)]);
         }
 
         let mut h: u64 = 0xcbf29ce484222325;
@@ -173,6 +182,18 @@ mod tests {
         let mut d = pos(Rules::Chinese, 0.5);
         d.setup = vec![(Color::Black, gtp("D4")), (Color::Black, gtp("Q16"))];
         assert_eq!(key(&d), "87ca92a0a8996f5d");
+    }
+
+    #[test]
+    fn initial_player_changes_the_key_only_when_set() {
+        let mut p = pos(Rules::Chinese, 7.5);
+        assert_eq!(p.initial_player, None);
+        assert_eq!(p.key().to_string(), "4d325c64abd378a1");
+        p.initial_player = Some(Color::White);
+        assert_ne!(p.key().to_string(), "4d325c64abd378a1");
+        let mut q = p.clone();
+        q.initial_player = Some(Color::Black);
+        assert_ne!(p.key(), q.key());
     }
 
     #[test]

@@ -2,12 +2,16 @@ import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
 import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
+import { useGameSync } from './game/useGameSync';
+import { DropOverlay } from './board/DropOverlay';
 import { MainFrame } from './layout/MainFrame';
 import { CandidateList } from './panel/CandidateList';
 import { EngineStatus } from './panel/EngineStatus';
 import { NoEngine } from './panel/NoEngine';
+import { NoticeLine } from './panel/NoticeLine';
 import { PanelHeader } from './panel/PanelHeader';
 import { VersionLine } from './panel/VersionLine';
+import { usePlatformSync } from './platform/usePlatformSync';
 import { AboutPanel } from './settings/AboutPanel';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { useSettingsSync } from './settings/useSettingsSync';
@@ -19,6 +23,8 @@ export default function App() {
   useSettingsSync();
   useEngineSync();
   useSetupProgress();
+  const { ready } = useGameSync();
+  usePlatformSync();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);
   const dismissed = useWizardStore((s) => s.dismissed);
@@ -28,8 +34,10 @@ export default function App() {
 
   return (
     <MainFrame
+      boardOverlay={<DropOverlay />}
       panel={
-        mode === 'wizard' ? (
+        // The first frame waits for both the engine status and the game, so neither flashes.
+        !ready ? null : mode === 'wizard' ? (
           <SetupPanel />
         ) : mode === 'settings' ? (
           view === 'about' ? (
@@ -40,6 +48,7 @@ export default function App() {
         ) : (
           <>
             <PanelHeader />
+            <NoticeLine />
             {engine?.state === 'notConfigured' ? (
               <NoEngine />
             ) : (

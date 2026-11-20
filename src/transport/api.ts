@@ -11,6 +11,12 @@ import type { LicenceInfo } from './generated/LicenceInfo';
 import type { NetworkList } from './generated/NetworkList';
 import type { EngineState } from './generated/EngineState';
 import type { PositionKey } from './generated/PositionKey';
+import type { AnalysisRules } from './generated/AnalysisRules';
+import type { GameSnapshot } from './generated/GameSnapshot';
+import type { GameWarning } from './generated/GameWarning';
+import type { Move } from './generated/Move';
+import type { NavTarget } from './generated/NavTarget';
+import type { Preview } from './generated/Preview';
 import type { Request } from './generated/Request';
 import type { Response } from './generated/Response';
 import type { UiSettings } from './generated/UiSettings';
@@ -31,7 +37,7 @@ function unexpected(response: { type?: unknown }): TransportError {
 
 export interface EngineStatus {
   engine: EngineState;
-  position: PositionKey;
+  position: PositionKey | null;
   analysis: AnalysisUpdate | null;
 }
 
@@ -143,4 +149,41 @@ export async function getInstalled(
 /** Deletes what the active engine does not use; the bytes freed. */
 export async function removeUnused(transport: Transport): Promise<number> {
   return (await expectType(transport, { type: 'setupRemoveUnused' }, 'setupRemoved')).freedBytes;
+}
+
+/** The game after a `game*` request, and what opening its file reported. */
+export interface GameReply {
+  snapshot: GameSnapshot;
+  warnings: GameWarning[];
+}
+
+async function gameReply(transport: Transport, request: Request): Promise<GameReply> {
+  const { snapshot, warnings } = await expectType(transport, request, 'game');
+  return { snapshot, warnings };
+}
+
+export const newGame = (transport: Transport, size: number) =>
+  gameReply(transport, { type: 'gameNew', size });
+
+/** `bytes` is the file, base64-encoded. */
+export const openGame = (transport: Transport, name: string, bytes: string) =>
+  gameReply(transport, { type: 'gameOpen', name, bytes });
+
+export const navigateGame = (transport: Transport, to: NavTarget) =>
+  gameReply(transport, { type: 'gameNavigate', to });
+
+/** `null` goes back to the file's reading. */
+export const setGameRules = (transport: Transport, rules: AnalysisRules | null) =>
+  gameReply(transport, { type: 'gameSetRules', rules });
+
+export const getGameSnapshot = (transport: Transport) =>
+  gameReply(transport, { type: 'gameSnapshot' });
+
+export async function previewGame(transport: Transport, moves: Move[]): Promise<Preview> {
+  return (await expectType(transport, { type: 'gamePreview', moves }, 'gamePreview')).preview;
+}
+
+export async function exportGame(transport: Transport): Promise<{ name: string; text: string }> {
+  const { name, text } = await expectType(transport, { type: 'gameExport' }, 'gameExport');
+  return { name, text };
 }

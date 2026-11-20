@@ -17,7 +17,7 @@ Chinese appears only in the second column of the tables, quoting LizzieYzy's lab
   - **Hiding candidates.** LizzieYzy can hide the candidate discs while analysis keeps running, for a player who wants to think first. The charter has no row for it (G7).
   - **"Replay" is a timed replay.** In LizzieYzy it is an animation of the hovered variation at a set interval, separate from stepping with the wheel. Roadmap M7 reads it as wheel stepping only (G8).
   - **The per-position analysis limit** is asked at LizzieYzy's first run, sits in charter Phase 4, and is hard-coded in roadmap section 3.4 (G3).
-  - **Tygem `.gib` files.** LizzieYzy opens them natively. The charter and roadmap name SGF only, and the owner's own Tygem files are an M6 exit criterion (G6).
+  - **Tygem `.gib` files.** LizzieYzy opens them natively. The charter and roadmap name SGF only, and the owner's own Tygem files are an M6 exit criterion (G6). Settled in M6: the owner has no Tygem records, so Aji opens general SGF only.
 - One licensing item the charter does not mention: Aji needs a place to show the AGPL notice and the notices for KataGo, the networks and the bundled fonts (G4).
 
 ## 2. Method
@@ -134,7 +134,7 @@ Charter rows are cited by section and the first words of the row, for example "7
 | F6 | 复制棋谱到剪贴板 (`Menu.copySgf`); 从剪贴板粘贴棋谱 (`Menu.pasteSgf`) | Copy the game to the clipboard; paste a game from it | 7.2 Paste, copy a game | Later · P2 | |
 | F7 | `Menu.showReplaceFileConfirmDialog`, `LizzieFrame.ifReplaceFile`, `LizzieFrame.fileExists` | Confirm before overwriting a file | none needed | Covered · P1 · M6 | The native save dialog asks; "Save" over the opened file in place should confirm too. |
 | F8 | `Lizzie.askOnExit1` | On exit, ask "Save SGF?" | none | Later · P2 (L4) | Nothing can change in P1, so there is no unsaved state to protect. Needed once editing exists. |
-| F9 | (no label) `.gib` handling in the open dialog and `rules/GIBParser` | Open Tygem's native `.gib` record format as well as SGF | 7.2 Open, save, recent, drop (SGF only) | **Gap** · P1 · M6 | LizzieYzy reads `.gib` directly. Roadmap M6 exits on "the owner's Fox and Tygem files open". Ask the owner which format those files are in. Proposed as G6. |
+| F9 | (no label) `.gib` handling in the open dialog and `rules/GIBParser` | Open Tygem's native `.gib` record format as well as SGF | 7.2 Open, save, recent, drop (SGF only) | Later · not planned | LizzieYzy reads `.gib` directly. **Decided** in M6 (owner, 2026-11-21): general SGF only; the owner has no Tygem records, and `.gib` is not supported for now (G6). |
 | F10 | (no label) drag and drop: a drop handler on the main panel | Drop a file on the window to open it | 7.2 Open, save, recent, drop | Covered · P1 · M6 | One dropped file opens. Several dropped files start batch-analysis setup in LizzieYzy (P5 here). Roadmap M6 should define the P1 behaviour: open the first and say the rest were ignored. |
 | F11 | 新建 (`Menu.newBoard`); 清空棋盘 (`Menu.clearBoard`); 新建空白棋盘 (`Menu.btnNewFile.toolTipText`); `LizzieFrame.confirmNewBoard` | New empty board, with a confirmation that analysis is cleared | none | **Gap** · P1 · M6 | Charter 7.2 has no "new game" row, but roadmap M6 already has `game.new`. Board size choice (`SetBoardSize.*`: 19, 15, 13, 9, other) is Later · P2 under 7.1 Rules, komi, board size. Proposed as G5. |
 | F12 | 加载SGF棋谱中的贴目 (`Menu.loadKomi`) | Switch: take komi from the SGF | 7.2 Open, save, recent, drop | Covered differently · P1 · M6 | Aji always reads `KM`; no switch. |
@@ -259,7 +259,7 @@ These need no approval. They are details the M2, M5, M6 and M7 plans should sett
 
 | # | Milestone | Note |
 |---|---|---|
-| K1 | M2, M6 | **Default rules.** Pick the rules used on the empty board (M2) and for an SGF with no `RU` property (M6). LizzieYzy falls back to Chinese rules (E15). |
+| K1 | M2, M6 | **Default rules.** Pick the rules used on the empty board (M2) and for an SGF with no `RU` property (M6). LizzieYzy falls back to Chinese rules (E15). **Done** in M6: a 新棋局默认规则 setting (Chinese at first) covers new games and files that name neither rules nor komi; each game's rules (Chinese, Japanese/Korean, or Custom komi and scoring) change in the rules chip. |
 | K2 | M5 | **Language inside the wizard.** Make the language switch reachable while the wizard runs, since the OS guess can be wrong and the wizard has no language step. **Done** in M5: a `中文 · EN` switch in the wizard's title row. |
 | K3 | M6 | **Opening behaviour.** Decide whether a loaded game shows the first or the last move (F13). Several files dropped at once: open the first and say the rest were ignored (F10). Files with variations: navigate the main line, keep the branches on save (N6). |
 | K4 | M6 | **Keys.** Aji's arrows are inverted relative to LizzieYzy (N2). Say so in the v0.1.0 notes until the P2 compatibility preset exists. The game title (F17) shows the file name or the players: decide. |
@@ -279,12 +279,12 @@ All are **[Proposed]**. Nothing here changes the charter or the roadmap until th
 | G2 | Run without an engine: the wizard gets a "skip for now" that opens the app with analysis off, so a game can still be opened and navigated | 7.9 First-run wizard; roadmap M5 | E8 | M5. **Done** in M5: "暂不设置" on every step, the no-engine panel, and the wizard again at the next launch until an engine is active (opening games comes with M6) |
 | G3 | Analysis limit as a visible setting: visits per position, 0 for no limit, plus a "stopped at limit" indicator state that the same control resumes. Time limits and play limits stay in Phase 4 | Split 7.1 Engine parameters; roadmap M5 settings and M7 | E18, A2 | M5, M7. **Done in M5** except the indicator state: the setting (empty for no limit, the default), applied at once to the running search, and a "已达到每步上限" status line. The dot's own "stopped at limit" state and resuming from it move to M7 (K6) |
 | G4 | An About screen: version, AGPL-3.0-or-later and the source link, notices for KataGo, the networks and the bundled fonts | New 7.9 row, Phase 1 | I11 | M5. **Done** in M5, with a generated list of every other shipped component's licence |
-| G5 | "New empty game" | Add to the 7.2 Phase 1 row (roadmap M6 already has `game.new`) | F11 | M6 |
-| G6 | Tygem `.gib` files: the owner confirms which format the Tygem files for S4 are. If `.gib`, add "open `.gib`" to 7.2 Phase 1; if SGF, add it to 7.2 in Phase 2 | 7.2; roadmap S4 and M6 | F9 | M6 |
+| G5 | "New empty game" | Add to the 7.2 Phase 1 row (roadmap M6 already has `game.new`) | F11 | M6 **Done** in M6: 新建棋局 with 19, 13 and 9 路. |
+| G6 | Tygem `.gib` files: the owner confirms which format the Tygem files for S4 are. If `.gib`, add "open `.gib`" to 7.2 Phase 1; if SGF, add it to 7.2 in Phase 2 | 7.2; roadmap S4 and M6 | F9 | M6 **Decided** in M6: SGF only; no `.gib` (F9). |
 | G7 | Show or hide candidates on the board, and hold a key to hide them, while analysis keeps running | New 7.3 row, Phase 1 | C6, A3 | M7 |
 | G8 | Say what "replay" means: a timed replay of the hovered variation at a set interval, in addition to stepping through it with the wheel | 7.3 hover row; roadmap M7 | H3 | M7 |
 | G9 | Phase 1 keys: PageUp and PageDown move ten moves (M6); Space pauses and resumes analysis (M7) | 7.2 navigation row; 7.3 start and pause row | N5, A1 | M6, M7 |
-| G10 | Add a LizzieYzy-analysed SGF (with `LZ`, `LZOP`, `LZ2`, `LZOP2`) to the S4 fixtures, so M6's round-trip tests prove that a Phase 1 save keeps the analysis | Roadmap S4 and M6 | F18 | M6 |
+| G10 | Add a LizzieYzy-analysed SGF (with `LZ`, `LZOP`, `LZ2`, `LZOP2`) to the S4 fixtures, so M6's round-trip tests prove that a Phase 1 save keeps the analysis | Roadmap S4 and M6 | F18 | M6 **Done** in M6: `lizzie.sgf` in the fixtures; its `LZ` properties survive a save. |
 | G11 | Add a DPI check to the M8 acceptance list: 100, 150 and 200 percent, and moving the window between screens of different scale | Roadmap M8 | I4 | M8 |
 | G12 | **Question, not a gap:** can Aji's two disc lines be any two of win rate, score lead and visits? LizzieYzy allows one to three lines from those fields | Roadmap M5 settings | C1 | M5. **Done** in M5: any two different fields, with a preview disc; drawn on the board in M7 |
 

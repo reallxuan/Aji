@@ -880,7 +880,7 @@ async fn set_position_rejects_an_off_board_move() {
         bounded(p.engine.set_position(off_board)).await,
         Err(EngineError::InvalidPosition)
     );
-    assert_eq!(p.engine.status().position, p1().key());
+    assert_eq!(p.engine.status().position, Some(p1().key()));
     let after = p.collect_for(Duration::from_millis(300)).await;
     assert!(
         updates(&after).iter().all(|u| u.position == p1().key()),
@@ -902,13 +902,56 @@ async fn status_carries_the_latest_analysis() {
         last = (*update).clone();
     }
     let status = p.engine.status();
-    assert_eq!(status.position, p1().key());
+    assert_eq!(status.position, Some(p1().key()));
     assert_eq!(status.analysis, Some(last));
 
     assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
     let status = p.engine.status();
-    assert_eq!(status.position, p2().key());
+    assert_eq!(status.position, Some(p2().key()));
     assert_eq!(status.analysis, None);
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn clear_position_stops_analysis() {
+    let mut p = start(Some(files("slow")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    p.next_analysis().await;
+
+    assert_eq!(bounded(p.engine.clear_position()).await, Ok(()));
+    let mut seen = p.until_state(|s| *s == ready()).await;
+    seen.extend(p.collect_for(Duration::from_millis(400)).await);
+    let after_ready = seen
+        .iter()
+        .position(|e| *e == EngineEvent::State(ready()))
+        .unwrap();
+    assert!(
+        updates(&seen[after_ready..]).is_empty(),
+        "an update after clearing: {seen:?}"
+    );
+    let status = p.engine.status();
+    assert_eq!(status.position, None);
+    assert_eq!(status.analysis, None);
+    assert_eq!(p.engine.state(), ready());
+
+    // The same position as before is analysed again once it is set.
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
+    assert_eq!(p.engine.status().position, Some(p1().key()));
+    p.until(|e| matches!(e, EngineEvent::Analysis(u) if u.position == p1().key()))
+        .await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn clear_position_while_paused_stays_paused() {
+    let mut p = start(Some(files("slow")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    p.until_state(|s| *s == paused()).await;
+    assert_eq!(bounded(p.engine.clear_position()).await, Ok(()));
+    assert_eq!(p.engine.state(), paused());
+    assert_eq!(bounded(p.engine.resume()).await, Ok(()));
+    assert_eq!(p.next_state().await, ready());
     bounded(p.engine.shutdown()).await;
 }
 
@@ -1032,7 +1075,7 @@ async fn set_files_switches_to_the_new_files() {
     assert_ne!(new, old);
     assert_eq!(
         p.engine.status().position,
-        p1().key(),
+        Some(p1().key()),
         "the position is kept"
     );
     bounded(p.engine.shutdown()).await;

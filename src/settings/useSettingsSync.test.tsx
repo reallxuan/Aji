@@ -13,6 +13,7 @@ const stored: UiSettings = {
   theme: 'system',
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
+  defaultRules: { kind: 'chinese' },
 };
 
 function Probe() {

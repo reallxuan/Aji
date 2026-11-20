@@ -3,6 +3,8 @@ import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
 import { usePanelStore } from './app/panelStore';
+import { createFakeFiles } from './platform/fakeFiles';
+import { PlatformProvider } from './platform/PlatformProvider';
 import { createEngineStore, EngineStoreProvider } from './engine/engineStore';
 import { createI18n } from './i18n/createI18n';
 import { setupTransport } from './setup/testing';
@@ -27,7 +29,9 @@ function renderApp(engine: EngineState) {
     <I18nextProvider i18n={createI18n('zh-CN')}>
       <TransportProvider transport={transport}>
         <EngineStoreProvider store={createEngineStore()}>
-          <App />
+          <PlatformProvider files={createFakeFiles()}>
+            <App />
+          </PlatformProvider>
         </EngineStoreProvider>
       </TransportProvider>
     </I18nextProvider>,

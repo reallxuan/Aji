@@ -100,6 +100,9 @@ fn context() -> AppContext {
         files: Arc::new(Cancelled),
         source,
         events: Arc::new(Discard),
+        game: Arc::new(tokio::sync::Mutex::new(
+            aji_lib::game::GameSession::new(19, Default::default()).unwrap(),
+        )),
     }
 }
 
@@ -159,6 +162,27 @@ fn malformed_request_is_rejected_with_a_plain_string() {
     // normalise this string into an internal error (Review Focus 4).
     let error = invoke_rpc(json!({"request": {"type": "nope"}})).expect_err("must be rejected");
     assert!(error.is_string(), "expected a string error, got {error}");
+}
+
+#[test]
+fn rpc_opens_a_game_from_base64() {
+    // "(;SZ[9];B[ee])" in base64.
+    let response = invoke_rpc(json!({"request": {"type": "gameOpen", "name": "a.sgf",
+        "bytes": "KDtTWls5XTtCW2VlXSk="}}))
+    .unwrap();
+    assert_eq!(response["type"], "game");
+    assert_eq!(response["snapshot"]["size"], 9);
+    assert_eq!(response["snapshot"]["mainLineLength"], 1);
+    assert_eq!(
+        response["snapshot"]["rules"]["current"],
+        json!({"kind": "chinese"})
+    );
+    assert_eq!(response["warnings"], json!([]));
+    let error = invoke_rpc(json!({"request": {"type": "gameNew", "size": 21}})).unwrap_err();
+    assert_eq!(
+        error,
+        json!({"code": "sgfUnsupportedSize", "message": "21x21", "detail": "21x21"})
+    );
 }
 
 #[test]

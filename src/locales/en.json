@@ -31,7 +31,17 @@
     "setupUnknownNetwork": "That network is not in the list.",
     "setupImportFailed": "That file is not a KataGo network.",
     "setupInvalidSource": "A download source must be a web address starting with http:// or https://.",
-    "engineBusy": "The engine is being installed or measured. Try again when that has finished."
+    "engineBusy": "The engine is being installed or measured. Try again when that has finished.",
+    "invalidPosition": "The position has a point off the board, so it cannot be analysed.",
+    "sgfNotAGame": "The file holds no game record.",
+    "sgfNotGo": "The file records a game other than Go.",
+    "sgfUnsupportedSize": "A {{size}} board is not supported. Aji opens square boards from 5×5 to 19×19.",
+    "sgfTooLarge": "The file is over 20 MB.",
+    "gameEmpty": "The game has no moves to save.",
+    "fileReadFailed": "The file could not be read.",
+    "fileWriteFailed": "The file could not be saved.",
+    "fileNotSgf": "Only .sgf files can be opened.",
+    "fileMissing": "The file has been moved or deleted."
   },
   "engine": {
     "state": {
@@ -58,7 +68,14 @@
       "stop": "Stop engine",
       "setupAgain": "Set up the engine again"
     },
-    "limitReached": "Visit limit reached"
+    "limitReached": "Visit limit reached",
+    "illegal": "This move breaks the rules ({{reason}}); the position cannot be analysed.",
+    "illegalReason": {
+      "occupied": "the point is taken",
+      "suicide": "it takes its own last liberty",
+      "ko": "it retakes a ko at once",
+      "offBoard": "it is off the board"
+    }
   },
   "analysis": {
     "columns": {
@@ -215,7 +232,9 @@
     "previous": "Previous move",
     "next": "Next move",
     "last": "Last move",
-    "settings": "Settings"
+    "settings": "Settings",
+    "jumpFrom": "Move {{current}}; click to go to another move",
+    "jumpTo": "Go to move"
   },
   "noEngine": {
     "title": "No engine is set up",
@@ -256,6 +275,106 @@
     "confirmTitle": "Delete unused files?",
     "confirmBody": "This deletes {{size}} of files the current engine does not use. They cannot be restored; Aji downloads them again if needed.",
     "cancel": "Cancel",
-    "about": "About Aji"
+    "about": "About Aji",
+    "defaultRules": "Default rules for new games",
+    "defaultRulesNote": "Used for new games, and for records that name neither rules nor komi. Games already open are not changed."
+  },
+  "game": {
+    "players": "{{black}} vs {{white}}"
+  },
+  "notice": {
+    "openFailed": "Couldn't open {{name}}",
+    "saveFailed": "Couldn't save the game",
+    "gameFailed": "The game could not be changed",
+    "dismiss": "Dismiss",
+    "warning": {
+      "truncated": {
+        "title": "The record is incomplete: opened the first {{moves}} moves",
+        "detail": "The file breaks off at move {{next}}; it may not have finished downloading."
+      },
+      "extraGames": {
+        "title": "This file holds {{total}} games; only the first is open",
+        "detail": "Save as keeps the others as they are."
+      },
+      "encodingGuessed": {
+        "title": "The record names no encoding: read as {{encoding}}",
+        "detail": "If names look wrong, please let us know."
+      },
+      "repaired": {
+        "title": "The record was damaged and has been repaired where possible",
+        "detail": "Save as writes the repaired record."
+      },
+      "illegalMoves": {
+        "title": "The record has moves that break the rules",
+        "detail": "Those positions cannot be analysed; every other position is."
+      },
+      "komiUnreadable": {
+        "title": "The record's komi could not be read",
+        "detail": "Analysing with the default rules for new games; change them from the rules chip."
+      }
+    },
+    "dropHere": "Release to open the record"
+  },
+  "rules": {
+    "title": "Analysis rules",
+    "rule": "Rules",
+    "komi": "Komi",
+    "scoring": "Scoring",
+    "chinese": "Chinese",
+    "japaneseKorean": "Japanese/Korean",
+    "custom": "Custom",
+    "area": "Area",
+    "territory": "Territory",
+    "fixedKomi": "{{komi}} points",
+    "fixedHint": "{{scoring}} · set by the rules",
+    "stepHint": "Steps of 0.5",
+    "komiDown": "Lower komi",
+    "komiUp": "Raise komi",
+    "short": {
+      "chinese": "Chinese",
+      "japaneseKorean": "Japanese",
+      "custom": "Custom"
+    },
+    "chip": "{{rules}} · {{komi}}",
+    "chipChanged": "{{rules}} · {{komi}}, changed from the file",
+    "described": {
+      "chinese": "Chinese rules",
+      "japaneseKorean": "Japanese/Korean rules",
+      "custom": "custom rules ({{scoring}}, komi {{komi}})"
+    },
+    "source": {
+      "sameLead": "Matches the file, which records",
+      "readAs": ", read as {{rules}}.",
+      "changedLead": "Changed. The file records",
+      "wasReadAs": ", first read as {{rules}}.",
+      "none": "The file names no rules or komi, so the default is used.",
+      "changedNone": "Changed. The file names no rules or komi; the default was used.",
+      "restore": "Restore the file's setting"
+    }
+  },
+  "gameInfo": {
+    "title": "Game",
+    "result": "Result",
+    "date": "Date",
+    "event": "Event",
+    "place": "Place",
+    "handicap": "Handicap",
+    "empty": "The record names no players or event",
+    "black": "Black",
+    "white": "White"
+  },
+  "menu": {
+    "newGame": "New Game",
+    "size19": "19×19",
+    "size13": "13×13",
+    "size9": "9×9",
+    "open": "Open…",
+    "openRecent": "Open Recent",
+    "noRecent": "No recent games",
+    "missing": "Moved or deleted",
+    "clearRecent": "Clear Recent",
+    "saveAs": "Save As…",
+    "today": "Today",
+    "yesterday": "Yesterday"
   }
 }

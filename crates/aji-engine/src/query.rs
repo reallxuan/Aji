@@ -34,6 +34,9 @@ pub fn analysis_query(
         "maxVisits": max_visits,
         "reportDuringSearchEvery": report_every.as_secs_f64(),
     });
+    if let Some(player) = position.initial_player {
+        q["initialPlayer"] = json!(player.gtp());
+    }
     if !position.setup.is_empty() {
         let stones = position
             .setup
@@ -100,6 +103,20 @@ mod tests {
         )
         .unwrap();
         assert_eq!(v["initialStones"], json!([["B", "D4"]]));
+    }
+
+    #[test]
+    fn initial_player_is_sent_when_set() {
+        let query = |p: &Position| -> Value {
+            serde_json::from_str(
+                &analysis_query("a", p, Some(10), Duration::from_millis(100)).unwrap(),
+            )
+            .unwrap()
+        };
+        let mut p = p1();
+        assert!(query(&p).get("initialPlayer").is_none());
+        p.initial_player = Some(Color::White);
+        assert_eq!(query(&p)["initialPlayer"], json!("W"));
     }
 
     #[test]
