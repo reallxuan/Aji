@@ -70,7 +70,7 @@ export function ChoiceList({
       value={value ?? ''}
       onValueChange={onChange}
       aria-label={label}
-      className="gap-0 border-t border-hairline"
+      className="grid-cols-1 gap-0 border-t border-hairline"
     >
       {children}
     </RadioGroup>

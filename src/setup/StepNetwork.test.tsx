@@ -28,6 +28,29 @@ describe('StepNetwork', () => {
     });
   });
 
+  it('shows Elo as a whole number, as the mockup does', async () => {
+    const transport = setupTransport({
+      setupNetworks: () => ({
+        type: 'setupNetworks',
+        networks: {
+          networks: [
+            {
+              network: 'kata1-tf3',
+              family: 'tf3',
+              elo: 14638.2,
+              uploaded: '2026-11-01',
+              sizeBytes: 1,
+            },
+          ],
+          preselected: 'kata1-tf3',
+          human: null,
+        },
+      }),
+    });
+    renderSetup(transport, atNetwork);
+    expect(await screen.findByText('14638')).toBeInTheDocument();
+  });
+
   it('puts an imported network at the top, chosen', async () => {
     const transport = setupTransport({
       setupImportNetwork: () => ({

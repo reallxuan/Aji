@@ -79,7 +79,9 @@ export function StepNetwork() {
             <span className="w-5">{t('setup.network.columnIndex')}</span>
             <span className="flex-1">{t('setup.network.columnName')}</span>
             <span className="w-12 text-right">{t('setup.network.columnElo')}</span>
-            <span className="w-20 text-right">{t('setup.network.columnReleased')}</span>
+            <span className="w-24 text-right whitespace-nowrap">
+              {t('setup.network.columnReleased')}
+            </span>
           </div>
           <ChoiceList
             value={network}
@@ -91,7 +93,7 @@ export function StepNetwork() {
                 <span className="w-5" />
                 <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
                 <span className="w-12" />
-                <span className="w-20 text-right text-[13px] text-text-muted">
+                <span className="w-24 text-right whitespace-nowrap text-[13px] text-text-muted">
                   {t('setup.network.imported')}
                 </span>
               </ChoiceRow>
@@ -102,8 +104,10 @@ export function StepNetwork() {
                 <span className="min-w-0 flex-1 truncate font-medium" title={item.network}>
                   {item.network}
                 </span>
-                <span className="w-12 text-right font-medium tabular-nums">{item.elo ?? ''}</span>
-                <span className="w-20 text-right text-[13px] text-text-muted tabular-nums">
+                <span className="w-12 text-right font-medium tabular-nums">
+                  {item.elo === null ? '' : Math.round(item.elo)}
+                </span>
+                <span className="w-24 text-right whitespace-nowrap text-[13px] text-text-muted tabular-nums">
                   {formatDate(item.uploaded, i18n.language)}
                 </span>
               </ChoiceRow>

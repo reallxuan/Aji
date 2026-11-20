@@ -163,6 +163,31 @@ to start over.
 
 The M4 `AJI_DEV_INSTALL` trigger is gone: the wizard drives the same install pipeline.
 
+## Setup panels without the hardware: `?scenario=`
+
+A Mac reaches only the Metal path of the setup wizard. To see the other panels, run `pnpm dev`
+and open the Vite page in a browser with a scenario name, for example
+`http://localhost:1420/?scenario=a1-driver`. A scripted engine side (`src/dev/scenarios.ts`)
+then answers every request with ids, sizes and driver versions from the bundled manifest, and
+emits install progress on timers. Nothing is downloaded and no KataGo runs.
+
+| Scenario | What it shows |
+|---|---|
+| `pc-cuda` | Windows with an RTX 5070 and a current driver: CUDA installs and the engine comes up |
+| `pc-old-driver` | Step 2 with CUDA disabled for an old driver; "detect again" then finds the updated one |
+| `cuda-licence` | The NVIDIA licence panel before the CUDA download |
+| `a1-driver` | Panel A1: CUDA fails for an old driver; Retry fails again, DirectML installs |
+| `a2-gpu-error` | Panel A2: CUDA fails with a GPU error, DirectML first |
+| `b-download-failed` | Panel B: the network download fails, with nothing to fall back to |
+| `d-crashed` | The analysis panel with a crashed engine, and "set up again" |
+| `no-engine` | Choose "set up later" to see the no-engine panel |
+| `mac` | The Metal path on Apple silicon |
+
+The language follows the browser until you switch it in the title row or in settings. Reload
+the page to start a scenario again. Scenarios exist only in a development build: `main.tsx`
+loads them behind `import.meta.env.DEV`, so `pnpm build` leaves them out, and an unknown name
+falls back to the Tauri transport with a warning in the console.
+
 ## The `downloadSource` setting
 
 Where engine and network files are downloaded from. NVIDIA's archives always come from NVIDIA.
