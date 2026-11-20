@@ -22,6 +22,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # scripts/third-party-notices.test.mjs runs `cargo metadata` to check that the About page's
+      # notices match the Rust dependency graph.
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

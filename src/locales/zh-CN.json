@@ -1,6 +1,20 @@
 {
   "about": {
-    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}"
+    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}",
+    "title": "关于 Aji",
+    "licence": "Aji 是自由软件，按 GNU Affero 通用公共许可证第 3 版或更高版本发布。",
+    "source": "源代码：",
+    "thirdParty": "第三方软件",
+    "katago": "KataGo",
+    "katagoLicence": "KataGo 许可",
+    "networks": "KataGo 权重（katagotraining.org）",
+    "networksLicence": "权重许可",
+    "inter": "Inter",
+    "wenkai": "霞鹜文楷 LXGW WenKai",
+    "ofl": "SIL OFL 1.1",
+    "others": "其他开源组件",
+    "othersLicence": "列表",
+    "loading": "正在读取…"
   },
   "os": {
     "windows": "Windows",
@@ -40,8 +54,11 @@
     "action": {
       "pause": "暂停分析",
       "resume": "继续分析",
-      "restart": "重启引擎"
-    }
+      "restart": "重启引擎",
+      "stop": "停止引擎",
+      "setupAgain": "重新设置引擎"
+    },
+    "limitReached": "已达到每步上限"
   },
   "analysis": {
     "columns": {
@@ -173,6 +190,53 @@
   "languageName": {
     "zh": "中文",
     "en": "English",
-    "enShort": "EN"
+    "enShort": "EN",
+    "zhHans": "简体中文"
+  },
+  "panel": {
+    "untitled": "未命名棋局",
+    "moveCounter": "{{current}} / {{total}}",
+    "first": "第一手",
+    "previous": "上一手",
+    "next": "下一手",
+    "last": "最后一手",
+    "settings": "设置"
+  },
+  "noEngine": {
+    "title": "尚未设置引擎",
+    "body": "设置好 KataGo 后才能分析。",
+    "setup": "设置引擎"
+  },
+  "settings": {
+    "title": "设置",
+    "back": "返回",
+    "interface": "界面",
+    "language": "语言",
+    "followSystem": "跟随系统",
+    "theme": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "analysis": "分析",
+    "discLine1": "选点第一行",
+    "discLine2": "选点第二行",
+    "fields": {
+      "winrate": "胜率",
+      "scoreLead": "目差",
+      "visits": "计算量"
+    },
+    "preview": "选点预览",
+    "visitLimit": "每步计算量上限",
+    "visitLimitNone": "不限",
+    "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
+    "engine": "引擎",
+    "engineLine": "KataGo {{version}} · {{backend}}",
+    "networkLine": "权重 {{network}} · {{threads}} 线程",
+    "noEngine": "尚未设置引擎",
+    "unused": "未使用的已下载文件",
+    "delete": "删除",
+    "confirmTitle": "删除未使用的文件？",
+    "confirmBody": "将删除 {{size}} 当前引擎用不到的文件，删除后无法恢复。以后需要时 Aji 会重新下载。",
+    "cancel": "取消",
+    "about": "关于 Aji"
   }
 }

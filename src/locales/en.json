@@ -1,6 +1,20 @@
 {
   "about": {
-    "versionLine": "Aji version {{version}} · {{os}} {{arch}}"
+    "versionLine": "Aji version {{version}} · {{os}} {{arch}}",
+    "title": "About Aji",
+    "licence": "Aji is free software, released under the GNU Affero General Public License, version 3 or later.",
+    "source": "Source code:",
+    "thirdParty": "Third-party software",
+    "katago": "KataGo",
+    "katagoLicence": "KataGo licence",
+    "networks": "KataGo networks (katagotraining.org)",
+    "networksLicence": "Network licence",
+    "inter": "Inter",
+    "wenkai": "LXGW WenKai",
+    "ofl": "SIL OFL 1.1",
+    "others": "Other open-source components",
+    "othersLicence": "List",
+    "loading": "Loading…"
   },
   "os": {
     "windows": "Windows",
@@ -40,8 +54,11 @@
     "action": {
       "pause": "Pause analysis",
       "resume": "Resume analysis",
-      "restart": "Restart engine"
-    }
+      "restart": "Restart engine",
+      "stop": "Stop engine",
+      "setupAgain": "Set up the engine again"
+    },
+    "limitReached": "Visit limit reached"
   },
   "analysis": {
     "columns": {
@@ -173,6 +190,53 @@
   "languageName": {
     "zh": "中文",
     "en": "English",
-    "enShort": "EN"
+    "enShort": "EN",
+    "zhHans": "简体中文"
+  },
+  "panel": {
+    "untitled": "Untitled game",
+    "moveCounter": "{{current}} / {{total}}",
+    "first": "First move",
+    "previous": "Previous move",
+    "next": "Next move",
+    "last": "Last move",
+    "settings": "Settings"
+  },
+  "noEngine": {
+    "title": "No engine is set up",
+    "body": "Set up KataGo to start analysing.",
+    "setup": "Set up the engine"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "interface": "Interface",
+    "language": "Language",
+    "followSystem": "Follow system",
+    "theme": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "analysis": "Analysis",
+    "discLine1": "Disc, first line",
+    "discLine2": "Disc, second line",
+    "fields": {
+      "winrate": "Win rate",
+      "scoreLead": "Score lead",
+      "visits": "Visits"
+    },
+    "preview": "Disc preview",
+    "visitLimit": "Visit limit per move",
+    "visitLimitNone": "No limit",
+    "visitLimitNote": "Analysis stops at the limit and the graphics card idles; it starts again on the next move.",
+    "engine": "Engine",
+    "engineLine": "KataGo {{version}} · {{backend}}",
+    "networkLine": "Network {{network}} · {{threads}} threads",
+    "noEngine": "No engine is set up",
+    "unused": "Unused downloaded files",
+    "delete": "Delete",
+    "confirmTitle": "Delete unused files?",
+    "confirmBody": "This deletes {{size}} of files the current engine does not use. They cannot be restored; Aji downloads them again if needed.",
+    "cancel": "Cancel",
+    "about": "About Aji"
   }
 }

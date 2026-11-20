@@ -9,6 +9,7 @@ import type { EngineState } from '../transport/generated/EngineState';
 import type { Request } from '../transport/generated/Request';
 import { TransportProvider } from '../transport/TransportProvider';
 import { EngineIndicator } from './EngineIndicator';
+import { initialWizard, useWizardStore } from '../setup/wizardStore';
 
 function renderWith(engine: EngineState, requests: Request[] = []) {
   const store = createEngineStore();
@@ -48,4 +49,13 @@ it('is disabled when crashed', () => {
   const button = screen.getByRole('button', { name: 'KataGo has stopped.' });
   expect(button).toBeDisabled();
   expect(button).toHaveAttribute('data-state', 'crashed');
+});
+
+it('is grey with no engine, and clicking it opens the wizard', () => {
+  useWizardStore.setState(initialWizard);
+  renderWith({ state: 'notConfigured' });
+  const dot = screen.getByRole('button', { name: 'Set up the engine' });
+  expect(dot).toHaveClass('bg-line');
+  fireEvent.click(dot);
+  expect(useWizardStore.getState()).toMatchObject({ open: true, rerun: false });
 });

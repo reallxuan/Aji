@@ -1,11 +1,13 @@
 import { render } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { I18nextProvider } from 'react-i18next';
+import { createEngineStore, EngineStoreProvider } from '../engine/engineStore';
 import { createI18n } from '../i18n/createI18n';
 import type { Language } from '../i18n/language';
 import { useSettingsSync } from '../settings/useSettingsSync';
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
 import type { BackendRecommendation } from '../transport/generated/BackendRecommendation';
+import type { EngineState } from '../transport/generated/EngineState';
 import type { EngineVersionChoice } from '../transport/generated/EngineVersionChoice';
 import type { HardwareReport } from '../transport/generated/HardwareReport';
 import type { JobSnapshot } from '../transport/generated/JobSnapshot';
@@ -244,6 +246,22 @@ export function setupTransport(
         return { type: 'ok' };
       case 'setupStatus':
         return { type: 'setupStatus', job: null };
+      case 'setupInstalled':
+        return { type: 'setupInstalled', active: null, unusedBytes: 0 };
+      case 'setupRemoveUnused':
+        return { type: 'setupRemoved', freedBytes: 0 };
+      case 'engineRestart':
+      case 'engineStop':
+        return { type: 'ok' };
+      case 'engineStatus':
+        return {
+          type: 'engineStatus',
+          engine: { state: 'notConfigured' },
+          position: '0000000000000000',
+          analysis: null,
+        };
+      case 'appInfo':
+        return { type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' };
       case 'settingsGet':
         return { type: 'settings', settings: storedSettings };
       case 'settingsSet':
@@ -258,6 +276,35 @@ export function setupTransport(
 function Harness() {
   useSettingsSync();
   return <SetupPanel />;
+}
+
+function SettingsSync({ children }: { children: ReactNode }) {
+  useSettingsSync();
+  return children;
+}
+
+/**
+ * Renders `node` with every provider the panel needs, settings sync included, and an engine
+ * store that starts in `engine`.
+ */
+export function renderWithProviders(
+  node: ReactNode,
+  transport: FakeTransport,
+  engine: EngineState | null = null,
+) {
+  const store = createEngineStore();
+  if (engine) store.setState({ engine, sawEvent: true });
+  const i18n = createI18n('zh-CN');
+  render(
+    <I18nextProvider i18n={i18n}>
+      <TransportProvider transport={transport}>
+        <EngineStoreProvider store={store}>
+          <SettingsSync>{node}</SettingsSync>
+        </EngineStoreProvider>
+      </TransportProvider>
+    </I18nextProvider>,
+  );
+  return store;
 }
 
 /** Renders the setup panel, with settings sync, from the given wizard state. */
