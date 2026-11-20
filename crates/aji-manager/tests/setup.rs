@@ -61,3 +61,28 @@ async fn setup_requests_do_not_wait_for_the_fetch() {
     assert!(recommendation.default.is_some());
     fetch.abort();
 }
+
+#[tokio::test]
+async fn refresh_runs_the_detector_again() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let cache = tempfile::tempdir().unwrap();
+    let store = ManifestStore::open(BUNDLED, cache.path().join("manifest"), Vec::new());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&calls);
+    let setup = Setup::with_detector(
+        store,
+        Arc::new(move || {
+            let n = counted.fetch_add(1, Ordering::SeqCst);
+            let mut r = report();
+            r.os.version = format!("detection {n}");
+            r
+        }),
+    );
+    assert_eq!(setup.hardware().await.os.version, "detection 0");
+    assert_eq!(setup.hardware().await.os.version, "detection 0");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(setup.refresh().await.os.version, "detection 1");
+    assert_eq!(setup.hardware().await.os.version, "detection 1");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}

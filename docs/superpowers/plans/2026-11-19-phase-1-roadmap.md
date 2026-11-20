@@ -79,7 +79,7 @@ The alternative (O2) is `aji-core` compiled to WebAssembly, with the tree held i
 - The analysis engine (JSON over stdin and stdout) is the only protocol in Phase 1. GTP waits for Phase 4.
 - `reportAnalysisWinratesAs = BLACK` in the generated config. Phase 1 shows Black's perspective only.
 - Intermediate results are throttled to 10 per second per position (charter 6.5).
-- Each position gets a visit cap, after which the engine stops and the GPU goes idle until the user navigates. **[Proposed]** The default is 100,000 visits.
+- A visit limit per position, after which the engine stops and the GPU goes idle until the user navigates. **[Decided in M5]** The default is no limit (audit G3): the user sets one in settings, and a change applies at once to the position under analysis.
 - Results are cached in memory in Phase 1. The SQLite cache is Phase 2.
 
 ## 4. Milestones
@@ -211,12 +211,14 @@ Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-instal
   - Five steps, with the progress line.
   - Detection advances on its own.
   - Backend, version and network lists.
-  - Install task rows, the download-source selector, and Cancel.
+  - Install task rows and Cancel. There is no download-source selector in M5 (the owner's decision on 2026-11-20); the `downloadSource` setting stays for development.
   - The panel becomes the analysis panel in place when setup finishes.
   - The wizard comes back after a cancel or a quit until an engine is active.
-- Failure-state and settings designs (O7) go to the owner first. Minimal settings, shown in the panel: language, theme, download source, the two lines shown on candidate discs (charter 7.3, "fields configurable"), and running engine setup again.
+- Failure-state and settings designs (O7) go to the owner first. Minimal settings, shown in the panel: language, theme, the two lines shown on candidate discs (charter 7.3, "fields configurable"), the visit limit, the engine (restart, stop, set up again, delete unused downloads), and About.
 
-**Exit:** the setup half of Phase 1 acceptance, on the PC and the Mac, each from a new OS user account.
+**Exit:** the setup half of Phase 1 acceptance, on the PC and the Mac, each from a new OS user account. It includes leaving one position analysing for 30 minutes with no visit limit and recording KataGo's memory.
+
+**Status:** built on 2026-11-20. Detailed plan and design: [2026-11-20-phase-1-m5-wizard-settings.md](2026-11-20-phase-1-m5-wizard-settings.md), [the M5 design](../specs/2026-11-20-m5-wizard-settings-design.md). The exit check results are in the plan's Status.
 
 ### M6. Game records and board
 

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>M5 failure states</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground:#161618; --panel:#1E1E21; --hairline:#303035; --soft:#28282C;
+    --text:#ECEAE4; --muted:#A3A19A; --line:#5A5A61; --ok:#1E8E5A; --err:#E5484D;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:var(--text);
+         font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1180px; margin:0 auto 22px; color:#c9c7c0; font-size:14px; line-height:1.55; }
+  .intro h1 { font-size:20px; margin:0 0 6px; color:var(--text); font-weight:600; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, 560px); gap:28px 40px; justify-content:center; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 8px; line-height:1.45; }
+  .cap b { color:var(--text); }
+  .panel { width:560px; height:660px; background:var(--panel); border-left:1px solid var(--hairline);
+           display:flex; flex-direction:column; position:relative; outline:1px solid #2a2a2e; }
+  .top { padding:22px 28px 0; }
+  .toprow { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--muted); }
+  .lang { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:4px; padding:2px 8px; }
+  .progress { display:flex; gap:6px; margin-top:12px; }
+  .progress span { flex:1; height:3px; background:var(--text); border-radius:2px; }
+  .progress span.dim { background:var(--line); }
+  h2 { font-size:24px; font-weight:700; margin:34px 0 4px; letter-spacing:.5px; }
+  .sub { font-size:13px; color:var(--muted); }
+  .rows { padding:18px 28px 0; }
+  .row { display:flex; align-items:center; padding:13px 0; font-size:15px; }
+  .row .ic { width:34px; color:var(--muted); font-size:14px; }
+  .row .name { flex:1; }
+  .row .st { color:var(--muted); font-size:13px; }
+  .row.bad .ic, .row.bad .st { color:var(--err); }
+  .row.wait { color:var(--muted); }
+  .msg { margin:14px 28px 0; padding:16px 0 0; border-top:1px solid var(--hairline); }
+  .msg h3 { font-size:16px; margin:0 0 6px; font-weight:700; }
+  .msg p { font-size:14px; color:var(--muted); margin:0 0 10px; line-height:1.6; }
+  .details { font-size:13px; color:var(--muted); margin-top:4px; }
+  .details summary { cursor:pointer; }
+  .log { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8f8d87; background:#18181b;
+         padding:10px 12px; margin-top:8px; line-height:1.5; white-space:pre-wrap; border-left:2px solid var(--hairline); }
+  .lic { padding:0 28px; }
+  .lic .l { display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--soft); font-size:15px; }
+  .lic a { color:var(--text); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line); font-size:13px; }
+  .foot { margin-top:auto; border-top:1px solid var(--hairline); padding:18px 28px; display:flex; align-items:center; gap:12px; }
+  .foot .sp { flex:1; }
+  .btn { font:inherit; font-size:14px; padding:9px 18px; border-radius:6px; border:1px solid var(--hairline); background:transparent; color:var(--text); }
+  .btn.pri { background:var(--text); color:#161618; border-color:var(--text); font-weight:600; }
+  .link { font-size:13px; color:var(--muted); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--err); margin-right:8px; vertical-align:1px; }
+  .hdr { display:flex; align-items:center; gap:14px; padding:16px 28px; border-bottom:1px solid var(--hairline); font-size:14px; color:var(--muted); }
+  .hdr .title { color:var(--text); flex:1; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Failure states and the licence step: four panels</h1>
+  Only the right-hand panel is drawn. The board stays on the left, as in the setup mockups. Red is used only for the failed row and the engine dot. Click a panel to mark it, and tell me in the chat what you'd change.
+</div>
+
+<div class="grid">
+
+<!-- A -->
+<div data-choice="a" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>A. A backend fails, and Aji offers the next one.</b> The PC case: CUDA downloaded, but KataGo failed on the benchmark. The rows that finished stay ticked. The offer is one button that shows the extra download, and the network is reused.</p>
+  <div class="panel">
+    <div class="top">
+      <div class="toprow"><span>准备 AI 引擎</span><span class="lang">中文 · EN</span></div>
+      <div class="progress"><span></span><span></span><span></span><span></span><span></span></div>
+      <h2>CUDA 无法使用</h2>
+    </div>
+    <div class="rows">
+      <div class="row"><span class="ic">✓</span><span class="name">KataGo 引擎</span><span class="st">完成</span></div>
+      <div class="row"><span class="ic">✓</span><span class="name">运行库</span><span class="st">完成</span></div>
+      <div class="row"><span class="ic">✓</span><span class="name">权重</span><span class="st">完成</span></div>
+      <div class="row bad"><span class="ic">✕</span><span class="name">测速</span><span class="st">失败</span></div>
+      <div class="row wait"><span class="ic">·</span><span class="name">试算一步</span><span class="st"></span></div>
+    </div>
+    <div class="msg">
+      <p>显卡驱动版本过旧，无法使用此后端。更新驱动可能解决这个问题。</p>
+      <p>可以改用 DirectML，需要再下载 24 MB，已下载的权重会保留。</p>
+      <details class="details"><summary>KataGo 最后的输出</summary>
+<div class="log">CUDA Error: CUDA driver version is insufficient for CUDA runtime version
+file: cudahelpers.cu line: 54</div></details>
+    </div>
+    <div class="foot">
+      <span class="link">返回选择后端</span><span class="sp"></span>
+      <button class="btn pri">改用 DirectML（24 MB）</button>
+    </div>
+  </div>
+</div>
+
+<!-- B -->
+<div data-choice="b" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>B. A failure that no other backend fixes.</b> A download or disk failure, or Metal failing on the Mac, where there is nothing to fall back to. Retry reuses what is already verified. "Set up later" opens the main screen with no engine (G2).</p>
+  <div class="panel">
+    <div class="top">
+      <div class="toprow"><span>准备 AI 引擎</span><span class="lang">中文 · EN</span></div>
+      <div class="progress"><span></span><span></span><span></span><span></span><span></span></div>
+      <h2>安装没有完成</h2>
+    </div>
+    <div class="rows">
+      <div class="row"><span class="ic">✓</span><span class="name">KataGo 引擎</span><span class="st">完成</span></div>
+      <div class="row bad"><span class="ic">✕</span><span class="name">权重</span><span class="st">失败</span></div>
+      <div class="row wait"><span class="ic">·</span><span class="name">测速</span></div>
+      <div class="row wait"><span class="ic">·</span><span class="name">试算一步</span></div>
+    </div>
+    <div class="msg">
+      <p>所有下载源都下载失败。请检查网络连接后重试。</p>
+    </div>
+    <div class="foot">
+      <span class="link">暂不设置</span><span class="sp"></span>
+      <button class="btn">返回</button>
+      <button class="btn pri">重试</button>
+    </div>
+  </div>
+</div>
+
+<!-- C -->
+<div data-choice="c" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>C. NVIDIA's licences, before anything downloads.</b> This replaces step 5 when CUDA needs a licence that was never accepted. Each name opens NVIDIA's page in the system browser, and acceptance is remembered. Declining leads to A's offer of DirectML without downloading anything.</p>
+  <div class="panel">
+    <div class="top">
+      <div class="toprow"><span>准备 AI 引擎</span><span class="lang">中文 · EN</span></div>
+      <div class="progress"><span></span><span></span><span></span><span></span><span class="dim"></span></div>
+      <h2>需要接受许可协议</h2>
+      <div class="sub" style="margin-top:6px">CUDA 运行库由 NVIDIA 提供，从 NVIDIA 的服务器下载。</div>
+    </div>
+    <div class="lic" style="margin-top:22px">
+      <div class="l"><span>CUDA Toolkit 最终用户许可协议</span><a>查看 ↗</a></div>
+      <div class="l"><span>cuDNN 软件许可协议</span><a>查看 ↗</a></div>
+    </div>
+    <div class="foot">
+      <span class="link">返回</span><span class="sp"></span>
+      <button class="btn">不接受</button>
+      <button class="btn pri">接受并安装</button>
+    </div>
+  </div>
+</div>
+
+<!-- D -->
+<div data-choice="d" onclick="toggleSelect && toggleSelect(this)">
+  <p class="cap"><b>D. The installed engine stops working later,</b> for example after a driver update. This is the analysis panel, not the wizard. M2's crashed state gains a second action, "Set up the engine again", which opens the wizard (charter 6.6).</p>
+  <div class="panel">
+    <div class="hdr"><span class="title">未命名棋局</span><span>⏮ ◀ 0 / 0 ▶ ⏭</span><span><span class="dot"></span></span><span>⚙</span></div>
+    <div class="top">
+      <h2 style="margin-top:26px">KataGo 已停止运行</h2>
+      <div class="sub" style="margin-top:6px">KataGo 意外退出。退出代码 1</div>
+    </div>
+    <div class="msg">
+      <details class="details" open><summary>KataGo 最后的输出</summary>
+<div class="log">Loading model and initializing benchmark...
+CUDA Error: no CUDA-capable device is detected
+file: cudahelpers.cu line: 54</div></details>
+    </div>
+    <div class="foot">
+      <span class="link">重新设置引擎</span><span class="sp"></span>
+      <button class="btn pri">重启引擎</button>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

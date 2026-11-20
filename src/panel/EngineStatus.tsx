@@ -1,13 +1,20 @@
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { useEngineStore } from '../engine/engineStore';
+import { useSettingsStore } from '../settings/settingsStore';
+import { useWizardStore } from '../setup/wizardStore';
 import { restartEngine } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
+
+const setUpAgain = () => useWizardStore.getState().openWizard(true);
 
 /** The status line under the header: shown for every state except analysing and paused. */
 export function EngineStatus() {
   const transport = useTransport();
   const { t } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
+  const rootVisits = useEngineStore((s) => s.analysis?.rootVisits ?? null);
+  const visitLimit = useSettingsStore((s) => s.settings?.visitLimit ?? null);
   if (!engine || engine.state === 'analysing' || engine.state === 'paused') return null;
 
   const crashed = engine.state === 'crashed' ? engine : null;
@@ -20,9 +27,16 @@ export function EngineStatus() {
         : null
     : null;
 
+  // KataGo stops at the visit limit and the engine goes back to ready (M5 design 5.9).
+  const limitReached =
+    engine.state === 'ready' &&
+    visitLimit !== null &&
+    rootVisits !== null &&
+    rootVisits >= visitLimit;
+
   return (
     <div className="px-6 py-3 text-sm text-text-muted">
-      <p>{t(`engine.state.${engine.state}`)}</p>
+      <p>{limitReached ? t('engine.limitReached') : t(`engine.state.${engine.state}`)}</p>
       {crashed && (
         <>
           <p>{t(`engine.crash.${crashed.reason}`)}</p>
@@ -35,15 +49,19 @@ export function EngineStatus() {
               </pre>
             </>
           )}
-          <button
-            type="button"
-            className="mt-2 rounded border border-hairline px-3 py-1 text-text"
-            onClick={() => {
-              restartEngine(transport).catch(() => undefined);
-            }}
-          >
-            {t('engine.action.restart')}
-          </button>
+          <div className="mt-3 flex gap-2">
+            <Button variant="outline" size="sm" onClick={setUpAgain}>
+              {t('engine.action.setupAgain')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                restartEngine(transport).catch(() => undefined);
+              }}
+            >
+              {t('engine.action.restart')}
+            </Button>
+          </div>
         </>
       )}
     </div>

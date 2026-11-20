@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use aji_engine::{EngineFiles, RunLimits, katago_benchmark_launch, run_to_end};
+use aji_engine::{EngineFiles, RunLimits, katago_benchmark_launch, run_to_end_watching};
+use serde::Serialize;
+use ts_rs::TS;
 
 use super::{FailureCode, StepFailure, ThreadSpeed, classify};
 use crate::manifest::Backend;
@@ -47,10 +49,85 @@ pub fn benchmark_plan(backend: Backend, cpu_cores: u32) -> BenchmarkPlan {
     }
 }
 
+/// The thread count used when no benchmark has run: 6 on Metal (the fastest of 6, 10 and 16
+/// on an Apple M-series with b11 and close to it with b40), 16 on other GPUs (the middle of the
+/// benchmark's 8, 16 and 32), and one per physical core on the CPU.
+pub fn default_threads(backend: Backend, cpu_cores: u32) -> u32 {
+    match backend {
+        Backend::Eigen | Backend::Eigenavx2 => cpu_cores.max(1),
+        Backend::Metal => 6,
+        Backend::Cuda
+        | Backend::Rocm
+        | Backend::Directml
+        | Backend::Openvino
+        | Backend::Opencl
+        | Backend::Unknown => 16,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BenchmarkParseError {
     /// No thread count finished its positions.
     NoResults,
+}
+
+/// Where a running benchmark is: the thread count under test and its positions done, and the
+/// counts already measured, in the order they ran. Before the first count KataGo is still
+/// starting and loading the network.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BenchmarkProgress {
+    pub testing: Option<u32>,
+    pub positions_done: u32,
+    pub tested: Vec<ThreadSpeed>,
+}
+
+/// `numSearchThreads = %2d: <n> / <m> positions, visits/s = <x>`, where `x` is `nan` at 0.
+static PROGRESS: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"numSearchThreads\s*=\s*(\d+):\s*(\d+)\s*/\s*(\d+)\s+positions,\s*visits/s\s*=\s*(nan|\d+(?:\.\d+)?)",
+    )
+    .expect("a valid pattern")
+});
+
+/// The progress shown by `stdout` so far. A line cut off at the end is skipped until the rest
+/// arrives, so call it again on the whole output each time more arrives.
+pub fn benchmark_progress(stdout: &str) -> BenchmarkProgress {
+    let main_run = stdout
+        .split("Running additional tests")
+        .next()
+        .unwrap_or_default();
+    let mut progress = BenchmarkProgress {
+        testing: None,
+        positions_done: 0,
+        tested: Vec::new(),
+    };
+    for line in main_run.split(['\n', '\r']) {
+        let Some(c) = PROGRESS.captures(line) else {
+            continue;
+        };
+        let number = |i: usize| c[i].parse::<u32>().ok();
+        let (Some(threads), Some(done), Some(total)) = (number(1), number(2), number(3)) else {
+            continue;
+        };
+        match c[4].parse::<f64>() {
+            Ok(visits_per_second) if total > 0 && done == total => {
+                progress.tested.retain(|s| s.threads != threads);
+                progress.tested.push(ThreadSpeed {
+                    threads,
+                    visits_per_second,
+                });
+                progress.testing = None;
+                progress.positions_done = 0;
+            }
+            _ => {
+                progress.testing = Some(threads);
+                progress.positions_done = done;
+            }
+        }
+    }
+    progress
 }
 
 /// Per thread count, the last `k / k positions, visits/s = X` line before "Running additional
@@ -111,10 +188,12 @@ pub fn choose_threads(speeds: &[ThreadSpeed]) -> Option<u32> {
 /// Runs `benchmark` with `plan`. A run that stays silent for `stall` is timedOut; one that
 /// exits non-zero, or prints no result, is classified from its stderr tail and the last 20
 /// lines of stdout, where `benchmark` logs (findings 4c).
+/// `on_progress` hears each change in [`BenchmarkProgress`] while it runs.
 pub async fn run_benchmark(
     files: &EngineFiles,
     plan: &BenchmarkPlan,
     stall: Duration,
+    on_progress: &mut (dyn FnMut(BenchmarkProgress) + Send),
 ) -> Result<Vec<ThreadSpeed>, StepFailure> {
     eprintln!(
         "aji: benchmarking KataGo {} with {:?} threads",
@@ -126,10 +205,22 @@ pub async fn run_benchmark(
         stall,
         stderr_lines: 50,
     };
-    let output = run_to_end(spec, limits).await.map_err(|e| StepFailure {
-        code: FailureCode::Crashed,
-        stderr_tail: vec![format!("aji: cannot start {}: {e}", files.katago.display())],
-    })?;
+    let mut seen = String::new();
+    let mut last: Option<BenchmarkProgress> = None;
+    let mut watch = |chunk: &[u8]| {
+        seen.push_str(&String::from_utf8_lossy(chunk));
+        let progress = benchmark_progress(&seen);
+        if last.as_ref() != Some(&progress) {
+            last = Some(progress.clone());
+            on_progress(progress);
+        }
+    };
+    let output = run_to_end_watching(spec, limits, &mut watch)
+        .await
+        .map_err(|e| StepFailure {
+            code: FailureCode::Crashed,
+            stderr_tail: vec![format!("aji: cannot start {}: {e}", files.katago.display())],
+        })?;
     let lines = failure_lines(&output.stderr_tail, &output.stdout);
     if output.stalled {
         return Err(StepFailure {
@@ -241,6 +332,75 @@ mod tests {
         assert_eq!(
             parse_benchmark("visits/s = 12\nnumSearchThreads = x: 1 / 1 positions"),
             Err(BenchmarkParseError::NoResults)
+        );
+    }
+
+    #[test]
+    fn default_threads_without_a_benchmark() {
+        assert_eq!(default_threads(Backend::Metal, 12), 6);
+        assert_eq!(default_threads(Backend::Opencl, 12), 16);
+        assert_eq!(default_threads(Backend::Cuda, 12), 16);
+        assert_eq!(default_threads(Backend::Eigenavx2, 8), 8);
+        assert_eq!(default_threads(Backend::Eigen, 0), 1);
+    }
+
+    /// The fixture up to and including the first line that contains `marker`.
+    fn up_to(stdout: &str, marker: &str) -> String {
+        let end = stdout.find(marker).expect(marker) + marker.len();
+        stdout[..end].to_string()
+    }
+
+    #[test]
+    fn progress_before_any_thread_count_is_starting() {
+        let stdout = fixture(TF3_FIXED);
+        let loading = up_to(&stdout, "Loaded model");
+        assert_eq!(
+            benchmark_progress(&loading),
+            BenchmarkProgress {
+                testing: None,
+                positions_done: 0,
+                tested: vec![],
+            }
+        );
+        assert_eq!(benchmark_progress(""), benchmark_progress(&loading));
+    }
+
+    #[test]
+    fn progress_names_the_count_under_test_and_the_ones_finished() {
+        let stdout = fixture(TF3_FIXED);
+        let first = up_to(
+            &stdout,
+            "numSearchThreads =  6: 3 / 10 positions, visits/s = 45.04",
+        );
+        assert_eq!(
+            benchmark_progress(&first),
+            BenchmarkProgress {
+                testing: Some(6),
+                positions_done: 3,
+                tested: vec![],
+            }
+        );
+        let second = up_to(
+            &stdout,
+            "numSearchThreads =  8: 0 / 10 positions, visits/s = nan",
+        );
+        assert_eq!(
+            benchmark_progress(&second),
+            BenchmarkProgress {
+                testing: Some(8),
+                positions_done: 0,
+                tested: speeds(&[(6, 51.03)]),
+            }
+        );
+    }
+
+    #[test]
+    fn progress_after_the_last_count_lists_them_all() {
+        let progress = benchmark_progress(&fixture(TF3_FIXED));
+        assert_eq!(progress.testing, None);
+        assert_eq!(
+            pairs(&progress.tested),
+            [(6, 51.03), (8, 50.81), (10, 50.82)]
         );
     }
 

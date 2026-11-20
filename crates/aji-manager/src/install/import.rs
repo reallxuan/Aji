@@ -30,9 +30,34 @@ pub enum ImportError {
     Io(String),
 }
 
-/// Copies `file` while hashing it to `networks/imported-<16 hex>.bin.gz` and records it with
+/// Copies `file` while hashing it to `networks/imported-<16 hex>.bin.gz` (`.txt.gz` for a text
+/// network named so) and records it with
 /// `imported: true`. The caller serialises record writes. Blocking: it copies the whole file.
 pub fn import_network(root: &InstallRoot, file: &Path) -> Result<ImportedNetwork, ImportError> {
+    let (imported, network) = copy_network(root, file)?;
+    record_network(root, &imported.id, network)?;
+    Ok(imported)
+}
+
+/// Records a copied network as imported. The caller serialises record writes.
+pub fn record_network(
+    root: &InstallRoot,
+    id: &str,
+    network: InstalledNetwork,
+) -> Result<(), ImportError> {
+    let record_file = root.record_file();
+    update_installed(&record_file, |record| {
+        record.networks.insert(id.to_string(), network);
+    })
+    .map(|_| ())
+    .map_err(|e| ImportError::Io(format!("{}: {e}", record_file.display())))
+}
+
+/// The copy half of [`import_network`]: no record is touched, so no lock is needed.
+pub fn copy_network(
+    root: &InstallRoot,
+    file: &Path,
+) -> Result<(ImportedNetwork, InstalledNetwork), ImportError> {
     let io_error = |path: &Path, e: io::Error| ImportError::Io(format!("{}: {e}", path.display()));
     let mut source = File::open(file).map_err(|e| io_error(file, e))?;
     let mut magic = [0u8; 2];
@@ -54,28 +79,26 @@ pub fn import_network(root: &InstallRoot, file: &Path) -> Result<ImportedNetwork
         }
     };
     let id = format!("imported-{}", &hash[..16]);
-    let file_name = format!("{id}.bin.gz");
+    let file_name = format!("{id}.{}", stored_suffix(file));
     let dest = root.network_file(&file_name);
     if let Err(e) = fs::rename(&temp, &dest) {
         let _ = fs::remove_file(&temp);
         return Err(io_error(&dest, e));
     }
     let name = display_name(file).unwrap_or_else(|| id.clone());
-    let record_file = root.record_file();
     let network = InstalledNetwork {
         file: file_name,
         name: name.clone(),
         imported: true,
     };
-    update_installed(&record_file, |record| {
-        record.networks.insert(id.clone(), network);
-    })
-    .map_err(|e| io_error(&record_file, e))?;
-    Ok(ImportedNetwork {
-        id,
-        name,
-        size_bytes,
-    })
+    Ok((
+        ImportedNetwork {
+            id,
+            name,
+            size_bytes,
+        },
+        network,
+    ))
 }
 
 /// Writes `magic` and the rest of `source` to `dest`, returning the SHA-256 in hex and the
@@ -103,6 +126,20 @@ fn copy_hashing(source: &mut File, magic: [u8; 2], dest: &Path) -> io::Result<(S
         .map(|b| format!("{b:02x}"))
         .collect();
     Ok((hash, size))
+}
+
+/// The suffix the copy is stored under. KataGo chooses the model format by suffix: a name
+/// ending in `.txt.gz` is parsed as text and any other `.gz` as binary, so a text network must
+/// keep its suffix.
+fn stored_suffix(file: &Path) -> &'static str {
+    let name = file
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase());
+    if name.is_some_and(|n| n.ends_with(".txt.gz")) {
+        "txt.gz"
+    } else {
+        "bin.gz"
+    }
 }
 
 /// The file name without `.gz`, then without `.bin` or `.txt`, KataGo's two network formats.

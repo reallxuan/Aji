@@ -28,7 +28,32 @@ export default defineConfig([
     rules: {
       'i18next/no-literal-string': [
         'error',
-        { mode: 'jsx-only', 'should-validate-template': true },
+        {
+          mode: 'jsx-only',
+          'should-validate-template': true,
+          // The plugin's defaults, plus the props shadcn/ui components use to pick a style or
+          // mark their parts; none of them is shown to the user.
+          'jsx-attributes': {
+            exclude: [
+              'className',
+              'styleName',
+              'style',
+              'type',
+              'key',
+              'id',
+              'width',
+              'height',
+              'data-slot',
+              'role',
+              'variant',
+              'size',
+              'orientation',
+              'position',
+              'side',
+              'align',
+            ],
+          },
+        },
       ],
     },
   },

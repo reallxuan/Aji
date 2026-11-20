@@ -1,10 +1,12 @@
 //! What the setup wizard asks for: the hardware report and the answers read from it and from the
 //! manifest in use.
 //!
-//! Detection runs once, on first use. The manifest is read through [`ManifestStore::current`], so
+//! Detection runs on first use and again on [`Setup::refresh`]. The manifest is read through [`ManifestStore::current`], so
 //! no request waits for, or holds a lock across, a refresh in progress.
 
-use tokio::sync::OnceCell;
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
 
 use crate::hardware::{HardwareReport, detect};
 use crate::manifest::{Backend, ManifestStore};
@@ -12,9 +14,15 @@ use crate::recommend::{
     BackendRecommendation, EngineVersionChoice, NetworkList, networks, recommend_backends, versions,
 };
 
+/// Produces a hardware report. Tests pass a closure; the app uses [`detect`].
+pub type Detector = Arc<dyn Fn() -> HardwareReport + Send + Sync>;
+
 pub struct Setup {
     manifest: ManifestStore,
-    hardware: OnceCell<HardwareReport>,
+    /// The last report, once detection has run.
+    hardware: RwLock<Option<HardwareReport>>,
+    /// `None` for the system's own detection.
+    detector: Option<Detector>,
 }
 
 impl std::fmt::Debug for Setup {
@@ -28,15 +36,22 @@ impl Setup {
     pub fn new(manifest: ManifestStore) -> Setup {
         Setup {
             manifest,
-            hardware: OnceCell::new(),
+            hardware: RwLock::new(None),
+            detector: None,
         }
     }
 
-    /// Uses `report` instead of detecting. For tests.
+    /// Uses `report` instead of detecting, every time. For tests.
     pub fn with_hardware(manifest: ManifestStore, report: HardwareReport) -> Setup {
+        Setup::with_detector(manifest, Arc::new(move || report.clone()))
+    }
+
+    /// Detects by calling `detector` instead of probing the system. For tests.
+    pub fn with_detector(manifest: ManifestStore, detector: Detector) -> Setup {
         Setup {
             manifest,
-            hardware: OnceCell::new_with(Some(report)),
+            hardware: RwLock::new(None),
+            detector: Some(detector),
         }
     }
 
@@ -44,8 +59,33 @@ impl Setup {
         &self.manifest
     }
 
+    /// The report, detecting on the first call.
     pub async fn hardware(&self) -> HardwareReport {
-        self.hardware.get_or_init(detect).await.clone()
+        if let Some(report) = self.hardware.read().await.as_ref() {
+            return report.clone();
+        }
+        let mut slot = self.hardware.write().await;
+        if let Some(report) = slot.as_ref() {
+            return report.clone();
+        }
+        let report = self.detect().await;
+        *slot = Some(report.clone());
+        report
+    }
+
+    /// Detects again and keeps the new report, for example after a driver update.
+    pub async fn refresh(&self) -> HardwareReport {
+        let mut slot = self.hardware.write().await;
+        let report = self.detect().await;
+        *slot = Some(report.clone());
+        report
+    }
+
+    async fn detect(&self) -> HardwareReport {
+        match &self.detector {
+            Some(detector) => detector(),
+            None => detect().await,
+        }
     }
 
     pub async fn backends(&self) -> BackendRecommendation {

@@ -154,7 +154,12 @@ fn table(
         v.extend(cpu());
         return (v, 1, Vec::new());
     }
-    let generic = || vec![any(Backend::Directml), any(Backend::Opencl)];
+    // R20: every GPU row ends with the CPU build, so a GPU that fails leaves a way out.
+    let generic = || {
+        let mut v = vec![any(Backend::Directml), any(Backend::Opencl)];
+        v.extend(cpu());
+        v
+    };
     let with_first = |first: Pick| {
         let mut v = vec![first];
         v.extend(generic());
@@ -232,6 +237,36 @@ fn cuda_variant(manifest: &Manifest, platform: Platform, gpu: &GpuReport) -> Cud
             .min_by(|a, b| a.1.cmp(&b.1)),
     };
     chosen.map_or(Cuda::TooOld, |(v, _)| Cuda::Variant(v))
+}
+
+/// The `minDriver` of the CUDA runtime this GPU would get if its driver were new enough: the
+/// first variant whose compute-capability minimum the GPU meets, or, with an unknown compute
+/// capability, the variant with the lowest minimum (as [`cuda_variant`] chooses). `None` when the
+/// manifest has no CUDA build with a driver minimum for this platform.
+pub fn required_driver(manifest: &Manifest, platform: Platform, gpu: &GpuReport) -> Option<String> {
+    let candidates: Vec<(&str, Option<Vec<u64>>)> = CUDA_VARIANTS
+        .into_iter()
+        .filter(|v| cuda_engine(manifest, platform, v).is_some())
+        .filter_map(|v| {
+            let runtime = cuda_runtime(manifest, platform, v)?;
+            runtime.min_driver.as_deref().and_then(dotted)?;
+            let min_cc = match runtime.min_compute_capability.as_deref() {
+                None => Some(Vec::new()),
+                Some(min) => dotted(min),
+            };
+            Some((runtime.min_driver.as_deref()?, min_cc))
+        })
+        .collect();
+    let chosen = match gpu.compute_capability.as_deref().and_then(dotted) {
+        Some(cc) => candidates
+            .iter()
+            .find(|(_, min)| min.as_ref().is_some_and(|min| cc >= *min)),
+        None => candidates
+            .iter()
+            .filter(|(_, min)| min.is_some())
+            .min_by(|a, b| a.1.cmp(&b.1)),
+    };
+    chosen.map(|(driver, _)| (*driver).to_owned())
 }
 
 fn cuda_engine<'m>(

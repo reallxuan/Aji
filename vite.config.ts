@@ -1,3 +1,4 @@
+import path from 'node:path';
 import process from 'node:process';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
@@ -8,6 +9,7 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
 
   // Vite options tailored for Tauri development, applied in `tauri dev` and `tauri build`:
   // 1. keep Rust errors visible instead of clearing the screen

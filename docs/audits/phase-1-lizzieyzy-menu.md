@@ -1,7 +1,7 @@
 # Phase 1 LizzieYzy Menu Check
 
 - Date: 2026-11-19
-- Status: Draft for the owner's review. The owner approved G1 on 2026-11-19, for M2; the other proposals are open.
+- Status: Draft for the owner's review. The owner approved G1 on 2026-11-19, for M2. On 2026-11-20 the owner approved G2, G3 (with no limit as the default), G4, G12 and K2 for M5, which built them with G1's settings buttons; see the Status column of section 6. The other proposals are open.
 - Roadmap item: S5 of the M0 track in `docs/superpowers/plans/2026-11-19-phase-1-roadmap.md` (merged into `dev` in `90f1d79`; not yet on `main`, so it is cited by path rather than linked). The result feeds M5 (first-run wizard and settings). Several rows also feed M2, M6, M7 and M8.
 - Charter: [section 7](../superpowers/specs/2026-11-19-aji-project-charter-design.md) requires this check at the start of each phase. Interface design: [aji-ui-design](../superpowers/specs/2026-11-19-aji-ui-design.md).
 - Markers follow the charter. Everything that changes scope is **[Proposed]**; this document edits neither the charter nor the roadmap.
@@ -260,7 +260,7 @@ These need no approval. They are details the M2, M5, M6 and M7 plans should sett
 | # | Milestone | Note |
 |---|---|---|
 | K1 | M2, M6 | **Default rules.** Pick the rules used on the empty board (M2) and for an SGF with no `RU` property (M6). LizzieYzy falls back to Chinese rules (E15). |
-| K2 | M5 | **Language inside the wizard.** Make the language switch reachable while the wizard runs, since the OS guess can be wrong and the wizard has no language step. |
+| K2 | M5 | **Language inside the wizard.** Make the language switch reachable while the wizard runs, since the OS guess can be wrong and the wizard has no language step. **Done** in M5: a `中文 · EN` switch in the wizard's title row. |
 | K3 | M6 | **Opening behaviour.** Decide whether a loaded game shows the first or the last move (F13). Several files dropped at once: open the first and say the rest were ignored (F10). Files with variations: navigate the main line, keep the branches on save (N6). |
 | K4 | M6 | **Keys.** Aji's arrows are inverted relative to LizzieYzy (N2). Say so in the v0.1.0 notes until the P2 compatibility preset exists. The game title (F17) shows the file name or the players: decide. |
 | K5 | M7 | **Hover preview.** Freeze the previewed line while the pointer stays on a candidate (H2). Decide the variation length limit (H5) and the keys for the preview (H4). |
@@ -275,10 +275,10 @@ All are **[Proposed]**. Nothing here changes the charter or the roadmap until th
 
 | # | Change | Where | From | Milestone |
 |---|---|---|---|---|
-| G1 | Engine lifecycle: restart, stop (free GPU memory), and detect a hung engine | New 7.1 row, Phase 1 | E10, E11, E12 | M2 (protocol and watchdog), M5 (buttons in settings) |
-| G2 | Run without an engine: the wizard gets a "skip for now" that opens the app with analysis off, so a game can still be opened and navigated | 7.9 First-run wizard; roadmap M5 | E8 | M5 |
-| G3 | Analysis limit as a visible setting: visits per position, 0 for no limit, plus a "stopped at limit" indicator state that the same control resumes. Time limits and play limits stay in Phase 4 | Split 7.1 Engine parameters; roadmap M5 settings and M7 | E18, A2 | M5, M7 |
-| G4 | An About screen: version, AGPL-3.0-or-later and the source link, notices for KataGo, the networks and the bundled fonts | New 7.9 row, Phase 1 | I11 | M5 |
+| G1 | Engine lifecycle: restart, stop (free GPU memory), and detect a hung engine | New 7.1 row, Phase 1 | E10, E11, E12 | M2 (protocol and watchdog), M5 (buttons in settings). **Done** in M2 and M5 |
+| G2 | Run without an engine: the wizard gets a "skip for now" that opens the app with analysis off, so a game can still be opened and navigated | 7.9 First-run wizard; roadmap M5 | E8 | M5. **Done** in M5: "暂不设置" on every step, the no-engine panel, and the wizard again at the next launch until an engine is active (opening games comes with M6) |
+| G3 | Analysis limit as a visible setting: visits per position, 0 for no limit, plus a "stopped at limit" indicator state that the same control resumes. Time limits and play limits stay in Phase 4 | Split 7.1 Engine parameters; roadmap M5 settings and M7 | E18, A2 | M5, M7. **Done in M5** except the indicator state: the setting (empty for no limit, the default), applied at once to the running search, and a "已达到每步上限" status line. The dot's own "stopped at limit" state and resuming from it move to M7 (K6) |
+| G4 | An About screen: version, AGPL-3.0-or-later and the source link, notices for KataGo, the networks and the bundled fonts | New 7.9 row, Phase 1 | I11 | M5. **Done** in M5, with a generated list of every other shipped component's licence |
 | G5 | "New empty game" | Add to the 7.2 Phase 1 row (roadmap M6 already has `game.new`) | F11 | M6 |
 | G6 | Tygem `.gib` files: the owner confirms which format the Tygem files for S4 are. If `.gib`, add "open `.gib`" to 7.2 Phase 1; if SGF, add it to 7.2 in Phase 2 | 7.2; roadmap S4 and M6 | F9 | M6 |
 | G7 | Show or hide candidates on the board, and hold a key to hide them, while analysis keeps running | New 7.3 row, Phase 1 | C6, A3 | M7 |
@@ -286,7 +286,7 @@ All are **[Proposed]**. Nothing here changes the charter or the roadmap until th
 | G9 | Phase 1 keys: PageUp and PageDown move ten moves (M6); Space pauses and resumes analysis (M7) | 7.2 navigation row; 7.3 start and pause row | N5, A1 | M6, M7 |
 | G10 | Add a LizzieYzy-analysed SGF (with `LZ`, `LZOP`, `LZ2`, `LZOP2`) to the S4 fixtures, so M6's round-trip tests prove that a Phase 1 save keeps the analysis | Roadmap S4 and M6 | F18 | M6 |
 | G11 | Add a DPI check to the M8 acceptance list: 100, 150 and 200 percent, and moving the window between screens of different scale | Roadmap M8 | I4 | M8 |
-| G12 | **Question, not a gap:** can Aji's two disc lines be any two of win rate, score lead and visits? LizzieYzy allows one to three lines from those fields | Roadmap M5 settings | C1 | M5 |
+| G12 | **Question, not a gap:** can Aji's two disc lines be any two of win rate, score lead and visits? LizzieYzy allows one to three lines from those fields | Roadmap M5 settings | C1 | M5. **Done** in M5: any two different fields, with a preview disc; drawn on the board in M7 |
 
 ### Addition to 7.10
 

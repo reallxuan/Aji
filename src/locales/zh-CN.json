@@ -1,6 +1,20 @@
 {
   "about": {
-    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}"
+    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}",
+    "title": "关于 Aji",
+    "licence": "Aji 是自由软件，按 GNU Affero 通用公共许可证第 3 版或更高版本发布。",
+    "source": "源代码：",
+    "thirdParty": "第三方软件",
+    "katago": "KataGo",
+    "katagoLicence": "KataGo 许可",
+    "networks": "KataGo 权重（katagotraining.org）",
+    "networksLicence": "权重许可",
+    "inter": "Inter",
+    "wenkai": "霞鹜文楷 LXGW WenKai",
+    "ofl": "SIL OFL 1.1",
+    "others": "其他开源组件",
+    "othersLicence": "列表",
+    "loading": "正在读取…"
   },
   "os": {
     "windows": "Windows",
@@ -16,7 +30,8 @@
     "setupBusy": "已有安装正在进行。",
     "setupUnknownNetwork": "列表中没有这个网络。",
     "setupImportFailed": "该文件不是 KataGo 网络文件。",
-    "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。"
+    "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。",
+    "engineBusy": "引擎正在安装或测速，请在完成后再试。"
   },
   "engine": {
     "state": {
@@ -39,8 +54,11 @@
     "action": {
       "pause": "暂停分析",
       "resume": "继续分析",
-      "restart": "重启引擎"
-    }
+      "restart": "重启引擎",
+      "stop": "停止引擎",
+      "setupAgain": "重新设置引擎"
+    },
+    "limitReached": "已达到每步上限"
   },
   "analysis": {
     "columns": {
@@ -64,7 +82,180 @@
       "openclNoDevice": "没有可以通过 OpenCL 使用的显卡。",
       "licenceNotAccepted": "此后端需要的许可协议尚未接受。",
       "timedOut": "KataGo 响应超时。",
-      "crashed": "KataGo 出错退出。"
+      "crashed": "KataGo 出错退出。",
+      "diskError": "Aji 无法写入自己的文件夹。请检查磁盘是否已满，以及 Aji 是否有写入权限。"
+    },
+    "title": "准备 AI 引擎",
+    "later": "暂不设置",
+    "cancel": "取消",
+    "next": "下一步",
+    "downloaded": "已下载",
+    "back": "上一步",
+    "retry": "重试",
+    "loadFailed": "无法读取列表：{{reason}}",
+    "steps": {
+      "backend": "选择后端",
+      "version": "选择 KataGo 版本",
+      "network": "选择权重",
+      "install": "正在安装"
+    },
+    "detect": {
+      "heading": "本机硬件",
+      "gpu": "显卡",
+      "gpuMemory": "显存",
+      "memory": "内存",
+      "system": "系统",
+      "driver": "驱动",
+      "detecting": "检测中",
+      "notFound": "未检测到",
+      "driverBuiltIn": "随系统提供",
+      "done": "完成"
+    },
+    "backend": {
+      "names": {
+        "cuda": "CUDA",
+        "directml": "DirectML",
+        "openvino": "OpenVINO",
+        "rocm": "ROCm",
+        "opencl": "OpenCL",
+        "metal": "Metal",
+        "eigenavx2": "处理器（AVX2）",
+        "eigen": "处理器"
+      },
+      "tags": {
+        "fastest": "最快",
+        "noRuntimeDownload": "免运行库",
+        "mostCompatible": "兼容性最好",
+        "slowest": "最慢",
+        "mostCompatibleSlowest": "兼容性最好，最慢",
+        "cpuOnly": "仅用处理器",
+        "needsDriver": "需要更新驱动"
+      },
+      "driverAdvice": "当前驱动 {{current}}，CUDA 需要 {{required}} 或更新版本。",
+      "driverUnknown": "无法读取当前驱动版本，CUDA 需要 {{required}} 或更新版本。",
+      "downloadDriver": "下载驱动",
+      "detectAgain": "重新检测",
+      "unsupported": "Aji 没有适用于此系统的 KataGo 版本。"
+    },
+    "version": {
+      "latest": "最新",
+      "columnVersion": "版本",
+      "columnReleased": "发布日期"
+    },
+    "network": {
+      "columnIndex": "#",
+      "columnName": "名称",
+      "columnElo": "Elo",
+      "columnReleased": "发布日期",
+      "import": "导入权重文件",
+      "imported": "已导入",
+      "start": "开始安装"
+    },
+    "licence": {
+      "title": "需要接受许可协议",
+      "intro": "以下组件由 NVIDIA 提供，从 NVIDIA 的服务器下载。",
+      "view": "查看",
+      "accept": "我已年满法定年龄，并接受以上 NVIDIA 许可条款",
+      "acceptInstall": "接受并安装",
+      "decline": "不接受"
+    },
+    "install": {
+      "tasks": {
+        "engine": "KataGo 引擎",
+        "runtime": "运行库",
+        "network": "权重",
+        "benchmark": "测速",
+        "testQuery": "试算一步"
+      },
+      "amount": "{{done}} / {{total}}",
+      "amountSpeed": "{{done}} / {{total}}（{{speed}}/s）",
+      "amountSpeedLeft": "{{done}} / {{total}}（{{speed}}/s，还需 {{remaining}}）",
+      "timeLeft": {
+        "seconds": "{{n}} 秒",
+        "minutes": "{{n}} 分钟",
+        "hours": "{{hours}} 小时 {{minutes}} 分钟"
+      },
+      "benchmark": {
+        "starting": "正在启动 KataGo，加载权重",
+        "testing": "正在测试 {{threads}} 个搜索线程",
+        "result": "{{threads}} 个线程：{{speed}} 次/秒",
+        "choosing": "正在选出最合适的线程数"
+      },
+      "done": "完成",
+      "reused": "已有",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "notFinished": "安装没有完成",
+      "backendFailed": "{{backend}} 无法使用",
+      "lastOutput": "KataGo 最后的输出",
+      "back": "返回",
+      "backToBackends": "返回选择后端",
+      "switchTo": "改用 {{backend}}（{{size}}）",
+      "offer": "可以改用 {{backend}}，需要再下载 {{size}}，已下载的权重会保留。",
+      "driver": "当前驱动 {{current}}，CUDA 需要 {{required}} 或更新版本。",
+      "driverUnknown": "无法读取当前驱动版本，CUDA 需要 {{required}} 或更新版本。",
+      "downloadDriver": "下载 NVIDIA 驱动",
+      "retryReuses": "更新驱动后点“重试”，已下载的文件不会重新下载。",
+      "startFailed": "安装无法开始：{{reason}}"
     }
+  },
+  "common": {
+    "close": "关闭"
+  },
+  "languageName": {
+    "zh": "中文",
+    "en": "English",
+    "enShort": "EN",
+    "zhHans": "简体中文"
+  },
+  "panel": {
+    "untitled": "未命名棋局",
+    "moveCounter": "{{current}} / {{total}}",
+    "first": "第一手",
+    "previous": "上一手",
+    "next": "下一手",
+    "last": "最后一手",
+    "settings": "设置"
+  },
+  "noEngine": {
+    "title": "尚未设置引擎",
+    "body": "设置好 KataGo 后才能分析。",
+    "setup": "设置引擎"
+  },
+  "settings": {
+    "title": "设置",
+    "back": "返回",
+    "interface": "界面",
+    "language": "语言",
+    "followSystem": "跟随系统",
+    "theme": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "analysis": "分析",
+    "discLine1": "选点第一行",
+    "discLine2": "选点第二行",
+    "fields": {
+      "winrate": "胜率",
+      "scoreLead": "目差",
+      "visits": "计算量"
+    },
+    "preview": "选点预览",
+    "visitLimit": "每步计算量上限",
+    "visitLimitNone": "不限",
+    "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
+    "engine": "引擎",
+    "engineLine": "KataGo {{version}} · {{backend}}",
+    "networkLine": "权重 {{network}}",
+    "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
+    "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
+    "benchmark": "测速",
+    "benchmarkFailed": "测速失败：{{reason}}",
+    "noEngine": "尚未设置引擎",
+    "unused": "未使用的已下载文件",
+    "delete": "删除",
+    "confirmTitle": "删除未使用的文件？",
+    "confirmBody": "将删除 {{size}} 当前引擎用不到的文件，删除后无法恢复。以后需要时 Aji 会重新下载。",
+    "cancel": "取消",
+    "about": "关于 Aji"
   }
 }

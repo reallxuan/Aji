@@ -1,5 +1,6 @@
 export type Language = 'zh-CN' | 'en';
-export type LanguagePreference = 'system' | Language;
+export type { LanguagePreference } from '../transport/generated/LanguagePreference';
+import type { LanguagePreference } from '../transport/generated/LanguagePreference';
 
 /**
  * An explicit preference wins. Otherwise the first system locale whose language Aji ships decides:

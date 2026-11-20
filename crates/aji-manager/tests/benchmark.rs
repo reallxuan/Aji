@@ -29,7 +29,7 @@ async fn the_benchmark_reports_each_thread_count() {
     let speeds: serde_json::Value = serde_json::from_str(SPEEDS).unwrap();
     let scenario = json!({ "benchmark": { "visitsPerSecond": speeds } });
     let (_dir, files) = install(&scenario, BENCHMARK_CONFIG);
-    let result = run_benchmark(&files, &plan(), Duration::from_secs(10))
+    let result = run_benchmark(&files, &plan(), Duration::from_secs(10), &mut |_| {})
         .await
         .unwrap();
     let pairs: Vec<(u32, f64)> = result
@@ -48,7 +48,7 @@ async fn a_failed_benchmark_is_classified() {
         "failure": { "during": "benchmark", "stderr": [line], "exitCode": 3 }
     });
     let (_dir, files) = install(&scenario, BENCHMARK_CONFIG);
-    let failure = run_benchmark(&files, &plan(), Duration::from_secs(10))
+    let failure = run_benchmark(&files, &plan(), Duration::from_secs(10), &mut |_| {})
         .await
         .unwrap_err();
     assert_eq!(failure.code, FailureCode::OutOfMemory);
@@ -68,7 +68,7 @@ async fn a_config_error_is_crashed() {
     let speeds: serde_json::Value = serde_json::from_str(SPEEDS).unwrap();
     let scenario = json!({ "benchmark": { "visitsPerSecond": speeds } });
     let (_dir, files) = install(&scenario, "nnMaxBatchSize = 8\n");
-    let failure = run_benchmark(&files, &plan(), Duration::from_secs(10))
+    let failure = run_benchmark(&files, &plan(), Duration::from_secs(10), &mut |_| {})
         .await
         .unwrap_err();
     assert_eq!(failure.code, FailureCode::Crashed);
@@ -85,7 +85,7 @@ async fn a_config_error_is_crashed() {
 async fn a_stalled_benchmark_times_out() {
     let (_dir, files) = install(&json!({ "hang": true }), BENCHMARK_CONFIG);
     let started = Instant::now();
-    let failure = run_benchmark(&files, &plan(), Duration::from_millis(500))
+    let failure = run_benchmark(&files, &plan(), Duration::from_millis(500), &mut |_| {})
         .await
         .unwrap_err();
     assert_eq!(failure.code, FailureCode::TimedOut);
@@ -105,7 +105,7 @@ async fn the_generated_configs_pass_katagos_rules() {
     let speeds: serde_json::Value = serde_json::from_str(SPEEDS).unwrap();
     let scenario = json!({ "benchmark": { "visitsPerSecond": speeds } });
     let (_dir, files) = install(&scenario, &benchmark_config(&plan(), &none));
-    let result = run_benchmark(&files, &plan(), Duration::from_secs(10)).await;
+    let result = run_benchmark(&files, &plan(), Duration::from_secs(10), &mut |_| {}).await;
     assert!(result.is_ok(), "{result:?}");
 
     let scenario = json!({ "transcript": transcript() });

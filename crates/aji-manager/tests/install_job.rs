@@ -14,15 +14,17 @@ use aji_engine::{EngineOptions, EngineState};
 use aji_manager::Setup;
 use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsKind, OsReport};
 use aji_manager::install::{
-    DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace, ImportError,
-    InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork, Installer,
-    InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, SPACE_MARGIN, SetKey, StartError,
-    TaskKind, TaskState, import_network, load_installed,
+    ActiveSummary, DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace,
+    ImportError, InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork,
+    Installer, InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent,
+    RemoveError, SPACE_MARGIN, SetKey, StartError, TaskKind, TaskState, import_network,
+    load_installed,
 };
 use aji_manager::manifest::{
     Archive, Backend, ClientOptions, Digest, Engine, FileRef, Licence, Manifest, ManifestStore,
     Network, NetworkKind, NetworkLicence, Platform, Runtime, RuntimeComponent, http_client,
 };
+use aji_manager::recommend::DriverAdvice;
 use common::engine_zip::{engine_zip, zip_of};
 use common::http::{FileMode, FileReply, TestServer, serve_files};
 use serde_json::{Value, json};
@@ -79,6 +81,12 @@ struct Spec {
     download_stall: Duration,
     progress_every: Duration,
     root_name: &'static str,
+    report: HardwareReport,
+    runtime_min_driver: Option<String>,
+    /// The platform the installer runs on.
+    platform: Option<Platform>,
+    /// The network's `minEngineVersion`.
+    network_min_engine: Option<semver::Version>,
 }
 
 impl Default for Spec {
@@ -93,6 +101,10 @@ impl Default for Spec {
             download_stall: Duration::from_secs(10),
             progress_every: Duration::from_millis(250),
             root_name: "aji",
+            report: report(),
+            runtime_min_driver: None,
+            platform: Some(Platform::LinuxX64),
+            network_min_engine: None,
         }
     }
 }
@@ -222,7 +234,7 @@ fn world(spec: Spec) -> World {
         elo: None,
         elo_games: None,
         uploaded: "2026-01-01".into(),
-        min_engine_version: None,
+        min_engine_version: spec.network_min_engine.clone(),
         file: file_ref(&server, "/net.bin.gz", &net, md5),
         licence: NetworkLicence {
             name: "KataGo network licence".into(),
@@ -232,7 +244,7 @@ fn world(spec: Spec) -> World {
     let runtime = Runtime {
         id: RT.into(),
         platform: Platform::LinuxX64,
-        min_driver: None,
+        min_driver: spec.runtime_min_driver.clone(),
         min_compute_capability: None,
         components: vec![RuntimeComponent {
             product: "cudnn".into(),
@@ -269,7 +281,7 @@ fn world(spec: Spec) -> World {
     let root = InstallRoot::new(dir.path().join(spec.root_name));
     let setup = Arc::new(Setup::with_hardware(
         ManifestStore::fixed(manifest),
-        report(),
+        spec.report.clone(),
     ));
     let komi = Komi::new(7.5).unwrap();
     let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
@@ -304,6 +316,7 @@ fn world(spec: Spec) -> World {
             source,
             space: Arc::new(Space(spec.space)),
             options,
+            platform: spec.platform,
         },
         move |snapshot| seen.lock().unwrap().push(snapshot),
     );
@@ -330,6 +343,8 @@ fn request(engine: &str, network: &str, accepted: &[&str]) -> InstallRequest {
         engine: engine.into(),
         network: network.into(),
         accepted_licences: accepted.iter().map(|s| s.to_string()).collect(),
+        // Most tests here cover the benchmark; the wizard's installs skip it.
+        benchmark: true,
     }
 }
 
@@ -415,6 +430,7 @@ fn failed(snapshot: &JobSnapshot) -> (FailureCode, Vec<String>, Option<FallbackO
             failure,
             stderr_tail,
             offer,
+            ..
         }) => (*failure, stderr_tail.clone(), offer.clone()),
         other => panic!("not failed: {other:?} in {snapshot:?}"),
     }
@@ -510,7 +526,7 @@ async fn accepting_the_offer_reuses_the_network() {
     let (_, _, offer) = failed(&w.install(OPENCL).await);
     let job = w.install(&offer.unwrap().engine).await;
     assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
-    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Done));
+    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Reused));
     assert_eq!(w.requests_for("/net.bin.gz"), 1);
     assert_eq!(w.record().active, key(EIGEN));
 }
@@ -576,6 +592,12 @@ async fn an_unaccepted_licence_fails_before_downloading() {
             name: "NVIDIA Software License Agreement".into(),
             url: "https://docs.nvidia.com/cudnn/latest/reference/eula.html".into(),
             text_sha256: LICENCE_HASH.into(),
+            components: vec![LicensedComponent {
+                name: "cuDNN".into(),
+                version: "9.0.0".into(),
+                bytes: zip_of(&[("bin/x.dll", b"a runtime library"), ("bin/notes.txt", b"x")]).len()
+                    as u64,
+            }],
         }])
     );
     assert_eq!(w.installer.licences(EIGEN), Some(Vec::new()));
@@ -790,6 +812,78 @@ async fn an_imported_network_can_be_installed_with() {
 }
 
 #[tokio::test]
+async fn an_install_without_the_benchmark_uses_the_default_thread_count() {
+    let w = world(Spec::default());
+    w.installer
+        .start(InstallRequest {
+            benchmark: false,
+            ..request(OPENCL, NET, &[])
+        })
+        .unwrap();
+    let job = w.finished().await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert!(!kinds(&job).contains(&TaskKind::Benchmark), "{job:?}");
+    assert!(
+        w.snapshots
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|s| s.benchmark.is_none())
+    );
+    let record = w.record();
+    let set = record.active_set().expect("an active set");
+    assert_eq!(set.threads, 16);
+    assert!(set.benchmark.is_empty());
+    let summary = w.installer.active_summary().expect("a summary");
+    assert_eq!((summary.threads, summary.visits_per_second), (16, None));
+    assert!(!job.measures);
+    assert!(
+        !w.root
+            .root()
+            .join(w.root.benchmark_config_rel(OPENCL, NET))
+            .exists()
+    );
+}
+
+#[tokio::test]
+async fn the_benchmark_reports_its_progress() {
+    let w = world(Spec::default());
+    let job = w.install(OPENCL).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    let snapshots = w.snapshots.lock().unwrap().clone();
+    // The OpenCL plan: 8, 16 and 32 threads, 5 positions each. The fake KataGo writes each
+    // count's lines at once, so which count is under test is pinned by the unit tests on a
+    // real recording; here the progress reaches the snapshots while the row runs.
+    // The row counts positions across all the counts, so its bar moves during the run.
+    assert!(
+        snapshots.iter().any(|s| matches!(
+            state_of(s, TaskKind::Benchmark),
+            Some(TaskState::Running { done, total: 15 }) if done > 0
+        )),
+        "{snapshots:#?}"
+    );
+    let last = snapshots
+        .iter()
+        .rev()
+        .find_map(|s| s.benchmark.clone())
+        .expect("benchmark progress");
+    assert_eq!(last.testing, None);
+    let tested: Vec<(u32, f64)> = last
+        .tested
+        .iter()
+        .map(|s| (s.threads, s.visits_per_second))
+        .collect();
+    assert_eq!(tested, [(8, 100.0), (16, 180.0), (32, 185.0)]);
+    // 16 is the smallest count within 95% of the best; the summary carries its speed.
+    let summary = w.installer.active_summary().expect("a summary");
+    assert_eq!(
+        (summary.threads, summary.visits_per_second),
+        (16, Some(180.0))
+    );
+    assert!(job.measures);
+}
+
+#[tokio::test]
 async fn progress_is_throttled_and_ends_with_the_outcome() {
     let w = world(Spec {
         progress_every: Duration::from_secs(3600),
@@ -857,6 +951,36 @@ fn import_network_copies_a_gzip_file() {
 }
 
 #[test]
+fn import_network_keeps_the_text_format_suffix() {
+    // KataGo chooses the model format by suffix: `.txt.gz` is parsed as text, every other `.gz`
+    // as binary, so a text network stored as `.bin.gz` fails to load.
+    let dir = tempfile::tempdir().unwrap();
+    let root = InstallRoot::new(dir.path().join("aji"));
+    for (name, fill, suffix) in [
+        ("Old Net.TXT.GZ", 1u8, "txt.gz"),
+        ("plain.gz", 2u8, "bin.gz"),
+    ] {
+        let source = dir.path().join(name);
+        let mut bytes = vec![0x1f, 0x8b, 0x08, 0x00];
+        bytes.extend(std::iter::repeat_n(fill, 1000));
+        std::fs::write(&source, &bytes).unwrap();
+
+        let imported = import_network(&root, &source).unwrap();
+        let file = format!("{}.{suffix}", imported.id);
+        assert_eq!(
+            std::fs::read(root.network_file(&file)).unwrap(),
+            bytes,
+            "{name}"
+        );
+        assert_eq!(
+            load_installed(&root.record_file()).networks[&imported.id].file,
+            file,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn import_network_rejects_other_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = InstallRoot::new(dir.path().join("aji"));
@@ -883,4 +1007,386 @@ fn import_network_rejects_other_files() {
         "nothing is left in networks/"
     );
     assert!(load_installed(&root.record_file()).networks.is_empty());
+}
+
+// ---------------------------------------------------------------- M5: reused rows, disk errors, driver advice
+
+const INSUFFICIENT_DRIVER: &str = "ERROR: NN server thread failed: CUDA Error, for cudaMalloc file cudaandrocmbackend.inc, line 1: CUDA driver version is insufficient for CUDA runtime version";
+
+#[tokio::test]
+async fn a_verified_component_shows_reused() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    w.snapshots.lock().unwrap().clear();
+    let job = w.install(OPENCL).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert_eq!(state_of(&job, TaskKind::Engine), Some(TaskState::Reused));
+    assert_eq!(state_of(&job, TaskKind::Network), Some(TaskState::Reused));
+    for snapshot in w.snapshots.lock().unwrap().iter() {
+        for task in [TaskKind::Engine, TaskKind::Network] {
+            assert!(
+                !matches!(state_of(snapshot, task), Some(TaskState::Running { .. })),
+                "{snapshot:?}"
+            );
+        }
+    }
+}
+
+fn nvidia_report(driver: &str) -> HardwareReport {
+    let mut r = report();
+    r.gpus = vec![GpuReport {
+        vendor: GpuVendor::Nvidia,
+        name: "NVIDIA GeForce RTX 3060".into(),
+        memory_bytes: Some(12 << 30),
+        driver_version: Some(driver.into()),
+        pci_device_id: None,
+        apple_gpu_cores: None,
+        compute_capability: Some("8.6".into()),
+        software: false,
+    }];
+    r
+}
+
+fn failing_with(line: &str) -> Value {
+    json!({
+        "benchmark": { "visitsPerSecond": opencl_speeds() },
+        "failure": { "during": "benchmark", "stderr": [line], "exitCode": 1 }
+    })
+}
+
+#[tokio::test]
+async fn a_driver_failure_carries_the_advice() {
+    let w = world(Spec {
+        opencl: failing_with(INSUFFICIENT_DRIVER),
+        opencl_runtime: true,
+        runtime_min_driver: Some("580.00".into()),
+        report: nvidia_report("575.0"),
+        ..Spec::default()
+    });
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    let Some(JobOutcome::Failed {
+        failure,
+        offer,
+        driver,
+        ..
+    }) = &job.outcome
+    else {
+        panic!("{job:?}");
+    };
+    assert_eq!(*failure, FailureCode::GpuDriverTooOld);
+    assert_eq!(
+        driver,
+        &Some(DriverAdvice {
+            current: Some("575.0".into()),
+            required: "580.00".into()
+        })
+    );
+    assert_eq!(offer.as_ref().map(|o| o.backend), Some(Backend::Eigenavx2));
+}
+
+#[tokio::test]
+async fn other_failures_carry_no_driver() {
+    let w = world(Spec {
+        opencl: failing_benchmark(),
+        opencl_runtime: true,
+        runtime_min_driver: Some("580.00".into()),
+        report: nvidia_report("575.0"),
+        ..Spec::default()
+    });
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    let Some(JobOutcome::Failed {
+        failure, driver, ..
+    }) = &job.outcome
+    else {
+        panic!("{job:?}");
+    };
+    assert_eq!(*failure, FailureCode::OutOfMemory);
+    assert_eq!(driver, &None);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_write_failure_in_the_root_is_disk_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world(Spec::default());
+    let engines = w.root.root().join("engines");
+    std::fs::create_dir_all(&engines).unwrap();
+    std::fs::set_permissions(&engines, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let job = w.install(OPENCL).await;
+    std::fs::set_permissions(&engines, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (failure, _, offer) = failed(&job);
+    assert_eq!(failure, FailureCode::DiskError, "{job:?}");
+    assert_eq!(offer, None);
+}
+
+#[tokio::test]
+async fn licences_list_their_components() {
+    let w = world(Spec {
+        opencl_runtime: true,
+        ..Spec::default()
+    });
+    let licences: Vec<LicenceInfo> = w.installer.licences(OPENCL).unwrap();
+    assert_eq!(licences.len(), 1);
+    let runtime_zip = zip_of(&[("bin/x.dll", b"a runtime library"), ("bin/notes.txt", b"x")]);
+    assert_eq!(
+        licences[0].components,
+        vec![LicensedComponent {
+            name: "cuDNN".into(),
+            version: "9.0.0".into(),
+            bytes: runtime_zip.len() as u64,
+        }]
+    );
+}
+
+// ---------------------------------------------------------------- M5: robustness and unused files
+
+#[tokio::test]
+async fn a_same_set_reinstall_keeps_the_active_config_until_its_test_passes() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let config = w.root.root().join(w.root.config_rel(OPENCL, NET));
+    let before = std::fs::read(&config).unwrap();
+    // The reused package now benchmarks differently (8 threads win) and fails its test query.
+    let scenario = json!({
+        "benchmark": { "visitsPerSecond": { "8": 200.0, "16": 100.0, "32": 100.0 } },
+        "failure": { "during": "query", "stderr": ["boom"], "exitCode": 1 },
+        "transcript": "analysis.jsonl"
+    });
+    std::fs::write(
+        w.root.engine_dir(OPENCL).join("fake-katago-scenario.json"),
+        serde_json::to_vec(&scenario).unwrap(),
+    )
+    .unwrap();
+    failed(&w.install(OPENCL).await);
+    assert_eq!(std::fs::read(&config).unwrap(), before);
+    assert_eq!(w.record().active, key(OPENCL));
+}
+
+#[tokio::test]
+async fn a_panicking_job_restarts_the_previous_engine() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.engine_runs().await;
+    w.installer.panic_next_job();
+    let (failure, _, offer) = failed(&w.install(OPENCL).await);
+    assert_eq!(failure, FailureCode::Crashed);
+    assert_eq!(offer, None);
+    assert!(!w.installer.holds_engine());
+    w.engine_runs().await;
+    assert_eq!(w.record().active, key(EIGEN));
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn importing_does_not_block_status() {
+    use std::io::Write;
+    let w = world(Spec::default());
+    let dir = tempfile::tempdir().unwrap();
+    let fifo = dir.path().join("net.bin.gz");
+    let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    let installer = Arc::clone(&w.installer);
+    let source = fifo.clone();
+    let import = std::thread::spawn(move || installer.import_network(&source));
+    // The writer feeds the magic bytes, then holds the pipe open: the copy waits for more.
+    let mut writer = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+    writer.write_all(&[0x1f, 0x8b, 1, 2, 3]).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    let installer = Arc::clone(&w.installer);
+    let reader = std::thread::spawn(move || installer.installed());
+    let started = std::time::Instant::now();
+    while !reader.is_finished() {
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "installed() waited for the copy"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    drop(writer);
+    let imported = import.join().unwrap().unwrap();
+    assert!(w.record().networks.contains_key(&imported.id));
+}
+
+#[tokio::test]
+async fn start_refuses_an_engine_for_another_platform() {
+    let w = world(Spec {
+        platform: Some(Platform::WindowsX64),
+        ..Spec::default()
+    });
+    assert_eq!(
+        w.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownEngine)
+    );
+    let unsupported = world(Spec {
+        platform: None,
+        ..Spec::default()
+    });
+    assert_eq!(
+        unsupported.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownEngine)
+    );
+}
+
+#[tokio::test]
+async fn start_refuses_a_network_the_engine_cannot_load() {
+    let w = world(Spec {
+        network_min_engine: Some(semver::Version::new(1, 19, 0)),
+        ..Spec::default()
+    });
+    assert_eq!(
+        w.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownNetwork)
+    );
+}
+
+fn dir_bytes(path: &Path) -> u64 {
+    match std::fs::metadata(path) {
+        Ok(m) if m.is_file() => m.len(),
+        Ok(_) => std::fs::read_dir(path)
+            .unwrap()
+            .map(|e| dir_bytes(&e.unwrap().path()))
+            .sum(),
+        Err(_) => 0,
+    }
+}
+
+#[tokio::test]
+async fn unused_counts_everything_outside_the_active_set() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.record().active, key(EIGEN));
+    let staging = w.root.root().join("staging").join("x");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("big"), vec![0u8; 1000]).unwrap();
+    std::fs::create_dir_all(w.root.downloads_dir()).unwrap();
+    std::fs::write(w.root.downloads_dir().join("y.part"), vec![0u8; 300]).unwrap();
+    let expected = dir_bytes(&w.root.engine_dir(OPENCL))
+        + 1000
+        + 300
+        + dir_bytes(&w.root.root().join(w.root.config_rel(OPENCL, NET)))
+        + dir_bytes(&w.root.root().join(w.root.benchmark_config_rel(OPENCL, NET)));
+    assert_eq!(w.installer.unused_bytes(), expected);
+}
+
+#[tokio::test]
+async fn remove_unused_deletes_them_and_keeps_the_active_set() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    std::fs::create_dir_all(w.root.root().join("staging").join("x")).unwrap();
+    let unused = w.installer.unused_bytes();
+    assert_eq!(w.installer.remove_unused(), Ok(unused));
+    assert_eq!(w.installer.unused_bytes(), 0);
+    assert!(!w.root.engine_dir(OPENCL).exists());
+    assert!(!w.root.root().join("staging").join("x").exists());
+    let record = w.record();
+    assert_eq!(record.engines.keys().collect::<Vec<_>>(), [EIGEN]);
+    assert_eq!(record.sets.len(), 1);
+    assert_eq!(record.active, key(EIGEN));
+    assert_eq!(
+        w.installer.active_summary(),
+        Some(ActiveSummary {
+            engine: EIGEN.into(),
+            version: "1.18.2".into(),
+            backend: Backend::Eigenavx2,
+            network: NET.into(),
+            network_name: NET.into(),
+            threads: 8,
+            visits_per_second: Some(60.0),
+        })
+    );
+}
+
+#[tokio::test]
+async fn remove_unused_with_no_active_set_removes_everything() {
+    let w = world(Spec {
+        opencl: failing_benchmark(),
+        ..Spec::default()
+    });
+    failed(&w.install(OPENCL).await);
+    assert!(w.installer.unused_bytes() > 0);
+    assert_eq!(w.installer.active_summary(), None);
+    w.installer.remove_unused().unwrap();
+    let record = w.record();
+    assert!(
+        record.engines.is_empty() && record.networks.is_empty(),
+        "{record:?}"
+    );
+    assert!(!w.root.network_file("net.bin.gz").exists());
+}
+
+#[tokio::test]
+async fn remove_unused_deletes_nothing_when_the_record_cannot_be_read() {
+    // An unreadable record must not read as "no active set", which would delete the engine in
+    // use.
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let record = w.root.record_file();
+    let aside = record.with_extension("aside");
+    std::fs::rename(&record, &aside).unwrap();
+    std::fs::create_dir(&record).unwrap();
+
+    assert!(matches!(
+        w.installer.remove_unused(),
+        Err(RemoveError::Io(_))
+    ));
+    assert!(w.root.engine_dir(OPENCL).exists());
+    assert!(w.root.network_file("net.bin.gz").exists());
+
+    std::fs::remove_dir(&record).unwrap();
+    std::fs::rename(&aside, &record).unwrap();
+    assert_eq!(w.record().active, key(OPENCL));
+}
+
+#[tokio::test]
+async fn remove_unused_is_refused_while_a_job_runs() {
+    let w = world(Spec {
+        modes: HashMap::from([("/net.bin.gz", FileMode::StallAfter(1000))]),
+        download_stall: Duration::from_secs(30),
+        ..Spec::default()
+    });
+    w.installer.start(request(OPENCL, NET, &[])).unwrap();
+    w.row_reaches(TaskKind::Network, 0).await;
+    assert_eq!(w.installer.remove_unused(), Err(RemoveError::Busy));
+    w.installer.cancel();
+    w.finished().await;
+}
+
+#[tokio::test]
+async fn holds_engine_is_true_only_during_the_benchmark_and_test() {
+    let w = world(Spec::default());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    assert!(!w.installer.holds_engine());
+    w.installer.start(request(OPENCL, NET, &[])).unwrap();
+    let installer = Arc::clone(&w.installer);
+    let record = Arc::clone(&seen);
+    let watcher = tokio::spawn(async move {
+        loop {
+            let status = installer.status().unwrap();
+            let benchmark = state_of(&status, TaskKind::Benchmark);
+            record
+                .lock()
+                .unwrap()
+                .push((benchmark, installer.holds_engine()));
+            if status.outcome.is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    });
+    w.finished().await;
+    watcher.await.unwrap();
+    let seen = seen.lock().unwrap();
+    assert!(
+        seen.iter()
+            .any(|(b, held)| matches!(b, Some(TaskState::Running { .. })) && *held),
+        "{seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .all(|(b, held)| !held || !matches!(b, Some(TaskState::Waiting))),
+        "{seen:?}"
+    );
+    assert!(!w.installer.holds_engine());
 }

@@ -13,6 +13,7 @@ mod smoke;
 mod source;
 mod space;
 mod unpack;
+mod unused;
 
 pub use benchmark::*;
 pub use classify::*;
@@ -26,3 +27,4 @@ pub use smoke::*;
 pub use source::*;
 pub use space::*;
 pub use unpack::*;
+pub use unused::{ActiveSummary, RemoveError};

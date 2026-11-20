@@ -1,11 +1,14 @@
 # Development setup
 
-Until the setup wizard of M5 exists, there are two ways to give Aji an engine:
+Aji installs its engine through the setup wizard, which opens by itself while no engine is set
+up. For development there are two more ways in:
 
-- name your own KataGo files in `settings.json` (`devEngine`, below);
-- let Aji install one with the `AJI_DEV_INSTALL` trigger, the same pipeline the wizard will use.
+- name your own KataGo files in `settings.json` (`devEngine`, below), which skips the wizard;
+- point `AJI_DATA_ROOT` at an empty folder, to see first-run setup without touching your real
+  settings and installs (below).
 
-Without either, Aji starts with no engine and reports `notConfigured`.
+`pnpm dev` also has setup scenarios that run the interface against a fake engine side, for the
+panels a Mac cannot reach (below).
 
 ## Where `settings.json` lives
 
@@ -140,54 +143,50 @@ empty one.
 To start over, quit Aji and delete `installed.json` with the `engines`, `runtimes`, `networks` and
 `configs` folders. On macOS do not delete the whole folder: it holds `settings.json` too.
 
-## Installing an engine: `AJI_DEV_INSTALL`
+## Seeing first-run setup: `AJI_DATA_ROOT`
 
-Set `AJI_DEV_INSTALL` before starting Aji, to `recommended` or to a backend name:
-
-```sh
-AJI_DEV_INSTALL=recommended pnpm tauri dev
-```
+Set `AJI_DATA_ROOT` to an absolute folder before starting Aji. Settings then live in
+`<root>/config/` and installs in `<root>/data/`, so an empty folder gives the first-run wizard
+while your real settings and engines stay as they are:
 
 ```sh
-AJI_DEV_INSTALL=recommended "/Applications/Aji.app/Contents/MacOS/aji"
+AJI_DATA_ROOT="$HOME/aji-scratch" pnpm tauri dev
 ```
 
-- `recommended` installs the default backend of the setup recommendation. A backend name (`cuda`,
-  `directml`, `opencl`, `metal`, `eigenavx2`, `eigen` and so on) must be one the recommendation lists
-  for this machine; `aji-setup-report` (below) shows them.
-- The engine is that backend's newest version, and the network the preselected one: the highest Elo
-  that engine can load.
-- It acts only when no engine is configured: no `devEngine` and no active set. Otherwise it logs
-  `aji: AJI_DEV_INSTALL ignored: an engine is already set up`.
-- It accepts every licence the engine needs (for CUDA, NVIDIA's CUDA Toolkit EULA and cuDNN licence)
-  for that job only. Nothing is written to `settings.json`. Set it only if you accept those licences.
-- Release builds read it too, so a packaged app can be checked. A Windows release build has no
-  console, so its log is not visible there.
-
-The job logs each step as it changes, not each byte:
-
-```text
-aji: dev install katago-v1.18.2-metal-macos-arm64 with kata1-tf3-b11c768-s12382M-d6533M
-aji: install engine: running (0 of 3934477)
-aji: install engine: done
-aji: install network: running (0 of 262041254)
-aji: install network: done
-aji: install benchmark: running (0 of 3)
-aji: install benchmark: done
-aji: install testQuery: running (0 of 1)
-aji: install testQuery: done
-aji: install installed
+```sh
+AJI_DATA_ROOT="$HOME/aji-scratch" "/Applications/Aji.app/Contents/MacOS/aji"
 ```
 
-On success the engine switches to the new set at once, and it starts on the next launch too. A
-failure ends with its code and, when another backend might work, the offer:
+Aji logs `aji: AJI_DATA_ROOT puts settings and installs under …`. A relative path is ignored and
+logged. Release builds read the variable too, so a packaged app can be checked. Delete the folder
+to start over.
 
-```text
-aji: install failed: outOfMemory; offer: directml (katago-v1.18.1-onnx1.24.4-directml-windows-x64, 23584379 bytes)
-```
+The M4 `AJI_DEV_INSTALL` trigger is gone: the wizard drives the same install pipeline.
 
-Aji never installs the offer by itself. To take it, start again with that backend's name
-(`AJI_DEV_INSTALL=directml`).
+## Setup panels without the hardware: `?scenario=`
+
+A Mac reaches only the Metal path of the setup wizard. To see the other panels, run `pnpm dev`
+and open the Vite page in a browser with a scenario name, for example
+`http://localhost:1420/?scenario=a1-driver`. A scripted engine side (`src/dev/scenarios.ts`)
+then answers every request with ids, sizes and driver versions from the bundled manifest, and
+emits install progress on timers. Nothing is downloaded and no KataGo runs.
+
+| Scenario | What it shows |
+|---|---|
+| `pc-cuda` | Windows with an RTX 5070 and a current driver: CUDA installs and the engine comes up |
+| `pc-old-driver` | Step 2 with CUDA disabled for an old driver; "detect again" then finds the updated one |
+| `cuda-licence` | The NVIDIA licence panel before the CUDA download |
+| `a1-driver` | Panel A1: CUDA fails for an old driver; Retry fails again, DirectML installs |
+| `a2-gpu-error` | Panel A2: CUDA fails with a GPU error, DirectML first |
+| `b-download-failed` | Panel B: the network download fails, with nothing to fall back to |
+| `d-crashed` | The analysis panel with a crashed engine, and "set up again" |
+| `no-engine` | Choose "set up later" to see the no-engine panel |
+| `mac` | The Metal path on Apple silicon |
+
+The language follows the browser until you switch it in the title row or in settings. Reload
+the page to start a scenario again. Scenarios exist only in a development build: `main.tsx`
+loads them behind `import.meta.env.DEV`, so `pnpm build` leaves them out, and an unknown name
+falls back to the Tauri transport with a warning in the console.
 
 ## The `downloadSource` setting
 
@@ -211,11 +210,29 @@ Where engine and network files are downloaded from. NVIDIA's archives always com
 
 The original URLs are always tried after a prefix or mirror. The URL must start with `http://` or
 `https://` and have a host; an invalid one is logged at startup and `direct` is used. A change made
-while a download runs applies from its next attempt. The setup wizard sets it with the
-`setupSetDownloadSource` request.
+while a download runs applies from its next attempt. The wizard has no selector for it yet (the
+owner's decision for M5); the `setupSetDownloadSource` request sets it.
 
-The wizard also records accepted licences in `acceptedLicences`: the SHA-256 of each licence text
-and the time it was accepted. The `AJI_DEV_INSTALL` trigger does not.
+The wizard records accepted licences in `acceptedLicences`: the SHA-256 of each licence text and
+the time it was accepted.
+
+## Interface preferences
+
+The settings page writes four more fields. Each is read on its own: a value Aji cannot read is
+logged and that field alone takes its default.
+
+```json
+{
+  "language": "system",
+  "theme": "system",
+  "discLines": ["winrate", "scoreLead"],
+  "visitLimit": null
+}
+```
+
+`language` is `system`, `zh-CN` or `en`; `theme` is `system`, `dark` or `light`; `discLines` is two
+different values of `winrate`, `scoreLead` and `visits`; `visitLimit` is a positive number of visits
+per position, or `null` for no limit.
 
 ## What Aji forces on the command line
 

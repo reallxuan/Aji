@@ -113,7 +113,16 @@ it('a setup progress event leaves the engine store alone', () => {
   const before = store.getState();
   store.getState().applyEvent({
     type: 'setupProgress',
-    job: { id: 1, engine: 'e', backend: 'metal', network: 'n', tasks: [], outcome: null },
+    job: {
+      id: 1,
+      engine: 'e',
+      backend: 'metal',
+      network: 'n',
+      tasks: [],
+      outcome: null,
+      measures: false,
+      benchmark: null,
+    },
   });
   expect(store.getState()).toBe(before);
 });

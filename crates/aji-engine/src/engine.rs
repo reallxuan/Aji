@@ -33,7 +33,8 @@ const VERSION_ID: &str = "aji-version";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineOptions {
     /// Visits per position; a query is not resubmitted once the cache holds this many.
-    pub visit_cap: u32,
+    /// The most visits per position, `None` for no limit. [`Engine::set_visit_limit`] changes it.
+    pub visit_limit: Option<u32>,
     /// KataGo's `reportDuringSearchEvery`.
     pub report_every: Duration,
     /// At most one non-final update per position per this interval.
@@ -69,7 +70,7 @@ pub struct EngineOptions {
 impl Default for EngineOptions {
     fn default() -> Self {
         EngineOptions {
-            visit_cap: 100_000,
+            visit_limit: None,
             report_every: Duration::from_millis(100),
             throttle: Duration::from_millis(100),
             max_candidates: 20,
@@ -145,6 +146,7 @@ enum Command {
     Restart(Reply<Outcome>),
     SetFiles(Option<EngineFiles>, Reply<Outcome>),
     Stop(Reply<Outcome>),
+    SetVisitLimit(Option<u32>, Reply<Outcome>),
     Shutdown(Reply<()>),
 }
 
@@ -271,6 +273,14 @@ impl Engine {
     /// exited and the state is `stopped`.
     pub async fn stop(&self) -> Result<(), EngineError> {
         self.outcome(Command::Stop).await
+    }
+
+    /// Changes the most visits per position (`None`: no limit), in every state. A search past
+    /// the new limit stops; a running search restarts under it; a position that stopped at the
+    /// old limit is searched again when the new one is higher.
+    pub async fn set_visit_limit(&self, limit: Option<u32>) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetVisitLimit(limit, reply))
+            .await
     }
 
     /// Stops KataGo like `stop` and ends the actor. Later calls report `NotRunning`.
@@ -467,6 +477,9 @@ impl Actor {
             }
             Command::SetFiles(files, reply) => self.set_files(files, reply),
             Command::Stop(reply) => self.stop(reply),
+            Command::SetVisitLimit(limit, reply) => {
+                let _ = reply.send(self.set_visit_limit(limit));
+            }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
                 self.shutdown();
@@ -496,6 +509,29 @@ impl Actor {
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
         }
+        Ok(())
+    }
+
+    fn set_visit_limit(&mut self, limit: Option<u32>) -> Outcome {
+        if self.options.visit_limit == limit {
+            return Ok(());
+        }
+        self.options.visit_limit = limit;
+        let Some(version) = self.ready_version() else {
+            return Ok(());
+        };
+        if self.paused {
+            return Ok(());
+        }
+        if let Some(active) = &self.current {
+            let reached = limit.is_some_and(|l| active.visits >= l);
+            self.terminate_current();
+            if reached {
+                self.set_state(EngineState::Ready { version });
+                return Ok(());
+            }
+        }
+        self.analyse_or_idle(version);
         Ok(())
     }
 
@@ -995,10 +1031,11 @@ impl Actor {
     fn wants_analysis(&mut self) -> bool {
         // The position given at spawn is not validated; `analysis_query` would refuse it.
         self.position.validate().is_ok()
-            && self
-                .cache
-                .get(self.position.key())
-                .is_none_or(|cached| cached.root_visits < self.options.visit_cap)
+            && self.cache.get(self.position.key()).is_none_or(|cached| {
+                self.options
+                    .visit_limit
+                    .is_none_or(|limit| cached.root_visits < limit)
+            })
     }
 
     fn submit(&mut self) {
@@ -1007,7 +1044,7 @@ impl Actor {
         let Ok(line) = analysis_query(
             &id,
             &self.position,
-            self.options.visit_cap,
+            self.options.visit_limit,
             self.options.report_every,
         ) else {
             return;

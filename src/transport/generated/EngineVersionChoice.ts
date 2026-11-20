@@ -4,4 +4,8 @@ export type EngineVersionChoice = { engine: string, version: string, released: s
 /**
  * The sum of the runtime's archive sizes, which is what the user downloads.
  */
-runtimeBytes: number | null, latest: boolean, };
+runtimeBytes: number | null, latest: boolean, 
+/**
+ * Already in the install record, so choosing it downloads nothing. The service fills it in.
+ */
+installed: boolean, };

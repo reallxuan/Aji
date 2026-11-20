@@ -11,7 +11,7 @@ use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsR
 use aji_manager::install::{
     DownloadSource, FreeSpace, InstallOptions, InstallRoot, Installer, InstallerParts,
 };
-use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, http_client};
+use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, Platform, http_client};
 use tokio::sync::watch;
 
 use crate::protocol::OsKind;
@@ -43,35 +43,6 @@ pub fn apple_m5() -> HardwareReport {
             pci_device_id: None,
             apple_gpu_cores: Some(10),
             compute_capability: None,
-            software: false,
-        }],
-        problems: Vec::new(),
-    }
-}
-
-/// M3's synthetic Windows PC: an RTX 5070 with driver 591.44, which CUDA 13.2 supports.
-pub fn rtx_5070() -> HardwareReport {
-    HardwareReport {
-        os: OsReport {
-            kind: OsKind::Windows,
-            version: String::new(),
-            arch: "x86_64".into(),
-        },
-        cpu: CpuReport {
-            name: "cpu".into(),
-            cores: 8,
-            threads: 16,
-            avx2: true,
-        },
-        memory_bytes: 16 << 30,
-        gpus: vec![GpuReport {
-            vendor: GpuVendor::Nvidia,
-            name: "NVIDIA GeForce RTX 5070".into(),
-            memory_bytes: Some(8 << 30),
-            driver_version: Some("591.44".into()),
-            pci_device_id: None,
-            apple_gpu_cores: None,
-            compute_capability: Some("12.0".into()),
             software: false,
         }],
         problems: Vec::new(),
@@ -112,6 +83,8 @@ pub fn installer(
             source,
             space: Arc::new(NoSpace),
             options: InstallOptions::default(),
+            // The service tests install the bundled manifest's Windows CUDA engine.
+            platform: Some(Platform::WindowsX64),
         },
         |_| {},
     )

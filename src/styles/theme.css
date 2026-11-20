@@ -44,3 +44,31 @@
   --color-engine-error: var(--engine-error);
   --color-board-base: var(--board-base);
 }
+
+/*
+ * shadcn/ui names, mapped onto the tokens above (M5 design 5.7). The accent colour belongs to the
+ * best candidate move only (interface design, principle 3), so a primary button is filled with the
+ * text colour, as in the M5 settings mockup, and nothing here introduces a new hue.
+ */
+@theme inline {
+  --color-background: var(--panel);
+  --color-foreground: var(--text);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--text);
+  --color-primary-foreground: var(--ground);
+  --color-secondary: var(--divider-soft);
+  --color-secondary-foreground: var(--text);
+  --color-accent: var(--divider-soft);
+  --color-accent-foreground: var(--text);
+  --color-muted: var(--divider-soft);
+  --color-muted-foreground: var(--text-muted);
+  --color-border: var(--hairline);
+  --color-input: var(--hairline);
+  --color-ring: var(--text-muted);
+  --color-destructive: var(--engine-error);
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+}

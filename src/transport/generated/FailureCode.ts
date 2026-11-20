@@ -3,4 +3,4 @@
 /**
  * Why an install step failed.
  */
-export type FailureCode = "downloadFailed" | "checksumMismatch" | "notEnoughSpace" | "unpackFailed" | "missingLibrary" | "gpuDriverTooOld" | "gpuError" | "outOfMemory" | "openclNoDevice" | "licenceNotAccepted" | "timedOut" | "crashed";
+export type FailureCode = "downloadFailed" | "checksumMismatch" | "notEnoughSpace" | "unpackFailed" | "missingLibrary" | "gpuDriverTooOld" | "gpuError" | "outOfMemory" | "openclNoDevice" | "licenceNotAccepted" | "timedOut" | "crashed" | "diskError";

@@ -18,6 +18,7 @@ in at least one line. Each pattern stays **[To verify]** until a real recording 
 
 | Code | Line | Source |
 |---|---|---|
+| `gpuDriverTooOld` | `ERROR: NN server thread failed: CUDA Error, for cudaMalloc file cudaandrocmbackend.inc, func Buffers, line 4724, error CUDA driver version is insufficient for CUDA runtime version` | `neuralnet/cudaerrorcheck.h:10` for the frame; the text is `cudaGetErrorString(cudaErrorInsufficientDriver)` from NVIDIA's CUDA Runtime API documentation (M5) |
 | `outOfMemory` | `ERROR: NN server thread failed: OpenCL error at openclbackend.cpp, func clEnqueueNDRangeKernel, line 1201, error CL_MEM_OBJECT_ALLOCATION_FAILURE (possibly ran out of GPU memory?)` | `neuralnet/nneval.cpp:399-404`, `neuralnet/openclhelpers.cpp:88,19` |
 | `outOfMemory` | `OpenCL error at openclbackend.cpp, func clFinish, line 1310, error CL_OUT_OF_RESOURCES` | `neuralnet/openclhelpers.cpp:88,20` |
 | `outOfMemory` | `OpenCL error at openclbackend.cpp, func clCreateBuffer, line 402, error CL_OUT_OF_HOST_MEMORY` | `neuralnet/openclhelpers.cpp:88,21` |

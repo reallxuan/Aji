@@ -2,8 +2,9 @@
 import type { AnalysisUpdate } from "./AnalysisUpdate";
 import type { EngineState } from "./EngineState";
 import type { JobSnapshot } from "./JobSnapshot";
+import type { UiSettings } from "./UiSettings";
 
 /**
  * A message the engine side pushes to the UI without being asked, tagged the same way.
  */
-export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "setupProgress", job: JobSnapshot, };
+export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "setupProgress", job: JobSnapshot, } | { "type": "settingsChanged", settings: UiSettings, };

@@ -38,8 +38,12 @@ it('each key uses the same placeholders in both locales', () => {
   }
 });
 
+// Language names are endonyms: each language is named in itself, whatever the interface language.
+const ENDONYMS = 'languageName.';
+
 it('English text contains no Chinese characters', () => {
   for (const [key, value] of Object.entries(locales.en)) {
+    if (key.startsWith(ENDONYMS)) continue;
     expect(/[㐀-鿿]/.test(value), key).toBe(false);
   }
 });

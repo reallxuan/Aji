@@ -4,7 +4,8 @@ use aji_manager::OsKind;
 use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsReport, Probe};
 use aji_manager::manifest::{Backend, Engine, Manifest, parse_manifest};
 use aji_manager::recommend::{
-    BackendRecommendation, RecommendationNote as Note, networks, recommend_backends, versions,
+    BackendRecommendation, DriverAdvice, RecommendationNote as Note, networks, recommend_backends,
+    versions,
 };
 use semver::Version;
 
@@ -125,9 +126,9 @@ fn nvidia_rtx50_new_driver() {
     let r = recommend_backends(&rtx5070(), &m);
     check(
         &r,
-        &[Cuda, Directml, Opencl],
+        &[Cuda, Directml, Opencl, Eigenavx2, Eigen],
         Some(Cuda),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     assert_eq!(
@@ -151,9 +152,9 @@ fn nvidia_rtx50_driver_575() {
     let r = recommend_backends(&h, &m);
     check(
         &r,
-        &[Cuda, Directml, Opencl],
+        &[Cuda, Directml, Opencl, Eigenavx2, Eigen],
         Some(Cuda),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     assert!(
@@ -169,9 +170,9 @@ fn nvidia_pascal_new_driver() {
     let r = recommend_backends(&gtx1080(), &m);
     check(
         &r,
-        &[Cuda, Directml, Opencl],
+        &[Cuda, Directml, Opencl, Eigenavx2, Eigen],
         Some(Cuda),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     let v = cuda_variants(&gtx1080(), &m);
@@ -190,9 +191,9 @@ fn nvidia_without_nvidia_smi() {
     let r = recommend_backends(&h, &m);
     check(
         &r,
-        &[Cuda, Directml, Opencl],
+        &[Cuda, Directml, Opencl, Eigenavx2, Eigen],
         Some(Cuda),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     assert!(
@@ -213,9 +214,9 @@ fn nvidia_driver_too_old() {
     let r = recommend_backends(&h, &m);
     check(
         &r,
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         Some(Directml),
-        &[Opencl],
+        &[Opencl, Eigenavx2, Eigen],
         &[Note::DriverTooOldForCuda],
     );
     assert!(versions(&h, &m, Cuda).is_empty());
@@ -227,9 +228,9 @@ fn nvidia_driver_unknown_is_too_old() {
     let r = recommend_backends(&h, &manifest());
     check(
         &r,
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         Some(Directml),
-        &[Opencl],
+        &[Opencl, Eigenavx2, Eigen],
         &[Note::DriverTooOldForCuda],
     );
 }
@@ -267,7 +268,9 @@ fn tags_follow_the_table() {
         [
             vec![Fastest],
             vec![NoRuntimeDownload],
-            vec![MostCompatible, Slowest]
+            vec![MostCompatible, Slowest],
+            vec![CpuOnly],
+            vec![CpuOnly]
         ]
     );
     let r = recommend_backends(&linux(vec![]), &manifest());
@@ -290,9 +293,9 @@ fn amd_rdna3() {
     let r = recommend_backends(&h, &m);
     check(
         &r,
-        &[Rocm, Directml, Opencl],
+        &[Rocm, Directml, Opencl, Eigenavx2, Eigen],
         Some(Rocm),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     let v = versions(&h, &m, Rocm);
@@ -327,9 +330,9 @@ fn amd_unknown_family() {
     let r = recommend_backends(&h, &manifest());
     check(
         &r,
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         Some(Directml),
-        &[Opencl],
+        &[Opencl, Eigenavx2, Eigen],
         &[Note::UnknownAmdFamily],
     );
 }
@@ -344,9 +347,9 @@ fn intel_arc() {
     let r = recommend_backends(&h, &manifest());
     check(
         &r,
-        &[Openvino, Directml, Opencl],
+        &[Openvino, Directml, Opencl, Eigenavx2, Eigen],
         Some(Openvino),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
 }
@@ -464,9 +467,9 @@ fn laptop_with_integrated_gpu_listed_first() {
     let r = recommend_backends(&h, &manifest());
     check(
         &r,
-        &[Cuda, Directml, Opencl],
+        &[Cuda, Directml, Opencl, Eigenavx2, Eigen],
         Some(Cuda),
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         &[],
     );
     assert_eq!(r.gpu.unwrap().vendor, GpuVendor::Nvidia);
@@ -510,9 +513,9 @@ fn a_missing_engine_moves_the_next_backend_up() {
     let r = recommend_backends(&rtx5070(), &m);
     check(
         &r,
-        &[Directml, Opencl],
+        &[Directml, Opencl, Eigenavx2, Eigen],
         Some(Directml),
-        &[Opencl],
+        &[Opencl, Eigenavx2, Eigen],
         &[Note::NoEngineForBackend],
     );
 }
@@ -796,4 +799,108 @@ fn a_missing_cuda13_build_falls_back_to_cuda12() {
     let h = rtx("591.44", Some("12.0"));
     assert_eq!(cuda_variant(&h, &m).as_deref(), Some(CUDA12));
     assert!(recommend_backends(&h, &m).notes.is_empty());
+}
+
+// ---------------------------------------------------------------- M5: R20 and driver advice
+
+#[test]
+fn windows_gpu_rows_end_with_the_cpu_builds() {
+    let m = manifest();
+    let old = win(vec![nvidia(
+        "NVIDIA GeForce RTX 3060",
+        Some("566.03"),
+        Some("8.6"),
+    )]);
+    let amd = win(vec![gpu(GpuVendor::Amd, "AMD Radeon RX 7800 XT", 16)]);
+    let amd_unknown = win(vec![gpu(GpuVendor::Amd, "AMD Radeon(TM) Graphics", 2)]);
+    let intel = win(vec![gpu(
+        GpuVendor::Intel,
+        "Intel(R) Arc(TM) A770 Graphics",
+        16,
+    )]);
+    for h in [rtx5070(), old, amd, amd_unknown, intel] {
+        let r = recommend_backends(&h, &m);
+        assert!(backends(&r).ends_with(&[Eigenavx2, Eigen]), "{r:?}");
+        assert!(r.fallbacks.ends_with(&[Eigenavx2, Eigen]), "{r:?}");
+    }
+    let no_avx2 = report(
+        OsKind::Windows,
+        "x86_64",
+        false,
+        vec![nvidia(
+            "NVIDIA GeForce RTX 5070",
+            Some("591.44"),
+            Some("12.0"),
+        )],
+    );
+    let r = recommend_backends(&no_avx2, &m);
+    check(
+        &r,
+        &[Cuda, Directml, Opencl, Eigen],
+        Some(Cuda),
+        &[Directml, Opencl, Eigen],
+        &[],
+    );
+}
+
+#[test]
+fn old_driver_gives_advice_for_the_cc_variant() {
+    let m = manifest();
+    let advice = |driver: Option<&str>, cc: Option<&str>| {
+        recommend_backends(&win(vec![nvidia("NVIDIA GeForce RTX", driver, cc)]), &m).driver
+    };
+    assert_eq!(
+        advice(Some("566.36"), Some("8.9")),
+        Some(DriverAdvice {
+            current: Some("566.36".into()),
+            required: "580.00".into()
+        })
+    );
+    assert_eq!(
+        advice(Some("566.36"), Some("6.1")).map(|a| a.required),
+        Some("572.61".into())
+    );
+    assert_eq!(
+        advice(Some("566.36"), None).map(|a| a.required),
+        Some("572.61".into())
+    );
+}
+
+#[test]
+fn missing_driver_version_gives_advice_with_no_current() {
+    let r = recommend_backends(
+        &win(vec![nvidia("NVIDIA GeForce RTX 3060", None, Some("8.6"))]),
+        &manifest(),
+    );
+    assert_eq!(
+        r.driver,
+        Some(DriverAdvice {
+            current: None,
+            required: "580.00".into()
+        })
+    );
+}
+
+#[test]
+fn usable_cuda_gives_no_advice() {
+    assert_eq!(recommend_backends(&rtx5070(), &manifest()).driver, None);
+}
+
+#[test]
+fn no_cuda_engine_gives_no_advice() {
+    let mut m = manifest();
+    m.engines.retain(|e| e.backend != Cuda);
+    let h = win(vec![nvidia(
+        "NVIDIA GeForce RTX 3060",
+        Some("566.03"),
+        Some("8.6"),
+    )]);
+    assert_eq!(recommend_backends(&h, &m).driver, None);
+}
+
+#[test]
+fn macos_still_offers_only_metal() {
+    let r = recommend_backends(&mac(vec![apple("Apple M5", 10)]), &manifest());
+    check(&r, &[Metal], Some(Metal), &[], &[]);
+    assert_eq!(r.driver, None);
 }

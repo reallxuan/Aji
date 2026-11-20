@@ -12,6 +12,7 @@ use ts_rs::TS;
 use crate::hardware::{GpuReport, HardwareReport};
 use crate::manifest::{Backend, Manifest, Platform};
 
+pub use gpu::required_driver;
 pub use networks::networks;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -26,6 +27,20 @@ pub struct BackendRecommendation {
     pub default: Option<Backend>,
     pub fallbacks: Vec<Backend>,
     pub notes: Vec<RecommendationNote>,
+    /// Set when the NVIDIA driver is too old for any CUDA build: the wizard shows CUDA disabled
+    /// and names the driver version that would unlock it.
+    pub driver: Option<DriverAdvice>,
+}
+
+/// The driver the GPU has, and the one the CUDA build for this GPU needs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct DriverAdvice {
+    /// `None` when the driver version could not be read.
+    pub current: Option<String>,
+    /// The `minDriver` of that CUDA build's runtime, as the manifest writes it.
+    pub required: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -73,6 +88,9 @@ pub struct EngineVersionChoice {
     #[ts(type = "number | null")]
     pub runtime_bytes: Option<u64>,
     pub latest: bool,
+    /// Already in the install record, so choosing it downloads nothing. The service fills it in.
+    #[serde(default)]
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -85,6 +103,9 @@ pub struct NetworkChoice {
     pub uploaded: String,
     #[ts(type = "number")]
     pub size_bytes: u64,
+    /// Already in the install record, so choosing it downloads nothing. The service fills it in.
+    #[serde(default)]
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -115,6 +136,19 @@ pub fn recommend_backends(report: &HardwareReport, manifest: &Manifest) -> Backe
         .take(plan.max_fallbacks)
         .map(|c| c.backend)
         .collect();
+    let driver = match (plan.platform, plan.gpu) {
+        (Some(platform), Some(gpu))
+            if plan
+                .notes
+                .contains(&RecommendationNote::DriverTooOldForCuda) =>
+        {
+            gpu::required_driver(manifest, platform, gpu).map(|required| DriverAdvice {
+                current: gpu.driver_version.clone(),
+                required,
+            })
+        }
+        _ => None,
+    };
     BackendRecommendation {
         platform: plan.platform,
         gpu: plan.gpu.cloned(),
@@ -122,6 +156,7 @@ pub fn recommend_backends(report: &HardwareReport, manifest: &Manifest) -> Backe
         default,
         fallbacks,
         notes: plan.notes,
+        driver,
     }
 }
 
@@ -161,6 +196,7 @@ pub fn versions(
                     .map(|r| r.components.iter().map(|c| c.archive.size).sum())
             }),
             latest: i == 0,
+            installed: false,
         })
         .collect()
 }

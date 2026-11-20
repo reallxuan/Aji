@@ -385,6 +385,15 @@ const BUSY_PAUSE: Duration = Duration::from_millis(100);
 /// stdout or stderr for `limits.stall` kills the process and sets `stalled`. Dropping the
 /// future kills the process.
 pub async fn run_to_end(spec: LaunchSpec, limits: RunLimits) -> io::Result<RunOutput> {
+    run_to_end_watching(spec, limits, &mut |_| {}).await
+}
+
+/// [`run_to_end`], passing each piece of stdout to `on_stdout` as it arrives, for progress.
+pub async fn run_to_end_watching(
+    spec: LaunchSpec,
+    limits: RunLimits,
+    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+) -> io::Result<RunOutput> {
     let spawned = retry_busy(|| spawn_here(spec.clone())).await?;
     let Spawned {
         mut process,
@@ -405,6 +414,7 @@ pub async fn run_to_end(spec: LaunchSpec, limits: RunLimits) -> io::Result<RunOu
         tokio::select! {
             read = stdout.read(&mut out_buf), if out_open => match read {
                 Ok(n) if n > 0 => {
+                    on_stdout(&out_buf[..n]);
                     keep_last(&mut out, &out_buf[..n], MAX_RUN_STDOUT);
                     quiet_until = tokio::time::Instant::now() + limits.stall;
                 }
@@ -432,7 +442,10 @@ pub async fn run_to_end(spec: LaunchSpec, limits: RunLimits) -> io::Result<RunOu
         while out_open || err_open {
             tokio::select! {
                 read = stdout.read(&mut out_buf), if out_open => match read {
-                    Ok(n) if n > 0 => keep_last(&mut out, &out_buf[..n], MAX_RUN_STDOUT),
+                    Ok(n) if n > 0 => {
+                        on_stdout(&out_buf[..n]);
+                        keep_last(&mut out, &out_buf[..n], MAX_RUN_STDOUT);
+                    }
                     _ => out_open = false,
                 },
                 read = stderr.read(&mut err_buf), if err_open => match read {

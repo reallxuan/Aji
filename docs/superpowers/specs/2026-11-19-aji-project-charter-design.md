@@ -153,23 +153,25 @@ This is the core of Phase 1 and Aji's largest difference from LizzieYzy.
 
 | Hardware | Default backend | Fallback |
 |---|---|---|
-| NVIDIA, driver 580 or newer and compute capability 7.5 or newer | CUDA 13.2 (cuDNN 9.24) | DirectML, then OpenCL |
-| NVIDIA, driver 572.61 or newer otherwise (older card or driver) | CUDA 12.8 (cuDNN 9.8) | DirectML, then OpenCL |
-| NVIDIA, older or unknown driver | DirectML | OpenCL |
-| AMD (Windows), GPU family known (RX 6000, 7000 and 9000 series; Radeon 8050S and 8060S) | ROCm for that family (self-contained) | DirectML, then OpenCL |
-| AMD (Windows), family unknown | DirectML | OpenCL |
-| Intel GPU (Windows) | ONNX + OpenVINO (self-contained) | DirectML, then OpenCL |
+| NVIDIA, driver 580 or newer and compute capability 7.5 or newer | CUDA 13.2 (cuDNN 9.24) | DirectML, then OpenCL, then the CPU build |
+| NVIDIA, driver 572.61 or newer otherwise (older card or driver) | CUDA 12.8 (cuDNN 9.8) | DirectML, then OpenCL, then the CPU build |
+| NVIDIA, older or unknown driver | DirectML | OpenCL, then the CPU build |
+| AMD (Windows), GPU family known (RX 6000, 7000 and 9000 series; Radeon 8050S and 8060S) | ROCm for that family (self-contained) | DirectML, then OpenCL, then the CPU build |
+| AMD (Windows), family unknown | DirectML | OpenCL, then the CPU build |
+| Intel GPU (Windows) | ONNX + OpenVINO (self-contained) | DirectML, then OpenCL, then the CPU build |
 | Any GPU (Linux) | OpenCL | Eigen AVX2 (Eigen without AVX2) |
 | Apple Silicon | Metal, built in Aji's own CI and hosted by Aji | — |
 | No usable GPU, including only the Microsoft Basic Render Driver (Remote Desktop, a VM) | Eigen AVX2 if the CPU has AVX2, else Eigen | Eigen |
 | Intel Mac | Not supported | — |
 
-- NVIDIA runtimes (cuBLAS, NVRTC, cuDNN) are downloaded by Aji from NVIDIA's own servers as whole archives and checked against the SHA-256 that NVIDIA publishes; Aji never re-hosts them (R1, `docs/research/r1-nvidia-runtime.md`). CUDA 13 dropped Maxwell, Pascal and Volta, hence the compute-capability split.
+- "The CPU build" is Eigen AVX2 when the CPU has AVX2, else Eigen. Every GPU machine lists it last, so a machine whose GPU backends all fail can still analyse (R20, done in M5).
+- NVIDIA runtimes (cuBLAS, NVRTC, cuDNN) are downloaded by Aji from NVIDIA's own servers as whole archives and checked against the SHA-256 that NVIDIA publishes; Aji never re-hosts them (R1, `docs/research/r1-nvidia-runtime.md`). They install only after the user accepts NVIDIA's licences in the wizard, which lists each component and its size and requires a tick before anything downloads (R1 section 6, done in M5). CUDA 13 dropped Maxwell, Pascal and Volta, hence the compute-capability split.
+- The driver thresholds come from each runtime's `minDriver` in the manifest, not from code. When the driver is too old for CUDA, the wizard keeps CUDA in the list as a disabled row that names the current and the required driver, with a link to NVIDIA's driver page and "detect again" (M5).
 - TensorRT is not offered in Phase 1: NVIDIA publishes no hash for its archive, and hashing it would mean downloading 1.94 GB to build the manifest.
 - The NVIDIA defaults are provisional until R4's benchmarks on the RTX 5070 arrive; their results are written back here.
 - The Metal build is self-contained (static protobuf and abseil), targets macOS 13 (minos 13.0; not yet run there), and benchmarked within 1% of Homebrew's KataGo on the M5 (R2 done).
 
-**Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, runs KataGo's `benchmark` to obtain thread counts and related settings and writes them into a generated config, then sends a minimal analysis query to confirm results come back. If any step fails, Aji explains the cause in plain language and offers the fallback backend, which it installs only if the user agrees.
+**Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, writes a generated config with the backend's default thread count, then sends a minimal analysis query to confirm results come back. KataGo's `benchmark`, which measures the thread count, runs from settings on request: it took minutes on the Mac and held the install with nothing for the user to do. **[Decided 2026-11-20]** (M5 design 5.4) If any step fails, Aji explains the cause in plain language and offers the fallback backend, which it installs only if the user agrees.
 
 **Network choice.** Aji lists the networks in katagotraining.org Elo order and preselects the highest-rated one the chosen engine can load, the same on every machine, with no GPU tiers and no local measurement (roadmap O4). The user can pick another row. The human-style network (human SL) is an optional download.
 
@@ -224,6 +226,8 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | In-app download of KataGo, networks and runtime libraries | 1 | Not in LizzieYzy |
 | Automatic benchmark and config generation | 1 | Manual commands in LizzieYzy |
 | Engine lifecycle: restart, stop (frees GPU memory), and detection of a hung engine with one automatic restart | 1 | Hang detection is always on; it is an option in LizzieYzy (自动检测并重启卡死的引擎) |
+| A visit limit per move, empty for no limit (the default); changing it applies at once to the position under analysis (audit G3, M5) | 1 | One setting with no restart, instead of LizzieYzy's limits spread over several dialogs |
+| "Set up later" (暂不设置) on every wizard step: the main screen opens with no engine and one button to set it up, and the wizard comes back at the next launch until an engine is active (audit G2, M5) | 1 | |
 | Several engine profiles (different networks and parameters) with one-click switching | 2 | Simpler interface |
 | Rules, komi and board size, including sizes other than 19x19 | 2 | |
 | Engine log and raw protocol console | 2 | Replaces the GTP console (Gtp控制台) |
@@ -330,6 +334,7 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 |---|---|
 | High-DPI support | 1 |
 | First-run wizard | 1 |
+| About page: version, licence, source link, and every bundled licence text, readable offline (audit G4, M5) | 1 |
 | Simplified Chinese and English | 1 |
 | Light and dark themes; selectable board and stone styles | 2 |
 | Dockable, resizable panel layout with presets (matching LizzieYzy's default, classic, minimal, thinking and four-panel modes) | 2 |

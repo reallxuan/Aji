@@ -57,8 +57,9 @@ pub struct InstalledNetwork {
     pub imported: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct ThreadSpeed {
     pub threads: u32,
     pub visits_per_second: f64,
@@ -141,7 +142,7 @@ pub fn load_installed(path: &Path) -> Installed {
 }
 
 /// [`load_installed`], except that a record that exists but cannot be read is an error.
-fn read_installed(path: &Path) -> io::Result<Installed> {
+pub(super) fn read_installed(path: &Path) -> io::Result<Installed> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Installed::default()),

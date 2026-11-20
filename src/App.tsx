@@ -1,27 +1,58 @@
+import { panelMode } from './app/panelMode';
+import { usePanelStore } from './app/panelStore';
+import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
 import { MainFrame } from './layout/MainFrame';
 import { CandidateList } from './panel/CandidateList';
-import { EngineIndicator } from './panel/EngineIndicator';
 import { EngineStatus } from './panel/EngineStatus';
+import { NoEngine } from './panel/NoEngine';
+import { PanelHeader } from './panel/PanelHeader';
 import { VersionLine } from './panel/VersionLine';
-import { useThemeSync } from './theme/useThemeSync';
+import { AboutPanel } from './settings/AboutPanel';
+import { SettingsPanel } from './settings/SettingsPanel';
+import { useSettingsSync } from './settings/useSettingsSync';
+import { SetupPanel } from './setup/SetupPanel';
+import { useSetupProgress } from './setup/useSetupProgress';
+import { useWizardStore } from './setup/wizardStore';
 
 export default function App() {
-  useThemeSync();
+  useSettingsSync();
   useEngineSync();
+  useSetupProgress();
+  const engine = useEngineStore((s) => s.engine);
+  const open = useWizardStore((s) => s.open);
+  const dismissed = useWizardStore((s) => s.dismissed);
+  const job = useWizardStore((s) => s.job);
+  const view = usePanelStore((s) => s.view);
+  const mode = panelMode(engine, { open, dismissed }, view !== 'main', job);
+
   return (
     <MainFrame
       panel={
-        <>
-          <header className="flex justify-end px-6 py-4">
-            <EngineIndicator />
-          </header>
-          <EngineStatus />
-          <CandidateList />
-          <footer className="mt-auto">
-            <VersionLine />
-          </footer>
-        </>
+        mode === 'wizard' ? (
+          <SetupPanel />
+        ) : mode === 'settings' ? (
+          view === 'about' ? (
+            <AboutPanel />
+          ) : (
+            <SettingsPanel />
+          )
+        ) : (
+          <>
+            <PanelHeader />
+            {engine?.state === 'notConfigured' ? (
+              <NoEngine />
+            ) : (
+              <>
+                <EngineStatus />
+                <CandidateList />
+              </>
+            )}
+            <footer className="mt-auto">
+              <VersionLine />
+            </footer>
+          </>
+        )
       }
     />
   );

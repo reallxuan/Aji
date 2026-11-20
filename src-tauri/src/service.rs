@@ -8,13 +8,16 @@ use std::sync::Arc;
 use aji_engine::{Engine, EngineError, EngineEvent, EngineFiles};
 use aji_manager::Setup;
 use aji_manager::install::{
-    DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, StartError,
-    engine_files,
+    DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
+    StartError, engine_files,
 };
 use tokio::sync::watch;
 
 use crate::protocol::{AppEvent, AppInfo, ErrorCode, OsKind, ProtocolError, Request, Response};
-use crate::settings::{Settings, load_settings, record_accepted_licences, update_settings};
+use crate::settings::{
+    Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
+    update_settings,
+};
 
 /// Facts about this installation, and the services, that requests may need.
 #[derive(Clone)]
@@ -29,6 +32,8 @@ pub struct AppContext {
     pub files: Arc<dyn FilePicker>,
     /// The download source the installer reads; `setupSetDownloadSource` changes it.
     pub source: watch::Sender<DownloadSource>,
+    /// Where events go, for those a request causes (`settingsChanged`).
+    pub events: Arc<dyn EventSink>,
 }
 
 /// Asks the user for a file. Blocking: call it through `spawn_blocking`.
@@ -96,31 +101,50 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 analysis: status.analysis,
             })
         }
-        Request::EngineRestart => ctx.engine.restart().await.map(|()| Response::Ok),
+        Request::EngineRestart => {
+            refuse_while_held(ctx)?;
+            ctx.engine.restart().await.map(|()| Response::Ok)
+        }
         Request::EngineStop => ctx.engine.stop().await.map(|()| Response::Ok),
         Request::AnalysisPause => ctx.engine.pause().await.map(|()| Response::Ok),
-        Request::AnalysisResume => ctx.engine.resume().await.map(|()| Response::Ok),
-        Request::SetupDetect => Ok(Response::SetupDetect {
-            hardware: ctx.setup.hardware().await,
+        Request::AnalysisResume => {
+            refuse_while_held(ctx)?;
+            ctx.engine.resume().await.map(|()| Response::Ok)
+        }
+        Request::SetupDetect { refresh } => Ok(Response::SetupDetect {
+            hardware: match refresh {
+                true => ctx.setup.refresh().await,
+                false => ctx.setup.hardware().await,
+            },
         }),
         Request::SetupBackends => Ok(Response::SetupBackends {
             recommendation: ctx.setup.backends().await,
         }),
-        Request::SetupVersions { backend } => Ok(Response::SetupVersions {
-            versions: ctx.setup.versions(backend).await,
-        }),
+        Request::SetupVersions { backend } => {
+            let installed = ctx.installer.installed();
+            let mut versions = ctx.setup.versions(backend).await;
+            for choice in &mut versions {
+                choice.installed = installed.engines.contains_key(&choice.engine);
+            }
+            Ok(Response::SetupVersions { versions })
+        }
         Request::SetupNetworks { engine } => {
-            return match ctx.setup.networks(&engine).await {
-                Some(networks) => Ok(Response::SetupNetworks { networks }),
-                None => Err(unknown_engine(&engine)),
+            let Some(mut networks) = ctx.setup.networks(&engine).await else {
+                return Err(unknown_engine(&engine));
             };
+            let installed = ctx.installer.installed();
+            for choice in networks.networks.iter_mut().chain(networks.human.as_mut()) {
+                choice.installed = installed.networks.contains_key(&choice.network);
+            }
+            Ok(Response::SetupNetworks { networks })
         }
         Request::SetupLicences { engine } => return setup_licences(ctx, &engine),
         Request::SetupInstall {
             engine,
             network,
             accept_licences,
-        } => return setup_install(ctx, engine, network, accept_licences),
+            benchmark,
+        } => return setup_install(ctx, engine, network, accept_licences, benchmark),
         Request::SetupCancel => {
             ctx.installer.cancel();
             Ok(Response::Ok)
@@ -130,8 +154,59 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         }),
         Request::SetupSetDownloadSource { source } => return set_download_source(ctx, source),
         Request::SetupImportNetwork => return import_network(ctx).await,
+        Request::SetupInstalled => return setup_installed(ctx).await,
+        Request::SetupRemoveUnused => return remove_unused(ctx).await,
+        Request::SettingsGet => Ok(Response::Settings {
+            settings: load_settings(&ctx.settings_path)
+                .map(|s| s.ui)
+                .unwrap_or_default(),
+        }),
+        Request::SettingsSet { settings } => return set_settings(ctx, settings).await,
     }
     .map_err(Into::into)
+}
+
+/// Restart and resume would take the GPU back from a job's benchmark or test query.
+fn refuse_while_held(ctx: &AppContext) -> Result<(), ProtocolError> {
+    match ctx.installer.holds_engine() {
+        true => Err(error(
+            ErrorCode::EngineBusy,
+            "an install job is measuring the engine",
+        )),
+        false => Ok(()),
+    }
+}
+
+/// Saves the preferences, hands the visit limit to the engine, and tells every client.
+async fn set_settings(ctx: &AppContext, settings: UiSettings) -> Result<Response, ProtocolError> {
+    save_ui_settings(&ctx.settings_path, &settings)
+        .map_err(|e| error(ErrorCode::Internal, e.to_string()))?;
+    ctx.engine.set_visit_limit(settings.visit_limit).await?;
+    ctx.events.emit(AppEvent::SettingsChanged {
+        settings: settings.clone(),
+    });
+    Ok(Response::Settings { settings })
+}
+
+/// Walking the install folders blocks, so it runs on the blocking pool.
+async fn setup_installed(ctx: &AppContext) -> Result<Response, ProtocolError> {
+    let installer = Arc::clone(&ctx.installer);
+    tokio::task::spawn_blocking(move || Response::SetupInstalled {
+        active: installer.active_summary(),
+        unused_bytes: installer.unused_bytes(),
+    })
+    .await
+    .map_err(|e| error(ErrorCode::Internal, e.to_string()))
+}
+
+async fn remove_unused(ctx: &AppContext) -> Result<Response, ProtocolError> {
+    let installer = Arc::clone(&ctx.installer);
+    match tokio::task::spawn_blocking(move || installer.remove_unused()).await {
+        Ok(Ok(freed_bytes)) => Ok(Response::SetupRemoved { freed_bytes }),
+        Ok(Err(RemoveError::Busy)) => Err(error(ErrorCode::SetupBusy, "an install job is running")),
+        Ok(Err(RemoveError::Io(e))) => Err(error(ErrorCode::Internal, e)),
+        Err(e) => Err(error(ErrorCode::Internal, e.to_string())),
+    }
 }
 
 fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolError {
@@ -182,6 +257,7 @@ fn setup_install(
     engine: String,
     network: String,
     accept_licences: Vec<String>,
+    benchmark: bool,
 ) -> Result<Response, ProtocolError> {
     let licences = ctx
         .installer
@@ -201,6 +277,7 @@ fn setup_install(
         engine,
         network,
         accepted_licences: accepted,
+        benchmark,
     };
     match ctx.installer.start(request.clone()) {
         Ok(()) => Ok(Response::Ok),
@@ -274,6 +351,7 @@ mod tests {
     use aji_engine::EngineState;
     use aji_manager::install::{
         EngineSet, FailureCode, InstalledEngine, InstalledNetwork, JobOutcome, engine_files,
+        save_installed,
     };
     use aji_manager::manifest::Backend;
 
@@ -311,6 +389,17 @@ mod tests {
             settings_path: dir.join("config").join("settings.json"),
             files: Arc::new(Picks(picks)),
             source,
+            events: Arc::new(Recorded::default()),
+        }
+    }
+
+    /// Keeps every event, for tests that check what a request emits.
+    #[derive(Default)]
+    struct Recorded(Mutex<Vec<AppEvent>>);
+
+    impl EventSink for Recorded {
+        fn emit(&self, event: AppEvent) {
+            self.0.lock().unwrap().push(event);
         }
     }
 
@@ -345,6 +434,7 @@ mod tests {
                 engine: "nope".into(),
                 network: NETWORK.into(),
                 accept_licences: vec![CUDA_EULA.into()],
+                benchmark: false,
             },
         )
         .await
@@ -370,6 +460,7 @@ mod tests {
                 engine: CUDA_ENGINE.into(),
                 network: "nope".into(),
                 accept_licences: vec![],
+                benchmark: false,
             },
         )
         .await
@@ -452,6 +543,7 @@ mod tests {
                 network: NETWORK.into(),
                 // A hash that is not one of this engine's licences is not recorded.
                 accept_licences: vec![CUDA_EULA.into(), "not-a-licence".into()],
+                benchmark: false,
             },
         )
         .await;
@@ -504,6 +596,7 @@ mod tests {
                 engine: CUDA_ENGINE.into(),
                 network: NETWORK.into(),
                 accept_licences: vec![],
+                benchmark: false,
             },
         )
         .await;
@@ -658,6 +751,74 @@ mod tests {
         assert_eq!(versions[0].version, "1.18.2");
     }
 
+    async fn metal_versions(ctx: &AppContext) -> Vec<aji_manager::recommend::EngineVersionChoice> {
+        let Ok(Response::SetupVersions { versions }) = handle(
+            ctx,
+            Request::SetupVersions {
+                backend: Backend::Metal,
+            },
+        )
+        .await
+        else {
+            panic!("expected setupVersions");
+        };
+        versions
+    }
+
+    #[tokio::test]
+    async fn setup_lists_mark_what_is_already_downloaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        let engine = metal_versions(&ctx).await[0].engine.clone();
+        let Ok(Response::SetupNetworks { networks }) = handle(
+            &ctx,
+            Request::SetupNetworks {
+                engine: engine.clone(),
+            },
+        )
+        .await
+        else {
+            panic!("expected setupNetworks");
+        };
+        assert!(networks.networks.len() > 1);
+        assert!(networks.networks.iter().all(|n| !n.installed));
+        let network = networks.networks[1].network.clone();
+
+        let root = InstallRoot::new(dir.path().join("data"));
+        let mut installed = Installed::default();
+        installed.engines.insert(
+            engine.clone(),
+            InstalledEngine {
+                backend: Backend::Metal,
+                version: "1.18.2".into(),
+                binary: "katago".into(),
+            },
+        );
+        installed.networks.insert(
+            network.clone(),
+            InstalledNetwork {
+                file: format!("{network}.bin.gz"),
+                name: network.clone(),
+                imported: false,
+            },
+        );
+        save_installed(&root.record_file(), &installed).unwrap();
+
+        assert!(metal_versions(&ctx).await[0].installed);
+        let Ok(Response::SetupNetworks { networks }) =
+            handle(&ctx, Request::SetupNetworks { engine }).await
+        else {
+            panic!("expected setupNetworks");
+        };
+        let marked: Vec<&str> = networks
+            .networks
+            .iter()
+            .filter(|n| n.installed)
+            .map(|n| n.network.as_str())
+            .collect();
+        assert_eq!(marked, [network.as_str()]);
+    }
+
     #[tokio::test]
     async fn setup_networks_for_an_unknown_engine_is_an_error() {
         let error = handle(
@@ -674,7 +835,7 @@ mod tests {
     #[tokio::test]
     async fn setup_detect_returns_the_report() {
         assert_eq!(
-            handle(&ctx(), Request::SetupDetect).await,
+            handle(&ctx(), Request::SetupDetect { refresh: false }).await,
             Ok(Response::SetupDetect {
                 hardware: apple_m5()
             })
@@ -736,6 +897,118 @@ mod tests {
             vec![AppEvent::EngineState {
                 engine: EngineState::Starting
             }]
+        );
+    }
+
+    // ------------------------------------------------------------ M5
+
+    #[tokio::test]
+    async fn settings_set_saves_applies_and_emits() {
+        use crate::settings::{DiscField, LanguagePreference, ThemePreference};
+        let dir = tempfile::tempdir().unwrap();
+        let mut ctx = ctx_in(dir.path(), None);
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        let settings = UiSettings {
+            language: LanguagePreference::En,
+            theme: ThemePreference::Light,
+            disc_lines: [DiscField::ScoreLead, DiscField::Visits],
+            visit_limit: Some(800),
+        };
+        assert_eq!(
+            handle(
+                &ctx,
+                Request::SettingsSet {
+                    settings: settings.clone()
+                }
+            )
+            .await,
+            Ok(Response::Settings {
+                settings: settings.clone()
+            })
+        );
+        assert_eq!(load_settings(&ctx.settings_path).unwrap().ui, settings);
+        assert_eq!(
+            handle(&ctx, Request::SettingsGet).await,
+            Ok(Response::Settings {
+                settings: settings.clone()
+            })
+        );
+        assert_eq!(
+            *recorded.0.lock().unwrap(),
+            [AppEvent::SettingsChanged { settings }]
+        );
+    }
+
+    #[tokio::test]
+    async fn settings_get_without_a_file_gives_the_defaults() {
+        assert_eq!(
+            handle(&ctx(), Request::SettingsGet).await,
+            Ok(Response::Settings {
+                settings: UiSettings::default()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn restart_is_refused_while_the_installer_holds_the_engine() {
+        let ctx = ctx();
+        ctx.installer.set_holds_engine(true);
+        for request in [Request::EngineRestart, Request::AnalysisResume] {
+            assert_eq!(
+                handle(&ctx, request).await.unwrap_err().code,
+                ErrorCode::EngineBusy
+            );
+        }
+        ctx.installer.set_holds_engine(false);
+        assert_eq!(
+            handle(&ctx, Request::EngineRestart).await.unwrap_err().code,
+            ErrorCode::EngineNotConfigured
+        );
+    }
+
+    #[tokio::test]
+    async fn detect_with_refresh_redetects() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let mut ctx = ctx();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&calls);
+        ctx.setup = Arc::new(Setup::with_detector(
+            aji_manager::manifest::ManifestStore::fixed(
+                aji_manager::manifest::parse_manifest(aji_manager::manifest::BUNDLED).unwrap(),
+            ),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                apple_m5()
+            }),
+        ));
+        handle(&ctx, Request::SetupDetect { refresh: false })
+            .await
+            .unwrap();
+        handle(&ctx, Request::SetupDetect { refresh: false })
+            .await
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        handle(&ctx, Request::SetupDetect { refresh: true })
+            .await
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn installed_reports_no_active_set_on_an_empty_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        assert_eq!(
+            handle(&ctx, Request::SetupInstalled).await,
+            Ok(Response::SetupInstalled {
+                active: None,
+                unused_bytes: 0
+            })
+        );
+        assert_eq!(
+            handle(&ctx, Request::SetupRemoveUnused).await,
+            Ok(Response::SetupRemoved { freed_bytes: 0 })
         );
     }
 }

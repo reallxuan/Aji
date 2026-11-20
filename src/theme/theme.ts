@@ -1,5 +1,6 @@
 export type Theme = 'dark' | 'light';
-export type ThemePreference = 'system' | Theme;
+export type { ThemePreference } from '../transport/generated/ThemePreference';
+import type { ThemePreference } from '../transport/generated/ThemePreference';
 
 export const DARK_QUERY = '(prefers-color-scheme: dark)';
 export const LIGHT_QUERY = '(prefers-color-scheme: light)';

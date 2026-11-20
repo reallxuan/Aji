@@ -14,6 +14,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   setupUnknownNetwork: true,
   setupImportFailed: true,
   setupInvalidSource: true,
+  engineBusy: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {
@@ -29,6 +30,7 @@ const FAILURE_CODES: Record<FailureCode, true> = {
   licenceNotAccepted: true,
   timedOut: true,
   crashed: true,
+  diskError: true,
 };
 
 type Tree = { [key: string]: unknown };

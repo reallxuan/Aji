@@ -16,7 +16,7 @@ use aji_manager::hardware::{CpuReport, HardwareReport, OsReport};
 use aji_manager::install::{
     DownloadSource, FreeSpace, InstallOptions, InstallRoot, Installer, InstallerParts, JobSnapshot,
 };
-use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, http_client};
+use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, Platform, http_client};
 use serde_json::{Value, json};
 use tauri::Listener;
 use tauri::ipc::{CallbackFn, InvokeBody};
@@ -83,6 +83,8 @@ fn context() -> AppContext {
         source: source.subscribe(),
         space: Arc::new(NoSpace),
         options: InstallOptions::default(),
+        // The tests name the bundled manifest's Linux engines.
+        platform: Some(Platform::LinuxX64),
     };
     // Jobs run on the runtime current when the installer is made: Tauri's.
     let installer =
@@ -97,7 +99,15 @@ fn context() -> AppContext {
         settings_path: PathBuf::from("no-such-aji-folder").join("settings.json"),
         files: Arc::new(Cancelled),
         source,
+        events: Arc::new(Discard),
     }
+}
+
+/// Drops events a request causes; these tests check replies only.
+struct Discard;
+
+impl aji_lib::service::EventSink for Discard {
+    fn emit(&self, _: aji_lib::protocol::AppEvent) {}
 }
 
 fn invoke_rpc(body: Value) -> Result<Value, Value> {
@@ -217,6 +227,8 @@ fn setup_progress_events_reach_the_webview_channel() {
         network: "n".into(),
         tasks: vec![],
         outcome: None,
+        measures: false,
+        benchmark: None,
     };
     TauriEventSink(app.handle().clone()).emit(AppEvent::SetupProgress { job });
     let payloads = received.lock().unwrap();
