@@ -2,6 +2,7 @@
 //! No I/O, no async, no OS calls.
 
 mod coords;
+pub mod game;
 mod position;
 pub mod sgf;
 
