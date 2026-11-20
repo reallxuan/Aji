@@ -11,7 +11,7 @@ use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsR
 use aji_manager::install::{
     DownloadSource, FreeSpace, InstallOptions, InstallRoot, Installer, InstallerParts,
 };
-use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, http_client};
+use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, Platform, http_client};
 use tokio::sync::watch;
 
 use crate::protocol::OsKind;
@@ -112,6 +112,8 @@ pub fn installer(
             source,
             space: Arc::new(NoSpace),
             options: InstallOptions::default(),
+            // The service tests install the bundled manifest's Windows CUDA engine.
+            platform: Some(Platform::WindowsX64),
         },
         |_| {},
     )

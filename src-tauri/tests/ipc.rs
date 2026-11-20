@@ -16,7 +16,7 @@ use aji_manager::hardware::{CpuReport, HardwareReport, OsReport};
 use aji_manager::install::{
     DownloadSource, FreeSpace, InstallOptions, InstallRoot, Installer, InstallerParts, JobSnapshot,
 };
-use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, http_client};
+use aji_manager::manifest::{BUNDLED, ClientOptions, ManifestStore, Platform, http_client};
 use serde_json::{Value, json};
 use tauri::Listener;
 use tauri::ipc::{CallbackFn, InvokeBody};
@@ -83,6 +83,8 @@ fn context() -> AppContext {
         source: source.subscribe(),
         space: Arc::new(NoSpace),
         options: InstallOptions::default(),
+        // The tests name the bundled manifest's Linux engines.
+        platform: Some(Platform::LinuxX64),
     };
     // Jobs run on the runtime current when the installer is made: Tauri's.
     let installer =

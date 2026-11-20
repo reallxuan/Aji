@@ -33,6 +33,30 @@ pub enum ImportError {
 /// Copies `file` while hashing it to `networks/imported-<16 hex>.bin.gz` and records it with
 /// `imported: true`. The caller serialises record writes. Blocking: it copies the whole file.
 pub fn import_network(root: &InstallRoot, file: &Path) -> Result<ImportedNetwork, ImportError> {
+    let (imported, network) = copy_network(root, file)?;
+    record_network(root, &imported.id, network)?;
+    Ok(imported)
+}
+
+/// Records a copied network as imported. The caller serialises record writes.
+pub fn record_network(
+    root: &InstallRoot,
+    id: &str,
+    network: InstalledNetwork,
+) -> Result<(), ImportError> {
+    let record_file = root.record_file();
+    update_installed(&record_file, |record| {
+        record.networks.insert(id.to_string(), network);
+    })
+    .map(|_| ())
+    .map_err(|e| ImportError::Io(format!("{}: {e}", record_file.display())))
+}
+
+/// The copy half of [`import_network`]: no record is touched, so no lock is needed.
+pub fn copy_network(
+    root: &InstallRoot,
+    file: &Path,
+) -> Result<(ImportedNetwork, InstalledNetwork), ImportError> {
     let io_error = |path: &Path, e: io::Error| ImportError::Io(format!("{}: {e}", path.display()));
     let mut source = File::open(file).map_err(|e| io_error(file, e))?;
     let mut magic = [0u8; 2];
@@ -61,21 +85,19 @@ pub fn import_network(root: &InstallRoot, file: &Path) -> Result<ImportedNetwork
         return Err(io_error(&dest, e));
     }
     let name = display_name(file).unwrap_or_else(|| id.clone());
-    let record_file = root.record_file();
     let network = InstalledNetwork {
         file: file_name,
         name: name.clone(),
         imported: true,
     };
-    update_installed(&record_file, |record| {
-        record.networks.insert(id.clone(), network);
-    })
-    .map_err(|e| io_error(&record_file, e))?;
-    Ok(ImportedNetwork {
-        id,
-        name,
-        size_bytes,
-    })
+    Ok((
+        ImportedNetwork {
+            id,
+            name,
+            size_bytes,
+        },
+        network,
+    ))
 }
 
 /// Writes `magic` and the rest of `source` to `dest`, returning the SHA-256 in hex and the

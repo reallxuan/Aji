@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,7 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
+use super::unused::{ActiveSummary, RemoveError};
 use super::{
     DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader, EngineSet,
     FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed, InstalledEngine,
@@ -23,7 +25,7 @@ use super::{
     unpack_runtime, update_installed,
 };
 use crate::atomic::write_atomically;
-use crate::manifest::{self, Backend, Network, Runtime, archive_file_name};
+use crate::manifest::{self, Backend, Network, Platform, Runtime, archive_file_name};
 use crate::recommend::DriverAdvice;
 use crate::setup::Setup;
 
@@ -70,6 +72,9 @@ pub struct InstallerParts {
     pub source: watch::Receiver<DownloadSource>,
     pub space: Arc<dyn FreeSpace>,
     pub options: InstallOptions,
+    /// Where the engines will run: `Platform::this()` in the app. An engine for another
+    /// platform is refused, and `None` refuses every engine.
+    pub platform: Option<Platform>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +204,7 @@ pub struct Installer {
     source: watch::Receiver<DownloadSource>,
     space: Arc<dyn FreeSpace>,
     options: InstallOptions,
+    platform: Option<Platform>,
     runtime: Handle,
     on_progress: Box<dyn Fn(JobSnapshot) + Send + Sync>,
     jobs: Mutex<Jobs>,
@@ -206,6 +212,10 @@ pub struct Installer {
     record: Mutex<()>,
     /// True while no job runs.
     idle: watch::Sender<bool>,
+    /// True while a job has the GPU for its benchmark and test query.
+    holds_engine: AtomicBool,
+    #[cfg(feature = "test-seams")]
+    panic_next: AtomicBool,
 }
 
 struct Jobs {
@@ -283,6 +293,7 @@ impl Installer {
             source: parts.source,
             space: parts.space,
             options: parts.options,
+            platform: parts.platform,
             runtime: Handle::current(),
             on_progress: Box::new(on_progress),
             jobs: Mutex::new(Jobs {
@@ -292,7 +303,22 @@ impl Installer {
             }),
             record: Mutex::new(()),
             idle: watch::Sender::new(true),
+            holds_engine: AtomicBool::new(false),
+            #[cfg(feature = "test-seams")]
+            panic_next: AtomicBool::new(false),
         })
+    }
+
+    /// Makes the next job panic once it has the engine. Tests only.
+    #[cfg(feature = "test-seams")]
+    pub fn panic_next_job(&self) {
+        self.panic_next.store(true, Ordering::SeqCst);
+    }
+
+    /// True while a job has stopped the engine for its benchmark and test query: restarting or
+    /// resuming the engine then would skew the numbers.
+    pub fn holds_engine(&self) -> bool {
+        self.holds_engine.load(Ordering::SeqCst)
     }
 
     pub fn start(self: &Arc<Self>, request: InstallRequest) -> Result<(), StartError> {
@@ -303,6 +329,7 @@ impl Installer {
             .iter()
             .find(|e| e.id == request.engine)
             .cloned()
+            .filter(|e| Some(e.platform) == self.platform)
             .ok_or(StartError::UnknownEngine)?;
         let runtime = match &engine.runtime {
             None => None,
@@ -316,6 +343,14 @@ impl Installer {
             ),
         };
         let network = match manifest.networks.iter().find(|n| n.id == request.network) {
+            Some(network)
+                if network
+                    .min_engine_version
+                    .as_ref()
+                    .is_some_and(|min| *min > engine.version) =>
+            {
+                return Err(StartError::UnknownNetwork);
+            }
             Some(network) => JobNetwork::Manifest(Box::new(network.clone())),
             None if self
                 .installed()
@@ -428,8 +463,52 @@ impl Installer {
 
     /// See `import_network`. Blocking: call it off the async runtime.
     pub fn import_network(&self, file: &Path) -> Result<ImportedNetwork, ImportError> {
+        // The copy can take a while: only the record write holds the lock.
+        let (imported, network) = super::copy_network(&self.root, file)?;
         let _record = lock(&self.record);
-        super::import_network(&self.root, file)
+        super::record_network(&self.root, &imported.id, network)?;
+        Ok(imported)
+    }
+
+    /// The active set, as the settings page shows it.
+    pub fn active_summary(&self) -> Option<ActiveSummary> {
+        super::unused::active_summary(&self.installed())
+    }
+
+    /// The bytes [`Installer::remove_unused`] would free. Blocking: it walks the folders.
+    pub fn unused_bytes(&self) -> u64 {
+        let installed = self.installed();
+        super::unused::unused_paths(&self.root, &installed)
+            .iter()
+            .map(|p| super::unused::size_of(p))
+            .sum()
+    }
+
+    /// Deletes everything the active set does not use and drops it from the record. Refused
+    /// while a job runs, since its staging folder and part files are in use. Blocking.
+    pub fn remove_unused(&self) -> Result<u64, RemoveError> {
+        let jobs = lock(&self.jobs);
+        if jobs.current.is_some() {
+            return Err(RemoveError::Busy);
+        }
+        let _record = lock(&self.record);
+        let path = self.root.record_file();
+        // Strict: a record that cannot be read would look like one with no active set, and
+        // everything, the engine in use included, would count as unused.
+        let installed = super::record::read_installed(&path)
+            .map_err(|e| RemoveError::Io(format!("{}: {e}", path.display())))?;
+        let mut freed = 0;
+        for unused in super::unused::unused_paths(&self.root, &installed) {
+            let size = super::unused::size_of(&unused);
+            super::unused::remove_path(&unused)
+                .map_err(|e| RemoveError::Io(format!("{}: {e}", unused.display())))?;
+            freed += size;
+        }
+        let kept = super::unused::only_active(&installed);
+        update_installed(&path, |record| *record = kept)
+            .map_err(|e| RemoveError::Io(format!("{}: {e}", path.display())))?;
+        drop(jobs);
+        Ok(freed)
     }
 
     pub fn installed(&self) -> Installed {
@@ -439,19 +518,31 @@ impl Installer {
 
     async fn run(self: Arc<Self>, job: Job) {
         let job = Arc::new(job);
+        let was_running = engine_runs(&self.engine.state());
         let work = {
             let (this, job) = (Arc::clone(&self), Arc::clone(&job));
             self.runtime.spawn(async move { this.work(&job).await })
         };
-        // A panic in the job still ends it, so the installer is never stuck busy.
-        let result = work.await.unwrap_or_else(|e| {
-            Err(Stop::failed(
-                FailureCode::Crashed,
-                format!("aji: the install job failed: {e}"),
-                false,
-                None,
-            ))
-        });
+        // A panic in the job still ends it, so the installer is never stuck busy, and the
+        // engine it may have stopped runs again.
+        let result = match work.await {
+            Ok(result) => result,
+            Err(e) => {
+                self.holds_engine.store(false, Ordering::SeqCst);
+                if was_running
+                    && !engine_runs(&self.engine.state())
+                    && let Err(e) = self.engine.restart().await
+                {
+                    eprintln!("aji: cannot restart the engine after the job failed: {e}");
+                }
+                Err(Stop::failed(
+                    FailureCode::Crashed,
+                    format!("aji: the install job failed: {e}"),
+                    false,
+                    None,
+                ))
+            }
+        };
         let outcome = match result {
             Ok(()) => JobOutcome::Installed,
             Err(Stop::Cancelled) => JobOutcome::Cancelled,
@@ -507,15 +598,14 @@ impl Installer {
             return Err(Stop::Cancelled);
         }
         // The benchmark needs the GPU to itself.
-        let was_running = matches!(
-            self.engine.state(),
-            EngineState::Starting
-                | EngineState::Ready { .. }
-                | EngineState::Analysing { .. }
-                | EngineState::Paused { .. }
-        );
+        self.holds_engine.store(true, Ordering::SeqCst);
+        let was_running = engine_runs(&self.engine.state());
         if was_running && let Err(e) = self.engine.stop().await {
             eprintln!("aji: cannot stop the running engine: {e}");
+        }
+        #[cfg(feature = "test-seams")]
+        if self.panic_next.swap(false, Ordering::SeqCst) {
+            panic!("the test seam made the job panic");
         }
         let result = match self.measure_and_test(job).await {
             Ok(set) => self.activate(set).await,
@@ -527,6 +617,7 @@ impl Installer {
         {
             eprintln!("aji: cannot restart the engine that ran before: {e}");
         }
+        self.holds_engine.store(false, Ordering::SeqCst);
         result
     }
 
@@ -818,10 +909,12 @@ impl Installer {
             TaskKind::TestQuery,
             TaskState::Running { done: 0, total: 1 },
         );
-        let config_rel = self.root.config_rel(engine, network);
-        self.write_config(&config_rel, &analysis_config(threads, &job.engine.config))
+        // The test runs on a pending copy: the active set's config, when this is the same set,
+        // stays untouched until the test passes (`activate` renames it into place).
+        let pending_rel = self.root.pending_config_rel(engine, network);
+        self.write_config(&pending_rel, &analysis_config(threads, &job.engine.config))
             .map_err(|line| disk_stop(line, Some(TaskKind::TestQuery)))?;
-        set.config = slashed(&config_rel);
+        set.config = slashed(&pending_rel);
         set.threads = threads;
         set.benchmark = speeds;
         let files = engine_files(&self.root, &installed, &set)
@@ -844,7 +937,20 @@ impl Installer {
 
     /// Records the set as active, then switches the running engine to it. Past the test query
     /// a cancel no longer applies.
-    async fn activate(&self, set: EngineSet) -> Result<(), Stop> {
+    async fn activate(&self, mut set: EngineSet) -> Result<(), Stop> {
+        let config_rel = self.root.config_rel(&set.engine, &set.network);
+        let pending = self
+            .root
+            .root()
+            .join(self.root.pending_config_rel(&set.engine, &set.network));
+        let config = self.root.root().join(&config_rel);
+        fs::rename(&pending, &config).map_err(|e| {
+            disk_stop(
+                format!("aji: cannot move {} into place: {e}", config.display()),
+                None,
+            )
+        })?;
+        set.config = slashed(&config_rel);
         let key = set.key();
         let record = self
             .write_record(|r| {
@@ -991,6 +1097,16 @@ impl Installer {
             (self.on_progress)(snapshot);
         }
     }
+}
+
+fn engine_runs(state: &EngineState) -> bool {
+    matches!(
+        state,
+        EngineState::Starting
+            | EngineState::Ready { .. }
+            | EngineState::Analysing { .. }
+            | EngineState::Paused { .. }
+    )
 }
 
 /// A failed write inside the install root: no other backend would fare better.

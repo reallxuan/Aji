@@ -141,7 +141,7 @@ pub fn load_installed(path: &Path) -> Installed {
 }
 
 /// [`load_installed`], except that a record that exists but cannot be read is an error.
-fn read_installed(path: &Path) -> io::Result<Installed> {
+pub(super) fn read_installed(path: &Path) -> io::Result<Installed> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Installed::default()),

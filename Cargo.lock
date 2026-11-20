@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "aji-core",
  "aji-engine",
+ "aji-manager",
  "ct-codecs",
  "fs4",
  "libc",

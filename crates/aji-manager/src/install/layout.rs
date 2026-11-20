@@ -47,6 +47,12 @@ impl InstallRoot {
         Path::new("configs").join(format!("{engine}+{network}.cfg"))
     }
 
+    /// `configs/<engine>+<network>.pending.cfg`, relative to the root: the analysis config a
+    /// job tests before it replaces `config_rel`.
+    pub fn pending_config_rel(&self, engine: &str, network: &str) -> PathBuf {
+        Path::new("configs").join(format!("{engine}+{network}.pending.cfg"))
+    }
+
     /// `configs/<engine>+<network>.benchmark.cfg`, relative to the root.
     pub fn benchmark_config_rel(&self, engine: &str, network: &str) -> PathBuf {
         Path::new("configs").join(format!("{engine}+{network}.benchmark.cfg"))

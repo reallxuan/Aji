@@ -19,7 +19,7 @@ use aji_manager::install::{
     SystemFreeSpace, load_installed,
 };
 use aji_manager::manifest::{
-    BUNDLED, ClientOptions, MANIFEST_BASES, ManifestStore, http_client, trusted_keys,
+    BUNDLED, ClientOptions, MANIFEST_BASES, ManifestStore, Platform, http_client, trusted_keys,
 };
 use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
@@ -169,6 +169,7 @@ fn start_installer(
         source,
         space: Arc::new(SystemFreeSpace),
         options: InstallOptions::default(),
+        platform: Platform::this(),
     };
     let logged = dev_install::dev_install_value().map(|_| Mutex::new(None::<JobSnapshot>));
     let on_progress = move |job: JobSnapshot| {

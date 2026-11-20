@@ -14,10 +14,11 @@ use aji_engine::{EngineOptions, EngineState};
 use aji_manager::Setup;
 use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsKind, OsReport};
 use aji_manager::install::{
-    DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace, ImportError,
-    InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork, Installer,
-    InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent, SPACE_MARGIN, SetKey,
-    StartError, TaskKind, TaskState, import_network, load_installed,
+    ActiveSummary, DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace,
+    ImportError, InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork,
+    Installer, InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent,
+    RemoveError, SPACE_MARGIN, SetKey, StartError, TaskKind, TaskState, import_network,
+    load_installed,
 };
 use aji_manager::manifest::{
     Archive, Backend, ClientOptions, Digest, Engine, FileRef, Licence, Manifest, ManifestStore,
@@ -82,6 +83,10 @@ struct Spec {
     root_name: &'static str,
     report: HardwareReport,
     runtime_min_driver: Option<String>,
+    /// The platform the installer runs on.
+    platform: Option<Platform>,
+    /// The network's `minEngineVersion`.
+    network_min_engine: Option<semver::Version>,
 }
 
 impl Default for Spec {
@@ -98,6 +103,8 @@ impl Default for Spec {
             root_name: "aji",
             report: report(),
             runtime_min_driver: None,
+            platform: Some(Platform::LinuxX64),
+            network_min_engine: None,
         }
     }
 }
@@ -227,7 +234,7 @@ fn world(spec: Spec) -> World {
         elo: None,
         elo_games: None,
         uploaded: "2026-01-01".into(),
-        min_engine_version: None,
+        min_engine_version: spec.network_min_engine.clone(),
         file: file_ref(&server, "/net.bin.gz", &net, md5),
         licence: NetworkLicence {
             name: "KataGo network licence".into(),
@@ -309,6 +316,7 @@ fn world(spec: Spec) -> World {
             source,
             space: Arc::new(Space(spec.space)),
             options,
+            platform: spec.platform,
         },
         move |snapshot| seen.lock().unwrap().push(snapshot),
     );
@@ -1024,4 +1032,256 @@ async fn licences_list_their_components() {
             bytes: runtime_zip.len() as u64,
         }]
     );
+}
+
+// ---------------------------------------------------------------- M5: robustness and unused files
+
+#[tokio::test]
+async fn a_same_set_reinstall_keeps_the_active_config_until_its_test_passes() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let config = w.root.root().join(w.root.config_rel(OPENCL, NET));
+    let before = std::fs::read(&config).unwrap();
+    // The reused package now benchmarks differently (8 threads win) and fails its test query.
+    let scenario = json!({
+        "benchmark": { "visitsPerSecond": { "8": 200.0, "16": 100.0, "32": 100.0 } },
+        "failure": { "during": "query", "stderr": ["boom"], "exitCode": 1 },
+        "transcript": "analysis.jsonl"
+    });
+    std::fs::write(
+        w.root.engine_dir(OPENCL).join("fake-katago-scenario.json"),
+        serde_json::to_vec(&scenario).unwrap(),
+    )
+    .unwrap();
+    failed(&w.install(OPENCL).await);
+    assert_eq!(std::fs::read(&config).unwrap(), before);
+    assert_eq!(w.record().active, key(OPENCL));
+}
+
+#[tokio::test]
+async fn a_panicking_job_restarts_the_previous_engine() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.engine_runs().await;
+    w.installer.panic_next_job();
+    let (failure, _, offer) = failed(&w.install(OPENCL).await);
+    assert_eq!(failure, FailureCode::Crashed);
+    assert_eq!(offer, None);
+    assert!(!w.installer.holds_engine());
+    w.engine_runs().await;
+    assert_eq!(w.record().active, key(EIGEN));
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn importing_does_not_block_status() {
+    use std::io::Write;
+    let w = world(Spec::default());
+    let dir = tempfile::tempdir().unwrap();
+    let fifo = dir.path().join("net.bin.gz");
+    let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    let installer = Arc::clone(&w.installer);
+    let source = fifo.clone();
+    let import = std::thread::spawn(move || installer.import_network(&source));
+    // The writer feeds the magic bytes, then holds the pipe open: the copy waits for more.
+    let mut writer = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+    writer.write_all(&[0x1f, 0x8b, 1, 2, 3]).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    let installer = Arc::clone(&w.installer);
+    let reader = std::thread::spawn(move || installer.installed());
+    let started = std::time::Instant::now();
+    while !reader.is_finished() {
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "installed() waited for the copy"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    drop(writer);
+    let imported = import.join().unwrap().unwrap();
+    assert!(w.record().networks.contains_key(&imported.id));
+}
+
+#[tokio::test]
+async fn start_refuses_an_engine_for_another_platform() {
+    let w = world(Spec {
+        platform: Some(Platform::WindowsX64),
+        ..Spec::default()
+    });
+    assert_eq!(
+        w.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownEngine)
+    );
+    let unsupported = world(Spec {
+        platform: None,
+        ..Spec::default()
+    });
+    assert_eq!(
+        unsupported.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownEngine)
+    );
+}
+
+#[tokio::test]
+async fn start_refuses_a_network_the_engine_cannot_load() {
+    let w = world(Spec {
+        network_min_engine: Some(semver::Version::new(1, 19, 0)),
+        ..Spec::default()
+    });
+    assert_eq!(
+        w.installer.start(request(OPENCL, NET, &[])),
+        Err(StartError::UnknownNetwork)
+    );
+}
+
+fn dir_bytes(path: &Path) -> u64 {
+    match std::fs::metadata(path) {
+        Ok(m) if m.is_file() => m.len(),
+        Ok(_) => std::fs::read_dir(path)
+            .unwrap()
+            .map(|e| dir_bytes(&e.unwrap().path()))
+            .sum(),
+        Err(_) => 0,
+    }
+}
+
+#[tokio::test]
+async fn unused_counts_everything_outside_the_active_set() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.record().active, key(EIGEN));
+    let staging = w.root.root().join("staging").join("x");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("big"), vec![0u8; 1000]).unwrap();
+    std::fs::create_dir_all(w.root.downloads_dir()).unwrap();
+    std::fs::write(w.root.downloads_dir().join("y.part"), vec![0u8; 300]).unwrap();
+    let expected = dir_bytes(&w.root.engine_dir(OPENCL))
+        + 1000
+        + 300
+        + dir_bytes(&w.root.root().join(w.root.config_rel(OPENCL, NET)))
+        + dir_bytes(&w.root.root().join(w.root.benchmark_config_rel(OPENCL, NET)));
+    assert_eq!(w.installer.unused_bytes(), expected);
+}
+
+#[tokio::test]
+async fn remove_unused_deletes_them_and_keeps_the_active_set() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    std::fs::create_dir_all(w.root.root().join("staging").join("x")).unwrap();
+    let unused = w.installer.unused_bytes();
+    assert_eq!(w.installer.remove_unused(), Ok(unused));
+    assert_eq!(w.installer.unused_bytes(), 0);
+    assert!(!w.root.engine_dir(OPENCL).exists());
+    assert!(!w.root.root().join("staging").join("x").exists());
+    let record = w.record();
+    assert_eq!(record.engines.keys().collect::<Vec<_>>(), [EIGEN]);
+    assert_eq!(record.sets.len(), 1);
+    assert_eq!(record.active, key(EIGEN));
+    assert_eq!(
+        w.installer.active_summary(),
+        Some(ActiveSummary {
+            engine: EIGEN.into(),
+            version: "1.18.2".into(),
+            backend: Backend::Eigenavx2,
+            network: NET.into(),
+            network_name: NET.into(),
+            threads: 8,
+        })
+    );
+}
+
+#[tokio::test]
+async fn remove_unused_with_no_active_set_removes_everything() {
+    let w = world(Spec {
+        opencl: failing_benchmark(),
+        ..Spec::default()
+    });
+    failed(&w.install(OPENCL).await);
+    assert!(w.installer.unused_bytes() > 0);
+    assert_eq!(w.installer.active_summary(), None);
+    w.installer.remove_unused().unwrap();
+    let record = w.record();
+    assert!(
+        record.engines.is_empty() && record.networks.is_empty(),
+        "{record:?}"
+    );
+    assert!(!w.root.network_file("net.bin.gz").exists());
+}
+
+#[tokio::test]
+async fn remove_unused_deletes_nothing_when_the_record_cannot_be_read() {
+    // An unreadable record must not read as "no active set", which would delete the engine in
+    // use.
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let record = w.root.record_file();
+    let aside = record.with_extension("aside");
+    std::fs::rename(&record, &aside).unwrap();
+    std::fs::create_dir(&record).unwrap();
+
+    assert!(matches!(
+        w.installer.remove_unused(),
+        Err(RemoveError::Io(_))
+    ));
+    assert!(w.root.engine_dir(OPENCL).exists());
+    assert!(w.root.network_file("net.bin.gz").exists());
+
+    std::fs::remove_dir(&record).unwrap();
+    std::fs::rename(&aside, &record).unwrap();
+    assert_eq!(w.record().active, key(OPENCL));
+}
+
+#[tokio::test]
+async fn remove_unused_is_refused_while_a_job_runs() {
+    let w = world(Spec {
+        modes: HashMap::from([("/net.bin.gz", FileMode::StallAfter(1000))]),
+        download_stall: Duration::from_secs(30),
+        ..Spec::default()
+    });
+    w.installer.start(request(OPENCL, NET, &[])).unwrap();
+    w.row_reaches(TaskKind::Network, 0).await;
+    assert_eq!(w.installer.remove_unused(), Err(RemoveError::Busy));
+    w.installer.cancel();
+    w.finished().await;
+}
+
+#[tokio::test]
+async fn holds_engine_is_true_only_during_the_benchmark_and_test() {
+    let w = world(Spec::default());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    assert!(!w.installer.holds_engine());
+    w.installer.start(request(OPENCL, NET, &[])).unwrap();
+    let installer = Arc::clone(&w.installer);
+    let record = Arc::clone(&seen);
+    let watcher = tokio::spawn(async move {
+        loop {
+            let status = installer.status().unwrap();
+            let benchmark = state_of(&status, TaskKind::Benchmark);
+            record
+                .lock()
+                .unwrap()
+                .push((benchmark, installer.holds_engine()));
+            if status.outcome.is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    });
+    w.finished().await;
+    watcher.await.unwrap();
+    let seen = seen.lock().unwrap();
+    assert!(
+        seen.iter()
+            .any(|(b, held)| matches!(b, Some(TaskState::Running { .. })) && *held),
+        "{seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .all(|(b, held)| !held || !matches!(b, Some(TaskState::Waiting))),
+        "{seen:?}"
+    );
+    assert!(!w.installer.holds_engine());
 }

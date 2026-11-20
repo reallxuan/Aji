@@ -40,6 +40,18 @@ pub enum Platform {
     Unknown,
 }
 
+impl Platform {
+    /// The platform this build of Aji runs on, or `None` where Aji has no engine builds.
+    pub fn this() -> Option<Platform> {
+        match (std::env::consts::OS, std::env::consts::ARCH) {
+            ("windows", "x86_64") => Some(Platform::WindowsX64),
+            ("macos", "aarch64") => Some(Platform::MacosArm64),
+            ("linux", "x86_64") => Some(Platform::LinuxX64),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]

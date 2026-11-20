@@ -43,7 +43,13 @@ windows = { version = "0.62", features = ["Win32_Graphics_Dxgi", "Win32_Foundati
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
 
+[features]
+# Hooks the integration tests use to make a job panic. Never enabled in a build of Aji.
+test-seams = []
+
 [dev-dependencies]
+# Turns the test seams on for this crate's own tests.
+aji-manager = { path = ".", features = ["test-seams"] }
 ct-codecs = "1"
 minisign = "0.10"
 ring = "0.17"
