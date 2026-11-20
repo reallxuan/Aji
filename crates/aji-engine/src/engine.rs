@@ -58,6 +58,12 @@ pub struct EngineOptions {
     pub hang_window: Duration,
     /// Time between closing stdin and killing KataGo.
     pub shutdown_grace: Duration,
+    /// How long a killed KataGo has to report its exit. A process stuck in the kernel (a hung
+    /// GPU driver) may never exit; after this the actor gives it up and carries on.
+    pub kill_deadline: Duration,
+    /// Holds back every exit report, as if each process never exited: tests the give-up.
+    #[cfg(feature = "test-seams")]
+    pub hold_exit_reports: bool,
 }
 
 impl Default for EngineOptions {
@@ -75,6 +81,9 @@ impl Default for EngineOptions {
             stall_timeout: Duration::from_secs(60),
             hang_window: Duration::from_secs(10 * 60),
             shutdown_grace: Duration::from_secs(2),
+            kill_deadline: Duration::from_secs(5),
+            #[cfg(feature = "test-seams")]
+            hold_exit_reports: false,
         }
     }
 }
@@ -134,6 +143,7 @@ enum Command {
     Pause(Reply<Outcome>),
     Resume(Reply<Outcome>),
     Restart(Reply<Outcome>),
+    SetFiles(Option<EngineFiles>, Reply<Outcome>),
     Stop(Reply<Outcome>),
     Shutdown(Reply<()>),
 }
@@ -249,6 +259,14 @@ impl Engine {
         self.outcome(Command::Restart).await
     }
 
+    /// Runs other KataGo files from now on, keeping the position. With files, KataGo restarts
+    /// on them and this returns once `starting` is entered; with `None` it is stopped and this
+    /// returns once the state is `notConfigured`. The analysis shown and cached is dropped,
+    /// since another engine or network gives other numbers.
+    pub async fn set_files(&self, files: Option<EngineFiles>) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetFiles(files, reply)).await
+    }
+
     /// Closes stdin, waits up to `shutdown_grace`, then kills. Returns once KataGo has
     /// exited and the state is `stopped`.
     pub async fn stop(&self) -> Result<(), EngineError> {
@@ -291,6 +309,8 @@ enum Then {
     RestartAfterHang,
     Shutdown,
     NotResponding,
+    /// The files were taken away: `notConfigured` once the process is gone.
+    Unconfigure,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -311,6 +331,8 @@ struct Proc {
     then: Option<Then>,
     /// When the shutdown grace runs out.
     kill_at: Option<Instant>,
+    /// Once killed: when the actor stops waiting for the exit report.
+    give_up_at: Option<Instant>,
     /// Started by the automatic restart after a hang.
     automatic: bool,
     /// When it answered its version query.
@@ -342,6 +364,8 @@ struct ProcIo {
     stdin: Option<mpsc::UnboundedSender<String>>,
     writer: JoinHandle<()>,
     kill: Option<oneshot::Sender<()>>,
+    /// Owns the process handle. Aborting it drops the handle, which kills the process.
+    supervisor: JoinHandle<()>,
 }
 
 impl ProcIo {
@@ -361,6 +385,8 @@ impl ProcIo {
 impl Drop for ProcIo {
     fn drop(&mut self) {
         self.writer.abort();
+        // Done already unless the process was given up after its kill.
+        self.supervisor.abort();
     }
 }
 
@@ -439,6 +465,7 @@ impl Actor {
             Command::Restart(reply) => {
                 let _ = reply.send(self.restart());
             }
+            Command::SetFiles(files, reply) => self.set_files(files, reply),
             Command::Stop(reply) => self.stop(reply),
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
@@ -511,6 +538,32 @@ impl Actor {
         Ok(())
     }
 
+    fn set_files(&mut self, files: Option<EngineFiles>, reply: Reply<Outcome>) {
+        if self.shutting_down() {
+            let _ = reply.send(Err(EngineError::NotRunning));
+            return;
+        }
+        self.files = files;
+        self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
+        self.throttle = Throttle::new(self.options.throttle);
+        lock(&self.snapshot).analysis = None;
+        if self.files.is_some() {
+            if self.process.is_some() {
+                self.announce_restart();
+                self.end_process(Then::Restart, End::Gracefully);
+            } else {
+                self.start_process(false);
+            }
+            let _ = reply.send(Ok(()));
+        } else if self.process.is_some() {
+            self.stop_waiters.push(reply);
+            self.end_process(Then::Unconfigure, End::Gracefully);
+        } else {
+            self.set_state(EngineState::NotConfigured);
+            let _ = reply.send(Ok(()));
+        }
+    }
+
     fn stop(&mut self, reply: Reply<Outcome>) {
         if self.files.is_none() {
             let _ = reply.send(Err(EngineError::NotConfigured));
@@ -535,6 +588,7 @@ impl Actor {
     /// Starts a new KataGo. `automatic` marks the restart after a hang.
     fn start_process(&mut self, automatic: bool) {
         let Some(files) = &self.files else { return };
+        eprintln!("aji: starting KataGo {}", files.katago.display());
         let spec = katago_launch(files);
         self.generation += 1;
         let generation = self.generation;
@@ -544,6 +598,7 @@ impl Actor {
             io: None,
             then: None,
             kill_at: None,
+            give_up_at: None,
             automatic,
             answered_at: None,
         });
@@ -559,6 +614,7 @@ impl Actor {
     /// analysis bookkeeping, since nothing from this process counts any more.
     fn end_process(&mut self, then: Then, end: End) {
         let grace = self.options.shutdown_grace;
+        let kill_deadline = self.options.kill_deadline;
         let Some(process) = self.process.as_mut() else {
             return;
         };
@@ -568,7 +624,12 @@ impl Actor {
         if let Some(io) = process.io.as_mut() {
             io.close_stdin();
             match end {
-                End::Kill => io.kill(),
+                End::Kill => {
+                    io.kill();
+                    process
+                        .give_up_at
+                        .get_or_insert(Instant::now() + kill_deadline);
+                }
                 End::Gracefully => {
                     process.kill_at.get_or_insert(Instant::now() + grace);
                 }
@@ -650,15 +711,22 @@ impl Actor {
 
         let (kill, kill_rx) = oneshot::channel();
         let reports = self.report_tx.clone();
-        tokio::spawn(async move {
+        #[cfg(feature = "test-seams")]
+        let hold = self.options.hold_exit_reports;
+        #[cfg(not(feature = "test-seams"))]
+        let hold = false;
+        let supervisor = tokio::spawn(async move {
             let readers = vec![stdout_reader, stderr_reader];
             let (exit, tail) = process::supervise(process, kill_rx, readers, tail).await;
-            let _ = reports.send(Report::Exited(generation, exit, tail));
+            if !hold {
+                let _ = reports.send(Report::Exited(generation, exit, tail));
+            }
         });
         ProcIo {
             stdin: Some(stdin_tx),
             writer,
             kill: Some(kill),
+            supervisor,
         }
     }
 
@@ -678,6 +746,7 @@ impl Actor {
             None => self.set_state(crashed(unexpected)),
             Some(Then::NotResponding) => self.set_state(crashed(CrashReason::NotResponding)),
             Some(Then::Stop) => self.set_state(EngineState::Stopped),
+            Some(Then::Unconfigure) => self.set_state(EngineState::NotConfigured),
             Some(Then::Restart) => self.start_process(false),
             Some(Then::RestartAfterHang) => self.start_process(true),
             Some(Then::Shutdown) => {
@@ -706,7 +775,10 @@ impl Actor {
     fn next_wake(&self) -> Option<Instant> {
         let process = self.process.as_ref()?;
         if process.then.is_some() {
-            return process.kill_at;
+            return [process.kill_at, process.give_up_at]
+                .into_iter()
+                .flatten()
+                .min();
         }
         let watchdog = match &process.phase {
             Phase::Spawning => None,
@@ -725,6 +797,7 @@ impl Actor {
 
     fn on_timer(&mut self, now: Instant) {
         let ping_timeout = self.options.ping_timeout;
+        let kill_deadline = self.options.kill_deadline;
         // `current` is cleared whenever a process starts ending, so this concerns a live one.
         if self.stalled_at().is_some_and(|at| now >= at) {
             self.on_hang(now);
@@ -734,10 +807,17 @@ impl Actor {
             return;
         };
         if process.then.is_some() {
+            if process.give_up_at.is_some_and(|at| now >= at) {
+                let why = "aji: KataGo did not exit after kill; giving it up";
+                eprintln!("{why}");
+                self.process_gone(None, vec![why.to_string()], CrashReason::Exited);
+                return;
+            }
             if process.kill_at.is_some_and(|at| now >= at) {
                 process.kill_at = None;
                 if let Some(io) = process.io.as_mut() {
                     io.kill();
+                    process.give_up_at = Some(now + kill_deadline);
                 }
             }
             return;

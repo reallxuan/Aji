@@ -47,6 +47,7 @@ name = "aji-engine"
 version = "0.1.0"
 dependencies = [
  "aji-core",
+ "aji-engine",
  "libc",
  "serde",
  "serde_json",

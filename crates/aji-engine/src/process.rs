@@ -35,14 +35,19 @@ pub struct EngineFiles {
     pub model: PathBuf,
     pub config: PathBuf,
     pub working_dir: PathBuf,
+    /// Folders put before the inherited `PATH`, for the runtime libraries KataGo loads (the
+    /// NVIDIA DLLs on Windows). Only KataGo's own environment changes, never the system's.
+    pub path_prepend: Vec<PathBuf>,
 }
 
-/// A program, its arguments and its working directory.
+/// A program, its arguments, its working directory and the variables set in its environment
+/// on top of the inherited ones.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchSpec {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub working_dir: PathBuf,
+    pub env: Vec<(OsString, OsString)>,
 }
 
 /// KataGo's analysis engine command line. Aji always forces `-quit-without-waiting`, Black's
@@ -62,6 +67,30 @@ pub fn katago_launch(files: &EngineFiles) -> LaunchSpec {
         program: files.katago.clone(),
         args,
         working_dir: files.working_dir.clone(),
+        env: runtime_path(&files.path_prepend)
+            .map(|path| (OsString::from("PATH"), path))
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// `PATH` with `prepend` before the inherited entries, or `None` when there is nothing to add.
+/// An unset or empty inherited `PATH` adds no empty entry, which Unix would read as the
+/// current folder. A folder that cannot go in a `PATH` (the list separator on Unix, a quote
+/// on Windows) is logged and the change dropped: KataGo then fails to load its runtime, which
+/// is reported like any start-up failure.
+fn runtime_path(prepend: &[PathBuf]) -> Option<OsString> {
+    if prepend.is_empty() {
+        return None;
+    }
+    let inherited = std::env::var_os("PATH").filter(|path| !path.is_empty());
+    let inherited = inherited.iter().flat_map(std::env::split_paths);
+    match std::env::join_paths(prepend.iter().cloned().chain(inherited)) {
+        Ok(path) => Some(path),
+        Err(e) => {
+            eprintln!("aji: cannot put the runtime folders on PATH: {e}");
+            None
+        }
     }
 }
 
@@ -158,6 +187,7 @@ fn spawn_now(spec: &LaunchSpec) -> io::Result<Spawned> {
     let mut command = Command::new(&spec.program);
     command
         .args(&spec.args)
+        .envs(spec.env.iter().map(|(key, value)| (key, value)))
         .current_dir(&spec.working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -402,5 +432,31 @@ mod tests {
         })
         .await;
         assert_eq!(lines, ["one", "tw\u{fffd}o", "", "last"]);
+    }
+
+    fn files(path_prepend: Vec<PathBuf>) -> EngineFiles {
+        EngineFiles {
+            katago: PathBuf::from("katago"),
+            model: PathBuf::from("model.bin.gz"),
+            config: PathBuf::from("analysis.cfg"),
+            working_dir: PathBuf::from("."),
+            path_prepend,
+        }
+    }
+
+    #[test]
+    fn path_prepend_goes_before_the_inherited_path() {
+        let (a, b) = (PathBuf::from("runtime-a"), PathBuf::from("runtime-b"));
+        let spec = katago_launch(&files(vec![a.clone(), b.clone()]));
+        let inherited = std::env::var_os("PATH").unwrap_or_default();
+        let want =
+            std::env::join_paths([a, b].into_iter().chain(std::env::split_paths(&inherited)))
+                .unwrap();
+        assert_eq!(spec.env, vec![(OsString::from("PATH"), want)]);
+    }
+
+    #[test]
+    fn no_path_prepend_leaves_the_environment_alone() {
+        assert!(katago_launch(&files(Vec::new())).env.is_empty());
     }
 }

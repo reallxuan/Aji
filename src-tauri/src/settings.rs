@@ -49,6 +49,7 @@ impl DevEngine {
             model,
             config,
             working_dir,
+            path_prepend: Vec::new(),
         }
     }
 }

@@ -42,6 +42,7 @@ fn files(name: &str) -> EngineFiles {
         model: PathBuf::from("model.bin.gz"),
         config: scenario(name),
         working_dir: manifest_dir(),
+        path_prepend: Vec::new(),
     }
 }
 
@@ -281,6 +282,7 @@ fn launch_args_are_exact() {
         model: PathBuf::from("models/b18.bin.gz"),
         config: PathBuf::from("my configs/analysis.cfg"),
         working_dir: PathBuf::from("/opt/katago"),
+        path_prepend: Vec::new(),
     };
     let spec = katago_launch(&files);
     assert_eq!(spec.program, PathBuf::from("/opt/katago/katago"));
@@ -890,14 +892,19 @@ async fn set_position_rejects_an_off_board_move() {
 #[tokio::test]
 async fn status_carries_the_latest_analysis() {
     let mut p = start(Some(files("normal")), p1());
-    let first = p.next_analysis().await;
+    let mut last = p.next_analysis().await;
+    // Paused, no new search starts; the terminated one's last report arrives promptly. After a
+    // quiet spell, the last update received is the last one emitted.
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    let mut events = p.until_state(|s| *s == paused()).await;
+    events.extend(p.collect_for(Duration::from_millis(300)).await);
+    if let Some(update) = updates(&events).last() {
+        last = (*update).clone();
+    }
     let status = p.engine.status();
     assert_eq!(status.position, p1().key());
-    assert_eq!(status.analysis, Some(first));
+    assert_eq!(status.analysis, Some(last));
 
-    // Paused, so that no report for P2 can arrive before the check.
-    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
-    p.until_state(|s| *s == paused()).await;
     assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
     let status = p.engine.status();
     assert_eq!(status.position, p2().key());
@@ -926,6 +933,7 @@ async fn starts_from_a_folder_with_cjk_and_spaces() {
         model: PathBuf::from("model.bin.gz"),
         config: PathBuf::from("scenarios/normal.json"),
         working_dir: dir,
+        path_prepend: Vec::new(),
     };
     let mut p = start(Some(files), p1());
     let mut retries = 0;
@@ -994,4 +1002,116 @@ fn force_quit_leaves_no_engine() {
         );
         thread::sleep(Duration::from_millis(20));
     }
+}
+
+#[tokio::test]
+async fn set_files_switches_to_the_new_files() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    let old = p.engine.pid().expect("a pid while analysing");
+
+    // A config that fails at start-up proves the new files are the ones launched.
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("startup-failure")))).await,
+        Ok(())
+    );
+    assert_eq!(p.engine.state(), EngineState::Starting);
+    let events = p
+        .until_state(|s| matches!(s, EngineState::Crashed { .. }))
+        .await;
+    assert!(states(&events).contains(&&EngineState::Starting));
+    assert!(!alive(old), "the old KataGo {old} is still alive");
+
+    // And back: the installer's fallback switches from a failed engine to a working one.
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("normal")))).await,
+        Ok(())
+    );
+    p.until_state(|s| *s == analysing()).await;
+    let new = p.engine.pid().expect("a pid while analysing");
+    assert_ne!(new, old);
+    assert_eq!(
+        p.engine.status().position,
+        p1().key(),
+        "the position is kept"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn set_files_none_stops_and_reports_not_configured() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    let pid = p.engine.pid().expect("a pid while analysing");
+
+    assert_eq!(bounded(p.engine.set_files(None)).await, Ok(()));
+    assert_eq!(p.engine.state(), EngineState::NotConfigured);
+    assert_eq!(p.engine.pid(), None);
+    assert!(!alive(pid), "KataGo {pid} is still alive");
+    assert!(
+        p.drain()
+            .contains(&EngineEvent::State(EngineState::NotConfigured))
+    );
+    assert_eq!(
+        bounded(p.engine.restart()).await,
+        Err(EngineError::NotConfigured)
+    );
+
+    // Not configured, files can be given again.
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("normal")))).await,
+        Ok(())
+    );
+    p.until_state(|s| *s == analysing()).await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn set_files_drops_the_old_analysis() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_final().await;
+    assert!(p.engine.status().analysis.is_some());
+
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("normal")))).await,
+        Ok(())
+    );
+    assert_eq!(
+        p.engine.status().analysis,
+        None,
+        "another network gives other numbers"
+    );
+    // Paused at once, the new KataGo analyses nothing, so the cache stays as the switch left
+    // it: coming back to P1 shows no cached result from the old files.
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    p.until_state(|s| *s == paused()).await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
+    assert_eq!(p.engine.status().analysis, None);
+
+    assert_eq!(bounded(p.engine.resume()).await, Ok(()));
+    p.next_analysis().await;
+    assert!(p.engine.status().analysis.is_some());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn an_unkillable_process_is_given_up_after_the_kill_deadline() {
+    let options = EngineOptions {
+        kill_deadline: Duration::from_millis(300),
+        hold_exit_reports: true,
+        ..options()
+    };
+    let mut p = start_with(Some(files("normal")), p1(), options.clone());
+    p.until_state(|s| *s == analysing()).await;
+
+    let asked = Instant::now();
+    assert_eq!(bounded(p.engine.stop()).await, Ok(()));
+    let took = asked.elapsed();
+    let limit = options.shutdown_grace + options.kill_deadline;
+    assert!(took >= limit, "returned after {took:?}, before the give-up");
+    assert!(took < limit + Duration::from_secs(1), "took {took:?}");
+    assert_eq!(p.engine.state(), EngineState::Stopped);
+    assert_eq!(p.engine.pid(), None);
+    bounded(p.engine.shutdown()).await;
 }
