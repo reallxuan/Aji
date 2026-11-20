@@ -53,7 +53,7 @@ The values are **[Proposed]** starting points taken from the mockups. The dark t
 - No monospace typeface. Tabular figures give column alignment without the loose spacing of a monospace decimal point and percent sign.
 - Bundle the original LXGW WenKai, which follows mainland glyph and punctuation conventions. The mockups load the "TC" build from Google Fonts because that is the only one hosted there; it covers Simplified characters but centres its punctuation, which the shipped app must not do.
 - Both typefaces are under the SIL Open Font License and may be bundled with an AGPL application.
-- **[Open]** Bundle size. LXGW WenKai is roughly 10 MB per weight, larger than the application itself. Phase 1 needs a subsetting plan (common characters bundled, the rest loaded on demand).
+- Bundle size: M5 bundles a subset of LXGW WenKai (GB2312 plus every character of the `zh-CN` locale, about 1.6 MB per weight as WOFF2), with a test that the subset covers the locale (roadmap O6). Characters outside it fall back to the system Chinese font.
 - **[Open]** WenKai at 11 px (table headers) is looser than a sans-serif would be. If it reads poorly in the real app, raise that tier by one size before changing typeface.
 
 ## 4. Main screen layout
@@ -119,7 +119,7 @@ Columns: rank chip, point, win rate, score lead, visits, difference from the bes
 
 - A wooden board in a warm honey tone (`#DDB067` base) with a straight grain, a lit top edge, and a darker lower edge that gives it thickness. **[Decided]** as a direction.
 - Grid lines and star points in dark brown; coordinates (A–T without I, 1–19) in the margin on the top and left.
-- The mockups build the grain from CSS gradients. Reviewed on screen it reads as a fairly even yellow panel with mechanical stripes. **[Open]** Replace it with a photographic or procedurally generated wood texture.
+- The mockups build the grain from CSS gradients. Reviewed on screen it reads as a fairly even yellow panel with mechanical stripes. M5 replaced it with a procedural straight grain from summed value noise, generated once per size and pixel ratio from a fixed seed. **[Proposed]**
 
 ### 5.2 Stones
 
@@ -191,26 +191,27 @@ A five-segment progress line sits at the top of the panel on every step. Each st
 | 2. Backend | A radio list: CUDA, TensorRT, DirectML, OpenCL. Each row is a name and a tag of a few characters (`最快`, `启动较慢`, `免运行库`, `兼容性最好，最慢`). The detected card is one small line under the title | Next |
 | 3. KataGo version | A list of releases, newest first: version and release date. The newest is selected and tagged `最新`. The chosen backend and platform are one small line under the title **[Decided]** that the step exists | Next |
 | 4. Network | A list ranked by Elo: rank, name, Elo, release date. The top row is selected **[Decided]** | Import network file; Start install |
-| 5. Install | One row per task: engine, runtime, network, benchmark, test query. Done, running with a percentage and a bar, or waiting | Download source; Cancel |
+| 5. Install | One row per task: engine, runtime, network, benchmark, test query. Done, already there, running with a percentage and a bar, waiting, or failed | Cancel |
 
 - No explanatory paragraphs, no "recommended configuration" summary, no "recommended" badge. **[Decided]** The default option is simply preselected.
 - The backend list depends on detected hardware (charter section 6.3). The four options above are what an NVIDIA card on Windows shows.
 - The version step comes after the backend step because the available versions depend on the backend. **[Proposed]** At the time of writing the newest CUDA build is 1.18.2 while every other backend stops at 1.18.1, and 1.17.2 exists for TensorRT only. The list shows only versions that ship the chosen backend for the detected platform. The versions and dates in the mockup are real, read from the KataGo releases on 2026-11-19.
 - The network list comes from Aji's manifest, which is built from katagotraining.org. The names, ratings and dates in the mockup are real values read from that page on 2026-11-19.
-- The download source selector is on the install step, where a slow download is noticed, not on a step of its own. **[Proposed]**
+- There is no download-source selector in the wizard. **[Decided 2026-11-20]** (M5): the owner set mirrors aside for now; the `downloadSource` setting remains for development.
+- Every step has "暂不设置" (set up later) on the left of the footer, "取消" (cancel) when setup was opened again over a working engine. While a job runs, Cancel is the only control. The title row has a compact `中文 · EN` switch. When CUDA's licences have not been accepted, a licence panel comes before the install (M5 design 5.2).
 - **[Decided 2026-11-19]** Which network is preselected: the top row, the highest-rated network on katagotraining.org that the chosen KataGo version can load, on every machine. There are no GPU tiers and no local measurement. On 2026-11-19 that is the transformer `kata1-tf3-b11c768-s12382M-d6533M`.
 - **[Open]** The list has no size or speed column, because the source page publishes neither. Both should be added once the manifest carries them, since strength against speed is the real choice.
-- **[Open]** Failure states (download error, runtime will not load, fallback to another backend) are described in the charter but not drawn.
+- Failure states are designed and built (M5 design 5.3, mockups `docs/design/mockups/m5/failure-states-v2.html`): A1 for an old driver (Retry first, the fallback second), A2 for other backend failures with a fallback (the fallback first), B when nothing else would help (Retry and Back), and D for an engine that crashes later, in the analysis panel.
 
 ## 8. Not designed yet
 
 - The opened game library.
-- Settings, including changing backend or network after setup.
+- Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎").
 - Hover preview of a candidate's continuation, and the right-click menus of section 6.
 - Ownership and territory display, policy heatmap, move-quality marks on stones.
 - Playing against the AI.
 - Layouts for windows wider or smaller than the reference size, and for touch.
-- Error and empty states in general.
+- Error and empty states outside setup. The setup failures, the no-engine panel and the crashed engine are designed (M5).
 
 ## 9. Effect on the charter
 

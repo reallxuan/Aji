@@ -22,6 +22,24 @@
 
 **Spec:** [M5 wizard and settings design](../specs/2026-11-20-m5-wizard-settings-design.md), approved by the owner on 2026-11-20. Section numbers below (5.2 and so on) refer to it. Mockups: `docs/design/mockups/m5/` and `docs/design/mockups/setup-*.jpg`.
 
+**Status:** Done on 2026-11-20, except the items under Outstanding.
+- **Checks.** At `fbc43a4` every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 491 Rust tests, `pnpm lint`, `pnpm typecheck`, 237 TypeScript tests, `cargo deny check licenses`, the notices staleness check and unchanged generated bindings.
+- **Final review.** A fresh review of the whole branch found nothing critical and two important issues, each fixed with a test that failed first and folded into the commit it corrects:
+  - "delete unused files" read `installed.json` leniently, so a record that could not be read counted as "no active set" and the engine in use would have been deleted (`5948dec`);
+  - the licence step showed one row per licence without the components it covers; it now names each component with its version and size (`489e920`).
+  Sixteen minor findings are deferred to M6 or M7 planning.
+- **Mac exit check** with the app from `pnpm tauri build --bundles app` (11.05 MiB):
+  - Item 7: one position analysed for 30 minutes with no limit (`maxVisits` 2^50), on the installed `katago-v1.18.2-metal-macos-arm64` with `kata1-tf3-b11c768-s12382M-d6533M`. KataGo's RSS at 0, 5, 10, 15, 20, 25 and 30 minutes: 5.8 GB (Metal start-up), 1.9, 1.4, 1.4, 1.4, 0.5 and 0.2 GB. The drop after 20 minutes is macOS compressing pages, not freed memory: at 30 minutes `footprint` gave 826 MB, 405 MB of it compressed. Memory did not grow over the run, so no visit limit by default (G3) stands on the Mac. A first run was ended at about 4 minutes when the owner quit Aji.
+  - M4 minor #14: KataGo 1.18.2 picks the model format by the file's suffix. The installed binary network loads as `.bin.gz` and as `.gz`, and fails as `.txt.gz` ("perhaps you are trying to load a .bin.gz model as a .txt.gz model?"). Imports stored every network as `.bin.gz`, so a text network would have failed; `fbc43a4` keeps `.txt.gz`. Homebrew ships only `.bin.gz` networks, so no real text network was installed through step 4.
+  - Item 9: every scenario of section 7 was walked in `pnpm dev` in the browser pane, against the mockups; the layout faults found there were fixed in `a5907c3`.
+  - `settings.json` was restored from its backup after item 7.
+- **Outstanding.**
+  - Items 3 to 6 in the native window: the wizard on empty data folders (`AJI_DATA_ROOT`), "暂不设置" at step 2 and the next launch, quitting during the network download and resuming, and the settings round trip (language and theme live, the visit limit stopping and resuming analysis, restart, stop, set up again, deleting unused files). They need clicks in the window, which the author's session could not make.
+  - Item 2 (a new macOS user) and item 8 (an external screen of a different scale), the owner's steps.
+  - The PC, at the owner's call: the NVIDIA panels on real hardware, and whether the `gpuDriverTooOld` pattern matches KataGo's real output (5.3, [To verify]).
+  - The owner's reading of the LXGW WenKai Reserved Font Name for the bundled WOFF2 subset.
+  - About's notices print "(no licence file; MIT)" for about 40 crates that package no licence file (the `objc2` family, `block2`, `ts-rs`, `webview2-com`, `dlopen2`, `jni`, `ndk` and others). MIT and BSD ask for the notice text, so this needs a fallback before the first release.
+
 ## Global Constraints
 
 - **Everything from M1 to M4 still holds:** language, interface text in both locales, dependency licences, Conventional Commits, crate rules, and the protocol rules. Protocol rules: no file paths cross the boundary; errors are `{ code, message }`; `#[ts(type = "number")]` on every `u64`; camelCase JSON. See the earlier plans' Global Constraints.
