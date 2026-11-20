@@ -9,7 +9,7 @@
 
 ## 1. Intent
 
-M4 built the machinery that installs KataGo with nobody watching. M5 puts a face on it. A new user on the PC or the Mac goes from a fresh install to a running engine through five short steps in the main screen's panel, with no command line, no manual download and no config editing. That is the setup half of Phase 1 acceptance (charter section 8).
+M4 built the machinery that installs KataGo with nobody watching. M5 puts a face on it. A new user on the PC or the Mac goes from a fresh install to a running engine through four short steps in the main screen's panel, with no command line, no manual download and no config editing. That is the setup half of Phase 1 acceptance (charter section 8).
 
 When something goes wrong, Aji says what happened in plain words. When the user can fix it, Aji says how, before it suggests a different backend. The user is never trapped in setup. M5 also gives the app its first real settings and its first real board surface, so the main screen looks like Aji rather than a placeholder.
 
@@ -80,7 +80,7 @@ A is chosen because the only state worth surviving a reload, the running job, al
 
 - At startup the UI asks `engineStatus`.
   - `notConfigured` with no job running: the wizard.
-  - A job running (`setupStatus`): the wizard at step 5, showing that job. This happens after a window reload, not after a quit.
+  - A job running (`setupStatus`): the wizard at step 4, showing that job. This happens after a window reload, not after a quit.
   - Anything else: the analysis panel.
 - **Quitting during setup.** Quitting cancels a running job, as M4 does, and the job is not remembered. The next launch starts the wizard at step 1 with the usual preselections. Detection is quick, and every verified component (an engine package, a runtime, the network) is reused, so nothing finished is downloaded again, and a `.part` file resumes. **[Proposed]** Remembering the interrupted choices would need a record on disk and a new startup path, and would only save three clicks on the default rows.
 - **The wizard comes back** at the next launch until an engine is active. "暂不设置" closes it for this run only. The next launch with no active engine shows the wizard again, still with "暂不设置" on every step. **[Proposed]** This keeps the roadmap's "comes back until an engine is active" and still never traps the user (G2).
@@ -89,22 +89,23 @@ A is chosen because the only state worth surviving a reload, the running job, al
 
 ### 5.2 The wizard
 
-The layout follows interface design 7 and the mockups in `docs/design/mockups/setup-*.jpg`. The empty board is on the left, and the panel holds a five-segment progress line, then the step.
+The layout follows interface design 7 and the mockups in `docs/design/mockups/setup-*.jpg`. The empty board is on the left, and the panel holds a four-segment progress line, then the step.
 
 - **Top row.** The title "准备 AI 引擎" (prepare the AI engine) with a compact `中文 · EN` switch on the right (K2). The switch writes the language setting, as the settings page does.
-- **Step 1, detect.** Four rows (graphics card, memory, operating system, driver), each with a spinner and then a tick. It advances by itself when `setupDetect` returns **[Decided]**. A failed probe shows its row as "未检测到" (not found) in muted text; detection never blocks.
-- **Step 2, backend.** A radio list from `setupBackends`, with tags as in the generated `BackendTag` comment. The detected card is one small line under the title.
-  - **New: driver advice.** When the recommendation carries `driverTooOldForCuda`, CUDA stays in the list as a disabled row tagged "需要更新驱动" (needs a driver update), instead of disappearing as it does in M3's recommendation today. A small line names the current driver and the version CUDA needs, with a "下载驱动 ↗" (download driver) link to NVIDIA's driver page and a "重新检测" (detect again) button. Detect again re-runs hardware detection and the recommendation, so a user who has just updated the driver gets CUDA without relaunching Aji. This is the step-2 form of the owner's point on panel A1: the user learns that a driver update gives them the faster backend before they settle for DirectML. **[Proposed]**
+- **Step 1, hardware and backend.** One page: what detection found, then the backends to choose from. **[Decided 2026-11-20]** The owner merged the separate detect step into this page during the exit check, so the user sees the hardware while choosing. It replaces an earlier step 1 that advanced by itself after detection and left only one line about the card on the backend step.
+  - **Hardware.** Under a small "本机硬件" (this computer) label, four compact rows (graphics card, memory, operating system, driver), each with a spinner and then a tick. A failed probe shows its row as "未检测到" (not found) in muted text; detection never blocks. A failed `setupDetect` shows the error with Retry, and no backend list.
+  - **Backends.** Once `setupDetect` has answered, a radio list from `setupBackends`, with tags as in the generated `BackendTag` comment.
+  - **New: driver advice.** When the recommendation carries `driverTooOldForCuda`, CUDA stays in the list as a disabled row tagged "需要更新驱动" (needs a driver update), instead of disappearing as it does in M3's recommendation today. A small line names the current driver and the version CUDA needs, with a "下载驱动 ↗" (download driver) link to NVIDIA's driver page and a "重新检测" (detect again) button. Detect again re-runs hardware detection and the recommendation, refreshing the hardware rows too, so a user who has just updated the driver gets CUDA without relaunching Aji. This is the step-1 form of the owner's point on panel A1: the user learns that a driver update gives them the faster backend before they settle for DirectML. **[Proposed]**
   - "The version CUDA needs" is the `minDriver` of the CUDA runtime the recommendation would pick for this GPU if the driver allowed it: 580 for compute capability 7.5 or newer (CUDA 13.2), else 572.61 (CUDA 12.8). Charter 6.3's thresholds therefore come from the manifest, not from code.
   - Hardware detection, held once per process today (`Setup.hardware`), becomes refreshable for this.
   - With R20, GPU machines list the CPU build last.
-- **Step 3, version.** The list from `setupVersions`, newest first, newest preselected and tagged "最新" (latest).
-- **Step 4, network.** The list from `setupNetworks`, in Elo order, top row preselected **[Decided]**. "导入权重文件" (import network file) calls `setupImportNetwork`, and the imported network joins the top of the list, selected. "开始安装" (start install) moves on.
-- **Licence step (mockup C).** If `setupLicences` lists a licence not yet accepted, step 5 first shows the licence panel:
+- **Step 2, version.** The list from `setupVersions`, newest first, newest preselected and tagged "最新" (latest).
+- **Step 3, network.** The list from `setupNetworks`, in Elo order, top row preselected **[Decided]**. "导入权重文件" (import network file) calls `setupImportNetwork`, and the imported network joins the top of the list, selected. "开始安装" (start install) moves on.
+- **Licence step (mockup C).** If `setupLicences` lists a licence not yet accepted, step 4 first shows the licence panel:
   - each component's name, its size and a "查看 ↗" (view) link that opens the licence URL in the system browser;
   - an unticked box: "我已年满法定年龄，并接受以上 NVIDIA 许可条款" (I am of legal age and accept the NVIDIA licence terms above); "接受并安装" (accept and install) is disabled until it is ticked;
   - "不接受" (decline) does not download anything. It shows panel A2 with the fallback offer for `licenceNotAccepted`, using the next backend from the recommendation. **[Proposed]** The mockup drew no box; R1 requires one.
-- **Step 5, install (mockup `setup-5-install.jpg`).** One row per task from `setupProgress`: waiting, running with a percentage and a bar, done, reused (new state, section 6), or failed. Cancel calls `setupCancel`, and the step then shows "已取消" (cancelled) with Retry, Back and "暂不设置". There is no download-source selector (section 2).
+- **Step 4, install (mockup `setup-5-install.jpg`).** One row per task from `setupProgress`: waiting, running with a percentage and a bar, done, reused (new state, section 6), or failed. Cancel calls `setupCancel`, and the step then shows "已取消" (cancelled) with Retry, Back and "暂不设置". There is no download-source selector (section 2).
   - While a job runs, Cancel is the footer's only control, so "暂不设置" never leaves a job running unseen. It returns once the job is cancelled, has failed or has finished. **[Proposed]** The user is still never trapped, because Cancel is always there.
 - **Success.** When the job outcome is `installed`, the panel becomes the analysis panel in place (interface design 7 **[Decided]**). The engine starts from the new set (M4 5.9).
 
@@ -122,8 +123,8 @@ The heading names the backend and what happened. The failed row turns red; finis
 
 - Every wizard failure panel also has "返回选择后端" (back to backends) or "暂不设置" as a text link on the left of the footer.
 - **Retry** is a new `setupInstall` with the same engine and network. Verified components are reused (M4 5.9). Retry re-runs detection first, so the driver line sees an updated driver, but it keeps the same engine even if the new recommendation would pick another CUDA build. **[Proposed]**
-- **How A1 is reached.** Step 2 keeps CUDA unselectable when detection already sees an old driver, so A1 is for the case detection misses: the driver passes the threshold, or reads wrong, and CUDA still refuses. M5 classifies CUDA's own `cudaErrorInsufficientDriver` text ("CUDA driver version is insufficient for CUDA runtime version", printed through KataGo's CUDA error handler) as `gpuDriverTooOld`. It follows M4 5.8's sourcing rule: the pattern cites KataGo's source at v1.18.2 and stays **[To verify]** until a real recording arrives from the PC.
-- **The required driver version** (A1, step 2) comes from the manifest runtime's `minDriver` (R1 section 7). The protocol exposes it with the recommendation and with a `gpuDriverTooOld` outcome. The exact field is left to the plan. This also closes the M3 deferral "read the CUDA thresholds from `minDriver` instead of hard-coding them".
+- **How A1 is reached.** Step 1 keeps CUDA unselectable when detection already sees an old driver, so A1 is for the case detection misses: the driver passes the threshold, or reads wrong, and CUDA still refuses. M5 classifies CUDA's own `cudaErrorInsufficientDriver` text ("CUDA driver version is insufficient for CUDA runtime version", printed through KataGo's CUDA error handler) as `gpuDriverTooOld`. It follows M4 5.8's sourcing rule: the pattern cites KataGo's source at v1.18.2 and stays **[To verify]** until a real recording arrives from the PC.
+- **The required driver version** (A1, step 1) comes from the manifest runtime's `minDriver` (R1 section 7). The protocol exposes it with the recommendation and with a `gpuDriverTooOld` outcome. The exact field is left to the plan. This also closes the M3 deferral "read the CUDA thresholds from `minDriver` instead of hard-coding them".
 - **Driver links** go to NVIDIA's driver download page. AMD and Intel get no driver advice in M5 (no `driverTooOld` classification exists for them).
 - **Disk errors.** A new failure code `diskError` covers a write or rename failure inside Aji's own folders (M4 minor #4). It has its own text and panel B, with no offer, since another backend would hit the same disk.
 
@@ -203,7 +204,7 @@ M4's final review left 14 minors (`m4-deferred-review-findings` in the author's 
 | 4 | Disk errors get misleading codes | **Fix**: `diskError` (5.3). |
 | 5 | Re-sending the same download source resets the download | **Drop**: no selector in M5. |
 | 6 | One unknown value makes `settings.json` unreadable | **Fix**: M5 adds four fields, so read each field leniently and fall back to its default. |
-| 7 | `import_network` holds the record lock while copying | **Fix**: import is now reachable from step 4. |
+| 7 | `import_network` holds the record lock while copying | **Fix**: import is now reachable from step 3. |
 | 8 | No "Text file busy" retry | Defer to M8 (Linux). |
 | 9 | No skipped state | **Fix**: `reused` (5.8). |
 | 10 | Nothing blocks restart or resume during the benchmark | **Fix**: `engineBusy` (5.4). |
@@ -229,7 +230,7 @@ The setup half of Phase 1 acceptance, on the Mac (and optionally the PC, per the
 1. Build locally (`pnpm tauri build`).
 2. **The owner's step:** log in as a new macOS user, install, and open Aji. The wizard runs from detection to analysis with no command line, no manual download and no config editing.
 3. Before that, the author checks the same path in the author's account by pointing Aji at empty data folders. The plan names how, for example a development-only environment variable for the config and data directories.
-4. "暂不设置" at step 2 opens the no-engine screen, and the next launch shows the wizard again.
+4. "暂不设置" at step 1 opens the no-engine screen, and the next launch shows the wizard again.
 5. Quit during the network download. The next launch starts the wizard at step 1, and the new install reuses the engine package and resumes the network's `.part` file.
 6. Settings: switch language and theme live; lower the visit limit below the current visits and see analysis stop, then remove it and see analysis continue; restart, stop, set up again; delete unused files after a second install.
 7. Leave one position analysing for 30 minutes with no limit, and record KataGo's memory (5.9).

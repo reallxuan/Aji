@@ -93,13 +93,13 @@
     "retry": "重试",
     "loadFailed": "无法读取列表：{{reason}}",
     "steps": {
-      "detect": "检测硬件",
       "backend": "选择后端",
       "version": "选择 KataGo 版本",
       "network": "选择权重",
       "install": "正在安装"
     },
     "detect": {
+      "heading": "本机硬件",
       "gpu": "显卡",
       "gpuMemory": "显存",
       "memory": "内存",

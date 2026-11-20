@@ -11,7 +11,7 @@ import type { NetworkChoice } from '../transport/generated/NetworkChoice';
 import type { NetworkList } from '../transport/generated/NetworkList';
 import { toTransportError, type TransportError, type Transport } from '../transport/transport';
 
-export type WizardStep = 'detect' | 'backend' | 'version' | 'network' | 'licence' | 'install';
+export type WizardStep = 'backend' | 'version' | 'network' | 'licence' | 'install';
 
 export interface WizardData {
   /** Opened explicitly (a re-run, or an install in progress). */
@@ -77,7 +77,7 @@ export type WizardState = WizardData & WizardActions;
 
 /** Everything the wizard collects, as at step 1. */
 const fresh = {
-  step: 'detect',
+  step: 'backend',
   hardware: null,
   recommendation: null,
   backend: null,

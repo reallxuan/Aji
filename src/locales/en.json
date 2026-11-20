@@ -93,13 +93,13 @@
     "retry": "Retry",
     "loadFailed": "The list could not be loaded: {{reason}}",
     "steps": {
-      "detect": "Detecting hardware",
       "backend": "Choose a backend",
       "version": "Choose a KataGo version",
       "network": "Choose a network",
       "install": "Installing"
     },
     "detect": {
+      "heading": "This computer",
       "gpu": "Graphics",
       "gpuMemory": "Video memory",
       "memory": "Memory",

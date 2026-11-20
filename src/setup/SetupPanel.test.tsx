@@ -36,8 +36,10 @@ describe('SetupPanel', () => {
     });
   });
 
-  it('shows the five-part progress line', () => {
+  it('shows the four-part progress line: hardware and backend, version, network, install', () => {
     renderSetup(setupTransport(), { step: 'version', backend: 'cuda' });
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveAttribute('aria-valuemax', '4');
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
   });
 });

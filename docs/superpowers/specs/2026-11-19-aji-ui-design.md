@@ -13,7 +13,7 @@ Reference screenshots are in [`docs/design/mockups/`](../../design/mockups/). Th
 |---|---|
 | `main-dark.jpg` | Main screen, dark theme |
 | `main-light.jpg` | Main screen, light theme |
-| `setup-1-detect.jpg` to `setup-5-install.jpg` | The five steps of first-run engine setup |
+| `setup-1-detect.jpg` to `setup-5-install.jpg` | First-run engine setup as first drawn in five steps; the first two are now one page (section 7) |
 
 ## 1. Principles
 
@@ -183,15 +183,14 @@ Two defaults chosen without an explicit answer from the owner, both **[Proposed]
 
 Setup uses the main screen's frame: the empty board on the left, the steps in the panel on the right. **[Decided]** When setup finishes, the panel becomes the analysis panel in place. An earlier version, a centred form on an empty page with everything on one screen, was rejected.
 
-A five-segment progress line sits at the top of the panel on every step. Each step asks for one decision.
+A four-segment progress line sits at the top of the panel on every step. Each step asks for one decision.
 
 | Step | Content | Controls |
 |---|---|---|
-| 1. Detect hardware | Four rows: graphics card, memory, operating system, driver. A tick when found, a spinner while checking | None. Advances to step 2 on its own when detection finishes **[Decided]** |
-| 2. Backend | A radio list: CUDA, TensorRT, DirectML, OpenCL. Each row is a name and a tag of a few characters (`最快`, `启动较慢`, `免运行库`, `兼容性最好，最慢`). The detected card is one small line under the title | Next |
-| 3. KataGo version | A list of releases, newest first: version and release date. The newest is selected and tagged `最新`. The chosen backend and platform are one small line under the title **[Decided]** that the step exists | Next |
-| 4. Network | A list ranked by Elo: rank, name, Elo, release date. The top row is selected **[Decided]** | Import network file; Start install |
-| 5. Install | One row per task: engine, runtime, network, benchmark, test query. Done, already there, running with a percentage and a bar, waiting, or failed | Cancel |
+| 1. Hardware and backend | Under a small "本机硬件" label, four compact rows: graphics card, memory, operating system, driver, each a spinner while checking and a tick when found. Below them, once detection finishes, a radio list: CUDA, TensorRT, DirectML, OpenCL. Each row is a name and a tag of a few characters (`最快`, `启动较慢`, `免运行库`, `兼容性最好，最慢`). **[Decided 2026-11-20]** one page, replacing a detect step that advanced on its own | Next |
+| 2. KataGo version | A list of releases, newest first: version and release date. The newest is selected and tagged `最新`. The chosen backend and platform are one small line under the title **[Decided]** that the step exists | Next |
+| 3. Network | A list ranked by Elo: rank, name, Elo, release date. The top row is selected **[Decided]** | Import network file; Start install |
+| 4. Install | One row per task: engine, runtime, network, benchmark, test query. Done, already there, running with a percentage and a bar, waiting, or failed | Cancel |
 
 - No explanatory paragraphs, no "recommended configuration" summary, no "recommended" badge. **[Decided]** The default option is simply preselected.
 - The backend list depends on detected hardware (charter section 6.3). The four options above are what an NVIDIA card on Windows shows.

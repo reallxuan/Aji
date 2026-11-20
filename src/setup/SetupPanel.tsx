@@ -5,23 +5,23 @@ import { useSettingsStore } from '../settings/settingsStore';
 import { getSettings } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
 import { StepBackend } from './StepBackend';
-import { StepDetect } from './StepDetect';
 import { StepInstall } from './StepInstall';
 import { StepLicence } from './StepLicence';
 import { StepNetwork } from './StepNetwork';
 import { StepVersion } from './StepVersion';
 import { useWizardStore, type WizardStep } from './wizardStore';
 
+/** Four parts: hardware and backend, version, network, then the licence and the install. */
 const SEGMENT: Record<WizardStep, number> = {
-  detect: 0,
-  backend: 1,
-  version: 2,
-  network: 3,
-  licence: 4,
-  install: 4,
+  backend: 0,
+  version: 1,
+  network: 2,
+  licence: 3,
+  install: 3,
 };
+const SEGMENTS = 4;
 
-/** The setup wizard in the right-hand panel: title row, five-part progress line, then the step. */
+/** The setup wizard in the right-hand panel: title row, four-part progress line, then the step. */
 export function SetupPanel() {
   const { t } = useTranslation();
   const step = useWizardStore((s) => s.step);
@@ -34,7 +34,6 @@ export function SetupPanel() {
         </div>
         <ProgressLine segment={SEGMENT[step]} />
       </header>
-      {step === 'detect' && <StepDetect />}
       {step === 'backend' && <StepBackend />}
       {step === 'version' && <StepVersion />}
       {step === 'network' && <StepNetwork />}
@@ -51,11 +50,11 @@ function ProgressLine({ segment }: { segment: number }) {
       role="progressbar"
       aria-label={t('setup.title')}
       aria-valuemin={1}
-      aria-valuemax={5}
+      aria-valuemax={SEGMENTS}
       aria-valuenow={segment + 1}
-      className="mt-3 grid grid-cols-5 gap-1.5"
+      className="mt-3 grid grid-cols-4 gap-1.5"
     >
-      {Array.from({ length: 5 }, (_, i) => (
+      {Array.from({ length: SEGMENTS }, (_, i) => (
         <span
           key={i}
           className={cn('h-0.5 rounded-full', i <= segment ? 'bg-text' : 'bg-hairline')}

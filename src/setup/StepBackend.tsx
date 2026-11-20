@@ -6,8 +6,8 @@ import { openExternal } from '../platform/openExternal';
 import { detectHardware, getBackends } from '../transport/api';
 import type { Backend } from '../transport/generated/Backend';
 import { useTransport } from '../transport/TransportProvider';
-import { formatBytes } from './format';
-import { backendName, mainGpu, tagText } from './labels';
+import { HardwareRows } from './HardwareRows';
+import { backendName, tagText } from './labels';
 import { ChoiceList, ChoiceRow, LoadError, StepLayout } from './parts';
 import { useWizardStore } from './wizardStore';
 
@@ -16,9 +16,12 @@ export const NVIDIA_DRIVER_URL = 'https://www.nvidia.com/drivers/';
 
 const toVersion = () => useWizardStore.getState().goTo('version');
 
-/** Step 2: the recommended backends, best first, with driver advice when CUDA is held back. */
+/**
+ * Step 1: what detection found, then the recommended backends, best first, with driver advice
+ * when CUDA is held back. The backends are asked for once detection has answered.
+ */
 export function StepBackend() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const transport = useTransport();
   const hardware = useWizardStore((s) => s.hardware);
   const recommendation = useWizardStore((s) => s.recommendation);
@@ -28,7 +31,23 @@ export function StepBackend() {
   const [detecting, setDetecting] = useState(false);
 
   useEffect(() => {
-    if (recommendation) return;
+    if (hardware) return;
+    let active = true;
+    detectHardware(transport, false).then(
+      (report) => {
+        if (active) useWizardStore.getState().setHardware(report);
+      },
+      (error) => {
+        if (active) setFailure(error);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [transport, hardware, attempt]);
+
+  useEffect(() => {
+    if (!hardware || recommendation) return;
     let active = true;
     getBackends(transport).then(
       (result) => {
@@ -41,7 +60,7 @@ export function StepBackend() {
     return () => {
       active = false;
     };
-  }, [transport, recommendation, attempt]);
+  }, [transport, hardware, recommendation, attempt]);
 
   /** Detects again, for a user who has just updated the driver. */
   const detectAgain = async () => {
@@ -58,13 +77,6 @@ export function StepBackend() {
     }
   };
 
-  const gpu = recommendation?.gpu ?? mainGpu(hardware);
-  const subtitle = gpu
-    ? [gpu.name, gpu.memoryBytes != null ? formatBytes(gpu.memoryBytes, i18n.language) : null]
-        .filter(Boolean)
-        .join(' · ')
-    : hardware?.cpu.name;
-
   const driver = recommendation?.driver ?? null;
   const rows: Array<{ backend: Backend; tags: string; disabled: boolean }> = [];
   if (driver && !recommendation?.backends.some((b) => b.backend === 'cuda')) {
@@ -78,29 +90,31 @@ export function StepBackend() {
   return (
     <StepLayout
       title={t('setup.steps.backend')}
-      subtitle={subtitle}
       actions={
         <Button disabled={!backend || unsupported} onClick={toVersion}>
           {t('setup.next')}
         </Button>
       }
     >
+      <HardwareRows hardware={hardware} />
       {unsupported && (
-        <p className="text-[14px] text-text-muted">{t('setup.backend.unsupported')}</p>
+        <p className="mt-6 text-[14px] text-text-muted">{t('setup.backend.unsupported')}</p>
       )}
       {rows.length > 0 && (
-        <ChoiceList
-          value={backend}
-          onChange={(value) => useWizardStore.getState().chooseBackend(value as Backend)}
-          label={t('setup.steps.backend')}
-        >
-          {rows.map((row) => (
-            <ChoiceRow key={row.backend} value={row.backend} disabled={row.disabled}>
-              <span className="flex-1 font-medium">{backendName(t, row.backend)}</span>
-              <span className="text-[13px] text-text-muted">{row.tags}</span>
-            </ChoiceRow>
-          ))}
-        </ChoiceList>
+        <div className="mt-6">
+          <ChoiceList
+            value={backend}
+            onChange={(value) => useWizardStore.getState().chooseBackend(value as Backend)}
+            label={t('setup.steps.backend')}
+          >
+            {rows.map((row) => (
+              <ChoiceRow key={row.backend} value={row.backend} disabled={row.disabled}>
+                <span className="flex-1 font-medium">{backendName(t, row.backend)}</span>
+                <span className="text-[13px] text-text-muted">{row.tags}</span>
+              </ChoiceRow>
+            ))}
+          </ChoiceList>
+        </div>
       )}
       {driver && (
         <div className="mt-4 text-[13px] text-text-muted">
