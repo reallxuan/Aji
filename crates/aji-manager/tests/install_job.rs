@@ -877,6 +877,36 @@ fn import_network_copies_a_gzip_file() {
 }
 
 #[test]
+fn import_network_keeps_the_text_format_suffix() {
+    // KataGo chooses the model format by suffix: `.txt.gz` is parsed as text, every other `.gz`
+    // as binary, so a text network stored as `.bin.gz` fails to load.
+    let dir = tempfile::tempdir().unwrap();
+    let root = InstallRoot::new(dir.path().join("aji"));
+    for (name, fill, suffix) in [
+        ("Old Net.TXT.GZ", 1u8, "txt.gz"),
+        ("plain.gz", 2u8, "bin.gz"),
+    ] {
+        let source = dir.path().join(name);
+        let mut bytes = vec![0x1f, 0x8b, 0x08, 0x00];
+        bytes.extend(std::iter::repeat_n(fill, 1000));
+        std::fs::write(&source, &bytes).unwrap();
+
+        let imported = import_network(&root, &source).unwrap();
+        let file = format!("{}.{suffix}", imported.id);
+        assert_eq!(
+            std::fs::read(root.network_file(&file)).unwrap(),
+            bytes,
+            "{name}"
+        );
+        assert_eq!(
+            load_installed(&root.record_file()).networks[&imported.id].file,
+            file,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn import_network_rejects_other_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = InstallRoot::new(dir.path().join("aji"));
