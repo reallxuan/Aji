@@ -3,4 +3,4 @@
 /**
  * Why a move in a file breaks the rules. The move is still played (design 5.1).
  */
-export type Illegal = "occupied" | "suicide" | "ko";
+export type Illegal = "occupied" | "suicide" | "ko" | "offBoard";

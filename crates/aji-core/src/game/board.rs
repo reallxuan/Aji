@@ -16,6 +16,8 @@ pub enum Illegal {
     Suicide,
     /// An immediate recapture of a simple ko.
     Ko,
+    /// The move names a point off the board; it was ignored.
+    OffBoard,
 }
 
 /// What a move did.
@@ -149,7 +151,7 @@ impl Board {
         let Some(i) = self.index(p) else {
             return PlayResult {
                 captured: Vec::new(),
-                illegal: Some(Illegal::Occupied),
+                illegal: Some(Illegal::OffBoard),
             };
         };
         let mut illegal = None;
