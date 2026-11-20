@@ -293,17 +293,49 @@ pub fn run() {
         if let RunEvent::Exit = event
             && let Some(ctx) = app.try_state::<AppContext>()
         {
-            let (installer, engine) = (Arc::clone(&ctx.installer), ctx.engine.clone());
-            // A cancelled job may restart the engine it stopped, so the engine stops last. An
-            // unkillable KataGo must not keep the app from exiting.
-            installer.cancel();
-            let _ = tauri::async_runtime::block_on(tokio::time::timeout(
-                SHUTDOWN_TIMEOUT,
-                async move {
-                    installer.finished().await;
-                    engine.shutdown().await
-                },
-            ));
+            shut_down(Arc::clone(&ctx.installer), ctx.engine.clone());
         }
     });
+}
+
+/// Cancels the install job, waits for it to end, then stops KataGo: a cancelled job may
+/// restart the engine it stopped, so the engine stops last. An unkillable KataGo must not keep
+/// the app from exiting, so all of it gives up after [`SHUTDOWN_TIMEOUT`]. Called from the
+/// event loop, outside the async runtime.
+fn shut_down(installer: Arc<Installer>, engine: Engine) {
+    installer.cancel();
+    // The timeout is made inside `block_on`: its timer needs the runtime.
+    let _ = tauri::async_runtime::block_on(async move {
+        tokio::time::timeout(SHUTDOWN_TIMEOUT, async move {
+            installer.finished().await;
+            engine.shutdown().await
+        })
+        .await
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::test_support::{apple_m5, installer, setup, unconfigured};
+
+    /// Quitting runs on the event loop's thread, outside the runtime. It panicked there ("no
+    /// reactor running"), so the job and KataGo were never stopped.
+    #[test]
+    fn shutting_down_from_outside_the_runtime_does_not_panic() {
+        let (installer, engine) = tauri::async_runtime::block_on(async {
+            let engine = unconfigured();
+            let source = watch::Sender::new(DownloadSource::Direct);
+            let installer = installer(
+                Path::new("no-such-aji-folder"),
+                setup(apple_m5()),
+                engine.clone(),
+                source.subscribe(),
+            );
+            (installer, engine)
+        });
+        shut_down(installer, engine.clone());
+        assert_eq!(engine.state(), aji_engine::EngineState::NotConfigured);
+    }
 }
