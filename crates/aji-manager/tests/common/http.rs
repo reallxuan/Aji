@@ -153,3 +153,147 @@ fn answer(mut stream: TcpStream, routes: &HashMap<String, Reply>) {
         }
     }
 }
+
+// -------------------------------------------------------------- file serving
+
+/// How a file route answers.
+#[derive(Clone, Copy, Debug)]
+pub enum FileMode {
+    /// Honours `Range: bytes=<n>-` with a `206`.
+    Normal,
+    /// Always answers `200` with the whole body.
+    IgnoreRange,
+    NotFound,
+    /// Like `Normal`, with every byte flipped: the right length, the wrong content.
+    Corrupt,
+    /// Like `Normal`, but sends nothing past this offset of the file: the connection stays open
+    /// and silent. A request starting at or past it is served in full.
+    StallAfter(usize),
+}
+
+#[derive(Clone)]
+pub struct FileReply {
+    pub body: Vec<u8>,
+    pub mode: FileMode,
+}
+
+/// One request a file server received.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordedRequest {
+    pub path: String,
+    pub range: Option<String>,
+}
+
+pub struct TestServer {
+    pub base: String,
+    pub requests: Arc<Mutex<Vec<RecordedRequest>>>,
+}
+
+impl TestServer {
+    pub fn requests(&self) -> Vec<RecordedRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+
+    pub fn ranges(&self) -> Vec<Option<String>> {
+        self.requests().into_iter().map(|r| r.range).collect()
+    }
+}
+
+/// Serves files with Range support, recording every request.
+pub fn serve_files(routes: Vec<(&str, FileReply)>) -> TestServer {
+    let routes: HashMap<String, FileReply> = routes
+        .into_iter()
+        .map(|(path, reply)| (path.to_string(), reply))
+        .collect();
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let base = format!("http://{}", listener.local_addr().expect("addr"));
+    let recorded = Arc::clone(&requests);
+    thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let (routes, recorded) = (routes.clone(), Arc::clone(&recorded));
+            thread::spawn(move || answer_file(stream, &routes, &recorded));
+        }
+    });
+    TestServer { base, requests }
+}
+
+fn answer_file(
+    mut stream: TcpStream,
+    routes: &HashMap<String, FileReply>,
+    recorded: &Mutex<Vec<RecordedRequest>>,
+) {
+    let mut request = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => request.extend_from_slice(&buf[..n]),
+        }
+    }
+    let text = String::from_utf8_lossy(&request).into_owned();
+    let mut lines = text.lines();
+    let path = lines
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/")
+        .to_string();
+    let range = lines
+        .filter_map(|line| line.split_once(':'))
+        .find(|(name, _)| name.trim().eq_ignore_ascii_case("range"))
+        .map(|(_, value)| value.trim().to_string());
+    recorded.lock().unwrap().push(RecordedRequest {
+        path: path.clone(),
+        range: range.clone(),
+    });
+
+    let Some(reply) = routes.get(&path) else {
+        let _ =
+            stream.write_all(b"HTTP/1.1 404 X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        return;
+    };
+    let mut body = reply.body.clone();
+    let start = match reply.mode {
+        FileMode::NotFound => {
+            let _ = stream
+                .write_all(b"HTTP/1.1 404 X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            return;
+        }
+        FileMode::IgnoreRange => 0,
+        _ => range
+            .as_deref()
+            .and_then(|r| r.strip_prefix("bytes="))
+            .and_then(|r| r.strip_suffix('-'))
+            .and_then(|n| n.parse::<usize>().ok())
+            .unwrap_or(0),
+    };
+    if let FileMode::Corrupt = reply.mode {
+        body.iter_mut().for_each(|b| *b = !*b);
+    }
+    if start > body.len() {
+        let _ =
+            stream.write_all(b"HTTP/1.1 416 X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        return;
+    }
+    let total = body.len();
+    let head = if start > 0 {
+        format!(
+            "HTTP/1.1 206 X\r\nContent-Range: bytes {start}-{}/{total}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            total - 1,
+            total - start
+        )
+    } else {
+        format!("HTTP/1.1 200 X\r\nContent-Length: {total}\r\nConnection: close\r\n\r\n")
+    };
+    let _ = stream.write_all(head.as_bytes());
+    let end = match reply.mode {
+        FileMode::StallAfter(at) if start < at => at.min(total),
+        _ => total,
+    };
+    let _ = stream.write_all(&body[start..end]);
+    let _ = stream.flush();
+    if end < total {
+        // Silent until the client hangs up.
+        let _ = stream.read(&mut buf);
+    }
+}
