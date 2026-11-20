@@ -5,6 +5,9 @@ use std::time::Duration;
 use aji_core::{CoreError, Position, move_to_gtp};
 use serde_json::{Value, json};
 
+/// `analysisPVLen`: KataGo counts the moves after the first, so a line is 20 moves (design 5.1).
+pub const PV_LEN_AFTER_FIRST: u32 = 19;
+
 /// The `maxVisits` sent for "no limit": explicit, so the config file never decides.
 pub const UNLIMITED_VISITS: u64 = 1 << 50;
 
@@ -33,6 +36,7 @@ pub fn analysis_query(
         "boardYSize": position.size.get(),
         "maxVisits": max_visits,
         "reportDuringSearchEvery": report_every.as_secs_f64(),
+        "analysisPVLen": PV_LEN_AFTER_FIRST,
     });
     if let Some(player) = position.initial_player {
         q["initialPlayer"] = json!(player.gtp());
@@ -81,7 +85,7 @@ mod tests {
             analysis_query("aji-1", &p1(), Some(100_000), Duration::from_millis(100)).unwrap();
         assert!(!line.contains('\n'));
         let v: Value = serde_json::from_str(&line).unwrap();
-        let want = json!({"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1});
+        let want = json!({"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1,"analysisPVLen":19});
         assert_eq!(v, want);
     }
 

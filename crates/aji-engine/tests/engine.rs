@@ -53,7 +53,16 @@ fn options() -> EngineOptions {
         startup_timeout: Duration::from_secs(5),
         shutdown_grace: Duration::from_millis(500),
         throttle: Duration::ZERO,
+        submit_interval: Duration::ZERO,
         ..EngineOptions::default()
+    }
+}
+
+/// The shipped submission gate, for the tests of rapid navigation.
+fn gated(interval_ms: u64) -> EngineOptions {
+    EngineOptions {
+        submit_interval: Duration::from_millis(interval_ms),
+        ..options()
     }
 }
 
@@ -1258,5 +1267,87 @@ async fn the_limit_is_kept_across_restart_and_set_files() {
 async fn setting_a_limit_without_an_engine_succeeds() {
     let p = start(None, p1());
     assert_eq!(bounded(p.engine.set_visit_limit(Some(5))).await, Ok(()));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_burst_ends_on_the_last_position() {
+    let mut p = start_with(Some(files("normal")), p1(), gated(100));
+    p.until_state(|s| *s == analysing()).await;
+    let begun = Instant::now();
+    for i in 0..15 {
+        let position = if i % 2 == 0 { p1() } else { p2() };
+        assert_eq!(bounded(p.engine.set_position(position)).await, Ok(()));
+        tokio::time::sleep(Duration::from_millis(9)).await;
+    }
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    assert!(begun.elapsed() < Duration::from_millis(400));
+    p.drain();
+    let after = p
+        .until(|e| matches!(e, EngineEvent::Analysis(u) if u.is_final && u.position == p2().key()))
+        .await;
+    let after = updates(&after);
+    assert!(
+        after.iter().all(|u| u.position == p2().key()),
+        "an update for another position came after the last set_position"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_single_step_is_not_delayed() {
+    // A long interval: any wait for the gate would show.
+    let mut p = start_with(Some(files("normal")), p1(), gated(2_000));
+    p.until_state(|s| *s == analysing()).await;
+    // Let the interval since P1's submission run out.
+    tokio::time::sleep(Duration::from_millis(2_100)).await;
+    p.drain();
+    let asked = Instant::now();
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    let first = p.next_analysis().await;
+    assert_eq!(first.position, p2().key());
+    assert!(
+        asked.elapsed() < Duration::from_millis(1_000),
+        "the first P2 update took {:?}",
+        asked.elapsed()
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_position_inside_the_interval_waits_for_it() {
+    let mut p = start_with(Some(files("normal")), p1(), gated(2_000));
+    p.until_state(|s| *s == analysing()).await;
+    p.drain();
+    let asked = Instant::now();
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    let first = p.next_analysis().await;
+    assert_eq!(first.position, p2().key());
+    assert!(
+        asked.elapsed() >= Duration::from_millis(1_500),
+        "P2 was submitted inside the interval"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn waiting_for_the_gate_is_analysing_and_not_a_hang() {
+    let options = EngineOptions {
+        stall_timeout: Duration::from_millis(150),
+        ..gated(400)
+    };
+    let mut p = start_with(Some(files("normal")), p1(), options);
+    p.until_state(|s| *s == analysing()).await;
+    p.drain();
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    assert_eq!(p.engine.state(), analysing());
+    let events = p
+        .until(|e| matches!(e, EngineEvent::Analysis(u) if u.position == p2().key()))
+        .await;
+    assert!(
+        states(&events).iter().all(|s| **s == analysing()),
+        "the state left analysing while waiting: {:?}",
+        states(&events)
+    );
     bounded(p.engine.shutdown()).await;
 }

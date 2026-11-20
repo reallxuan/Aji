@@ -7,6 +7,7 @@
 
 mod cache;
 mod engine;
+mod gate;
 mod process;
 mod query;
 mod response;

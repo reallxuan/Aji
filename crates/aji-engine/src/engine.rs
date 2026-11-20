@@ -20,6 +20,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
 
 use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
+use crate::gate::SubmitGate;
 use crate::process::{self, EngineFiles, Spawned, katago_launch, lock};
 use crate::query::{action_query, analysis_query, terminate_query};
 use crate::response::{KataLine, RawAnalysis, parse_line};
@@ -39,6 +40,9 @@ pub struct EngineOptions {
     pub report_every: Duration,
     /// At most one non-final update per position per this interval.
     pub throttle: Duration,
+    /// At most one query is submitted per this interval: the first after a quiet interval
+    /// goes out at once, and during a burst the position current when it has passed does.
+    pub submit_interval: Duration,
     /// Candidates kept per update, by KataGo's `order`.
     pub max_candidates: usize,
     /// Positions the analysis cache keeps; the least recently used goes first.
@@ -73,6 +77,7 @@ impl Default for EngineOptions {
             visit_limit: None,
             report_every: Duration::from_millis(100),
             throttle: Duration::from_millis(100),
+            submit_interval: Duration::from_millis(100),
             max_candidates: 20,
             cache_entries: DEFAULT_CACHE_ENTRIES,
             stderr_lines: 50,
@@ -197,6 +202,8 @@ impl Engine {
         let cache = AnalysisCache::with_capacity(options.cache_entries);
         let actor = Actor {
             throttle: Throttle::new(options.throttle),
+            gate: SubmitGate::new(options.submit_interval),
+            submit_at: None,
             files,
             options,
             on_event: Box::new(on_event),
@@ -428,6 +435,9 @@ struct Actor {
     paused: bool,
     cache: AnalysisCache,
     throttle: Throttle,
+    gate: SubmitGate,
+    /// A query for the current position waits for the gate until then.
+    submit_at: Option<Instant>,
     /// In-flight analysis queries, with the position each was submitted for. A terminated
     /// query stays until its final, `noResults` or error arrives.
     queries: HashMap<String, Position>,
@@ -705,6 +715,7 @@ impl Actor {
             }
         }
         self.current = None;
+        self.submit_at = None;
         self.queries.clear();
     }
 
@@ -805,6 +816,7 @@ impl Actor {
         let then = self.process.take().and_then(|process| process.then);
         lock(&self.snapshot).pid = None;
         self.current = None;
+        self.submit_at = None;
         self.queries.clear();
         let crashed = |reason| EngineState::Crashed {
             reason,
@@ -861,10 +873,19 @@ impl Actor {
                 ..
             } => Some(*since + self.options.ping_timeout),
         };
-        [watchdog, self.stalled_at()].into_iter().flatten().min()
+        [watchdog, self.stalled_at(), self.submit_at]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     fn on_timer(&mut self, now: Instant) {
+        if self.submit_at.is_some_and(|at| now >= at) {
+            self.submit_at = None;
+            if let Some(version) = self.ready_version() {
+                self.analyse_or_idle(version);
+            }
+        }
         let ping_timeout = self.options.ping_timeout;
         let kill_deadline = self.options.kill_deadline;
         // `current` is cleared whenever a process starts ending, so this concerns a live one.
@@ -1053,11 +1074,11 @@ impl Actor {
             return;
         }
         if self.current.is_none() && self.wants_analysis() {
-            self.submit();
+            self.submit_or_defer(Instant::now());
         }
-        let state = match self.current {
-            Some(_) => EngineState::Analysing { version },
-            None => EngineState::Ready { version },
+        let state = match (&self.current, self.submit_at) {
+            (None, None) => EngineState::Ready { version },
+            _ => EngineState::Analysing { version },
         };
         self.set_state(state);
     }
@@ -1073,6 +1094,18 @@ impl Actor {
             })
     }
 
+    /// Submits now if the gate allows, else arms `submit_at`, which re-enters
+    /// `analyse_or_idle` for whatever position is current then.
+    fn submit_or_defer(&mut self, now: Instant) {
+        match self.gate.earliest(now) {
+            None => {
+                self.submit_at = None;
+                self.submit();
+            }
+            Some(at) => self.submit_at = Some(at),
+        }
+    }
+
     fn submit(&mut self) {
         let id = format!("aji-{}", self.next_id);
         self.next_id += 1;
@@ -1085,6 +1118,7 @@ impl Actor {
             return;
         };
         self.send(line);
+        self.gate.submitted(Instant::now());
         self.queries.insert(id.clone(), self.position.clone());
         self.current = Some(Active {
             id,
@@ -1094,6 +1128,7 @@ impl Actor {
     }
 
     fn terminate_current(&mut self) {
+        self.submit_at = None;
         if let Some(target) = self.current.take() {
             let id = format!("aji-terminate-{}", self.next_id);
             self.next_id += 1;
