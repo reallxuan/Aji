@@ -2,5 +2,11 @@
 //! writing it back.
 
 mod decode;
+mod parse;
+mod tree;
+mod write;
 
 pub use decode::*;
+pub use parse::*;
+pub use tree::*;
+pub use write::*;
