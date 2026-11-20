@@ -2,22 +2,13 @@
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::Path;
 
 use super::select::{Candidate, Source};
+use crate::atomic::temporary;
 
 const MANIFEST: &str = "manifest.json";
 const SIGNATURE: &str = "manifest.json.minisig";
-
-/// Numbers the temporary files of this process.
-static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
-
-/// `<name>.<pid>-<n>.tmp`: unique across the writers of this process and of any other.
-fn temporary(dir: &Path, name: &str) -> PathBuf {
-    let n = NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed);
-    dir.join(format!("{name}.{}-{n}.tmp", std::process::id()))
-}
 
 /// Reads the cached copy, or `None` when either file is missing or unreadable. It is not
 /// verified here; [`select`](super::select) does that.

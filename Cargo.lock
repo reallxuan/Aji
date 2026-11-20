@@ -61,6 +61,8 @@ dependencies = [
 name = "aji-manager"
 version = "0.1.0"
 dependencies = [
+ "aji-core",
+ "aji-engine",
  "ct-codecs",
  "minisign",
  "minisign-verify",
