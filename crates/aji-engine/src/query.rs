@@ -5,15 +5,20 @@ use std::time::Duration;
 use aji_core::{CoreError, Position, move_to_gtp};
 use serde_json::{Value, json};
 
-/// Builds an analysis query line (without a trailing newline).
+/// The `maxVisits` sent for "no limit": explicit, so the config file never decides.
+pub const UNLIMITED_VISITS: u64 = 1 << 50;
+
+/// Builds an analysis query line (without a trailing newline). `max_visits` of `None` sends
+/// [`UNLIMITED_VISITS`].
 ///
 /// A point off the board gives `PointOffBoard`.
 pub fn analysis_query(
     id: &str,
     position: &Position,
-    max_visits: u32,
+    max_visits: Option<u32>,
     report_every: Duration,
 ) -> Result<String, CoreError> {
+    let max_visits = max_visits.map_or(UNLIMITED_VISITS, u64::from);
     let moves = position
         .moves
         .iter()
@@ -69,7 +74,8 @@ mod tests {
 
     #[test]
     fn query_json_shape() {
-        let line = analysis_query("aji-1", &p1(), 100_000, Duration::from_millis(100)).unwrap();
+        let line =
+            analysis_query("aji-1", &p1(), Some(100_000), Duration::from_millis(100)).unwrap();
         assert!(!line.contains('\n'));
         let v: Value = serde_json::from_str(&line).unwrap();
         let want = json!({"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1});
@@ -77,13 +83,22 @@ mod tests {
     }
 
     #[test]
+    fn unlimited_query_sends_two_to_the_fifty() {
+        let line = analysis_query("aji-1", &p1(), None, Duration::from_millis(100)).unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["maxVisits"], json!(1_125_899_906_842_624_u64));
+        assert_eq!(UNLIMITED_VISITS, 1 << 50);
+    }
+
+    #[test]
     fn initial_stones_are_sent_when_present() {
         let mut p = p1();
         p.moves.clear();
         p.setup = vec![(Color::Black, Point { x: 3, y: 15 })];
-        let v: Value =
-            serde_json::from_str(&analysis_query("a", &p, 10, Duration::from_millis(100)).unwrap())
-                .unwrap();
+        let v: Value = serde_json::from_str(
+            &analysis_query("a", &p, Some(10), Duration::from_millis(100)).unwrap(),
+        )
+        .unwrap();
         assert_eq!(v["initialStones"], json!([["B", "D4"]]));
     }
 
@@ -94,12 +109,12 @@ mod tests {
             .push((Color::Black, Move::Play(Point { x: 19, y: 0 })));
         let off = Point { x: 19, y: 0 };
         assert_eq!(
-            analysis_query("a", &p, 10, Duration::from_millis(100)),
+            analysis_query("a", &p, Some(10), Duration::from_millis(100)),
             Err(CoreError::PointOffBoard(off))
         );
         let mut p = p1();
         p.setup = vec![(Color::Black, off)];
-        assert!(analysis_query("a", &p, 10, Duration::from_millis(100)).is_err());
+        assert!(analysis_query("a", &p, Some(10), Duration::from_millis(100)).is_err());
     }
 
     #[test]

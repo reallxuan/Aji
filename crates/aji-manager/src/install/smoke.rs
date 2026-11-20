@@ -18,7 +18,7 @@ pub async fn run_test_query(files: EngineFiles, timeout: Duration) -> Result<(),
     let komi = Komi::new(7.5).expect("7.5 is a valid komi");
     let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
     let options = EngineOptions {
-        visit_cap: 50,
+        visit_limit: Some(50),
         ..EngineOptions::default()
     };
     let (events, mut received) = mpsc::unbounded_channel();

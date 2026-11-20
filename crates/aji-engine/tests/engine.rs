@@ -799,7 +799,7 @@ async fn healthy_restart_earns_a_fresh_restart() {
 async fn capped_position_is_not_reanalysed() {
     // P1's final has 315 visits, above this cap.
     let options = EngineOptions {
-        visit_cap: 100,
+        visit_limit: Some(100),
         ..options()
     };
     let mut p = start_with(Some(files("normal")), p1(), options);
@@ -1113,5 +1113,107 @@ async fn an_unkillable_process_is_given_up_after_the_kill_deadline() {
     assert!(took < limit + Duration::from_secs(1), "took {took:?}");
     assert_eq!(p.engine.state(), EngineState::Stopped);
     assert_eq!(p.engine.pid(), None);
+    bounded(p.engine.shutdown()).await;
+}
+
+// ---------------------------------------------------------------- M5: a visit limit that changes
+
+/// Waits for an analysis update of at least `visits` root visits.
+async fn until_visits(p: &mut Probe, visits: u32) {
+    loop {
+        if let EngineEvent::Analysis(update) = p.next().await
+            && update.root_visits >= visits
+        {
+            return;
+        }
+    }
+}
+
+#[tokio::test]
+async fn lowering_the_limit_below_current_visits_terminates_the_query() {
+    let mut p = start(Some(files("slow")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    until_visits(&mut p, 107).await;
+    assert_eq!(bounded(p.engine.set_visit_limit(Some(100))).await, Ok(()));
+    p.until_state(|s| *s == ready()).await;
+    let quiet = p.collect_for(Duration::from_millis(500)).await;
+    assert!(
+        states(&quiet).is_empty(),
+        "no new search after the lowered limit: {quiet:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn raising_the_limit_resubmits_a_capped_position() {
+    let options = EngineOptions {
+        visit_limit: Some(100),
+        ..options()
+    };
+    let mut p = start_with(Some(files("normal")), p1(), options);
+    p.until_state(|s| *s == ready()).await;
+    // P1's final has 315 visits: below 1000, so it is searched again.
+    assert_eq!(bounded(p.engine.set_visit_limit(Some(1000))).await, Ok(()));
+    p.until_state(|s| *s == analysing()).await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn removing_the_limit_resubmits_a_capped_position() {
+    let options = EngineOptions {
+        visit_limit: Some(100),
+        ..options()
+    };
+    let mut p = start_with(Some(files("normal")), p1(), options);
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.set_visit_limit(None)).await, Ok(()));
+    p.until_state(|s| *s == analysing()).await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_limit_change_while_paused_does_not_submit() {
+    let options = EngineOptions {
+        visit_limit: Some(100),
+        ..options()
+    };
+    let mut p = start_with(Some(files("normal")), p1(), options);
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    assert_eq!(p.next_state().await, paused());
+    assert_eq!(bounded(p.engine.set_visit_limit(None)).await, Ok(()));
+    let quiet = p.collect_for(Duration::from_millis(500)).await;
+    assert!(states(&quiet).is_empty(), "{quiet:?}");
+    assert_eq!(p.engine.state(), paused());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn the_limit_is_kept_across_restart_and_set_files() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == ready()).await;
+    // The cached final has 315 visits; a limit of 100 caps it from now on.
+    assert_eq!(bounded(p.engine.set_visit_limit(Some(100))).await, Ok(()));
+    assert_eq!(bounded(p.engine.restart()).await, Ok(()));
+    let seen = p.until_state(|s| *s != EngineState::Starting).await;
+    assert_eq!(states(&seen), [&EngineState::Starting, &ready()]);
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("normal")))).await,
+        Ok(())
+    );
+    // New files clear the cache, so P1 is searched again, to its final.
+    p.until_state(|s| *s == ready()).await;
+    // Its 315-visit final is at or above the kept limit: resume does not search again.
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    assert_eq!(p.next_state().await, paused());
+    assert_eq!(bounded(p.engine.resume()).await, Ok(()));
+    assert_eq!(p.next_state().await, ready());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn setting_a_limit_without_an_engine_succeeds() {
+    let p = start(None, p1());
+    assert_eq!(bounded(p.engine.set_visit_limit(Some(5))).await, Ok(()));
     bounded(p.engine.shutdown()).await;
 }
