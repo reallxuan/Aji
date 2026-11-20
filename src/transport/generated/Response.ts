@@ -18,9 +18,9 @@ import type { UiSettings } from "./UiSettings";
  */
 export type Response = { "type": "appInfo" } & AppInfo | { "type": "engineStatus", engine: EngineState, 
 /**
- * The position the engine is analysing.
+ * The position the engine is analysing; `null` when it has none (an illegal position).
  */
-position: PositionKey, 
+position: PositionKey | null, 
 /**
  * The latest analysis of that position, if any has arrived.
  */

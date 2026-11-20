@@ -10,8 +10,13 @@ import type { EngineStatus } from '../transport/api';
 export interface EngineStoreState {
   engine: EngineState | null;
   analysis: AnalysisUpdate | null;
-  /** The position the analysis belongs to; null until the status reply or `setPosition` sets it. */
+  /**
+   * The position the analysis belongs to; null until the status reply or `setPosition` sets it,
+   * and after `clearPosition`. No update is accepted while it is null.
+   */
   position: PositionKey | null;
+  /** True once the game has set or cleared the position; from then on a status reply is stale. */
+  positionOwned: boolean;
   /** True once an analysis update has arrived; from then on a status analysis is stale. */
   sawAnalysis: boolean;
   /** True once a pushed engine-state event has arrived; from then on a status reply is stale. */
@@ -21,6 +26,8 @@ export interface EngineStoreState {
   applyStatus(status: EngineStatus): void;
   /** Switches to another position, dropping the old analysis when the key changes. */
   setPosition(position: PositionKey): void;
+  /** The engine analyses nothing (an illegal position): drop the analysis and every update. */
+  clearPosition(): void;
 }
 
 export type EngineStore = StoreApi<EngineStoreState>;
@@ -30,6 +37,7 @@ export function createEngineStore(): EngineStore {
     engine: null,
     analysis: null,
     position: null,
+    positionOwned: false,
     sawAnalysis: false,
     sawEvent: false,
     applyEvent: (event) =>
@@ -37,22 +45,28 @@ export function createEngineStore(): EngineStore {
         if (event.type === 'engineState') return { engine: event.engine, sawEvent: true };
         // Install progress is for the setup screens, not the engine store.
         if (event.type !== 'analysisUpdate') return state;
-        if (state.position !== null && event.analysis.position !== state.position) return state;
+        if (state.position === null || event.analysis.position !== state.position) return state;
         return { analysis: event.analysis, sawAnalysis: true };
       }),
     applyStatus: (status) =>
       set((state) => {
         const next: Partial<EngineStoreState> = {};
         if (!state.sawEvent) next.engine = status.engine;
-        if (state.position === null) next.position = status.position;
-        const position = state.position ?? status.position;
-        if (!state.sawAnalysis && position === status.position) next.analysis = status.analysis;
+        const position = state.positionOwned ? state.position : status.position;
+        if (!state.positionOwned) next.position = status.position;
+        if (!state.sawAnalysis && position !== null && position === status.position) {
+          next.analysis = status.analysis;
+        }
         return next;
       }),
     setPosition: (position) =>
       set((state) =>
-        state.position === position ? state : { position, analysis: null, sawAnalysis: false },
+        state.position === position
+          ? { positionOwned: true }
+          : { position, positionOwned: true, analysis: null, sawAnalysis: false },
       ),
+    clearPosition: () =>
+      set({ position: null, positionOwned: true, analysis: null, sawAnalysis: false }),
   }));
 }
 

@@ -15,6 +15,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   setupImportFailed: true,
   setupInvalidSource: true,
   engineBusy: true,
+  invalidPosition: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {

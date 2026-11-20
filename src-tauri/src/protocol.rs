@@ -92,8 +92,8 @@ pub enum Response {
     AppInfo(AppInfo),
     EngineStatus {
         engine: EngineState,
-        /// The position the engine is analysing.
-        position: PositionKey,
+        /// The position the engine is analysing; `null` when it has none (an illegal position).
+        position: Option<PositionKey>,
         /// The latest analysis of that position, if any has arrived.
         analysis: Option<AnalysisUpdate>,
     },
@@ -189,6 +189,8 @@ pub enum ErrorCode {
     SetupInvalidSource,
     /// An install job has the engine for its benchmark and test query.
     EngineBusy,
+    /// A position with a point off the board.
+    InvalidPosition,
 }
 
 #[cfg(test)]
@@ -239,7 +241,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
             })
             .unwrap(),
@@ -253,7 +255,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
             })
             .unwrap(),

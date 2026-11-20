@@ -31,7 +31,8 @@
     "setupUnknownNetwork": "列表中没有这个网络。",
     "setupImportFailed": "该文件不是 KataGo 网络文件。",
     "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。",
-    "engineBusy": "引擎正在安装或测速，请在完成后再试。"
+    "engineBusy": "引擎正在安装或测速，请在完成后再试。",
+    "invalidPosition": "局面里有棋盘外的点，无法分析。"
   },
   "engine": {
     "state": {

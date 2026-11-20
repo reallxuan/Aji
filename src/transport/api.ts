@@ -31,7 +31,7 @@ function unexpected(response: { type?: unknown }): TransportError {
 
 export interface EngineStatus {
   engine: EngineState;
-  position: PositionKey;
+  position: PositionKey | null;
   analysis: AnalysisUpdate | null;
 }
 

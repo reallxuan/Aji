@@ -31,7 +31,8 @@
     "setupUnknownNetwork": "That network is not in the list.",
     "setupImportFailed": "That file is not a KataGo network.",
     "setupInvalidSource": "A download source must be a web address starting with http:// or https://.",
-    "engineBusy": "The engine is being installed or measured. Try again when that has finished."
+    "engineBusy": "The engine is being installed or measured. Try again when that has finished.",
+    "invalidPosition": "The position has a point off the board, so it cannot be analysed."
   },
   "engine": {
     "state": {

@@ -77,7 +77,7 @@ impl From<EngineError> for ProtocolError {
         let code = match error {
             EngineError::NotConfigured => ErrorCode::EngineNotConfigured,
             EngineError::NotRunning => ErrorCode::EngineNotRunning,
-            EngineError::InvalidPosition => ErrorCode::Internal,
+            EngineError::InvalidPosition => ErrorCode::InvalidPosition,
         };
         ProtocolError {
             code,
@@ -854,13 +854,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn invalid_position_has_its_own_code() {
+        let error = ProtocolError::from(EngineError::InvalidPosition);
+        assert_eq!(error.code, ErrorCode::InvalidPosition);
+    }
+
     #[tokio::test]
     async fn engine_status_reports_not_configured() {
         assert_eq!(
             handle(&ctx(), Request::EngineStatus).await,
             Ok(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: aji_core::PositionKey(0x4d32_5c64_abd3_78a1),
+                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
             })
         );
