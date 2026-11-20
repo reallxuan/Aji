@@ -271,60 +271,14 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    use aji_core::{BoardSize, Komi, Position, Rules};
-    use aji_engine::{EngineOptions, EngineState};
-    use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsReport};
+    use aji_engine::EngineState;
     use aji_manager::install::{
-        EngineSet, FailureCode, FreeSpace, InstallOptions, InstalledEngine, InstalledNetwork,
-        InstallerParts, JobOutcome, engine_files,
+        EngineSet, FailureCode, InstalledEngine, InstalledNetwork, JobOutcome, engine_files,
     };
-    use aji_manager::manifest::{BUNDLED, Backend, ClientOptions, ManifestStore, http_client};
+    use aji_manager::manifest::Backend;
 
     use crate::settings::{DevEngine, Settings, load_settings};
-
-    fn unconfigured() -> Engine {
-        let position =
-            Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
-        Engine::spawn(None, position, EngineOptions::default(), |_| {})
-    }
-
-    fn apple_m5() -> HardwareReport {
-        HardwareReport {
-            os: OsReport {
-                kind: OsKind::Macos,
-                version: "27.2".into(),
-                arch: "aarch64".into(),
-            },
-            cpu: CpuReport {
-                name: "Apple M5".into(),
-                cores: 10,
-                threads: 10,
-                avx2: false,
-            },
-            memory_bytes: 25_769_803_776,
-            gpus: vec![GpuReport {
-                vendor: GpuVendor::Apple,
-                name: "Apple M5".into(),
-                memory_bytes: None,
-                driver_version: None,
-                pci_device_id: None,
-                apple_gpu_cores: Some(10),
-                compute_capability: None,
-                software: false,
-            }],
-            problems: Vec::new(),
-        }
-    }
-
-    /// Every disk reports no free space, so a job that starts against the bundled manifest
-    /// fails its space check before it fetches anything.
-    struct NoSpace;
-
-    impl FreeSpace for NoSpace {
-        fn available(&self, _: &Path) -> std::io::Result<u64> {
-            Ok(0)
-        }
-    }
+    use crate::test_support::{apple_m5, installer, setup, unconfigured};
 
     /// The dialog's answer: a file, or `None` for a cancelled dialog.
     struct Picks(Option<PathBuf>);
@@ -338,24 +292,14 @@ mod tests {
     /// A context whose install root and `settings.json` live in `dir`. Must run on a Tokio
     /// runtime: the installer runs its jobs there.
     fn ctx_in(dir: &Path, picks: Option<PathBuf>) -> AppContext {
-        // The cache folder does not exist and the store is never refreshed, so the bundled
-        // manifest is in use.
-        let store = ManifestStore::open(BUNDLED, "no-such-manifest-cache".into(), Vec::new());
-        let setup = Arc::new(Setup::with_hardware(store, apple_m5()));
+        let setup = setup(apple_m5());
         let engine = unconfigured();
         let source = watch::Sender::new(DownloadSource::Direct);
-        let client = http_client("Aji/test", ClientOptions::default()).unwrap();
-        let installer = Installer::new(
-            InstallerParts {
-                root: InstallRoot::new(dir.join("data")),
-                setup: Arc::clone(&setup),
-                engine: engine.clone(),
-                client,
-                source: source.subscribe(),
-                space: Arc::new(NoSpace),
-                options: InstallOptions::default(),
-            },
-            |_| {},
+        let installer = installer(
+            &dir.join("data"),
+            Arc::clone(&setup),
+            engine.clone(),
+            source.subscribe(),
         );
         AppContext {
             version: "0.1.0".into(),

@@ -1,19 +1,22 @@
+mod dev_install;
 mod ipc;
 pub mod protocol;
 pub mod service;
 pub mod settings;
+#[cfg(test)]
+mod test_support;
 pub mod window;
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aji_core::{BoardSize, Komi, Position, Rules};
 use aji_engine::{Engine, EngineFiles, EngineOptions};
 use aji_manager::Setup;
 use aji_manager::install::{
-    DownloadSource, InstallOptions, InstallRoot, Installer, InstallerParts, SystemFreeSpace,
-    load_installed,
+    DownloadSource, InstallOptions, InstallRoot, Installed, Installer, InstallerParts, JobSnapshot,
+    SystemFreeSpace, load_installed,
 };
 use aji_manager::manifest::{
     BUNDLED, ClientOptions, MANIFEST_BASES, ManifestStore, http_client, trusted_keys,
@@ -110,9 +113,12 @@ fn download_source(settings: &Settings) -> DownloadSource {
 }
 
 /// Which engine starts: logged, since it decides what the user sees first.
-fn engine_files(settings: &Settings, root: &InstallRoot) -> Option<EngineFiles> {
-    let installed = load_installed(&root.record_file());
-    let files = service::startup_files(settings, &installed, root);
+fn engine_files(
+    settings: &Settings,
+    installed: &Installed,
+    root: &InstallRoot,
+) -> Option<EngineFiles> {
+    let files = service::startup_files(settings, installed, root);
     match (&settings.dev_engine, &installed.active, &files) {
         (Some(_), _, _) => eprintln!("aji: starting the development engine"),
         (None, Some(active), Some(_)) => eprintln!(
@@ -140,7 +146,8 @@ fn start_engine(files: Option<EngineFiles>, sink: Arc<dyn EventSink>) -> Engine 
 }
 
 /// The installer, with a download client of its own: the manifest client's whole-request limit
-/// would cut every large download. Its progress goes out as `setupProgress` events.
+/// would cut every large download. Its progress goes out as `setupProgress` events, and with
+/// the development trigger set it is logged too.
 fn start_installer(
     version: &str,
     root: InstallRoot,
@@ -163,11 +170,21 @@ fn start_installer(
         space: Arc::new(SystemFreeSpace),
         options: InstallOptions::default(),
     };
+    let logged = dev_install::dev_install_value().map(|_| Mutex::new(None::<JobSnapshot>));
+    let on_progress = move |job: JobSnapshot| {
+        if let Some(logged) = &logged {
+            let mut last = logged.lock().unwrap_or_else(|e| e.into_inner());
+            let before = last.as_ref().filter(|before| before.id == job.id);
+            for line in dev_install::progress_lines(before, &job) {
+                eprintln!("{line}");
+            }
+            *last = Some(job.clone());
+        }
+        sink.emit(AppEvent::SetupProgress { job });
+    };
     // Jobs run on the runtime current when the installer is made: Tauri's.
     Ok(tauri::async_runtime::block_on(async {
-        Installer::new(parts, move |job| {
-            sink.emit(AppEvent::SetupProgress { job });
-        })
+        Installer::new(parts, on_progress)
     }))
 }
 
@@ -235,7 +252,9 @@ pub fn run() {
             let settings = load_settings(&settings_path);
             let data_dir = local_data_dir(app);
             let root = InstallRoot::new(data_dir.clone());
-            let engine = start_engine(engine_files(&settings, &root), Arc::clone(&sink));
+            let installed = load_installed(&root.record_file());
+            let files = engine_files(&settings, &installed, &root);
+            let engine = start_engine(files, Arc::clone(&sink));
             let setup = start_setup(&version, data_dir.join("manifest"));
             let source = watch::Sender::new(download_source(&settings));
             let installer = start_installer(
@@ -246,6 +265,15 @@ pub fn run() {
                 source.subscribe(),
                 sink,
             )?;
+            if let Some(value) = dev_install::dev_install_value() {
+                let configured = settings.dev_engine.is_some() || installed.active.is_some();
+                dev_install::start(
+                    value,
+                    configured,
+                    Arc::clone(&setup),
+                    Arc::clone(&installer),
+                );
+            }
             app.manage(AppContext {
                 version,
                 os: OsKind::current(),
