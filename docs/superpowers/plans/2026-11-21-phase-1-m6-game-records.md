@@ -17,6 +17,22 @@
 
 **Spec:** [M6 game records design](../specs/2026-11-21-m6-game-records-design.md), approved by the owner on 2026-11-21, with the mockup [`docs/design/mockups/m6/game-records.html`](../../design/mockups/m6/game-records.html). Section numbers below (5.5 and so on) refer to the design; frame letters (A–G) refer to the mockup.
 
+**Status:** Built on 2026-11-21, except the items under Outstanding.
+- **Checks.** Every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 613 Rust tests, `pnpm lint`, `pnpm typecheck`, 306 TypeScript tests, `cargo deny check licenses`, the npm licence check, the notices staleness check and unchanged generated bindings.
+- **Final review.** A fresh review of the whole branch found nothing critical. It found four important issues, and one minor was re-graded as important. Each was fixed with a test that failed first and folded into the commit it corrects:
+  - returning to an analysed position dropped its cached analysis, because the engine answered before the interface heard of the position (the snapshot event now goes first);
+  - a UTF-8 file with no `CA` that was cut mid-character, or had a stray byte, read as windows-1252;
+  - the other games in a saved collection kept `CA[gb2312]` inside a UTF-8 file;
+  - moves after a stray `)` were dropped with no warning;
+  - save-as could replace an existing `<name>.sgf` that the dialog never asked about (now a native "replace it?" prompt).
+  Twelve minor findings are deferred to M7 planning.
+- **Mac exit check** with the app from `pnpm tauri build --bundles app` (11.60 MiB):
+  - Items 1, 4 and 5 run as automated tests on the fixtures: every good fixture opens and its Chinese names read correctly; a save, reopen and save again is byte-identical; LizzieYzy and unknown properties and the other games of a collection survive; each broken file gives its message, and the truncated one opens with its moves.
+  - The header, menus, rules popover, counter, keyboard navigation, notices (frame E), drop overlay (frame F), the illegal-position line and the settings row (frame G) were walked in `pnpm dev` in the browser pane, in light and dark, in Chinese and English, at 1024×700 and 1440×900. The walk found two layout faults, both fixed in Task 11: the title collapsed in a 360 px panel, and the English rules control overflowed its popover.
+- **Outstanding.**
+  - The native-window items, which are the owner's steps on the built app: item 2 (hold → through a full game while KataGo runs; wheel and trackpad), item 3 (Finder drop; recent after a restart; a moved file shows as missing), item 4's check in another program, item 6 (analysis follows navigation; the illegal fixture), item 7 (high-DPI), and the macOS menu with ⌘N, ⌘O and ⇧⌘S.
+  - The PC check, optional until M8.
+
 ## Global Constraints
 
 - **Everything from M1 to M5 still holds:** language rules, interface text in both locales, dependency licences, Conventional Commits, crate rules (`aji-core` depends on no workspace crate and does no I/O), and the protocol rules: no file paths in `rpc`; errors are `{ code, message }`; `#[ts(type = "number")]` on every `u64`; camelCase JSON.

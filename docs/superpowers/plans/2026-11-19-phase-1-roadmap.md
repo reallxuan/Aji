@@ -236,6 +236,8 @@ Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-instal
 
 **Exit:** the owner's Fox and Tygem files open on both machines, navigation is fluid, and save-as round-trips.
 
+**Status:** built on 2026-11-21. Detailed plan and design: [2026-11-21-phase-1-m6-game-records.md](2026-11-21-phase-1-m6-game-records.md), [the M6 design](../specs/2026-11-21-m6-game-records-design.md). General SGF only: the owner has no Tygem records and Tygem `.gib` is not supported (audit G6). Real-file fixtures are public pro games (Samsung Cup finals) plus constructed Fox-layout, GBK, Shift-JIS and broken files. The exit check results are in the plan's Status.
+
 ### M7. Analysis on the board
 
 - Analysis follows the current node. Rapid navigation debounces requests and terminates stale queries, and updates for any other position are never drawn.
