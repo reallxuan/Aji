@@ -7,16 +7,13 @@ use regex::Regex;
 
 use super::{BackendTag, RecommendationNote};
 use crate::hardware::{GpuReport, GpuVendor, HardwareReport, OsKind};
-use crate::manifest::{Backend, Engine, Manifest, Platform};
-
-/// The newest Windows driver and GPU the CUDA 13.2 runtime set supports.
-const CUDA13_DRIVER: &str = "580.00";
-const CUDA13_COMPUTE_CAPABILITY: &str = "7.5";
-/// The oldest Windows driver for the CUDA 12.8 runtime set.
-const CUDA12_DRIVER: &str = "572.61";
+use crate::manifest::{Backend, Engine, Manifest, Platform, Runtime};
 
 const CUDA13: &str = "cuda13.2-cudnn9.24.0";
 const CUDA12: &str = "cuda12.8-cudnn9.8.0";
+/// The CUDA variants, best first. Their driver and compute-capability limits come from the
+/// manifest's runtimes, so a wrong limit is fixed by publishing a new manifest.
+const CUDA_VARIANTS: [&str; 2] = [CUDA13, CUDA12];
 
 /// Which of a backend's engines this hardware needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,7 +97,7 @@ pub(super) fn plan<'a>(report: &'a HardwareReport, manifest: &Manifest) -> Plan<
             notes: vec![RecommendationNote::UnsupportedPlatform],
         };
     };
-    let (wanted, max_fallbacks, mut notes) = table(platform, report, gpu);
+    let (wanted, max_fallbacks, mut notes) = table(platform, report, gpu, manifest);
     let total = wanted.len();
     let picks: Vec<Pick> = wanted
         .into_iter()
@@ -132,6 +129,7 @@ fn table(
     platform: Platform,
     report: &HardwareReport,
     gpu: Option<&GpuReport>,
+    manifest: &Manifest,
 ) -> (Vec<Pick>, usize, Vec<RecommendationNote>) {
     use RecommendationNote::*;
     let any = |b| pick(b, Need::Any);
@@ -163,26 +161,15 @@ fn table(
         v
     };
     match gpu.vendor {
-        GpuVendor::Nvidia => {
-            let driver = gpu.driver_version.as_deref();
-            let cc = gpu.compute_capability.as_deref();
-            let at_least = |v: Option<&str>, min: &str| matches!((v.and_then(dotted), dotted(min)), (Some(a), Some(b)) if a >= b);
-            if at_least(driver, CUDA13_DRIVER) && at_least(cc, CUDA13_COMPUTE_CAPABILITY) {
-                (
-                    with_first(pick(Backend::Cuda, Need::Variant(CUDA13))),
-                    usize::MAX,
-                    vec![],
-                )
-            } else if at_least(driver, CUDA12_DRIVER) {
-                (
-                    with_first(pick(Backend::Cuda, Need::Variant(CUDA12))),
-                    usize::MAX,
-                    vec![],
-                )
-            } else {
-                (generic(), usize::MAX, vec![DriverTooOldForCuda])
-            }
-        }
+        GpuVendor::Nvidia => match cuda_variant(manifest, platform, gpu) {
+            Cuda::Variant(v) => (
+                with_first(pick(Backend::Cuda, Need::Variant(v))),
+                usize::MAX,
+                vec![],
+            ),
+            Cuda::NoEngine => (generic(), usize::MAX, vec![NoEngineForBackend]),
+            Cuda::TooOld => (generic(), usize::MAX, vec![DriverTooOldForCuda]),
+        },
         GpuVendor::Amd => match amd_family(&gpu.name) {
             Some(f) => (
                 with_first(pick(Backend::Rocm, Need::GpuFamily(f))),
@@ -195,6 +182,81 @@ fn table(
         // Any other adapter that is not a software renderer still runs DirectML.
         _ => (generic(), usize::MAX, vec![]),
     }
+}
+
+enum Cuda {
+    Variant(&'static str),
+    /// The manifest has no CUDA engine for this platform.
+    NoEngine,
+    /// The driver or the GPU is below every CUDA runtime's limits.
+    TooOld,
+}
+
+/// The best CUDA variant for this GPU. A variant counts when the manifest has an engine for it;
+/// it is usable when the driver is known and meets its runtime's `minDriver` (a runtime without
+/// one is never usable) and the GPU meets its `minComputeCapability`. An unknown compute
+/// capability (no nvidia-smi) takes the usable variant with the lowest minimum: it runs on the
+/// most cards, and a Pascal card must not get CUDA 13, which dropped it.
+fn cuda_variant(manifest: &Manifest, platform: Platform, gpu: &GpuReport) -> Cuda {
+    let present: Vec<&'static str> = CUDA_VARIANTS
+        .into_iter()
+        .filter(|v| cuda_engine(manifest, platform, v).is_some())
+        .collect();
+    if present.is_empty() {
+        return Cuda::NoEngine;
+    }
+    let Some(driver) = gpu.driver_version.as_deref().and_then(dotted) else {
+        return Cuda::TooOld;
+    };
+    // Each variant the driver allows, with its minimum compute capability: empty for none,
+    // `None` for one that does not parse.
+    let allowed: Vec<(&'static str, Option<Vec<u64>>)> = present
+        .into_iter()
+        .filter_map(|v| {
+            let runtime = cuda_runtime(manifest, platform, v)?;
+            let min_driver = dotted(runtime.min_driver.as_deref()?)?;
+            let min_cc = match runtime.min_compute_capability.as_deref() {
+                None => Some(Vec::new()),
+                Some(min) => dotted(min),
+            };
+            (driver >= min_driver).then_some((v, min_cc))
+        })
+        .collect();
+    let chosen = match gpu.compute_capability.as_deref().and_then(dotted) {
+        Some(cc) => allowed
+            .iter()
+            .find(|(_, min)| min.as_ref().is_some_and(|min| cc >= *min)),
+        None => allowed
+            .iter()
+            .filter(|(_, min)| min.is_some())
+            .min_by(|a, b| a.1.cmp(&b.1)),
+    };
+    chosen.map_or(Cuda::TooOld, |(v, _)| Cuda::Variant(v))
+}
+
+fn cuda_engine<'m>(
+    manifest: &'m Manifest,
+    platform: Platform,
+    variant: &str,
+) -> Option<&'m Engine> {
+    manifest
+        .engines
+        .iter()
+        .find(|e| e.platform == platform && e.backend == Backend::Cuda && e.variant == variant)
+}
+
+/// The runtime named by the variant's engines on this platform.
+fn cuda_runtime<'m>(
+    manifest: &'m Manifest,
+    platform: Platform,
+    variant: &str,
+) -> Option<&'m Runtime> {
+    let id = manifest
+        .engines
+        .iter()
+        .filter(|e| e.platform == platform && e.backend == Backend::Cuda && e.variant == variant)
+        .find_map(|e| e.runtime.as_deref())?;
+    manifest.runtimes.iter().find(|r| r.id == id)
 }
 
 /// Parses `580.00` or `7.5` into its numbers, so `1000.1` is above `580.00`.

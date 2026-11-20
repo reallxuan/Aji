@@ -139,12 +139,12 @@ pub(super) fn fill_from_nvidia_smi(
 }
 
 /// What the two nvidia-smi queries gave. The base data is kept when only the compute-capability
-/// query failed (older drivers lack the field): `caps_ok` is then false.
+/// query failed (older drivers lack the field): `caps_error` then says why.
 #[cfg_attr(not(any(target_os = "windows", target_os = "linux")), allow(dead_code))]
 pub(super) struct SmiData {
     pub gpus: Vec<NvidiaSmiGpu>,
     pub caps: Vec<(u32, String)>,
-    pub caps_ok: bool,
+    pub caps_error: Option<ParseError>,
 }
 
 /// Combines the outputs of the two queries. Only a failed base query is an error.
@@ -154,17 +154,20 @@ pub(super) fn smi_from_outputs(
     caps: Result<String, ParseError>,
 ) -> Result<SmiData, ParseError> {
     let gpus = parse_nvidia_smi(base)?;
-    let caps = caps.and_then(|csv| parse_nvidia_smi_compute_cap(&csv));
+    let (caps, caps_error) = match caps.and_then(|csv| parse_nvidia_smi_compute_cap(&csv)) {
+        Ok(caps) => (caps, None),
+        Err(e) => (Vec::new(), Some(e)),
+    };
     Ok(SmiData {
         gpus,
-        caps_ok: caps.is_ok(),
-        caps: caps.unwrap_or_default(),
+        caps,
+        caps_error,
     })
 }
 
 /// Runs the two nvidia-smi queries.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-pub(super) async fn query(program: &std::path::Path) -> Result<SmiData, ParseError> {
+pub(super) async fn query(program: &std::path::Path) -> Result<SmiData, super::CommandError> {
     let limit = std::time::Duration::from_secs(10);
     let base = super::run_command(
         program,
@@ -180,6 +183,7 @@ pub(super) async fn query(program: &std::path::Path) -> Result<SmiData, ParseErr
         &["--query-gpu=index,compute_cap", "--format=csv"],
         limit,
     )
-    .await;
-    smi_from_outputs(&base, caps)
+    .await
+    .map_err(|e| ParseError(e.to_string()));
+    Ok(smi_from_outputs(&base, caps)?)
 }

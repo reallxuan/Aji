@@ -45,8 +45,16 @@ pub(super) async fn probe() -> (Vec<GpuReport>, Vec<super::Probe>) {
         std::time::Duration::from_secs(15),
     )
     .await;
-    match output.and_then(|json| gpus_from_system_profiler(&json)) {
-        Ok(gpus) => (gpus, Vec::new()),
-        Err(_) => (Vec::new(), vec![super::Probe::SystemProfiler]),
-    }
+    let parsed = output
+        .map_err(|e| e.to_string())
+        .and_then(|json| gpus_from_system_profiler(&json).map_err(|e| e.to_string()));
+    let mut problems = Vec::new();
+    let gpus = match parsed {
+        Ok(gpus) => gpus,
+        Err(e) => {
+            super::record_problem(&mut problems, super::Probe::SystemProfiler, &e);
+            Vec::new()
+        }
+    };
+    (gpus, problems)
 }
