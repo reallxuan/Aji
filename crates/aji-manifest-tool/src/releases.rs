@@ -23,6 +23,11 @@ pub enum Source {
 struct Release {
     published_at: String,
     assets: Vec<Asset>,
+    /// Drafts and prereleases are not offered to users.
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
 }
 
 #[derive(Deserialize)]
@@ -108,7 +113,7 @@ pub fn engines(json: &str, source: Source) -> Result<Vec<Engine>, String> {
     let releases: Vec<Release> =
         serde_json::from_str(json).map_err(|e| format!("release list: {e}"))?;
     let mut out = Vec::new();
-    for release in &releases {
+    for release in releases.iter().filter(|r| !r.draft && !r.prerelease) {
         for asset in &release.assets {
             if let Some(engine) = engine(release, asset, source)? {
                 out.push(engine);

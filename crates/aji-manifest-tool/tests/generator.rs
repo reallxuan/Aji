@@ -504,3 +504,56 @@ fn licence_hash_covers_raw_bytes() {
         aji_manifest_tool::sha256_hex(String::from_utf8_lossy(raw).as_bytes())
     );
 }
+
+#[test]
+fn network_links_outside_the_models_prefix_are_rejected() {
+    // A strong row that would be listed, but whose file lives elsewhere.
+    let row = r#"<tr class="strongestNetworkStyle"><td> kata1-b18c384nbt-s9999999999-d9999999 </td><td> 2026-11-01 00:00:00 UTC </td><td> 99999.0 ± 10.0 - (5,000 games) </td><td><a href="https://example.com/x.bin.gz">[Download]</a></td></tr>"#;
+    let page = text("networks.html").replacen(
+        "<tr class=\"normalNetworkStyle\">",
+        &format!("{row}<tr class=\"normalNetworkStyle\">"),
+        1,
+    );
+    for err in [
+        networks::networks(&page, &heads()).unwrap_err(),
+        networks::head_urls(&page).unwrap_err(),
+    ] {
+        assert!(
+            err.contains("kata1-b18c384nbt-s9999999999-d9999999"),
+            "{err}"
+        );
+        assert!(err.contains("https://example.com/x.bin.gz"), "{err}");
+    }
+}
+
+#[test]
+fn draft_and_prerelease_releases_are_skipped() {
+    let asset = |version: &str| {
+        format!(
+            r#"{{"name":"katago-v{version}-eigen-linux-x64.zip","size":1,"digest":"sha256:{}","browser_download_url":"https://example.com/{version}.zip"}}"#,
+            "a".repeat(64)
+        )
+    };
+    let json = format!(
+        r#"[
+            {{"tag_name":"v1.19.0","draft":true,"prerelease":false,"published_at":"2026-12-01T00:00:00Z","assets":[{}]}},
+            {{"tag_name":"v1.18.9","draft":false,"prerelease":true,"published_at":"2026-11-30T00:00:00Z","assets":[{}]}},
+            {{"tag_name":"v1.18.1","draft":false,"prerelease":false,"published_at":"2026-08-01T00:00:00Z","assets":[{}]}}
+        ]"#,
+        asset("1.19.0"),
+        asset("1.18.9"),
+        asset("1.18.1"),
+    );
+    let versions: Vec<String> = releases::engines(&json, Source::KataGo)
+        .unwrap()
+        .iter()
+        .map(|e| e.version.to_string())
+        .collect();
+    assert_eq!(versions, ["1.18.1"]);
+    // Only drafts and prereleases: nothing qualifies, which is an error for KataGo.
+    let unreleased = json.replace(
+        r#""prerelease":false,"published_at":"2026-08"#,
+        r#""prerelease":true,"published_at":"2026-08"#,
+    );
+    assert!(releases::engines(&unreleased, Source::KataGo).is_err());
+}
