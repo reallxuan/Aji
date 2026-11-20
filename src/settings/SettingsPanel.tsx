@@ -40,6 +40,7 @@ const DEFAULTS: UiSettings = {
   theme: 'system',
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
+  defaultRules: { kind: 'chinese' },
 };
 const FIELDS: DiscField[] = ['winrate', 'scoreLead', 'visits'];
 

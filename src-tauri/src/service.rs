@@ -5,14 +5,18 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use aji_core::Move;
+use aji_core::game::AnalysisRules;
 use aji_engine::{Engine, EngineError, EngineEvent, EngineFiles};
 use aji_manager::Setup;
 use aji_manager::install::{
     DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
     StartError, engine_files,
 };
-use tokio::sync::watch;
+use base64::Engine as _;
+use tokio::sync::{Mutex, watch};
 
+use crate::game::{GameSession, NavTarget, OpenError};
 use crate::protocol::{AppEvent, AppInfo, ErrorCode, OsKind, ProtocolError, Request, Response};
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
@@ -34,6 +38,9 @@ pub struct AppContext {
     pub source: watch::Sender<DownloadSource>,
     /// Where events go, for those a request causes (`settingsChanged`).
     pub events: Arc<dyn EventSink>,
+    /// The open game. Held across the engine call that follows a change, so positions reach
+    /// the engine in the order the requests came.
+    pub game: Arc<Mutex<GameSession>>,
 }
 
 /// Asks the user for a file. Blocking: call it through `spawn_blocking`.
@@ -82,6 +89,7 @@ impl From<EngineError> for ProtocolError {
         ProtocolError {
             code,
             message: error.to_string(),
+            detail: None,
         }
     }
 }
@@ -162,6 +170,19 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 .unwrap_or_default(),
         }),
         Request::SettingsSet { settings } => return set_settings(ctx, settings).await,
+        Request::GameNew { size } => return game_new(ctx, size).await,
+        Request::GameOpen { name, bytes } => return game_open(ctx, name, bytes).await,
+        Request::GameNavigate { to } => return game_navigate(ctx, to).await,
+        Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
+        Request::GameSetRules { rules } => return game_set_rules(ctx, rules).await,
+        Request::GameSnapshot => {
+            let session = ctx.game.lock().await;
+            Ok(Response::Game {
+                snapshot: Box::new(session.snapshot()),
+                warnings: session.warnings().to_vec(),
+            })
+        }
+        Request::GameExport => return game_export(ctx).await,
     }
     .map_err(Into::into)
 }
@@ -179,6 +200,9 @@ fn refuse_while_held(ctx: &AppContext) -> Result<(), ProtocolError> {
 
 /// Saves the preferences, hands the visit limit to the engine, and tells every client.
 async fn set_settings(ctx: &AppContext, settings: UiSettings) -> Result<Response, ProtocolError> {
+    if !settings.default_rules.is_valid() {
+        return Err(error(ErrorCode::Internal, "default komi out of range"));
+    }
     save_ui_settings(&ctx.settings_path, &settings)
         .map_err(|e| error(ErrorCode::Internal, e.to_string()))?;
     ctx.engine.set_visit_limit(settings.visit_limit).await?;
@@ -213,7 +237,136 @@ fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolError {
     ProtocolError {
         code,
         message: message.into(),
+        detail: None,
     }
+}
+
+impl From<OpenError> for ProtocolError {
+    fn from(e: OpenError) -> Self {
+        match e {
+            OpenError::TooLarge => error(ErrorCode::SgfTooLarge, "the file is over 20 MB"),
+            OpenError::NotAGame => error(ErrorCode::SgfNotAGame, "no game in the file"),
+            OpenError::NotGo => error(ErrorCode::SgfNotGo, "the file records another game"),
+            OpenError::UnsupportedSize { width, height } => {
+                let size = format!("{width}x{height}");
+                ProtocolError {
+                    detail: Some(size.clone()),
+                    ..error(ErrorCode::SgfUnsupportedSize, size)
+                }
+            }
+        }
+    }
+}
+
+/// The rules new games and rule-less files start with; Chinese when the settings cannot be read.
+fn default_rules(ctx: &AppContext) -> AnalysisRules {
+    load_settings(&ctx.settings_path)
+        .map(|s| s.ui.default_rules)
+        .unwrap_or_default()
+}
+
+/// Tells every client of the current node, then hands its position to the engine (or idles it
+/// on an illegal node). Called with the session locked, so engines and clients see nodes in the
+/// same order. The snapshot goes first: an engine that has analysed the position answers at once
+/// from its cache, and a client drops analysis for a position it has not been told of. An engine
+/// that cannot take the position (shut down) is logged: the board still moves.
+async fn publish(ctx: &AppContext, session: &GameSession, warnings: bool) -> Response {
+    let snapshot = session.snapshot();
+    ctx.events.emit(AppEvent::GameSnapshot {
+        snapshot: snapshot.clone(),
+    });
+    let sent = match session.position() {
+        Some(position) => ctx.engine.set_position(position).await,
+        None => ctx.engine.clear_position().await,
+    };
+    if let Err(e) = sent {
+        eprintln!("aji: the engine did not take the position: {e}");
+    }
+    Response::Game {
+        snapshot: Box::new(snapshot),
+        warnings: match warnings {
+            true => session.warnings().to_vec(),
+            false => Vec::new(),
+        },
+    }
+}
+
+fn unchanged(session: &GameSession) -> Response {
+    Response::Game {
+        snapshot: Box::new(session.snapshot()),
+        warnings: Vec::new(),
+    }
+}
+
+async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError> {
+    let next = GameSession::new(size, default_rules(ctx))?;
+    let mut session = ctx.game.lock().await;
+    session.replace(next);
+    Ok(publish(ctx, &session, false).await)
+}
+
+/// Decoding and parsing a large file takes a while, so they run on the blocking pool, before
+/// the session is locked.
+async fn game_open(
+    ctx: &AppContext,
+    name: String,
+    bytes: String,
+) -> Result<Response, ProtocolError> {
+    // Base64 is 4 bytes per 3; anything longer than this decodes to more than the limit.
+    if bytes.len() > (crate::game::MAX_SGF_BYTES / 3 + 1) * 4 {
+        return Err(OpenError::TooLarge.into());
+    }
+    let defaults = default_rules(ctx);
+    let next = tokio::task::spawn_blocking(move || {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(bytes.as_bytes())
+            .map_err(|e| error(ErrorCode::Internal, format!("bytes are not base64: {e}")))?;
+        GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)
+    })
+    .await
+    .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
+    let mut session = ctx.game.lock().await;
+    session.replace(next);
+    Ok(publish(ctx, &session, true).await)
+}
+
+async fn game_navigate(ctx: &AppContext, to: NavTarget) -> Result<Response, ProtocolError> {
+    let mut session = ctx.game.lock().await;
+    Ok(match session.navigate(to) {
+        true => publish(ctx, &session, false).await,
+        false => unchanged(&session),
+    })
+}
+
+async fn game_set_rules(
+    ctx: &AppContext,
+    rules: Option<AnalysisRules>,
+) -> Result<Response, ProtocolError> {
+    let mut session = ctx.game.lock().await;
+    match session.set_rules(rules) {
+        Ok(true) => Ok(publish(ctx, &session, false).await),
+        Ok(false) => Ok(unchanged(&session)),
+        Err(rules) => Err(error(
+            ErrorCode::Internal,
+            format!("komi out of range: {rules:?}"),
+        )),
+    }
+}
+
+async fn game_preview(ctx: &AppContext, moves: &[Move]) -> Response {
+    Response::GamePreview {
+        preview: ctx.game.lock().await.preview(moves),
+    }
+}
+
+async fn game_export(ctx: &AppContext) -> Result<Response, ProtocolError> {
+    let (name, text) = ctx
+        .game
+        .lock()
+        .await
+        .export()
+        .ok_or_else(|| error(ErrorCode::GameEmpty, "the game holds no move"))?;
+    Ok(Response::GameExport { name, text })
 }
 
 fn unknown_engine(engine: &str) -> ProtocolError {
@@ -346,7 +499,6 @@ async fn import_network(ctx: &AppContext) -> Result<Response, ProtocolError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     use aji_engine::EngineState;
     use aji_manager::install::{
@@ -390,12 +542,15 @@ mod tests {
             files: Arc::new(Picks(picks)),
             source,
             events: Arc::new(Recorded::default()),
+            game: Arc::new(Mutex::new(
+                GameSession::new(19, AnalysisRules::Chinese).unwrap(),
+            )),
         }
     }
 
     /// Keeps every event, for tests that check what a request emits.
     #[derive(Default)]
-    struct Recorded(Mutex<Vec<AppEvent>>);
+    struct Recorded(std::sync::Mutex<Vec<AppEvent>>);
 
     impl EventSink for Recorded {
         fn emit(&self, event: AppEvent) {
@@ -885,7 +1040,7 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct Recorder(Mutex<Vec<AppEvent>>);
+    struct Recorder(std::sync::Mutex<Vec<AppEvent>>);
 
     impl EventSink for Recorder {
         fn emit(&self, event: AppEvent) {
@@ -920,6 +1075,7 @@ mod tests {
             theme: ThemePreference::Light,
             disc_lines: [DiscField::ScoreLead, DiscField::Visits],
             visit_limit: Some(800),
+            default_rules: AnalysisRules::JapaneseKorean,
         };
         assert_eq!(
             handle(
@@ -1015,6 +1171,487 @@ mod tests {
         assert_eq!(
             handle(&ctx, Request::SetupRemoveUnused).await,
             Ok(Response::SetupRemoved { freed_bytes: 0 })
+        );
+    }
+
+    // ------------------------------------------------------------ M6: the game session
+
+    use aji_core::game::{AnalysisRules, Game, Scoring};
+    use aji_core::sgf::parse_sgf;
+    use aji_core::{BoardSize, Komi, Move, Point};
+
+    use crate::game::{GameWarning, NavTarget};
+    use crate::protocol::GameSnapshot;
+
+    const SAMSUNG: &[u8] =
+        include_bytes!("../../crates/aji-core/tests/fixtures/sgf/samsung-2025-final-2.sgf");
+    const GBK_NO_CA: &[u8] =
+        include_bytes!("../../crates/aji-core/tests/fixtures/sgf/gbk-no-ca.sgf");
+    const COLLECTION: &[u8] =
+        include_bytes!("../../crates/aji-core/tests/fixtures/sgf/collection.sgf");
+    const SMALL: &str = "(;GM[1]FF[4]SZ[9]KM[7]RU[Chinese];B[ee];W[gc];B[cg];W[ce])";
+
+    fn b64(bytes: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    async fn open(ctx: &AppContext, name: &str, bytes: &[u8]) -> Result<Response, ProtocolError> {
+        handle(
+            ctx,
+            Request::GameOpen {
+                name: name.into(),
+                bytes: b64(bytes),
+            },
+        )
+        .await
+    }
+
+    fn snap(response: Result<Response, ProtocolError>) -> (GameSnapshot, Vec<GameWarning>) {
+        match response {
+            Ok(Response::Game { snapshot, warnings }) => (*snapshot, warnings),
+            other => panic!("expected a game reply, got {other:?}"),
+        }
+    }
+
+    async fn navigate(ctx: &AppContext, to: NavTarget) -> GameSnapshot {
+        snap(handle(ctx, Request::GameNavigate { to }).await).0
+    }
+
+    /// The game the tests opened, built again, to compute the positions the engine should get.
+    fn reference(bytes: &[u8]) -> Game {
+        let text = aji_core::sgf::decode(bytes).text;
+        let tree = parse_sgf(&text).unwrap().games.remove(0);
+        Game::from_sgf(tree, AnalysisRules::Chinese).unwrap().0
+    }
+
+    fn main_line_key(game: &Game, index: usize, rules: &AnalysisRules) -> aji_core::PositionKey {
+        game.position_at(game.main_line()[index], rules)
+            .unwrap()
+            .key()
+    }
+
+    fn game_events(ctx: &AppContext, recorded: &Recorded) -> Vec<u64> {
+        let _ = ctx;
+        recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::GameSnapshot { snapshot } => Some(snapshot.revision),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn open_navigate_and_export() {
+        let ctx = ctx();
+        let (s, warnings) = snap(open(&ctx, "small.sgf", SMALL.as_bytes()).await);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(s.name.as_deref(), Some("small"));
+        assert_eq!((s.size, s.move_number, s.main_line_length), (9, 0, 4));
+        assert!(s.at_start && !s.at_end && s.has_moves);
+        let game = reference(SMALL.as_bytes());
+        let rules = AnalysisRules::Custom {
+            komi: Komi::new(7.0).unwrap(),
+            scoring: Scoring::Area,
+        };
+        assert_eq!(s.rules.current, rules);
+        assert_eq!(s.position_key, Some(main_line_key(&game, 0, &rules)));
+        assert_eq!(ctx.engine.status().position, s.position_key);
+
+        let s = navigate(&ctx, NavTarget::Last).await;
+        assert!(s.at_end && !s.at_start);
+        assert_eq!(s.move_number, 4);
+        assert_eq!(s.next_color, aji_core::Color::Black);
+        assert_eq!(s.last_move, Some(Move::Play(Point { x: 2, y: 4 })));
+        assert_eq!(
+            ctx.engine.status().position,
+            Some(main_line_key(&game, 4, &rules))
+        );
+        assert_eq!(s.stones.iter().flatten().count(), 4);
+
+        navigate(&ctx, NavTarget::First).await;
+        let s = navigate(&ctx, NavTarget::Move(9999)).await;
+        assert!(s.at_end);
+        let s = navigate(&ctx, NavTarget::Move(2)).await;
+        assert_eq!(s.move_number, 2);
+        let s = navigate(&ctx, NavTarget::Previous).await;
+        assert_eq!(s.move_number, 1);
+        let s = navigate(&ctx, NavTarget::Next).await;
+        assert_eq!(s.move_number, 2);
+
+        let Ok(Response::GameExport { name, text }) = handle(&ctx, Request::GameExport).await
+        else {
+            panic!("expected an export");
+        };
+        assert_eq!(name, "small.sgf");
+        let again = Game::from_sgf(
+            parse_sgf(&text).unwrap().games.remove(0),
+            AnalysisRules::Chinese,
+        )
+        .unwrap()
+        .0;
+        let moves =
+            |g: &Game| -> Vec<_> { g.main_line().iter().map(|&n| g.last_move(n)).collect() };
+        assert_eq!(moves(&again), moves(&game));
+        assert!(text.contains("KM[7]"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn navigation_is_ordered() {
+        let ctx = Arc::new(ctx());
+        open(&ctx, "samsung.sgf", SAMSUNG).await.unwrap();
+        let tasks: Vec<_> = (0..50)
+            .map(|_| {
+                let ctx = Arc::clone(&ctx);
+                tokio::spawn(async move {
+                    handle(
+                        &ctx,
+                        Request::GameNavigate {
+                            to: NavTarget::Next,
+                        },
+                    )
+                    .await
+                })
+            })
+            .collect();
+        for task in tasks {
+            task.await.unwrap().unwrap();
+        }
+        let s = snap(handle(&ctx, Request::GameSnapshot).await).0;
+        assert_eq!(s.move_number, 50);
+        let game = reference(SAMSUNG);
+        assert_eq!(
+            ctx.engine.status().position,
+            Some(main_line_key(&game, 50, &s.rules.current))
+        );
+    }
+
+    #[tokio::test]
+    async fn illegal_node_clears_the_engine() {
+        let ctx = ctx();
+        let text = "(;GM[1]FF[4]SZ[19];B[pd];W[pd];B[dd])";
+        open(&ctx, "occupied.sgf", text.as_bytes()).await.unwrap();
+        let s = navigate(&ctx, NavTarget::Move(2)).await;
+        assert_eq!(s.illegal, Some(aji_core::game::Illegal::Occupied));
+        assert_eq!(s.position_key, None);
+        assert_eq!(ctx.engine.status().position, None);
+        let s = navigate(&ctx, NavTarget::Next).await;
+        assert_eq!(s.illegal, None);
+        assert!(s.position_key.is_some());
+        assert_eq!(ctx.engine.status().position, s.position_key);
+    }
+
+    #[tokio::test]
+    async fn set_rules() {
+        let ctx = ctx();
+        open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
+        navigate(&ctx, NavTarget::Next).await;
+        let custom = AnalysisRules::Custom {
+            komi: Komi::new(7.0).unwrap(),
+            scoring: Scoring::Territory,
+        };
+        let s = snap(
+            handle(
+                &ctx,
+                Request::GameSetRules {
+                    rules: Some(custom),
+                },
+            )
+            .await,
+        )
+        .0;
+        assert!(s.rules.changed);
+        assert_eq!(s.rules.current, custom);
+        assert_eq!(s.rules.ru.as_deref(), Some("Chinese"));
+        assert_eq!(s.rules.km.as_deref(), Some("7"));
+        let game = reference(SMALL.as_bytes());
+        let expected = game.position_at(game.main_line()[1], &custom).unwrap();
+        assert_eq!(expected.komi, Komi::new(7.0).unwrap());
+        assert_eq!(expected.rules, aji_core::Rules::Japanese);
+        assert_eq!(ctx.engine.status().position, Some(expected.key()));
+        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+            panic!("expected an export");
+        };
+        assert!(
+            text.contains("RU[Japanese]") && text.contains("KM[7]"),
+            "{text}"
+        );
+
+        let s = snap(handle(&ctx, Request::GameSetRules { rules: None }).await).0;
+        assert!(!s.rules.changed);
+        assert_eq!(s.rules.current, s.rules.from_file);
+        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+            panic!("expected an export");
+        };
+        assert!(
+            text.contains("RU[Chinese]") && !text.contains("RU[Japanese]"),
+            "{text}"
+        );
+
+        let wild = AnalysisRules::Custom {
+            komi: Komi::new(151.0).unwrap(),
+            scoring: Scoring::Area,
+        };
+        let error = handle(&ctx, Request::GameSetRules { rules: Some(wild) })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Internal);
+    }
+
+    #[tokio::test]
+    async fn new_game_uses_default_rules() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        std::fs::create_dir_all(dir.path().join("config")).unwrap();
+        std::fs::write(
+            &ctx.settings_path,
+            r#"{"defaultRules":{"kind":"japaneseKorean"}}"#,
+        )
+        .unwrap();
+        let s = snap(handle(&ctx, Request::GameNew { size: 13 }).await).0;
+        assert_eq!(s.size, 13);
+        assert_eq!(s.rules.current, AnalysisRules::JapaneseKorean);
+        assert!(!s.has_moves && s.at_start && s.at_end);
+        assert_eq!(s.name, None);
+        let position = aji_core::Position::empty(
+            BoardSize::new(13).unwrap(),
+            aji_core::Rules::Japanese,
+            Komi::new(6.5).unwrap(),
+        );
+        assert_eq!(ctx.engine.status().position, Some(position.key()));
+        let error = handle(&ctx, Request::GameNew { size: 4 })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::SgfUnsupportedSize);
+        assert_eq!(snap(handle(&ctx, Request::GameSnapshot).await).0.size, 13);
+        let error = handle(&ctx, Request::GameExport).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::GameEmpty);
+    }
+
+    #[tokio::test]
+    async fn open_errors() {
+        let ctx = ctx();
+        open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
+        let big = vec![b' '; 20 * 1024 * 1024 + 1];
+        let cases: [(&[u8], ErrorCode); 4] = [
+            (&big, ErrorCode::SgfTooLarge),
+            (b"hello", ErrorCode::SgfNotAGame),
+            (b"(;GM[2]FF[4]SZ[8];B[aa])", ErrorCode::SgfNotGo),
+            (
+                b"(;GM[1]FF[4]SZ[19:13];B[aa])",
+                ErrorCode::SgfUnsupportedSize,
+            ),
+        ];
+        for (bytes, code) in cases {
+            let error = open(&ctx, "bad.sgf", bytes).await.unwrap_err();
+            assert_eq!(error.code, code);
+            if code == ErrorCode::SgfUnsupportedSize {
+                assert_eq!(error.detail.as_deref(), Some("19x13"));
+            } else {
+                assert_eq!(error.detail, None);
+            }
+        }
+        let error = handle(
+            &ctx,
+            Request::GameOpen {
+                name: "bad.sgf".into(),
+                bytes: "not base64!".into(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Internal);
+        let s = snap(handle(&ctx, Request::GameSnapshot).await).0;
+        assert_eq!(s.name.as_deref(), Some("small"));
+        assert_eq!(s.size, 9);
+    }
+
+    #[tokio::test]
+    async fn warnings_are_reported() {
+        let ctx = ctx();
+        let (_, warnings) = snap(open(&ctx, "gbk.sgf", GBK_NO_CA).await);
+        assert_eq!(
+            warnings,
+            [GameWarning::EncodingGuessed {
+                encoding: "GBK".into()
+            }]
+        );
+        let (s, warnings) = snap(open(&ctx, "two.sgf", COLLECTION).await);
+        assert_eq!(warnings, [GameWarning::ExtraGames { count: 1 }]);
+        assert_eq!(s.info.game_name.as_deref(), Some("first"));
+        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+            panic!("expected an export");
+        };
+        assert_eq!(parse_sgf(&text).unwrap().games.len(), 2, "{text}");
+
+        let (_, warnings) = snap(open(&ctx, "cut.sgf", b"(;GM[1]SZ[19]KM[x];B[pd];W[dd]").await);
+        assert_eq!(
+            warnings,
+            [GameWarning::Truncated, GameWarning::KomiUnreadable]
+        );
+        let (_, warnings) = snap(open(&ctx, "bad.sgf", b"(;GM[1]SZ[19];B[pd];W[pd])").await);
+        assert_eq!(warnings, [GameWarning::IllegalMoves]);
+        // The last open's warnings come with a fresh snapshot, for a client that reloads.
+        let (_, warnings) = snap(handle(&ctx, Request::GameSnapshot).await);
+        assert_eq!(warnings, [GameWarning::IllegalMoves]);
+        let (_, warnings) = snap(
+            handle(
+                &ctx,
+                Request::GameNavigate {
+                    to: NavTarget::Next,
+                },
+            )
+            .await,
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn snapshot_events() {
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
+        navigate(&ctx, NavTarget::Next).await;
+        // No change: already at the start after `first`, so `previous` changes nothing.
+        navigate(&ctx, NavTarget::First).await;
+        navigate(&ctx, NavTarget::Previous).await;
+        handle(
+            &ctx,
+            Request::GameSetRules {
+                rules: Some(AnalysisRules::Chinese),
+            },
+        )
+        .await
+        .unwrap();
+        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(&ctx, Request::GameSnapshot).await.unwrap();
+        let revisions = game_events(&ctx, &recorded);
+        assert_eq!(revisions.len(), 5, "{revisions:?}");
+        assert!(revisions.windows(2).all(|w| w[0] < w[1]), "{revisions:?}");
+        let s = snap(handle(&ctx, Request::GameSnapshot).await).0;
+        assert_eq!(s.revision, *revisions.last().unwrap());
+    }
+
+    /// Records, for each snapshot event, the position the engine was on as it went out.
+    struct EngineAtSnapshot {
+        engine: Engine,
+        seen: std::sync::Mutex<Vec<(Option<aji_core::PositionKey>, Option<aji_core::PositionKey>)>>,
+    }
+
+    impl EventSink for EngineAtSnapshot {
+        fn emit(&self, event: AppEvent) {
+            if let AppEvent::GameSnapshot { snapshot } = event {
+                let engine = self.engine.status().position;
+                self.seen
+                    .lock()
+                    .unwrap()
+                    .push((snapshot.position_key, engine));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_interface_hears_of_a_position_before_the_engine_takes_it() {
+        // The engine answers a position it has analysed with the cached analysis at once; the
+        // interface drops analysis for a position it has not been told of yet.
+        let mut ctx = ctx();
+        let watcher = Arc::new(EngineAtSnapshot {
+            engine: ctx.engine.clone(),
+            seen: Default::default(),
+        });
+        ctx.events = watcher.clone();
+        open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
+        let first = navigate(&ctx, NavTarget::Next).await.position_key;
+        navigate(&ctx, NavTarget::Previous).await;
+        let seen = watcher.seen.lock().unwrap().clone();
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        // The two moves along the line; the open may land on the position the engine starts on.
+        for (shown, engine) in &seen[1..] {
+            assert_ne!(
+                shown, engine,
+                "the engine was already on {shown:?}: {seen:?}"
+            );
+        }
+        assert_eq!(seen[1].0, first);
+        assert_eq!(ctx.engine.status().position, seen[2].0);
+    }
+
+    #[tokio::test]
+    async fn preview_changes_nothing() {
+        let ctx = ctx();
+        open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
+        let before = snap(handle(&ctx, Request::GameSnapshot).await).0;
+        let engine_before = ctx.engine.status().position;
+        let moves = vec![Move::Play(Point { x: 0, y: 0 }), Move::Pass];
+        let Ok(Response::GamePreview { preview }) =
+            handle(&ctx, Request::GamePreview { moves }).await
+        else {
+            panic!("expected a preview");
+        };
+        assert_eq!(preview.stones.len(), 81);
+        assert_eq!(preview.stones[0], Some(aji_core::Color::Black));
+        assert_eq!(preview.illegal_at, None);
+        assert_eq!(snap(handle(&ctx, Request::GameSnapshot).await).0, before);
+        assert_eq!(ctx.engine.status().position, engine_before);
+    }
+
+    #[test]
+    fn game_request_json_shapes() {
+        use serde_json::json;
+        for (value, request) in [
+            (
+                json!({"type": "gameNew", "size": 9}),
+                Request::GameNew { size: 9 },
+            ),
+            (
+                json!({"type": "gameNavigate", "to": "previous"}),
+                Request::GameNavigate {
+                    to: NavTarget::Previous,
+                },
+            ),
+            (
+                json!({"type": "gameNavigate", "to": {"move": 12}}),
+                Request::GameNavigate {
+                    to: NavTarget::Move(12),
+                },
+            ),
+            (
+                json!({"type": "gameSetRules", "rules": null}),
+                Request::GameSetRules { rules: None },
+            ),
+            (
+                json!({"type": "gameSetRules", "rules": {"kind": "custom", "komi": 7, "scoring": "area"}}),
+                Request::GameSetRules {
+                    rules: Some(AnalysisRules::Custom {
+                        komi: Komi::new(7.0).unwrap(),
+                        scoring: Scoring::Area,
+                    }),
+                },
+            ),
+            (
+                json!({"type": "gamePreview", "moves": [{"type": "pass"}]}),
+                Request::GamePreview {
+                    moves: vec![Move::Pass],
+                },
+            ),
+        ] {
+            assert_eq!(serde_json::from_value::<Request>(value).unwrap(), request);
+        }
+        let warning = serde_json::to_value(GameWarning::ExtraGames { count: 2 }).unwrap();
+        assert_eq!(warning, json!({"code": "extraGames", "count": 2}));
+        let error = serde_json::to_value(ProtocolError {
+            code: ErrorCode::SgfUnsupportedSize,
+            message: "19x13".into(),
+            detail: Some("19x13".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            error,
+            json!({"code": "sgfUnsupportedSize", "message": "19x13", "detail": "19x13"})
         );
     }
 }

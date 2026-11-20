@@ -16,6 +16,15 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   setupInvalidSource: true,
   engineBusy: true,
   invalidPosition: true,
+  sgfNotAGame: true,
+  sgfNotGo: true,
+  sgfUnsupportedSize: true,
+  sgfTooLarge: true,
+  gameEmpty: true,
+  fileReadFailed: true,
+  fileWriteFailed: true,
+  fileNotSgf: true,
+  fileMissing: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {

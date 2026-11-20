@@ -4,4 +4,8 @@ import type { ErrorCode } from "./ErrorCode";
 /**
  * A failed request. The UI shows text looked up from `code`; `message` is for logs only.
  */
-export type ProtocolError = { code: ErrorCode, message: string, };
+export type ProtocolError = { code: ErrorCode, message: string, 
+/**
+ * A value the UI puts in the text: only `sgfUnsupportedSize`'s size, as `19x13`.
+ */
+detail?: string, };

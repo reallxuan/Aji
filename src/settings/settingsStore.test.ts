@@ -8,6 +8,7 @@ const initial: UiSettings = {
   theme: 'system',
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
+  defaultRules: { kind: 'chinese' },
 };
 
 describe('useSettingsStore.save', () => {

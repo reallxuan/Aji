@@ -32,7 +32,16 @@
     "setupImportFailed": "该文件不是 KataGo 网络文件。",
     "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。",
     "engineBusy": "引擎正在安装或测速，请在完成后再试。",
-    "invalidPosition": "局面里有棋盘外的点，无法分析。"
+    "invalidPosition": "局面里有棋盘外的点，无法分析。",
+    "sgfNotAGame": "文件里没有棋谱。",
+    "sgfNotGo": "这不是围棋棋谱。",
+    "sgfUnsupportedSize": "Aji 只能打开 5 到 19 路的方形棋盘，此棋盘为 {{size}}。",
+    "sgfTooLarge": "文件超过 20 MB。",
+    "gameEmpty": "棋局里还没有着手，无可保存。",
+    "fileReadFailed": "无法读取文件。",
+    "fileWriteFailed": "无法保存文件。",
+    "fileNotSgf": "只能打开 .sgf 文件。",
+    "fileMissing": "文件已移动或删除。"
   },
   "engine": {
     "state": {

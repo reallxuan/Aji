@@ -32,7 +32,16 @@
     "setupImportFailed": "That file is not a KataGo network.",
     "setupInvalidSource": "A download source must be a web address starting with http:// or https://.",
     "engineBusy": "The engine is being installed or measured. Try again when that has finished.",
-    "invalidPosition": "The position has a point off the board, so it cannot be analysed."
+    "invalidPosition": "The position has a point off the board, so it cannot be analysed.",
+    "sgfNotAGame": "The file holds no game record.",
+    "sgfNotGo": "The file records a game other than Go.",
+    "sgfUnsupportedSize": "Aji opens square boards of 5 to 19 lines; this board is {{size}}.",
+    "sgfTooLarge": "The file is over 20 MB.",
+    "gameEmpty": "The game has no moves to save.",
+    "fileReadFailed": "The file could not be read.",
+    "fileWriteFailed": "The file could not be saved.",
+    "fileNotSgf": "Only .sgf files can be opened.",
+    "fileMissing": "The file has been moved or deleted."
   },
   "engine": {
     "state": {

@@ -1,3 +1,4 @@
+pub mod game;
 mod ipc;
 pub mod protocol;
 pub mod service;
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use aji_core::{BoardSize, Komi, Position, Rules};
+use aji_core::Position;
 use aji_engine::{Engine, EngineFiles, EngineOptions};
 use aji_manager::Setup;
 use aji_manager::install::{
@@ -24,6 +25,7 @@ use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::watch;
 
+use game::GameSession;
 pub use ipc::{EVENT_CHANNEL, TauriEventSink};
 use protocol::{AppEvent, OsKind};
 use service::{AppContext, EventSink, FilePicker};
@@ -40,15 +42,6 @@ const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// they `.manage` their own [`AppContext`].
 pub fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder.invoke_handler(tauri::generate_handler![ipc::rpc])
-}
-
-/// An empty 19x19 board, Chinese rules, komi 7.5.
-fn default_position() -> Position {
-    Position::empty(
-        BoardSize::NINETEEN,
-        Rules::Chinese,
-        Komi::new(7.5).expect("7.5 is a valid komi"),
-    )
 }
 
 fn fit_main_window(app: &tauri::App) {
@@ -162,13 +155,14 @@ fn engine_files(
 
 fn start_engine(
     files: Option<EngineFiles>,
+    position: Position,
     visit_limit: Option<u32>,
     sink: Arc<dyn EventSink>,
 ) -> Engine {
     tauri::async_runtime::block_on(async {
         Engine::spawn(
             files,
-            default_position(),
+            position,
             EngineOptions {
                 visit_limit,
                 ..EngineOptions::default()
@@ -277,7 +271,10 @@ pub fn run() {
             let root = InstallRoot::new(data_dir.clone());
             let installed = load_installed(&root.record_file());
             let files = engine_files(&settings, &installed, &root);
-            let engine = start_engine(files, settings.ui.visit_limit, Arc::clone(&sink));
+            // The session starts as an empty 19x19 game, and the engine on its position.
+            let game = GameSession::new(19, settings.ui.default_rules).expect("19 is supported");
+            let position = game.position().expect("an empty board is legal");
+            let engine = start_engine(files, position, settings.ui.visit_limit, Arc::clone(&sink));
             let setup = start_setup(&version, data_dir.join("manifest"));
             let source = watch::Sender::new(download_source(&settings));
             let installer = start_installer(
@@ -299,6 +296,7 @@ pub fn run() {
                 files: Arc::new(DialogPicker(app.handle().clone())),
                 source,
                 events: sink,
+                game: Arc::new(tokio::sync::Mutex::new(game)),
             });
             Ok(())
         })

@@ -5,12 +5,15 @@ import type { AppInfo } from "./AppInfo";
 import type { BackendRecommendation } from "./BackendRecommendation";
 import type { EngineState } from "./EngineState";
 import type { EngineVersionChoice } from "./EngineVersionChoice";
+import type { GameSnapshot } from "./GameSnapshot";
+import type { GameWarning } from "./GameWarning";
 import type { HardwareReport } from "./HardwareReport";
 import type { ImportedNetwork } from "./ImportedNetwork";
 import type { JobSnapshot } from "./JobSnapshot";
 import type { LicenceInfo } from "./LicenceInfo";
 import type { NetworkList } from "./NetworkList";
 import type { PositionKey } from "./PositionKey";
+import type { Preview } from "./Preview";
 import type { UiSettings } from "./UiSettings";
 
 /**
@@ -32,4 +35,8 @@ accepted: Array<string>, } | { "type": "setupStatus", job: JobSnapshot | null, }
 /**
  * `None` when the user cancelled the file dialog.
  */
-network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveSummary | null, unusedBytes: number, } | { "type": "setupRemoved", freedBytes: number, } | { "type": "settings", settings: UiSettings, } | { "type": "ok" };
+network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveSummary | null, unusedBytes: number, } | { "type": "setupRemoved", freedBytes: number, } | { "type": "settings", settings: UiSettings, } | { "type": "game", 
+/**
+ * Boxed: a snapshot is far larger than any other reply.
+ */
+snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "ok" };

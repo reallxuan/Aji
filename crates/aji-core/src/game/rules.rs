@@ -18,11 +18,12 @@ pub enum Scoring {
 }
 
 /// The rules and komi KataGo analyses with. The presets fix the komi; only Custom frees it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 #[ts(export)]
 pub enum AnalysisRules {
-    /// Area scoring, komi 7.5.
+    /// Area scoring, komi 7.5. The default for new games until the user picks another.
+    #[default]
     Chinese,
     /// Territory scoring, komi 6.5.
     JapaneseKorean,

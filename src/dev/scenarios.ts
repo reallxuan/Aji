@@ -381,6 +381,7 @@ export function scenarioTransport(
     theme: 'system',
     discLines: ['winrate', 'scoreLead'],
     visitLimit: null,
+    defaultRules: { kind: 'chinese' },
   };
   const accepted = new Set(script.accepted);
   const installed = new Set<string>();

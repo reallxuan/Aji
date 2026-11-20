@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use aji_core::game::AnalysisRules;
 use aji_engine::EngineFiles;
 use aji_manager::install::DownloadSource;
 use serde::de::DeserializeOwned;
@@ -25,7 +26,7 @@ pub struct Settings {
     pub download_source: DownloadSource,
     /// The SHA-256 of each accepted licence text, to the RFC 3339 time it was accepted.
     pub accepted_licences: BTreeMap<String, String>,
-    /// Stored flat: `language`, `theme`, `discLines` and `visitLimit`.
+    /// Stored flat: `language`, `theme`, `discLines`, `visitLimit` and `defaultRules`.
     pub ui: UiSettings,
 }
 
@@ -72,6 +73,8 @@ pub struct UiSettings {
     pub disc_lines: [DiscField; 2],
     /// The most visits per position; `None` for no limit.
     pub visit_limit: Option<u32>,
+    /// The rules new games, and files that name neither rules nor komi, start with.
+    pub default_rules: AnalysisRules,
 }
 
 impl Default for UiSettings {
@@ -81,6 +84,7 @@ impl Default for UiSettings {
             theme: ThemePreference::System,
             disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
             visit_limit: None,
+            default_rules: AnalysisRules::Chinese,
         }
     }
 }
@@ -168,6 +172,9 @@ pub fn load_settings(path: &Path) -> Result<Settings, SettingsError> {
                 .filter(|[a, b]| a != b)
                 .unwrap_or(defaults.disc_lines),
             visit_limit: field::<u32>(&map, "visitLimit").filter(|limit| *limit > 0),
+            default_rules: field::<AnalysisRules>(&map, "defaultRules")
+                .filter(AnalysisRules::is_valid)
+                .unwrap_or_default(),
         },
     };
     if let Some(dev) = &settings.dev_engine {
@@ -558,6 +565,7 @@ mod tests {
                 theme: ThemePreference::System,
                 disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
                 visit_limit: None,
+                default_rules: AnalysisRules::Chinese,
             }
         );
     }
@@ -574,6 +582,7 @@ mod tests {
             theme: ThemePreference::Dark,
             disc_lines: [DiscField::Winrate, DiscField::Visits],
             visit_limit: Some(5000),
+            default_rules: AnalysisRules::JapaneseKorean,
         };
         save_ui_settings(&path, &ui).unwrap();
         let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -595,15 +604,44 @@ mod tests {
             theme: ThemePreference::Dark,
             disc_lines: [DiscField::Winrate, DiscField::Visits],
             visit_limit: Some(5000),
+            default_rules: AnalysisRules::Custom {
+                komi: aji_core::Komi::new(7.0).unwrap(),
+                scoring: aji_core::game::Scoring::Territory,
+            },
         };
         assert_eq!(
             serde_json::to_value(&ui).unwrap(),
             serde_json::json!({"language":"zh-CN","theme":"dark",
-                "discLines":["winrate","visits"],"visitLimit":5000})
+                "discLines":["winrate","visits"],"visitLimit":5000,
+                "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory"}})
         );
         assert_eq!(
             serde_json::from_value::<UiSettings>(serde_json::to_value(&ui).unwrap()).unwrap(),
             ui
         );
+    }
+
+    // ------------------------------------------------------------ M6: default rules
+
+    #[test]
+    fn default_rules_are_read_leniently() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = load_settings(&write(&dir, "{}")).unwrap();
+        assert_eq!(settings.ui.default_rules, AnalysisRules::Chinese);
+        let json = r#"{"theme":"dark","defaultRules":{"kind":"japaneseKorean"}}"#;
+        let settings = load_settings(&write(&dir, json)).unwrap();
+        assert_eq!(settings.ui.default_rules, AnalysisRules::JapaneseKorean);
+        for bad in [
+            r#"{"kind":"tromp"}"#,
+            r#"{"kind":"custom","komi":7.3,"scoring":"area"}"#,
+            r#"{"kind":"custom","komi":200,"scoring":"area"}"#,
+            r#""chinese""#,
+        ] {
+            let json = format!(r#"{{"theme":"dark","visitLimit":800,"defaultRules":{bad}}}"#);
+            let settings = load_settings(&write(&dir, &json)).unwrap();
+            assert_eq!(settings.ui.default_rules, AnalysisRules::Chinese, "{bad}");
+            assert_eq!(settings.ui.theme, ThemePreference::Dark, "{bad}");
+            assert_eq!(settings.ui.visit_limit, Some(800), "{bad}");
+        }
     }
 }

@@ -79,6 +79,7 @@ describe('M5 additions', () => {
         theme: 'system',
         discLines: ['winrate', 'scoreLead'],
         visitLimit: 500,
+        defaultRules: { kind: 'chinese' },
       },
     });
     const store = createEngineStore();
