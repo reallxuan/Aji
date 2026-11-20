@@ -25,7 +25,28 @@
 
 **Spec:** [M4 install pipeline design](../specs/2026-11-20-m4-install-pipeline-design.md), approved by the owner on 2026-11-20. Read it with this plan: section numbers below (5.3 and so on) refer to it.
 
-**Status:** Not started.
+**Status:** Done on 2026-11-20, except the items under Outstanding.
+- **Checks.** At `5828ad4` every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 445 Rust tests, `pnpm lint`, `pnpm typecheck`, 132 TypeScript tests and `cargo deny check licenses`.
+- **Final review.** A fresh review of the whole branch found nothing critical and three important issues, fixed in `2d11ed9`:
+  - a URL serving another file (an error page, a truncated mirror, a server that ignores Range and drops) was retried forever;
+  - an `installed.json` that could not be read was replaced by an empty one on the next write;
+  - recorded files were trusted without a check, and writes were not synced before their rename.
+  Thirteen minor findings are deferred to M5 planning.
+- **Mac exit check** on the M5, with the app from `pnpm tauri build --bundles app` (7.57 MiB):
+  - `AJI_DEV_INSTALL=recommended` chose `katago-v1.18.2-metal-macos-arm64` with `kata1-tf3-b11c768-s12382M-d6533M`. The engine came from github.com: 3934477 bytes in 3.3 s.
+  - `kill -9` during the network download left a part file of 42454639 of 262041254 bytes, and no Aji or KataGo process. On the next start the download resumed: it transferred 219586615 bytes, exactly the rest, in 89.6 s from media.katagotraining.org.
+  - The benchmark took 3 min 5 s: 6 threads gave 45.84 visits/s, 10 gave 36.82 and 16 gave 25.95, so 6 was chosen. The test query passed in 6 s, and the log ended `aji: install installed`.
+  - `ps` showed KataGo running from `…/engines/katago-v1.18.2-metal-macos-arm64/katago`, with the config and the model as relative paths.
+  - Started again without the variable, Aji logged `aji: starting the installed engine …` and the same KataGo path, and KataGo was analysing.
+  - Found and fixed (`5828ad4`): every quit panicked with "no reactor running", so the shutdown on exit never ran (the code dates from M2). KataGo still exited when its stdin closed, but an install job was never cancelled. After the fix, quitting leaves no KataGo process.
+  - `settings.json` was restored from its backup.
+- **Outstanding.**
+  - The owner's look at the candidates in the panel. The release app was left open on the installed engine.
+  - The Metal benchmark counts. With the preselected network, speed falls as threads rise, so the best count may be below the list's lowest, 6. The run also took about 3 minutes, not the proposed 2. The owner decides whether to lower the Metal counts (for example 2, 4 and 6).
+  - Step 5, the PC, at the owner's call. It needs the CI `workflow_dispatch`, which pushes the branch. The final review adds a check: whether a missing DLL shows a Windows system dialog.
+  - Step 6, D1. The speeds above are from the owner's Mac network; the owner decides whether they stand for a mainland network.
+  - A green CI run on all three OSes. It is the first compile of the Windows and Linux code, and a condition for the merge.
+  - Step 8 from M3, each with the owner's OK.
 
 ## Owner decisions for M4 (2026-11-20)
 

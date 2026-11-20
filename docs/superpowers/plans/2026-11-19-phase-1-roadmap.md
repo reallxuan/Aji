@@ -178,6 +178,14 @@ Detailed plan: [2026-11-19-phase-1-m3-manifest-hardware.md](2026-11-19-phase-1-m
 
 Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-install-pipeline-design.md), approved by the owner on 2026-11-20. It decides two things: on NVIDIA, CUDA is installed straight, with no DirectML bootstrap; and the pipeline lives in `aji-manager`, which now depends on `aji-engine`.
 
+**Status:** done on 2026-11-20. Detailed plan: [2026-11-20-phase-1-m4-install-pipeline.md](2026-11-20-phase-1-m4-install-pipeline.md). The Mac exit check passed on the M5: `AJI_DEV_INSTALL=recommended` installed the Metal engine and the preselected network, a download killed midway resumed, and analysis started from the installed engine. Still outstanding (details in the M4 plan):
+- the owner's look at the panel;
+- the Metal benchmark counts;
+- the optional PC run;
+- D1;
+- the first CI run on all three OSes;
+- M3's manifest publishing steps.
+
 - Downloader:
   - Tries the URLs in order, with the mirror prefix or custom mirror from settings applied.
   - Resumes `.part` files with HTTP Range, and starts over cleanly when the server ignores Range.
