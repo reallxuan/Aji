@@ -31,7 +31,7 @@
     "setupUnknownNetwork": "列表中没有这个网络。",
     "setupImportFailed": "该文件不是 KataGo 网络文件。",
     "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。",
-    "engineBusy": "正在安装引擎并测速，请在完成后再试。"
+    "engineBusy": "引擎正在安装或测速，请在完成后再试。"
   },
   "engine": {
     "state": {
@@ -245,7 +245,11 @@
     "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
     "engine": "引擎",
     "engineLine": "KataGo {{version}} · {{backend}}",
-    "networkLine": "权重 {{network}} · {{threads}} 线程",
+    "networkLine": "权重 {{network}}",
+    "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
+    "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
+    "benchmark": "测速",
+    "benchmarkFailed": "测速失败：{{reason}}",
     "noEngine": "尚未设置引擎",
     "unused": "未使用的已下载文件",
     "delete": "删除",

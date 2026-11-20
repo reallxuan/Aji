@@ -4,7 +4,10 @@ import { usePanelStore } from '../app/panelStore';
 import { setupTransport, storedSettings } from '../setup/testing';
 import { renderWithProviders } from '../setup/testing';
 import { initialWizard, useWizardStore } from '../setup/wizardStore';
+import { useBenchmarkStore } from '../setup/benchmarkStore';
+import { useSetupProgress } from '../setup/useSetupProgress';
 import type { EngineState } from '../transport/generated/EngineState';
+import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
 import { SettingsPanel } from './SettingsPanel';
@@ -18,6 +21,7 @@ const active = {
   network: 'kata1-tf3-b11c768-s12382M-d6533M',
   networkName: 'kata1-tf3-b11c768-s12382M-d6533M',
   threads: 4,
+  visitsPerSecond: null as number | null,
 };
 const sets = (requests: Request[]) =>
   requests.flatMap((r) => (r.type === 'settingsSet' ? [r.settings] : []));
@@ -34,6 +38,37 @@ function mount(
   return transport;
 }
 
+/** The settings page with the app's progress listener, which routes a benchmark job here. */
+function WithProgress() {
+  useSetupProgress();
+  return <SettingsPanel />;
+}
+
+/** A benchmark job on the active set: its downloads are reused. */
+function benchmarkJob(
+  outcome: JobSnapshot['outcome'],
+  benchmark: JobSnapshot['benchmark'],
+): JobSnapshot {
+  return {
+    id: 9,
+    engine: active.engine,
+    backend: 'metal',
+    network: active.network,
+    tasks: [
+      { task: 'engine', state: { state: 'reused' } },
+      { task: 'network', state: { state: 'reused' } },
+      {
+        task: 'benchmark',
+        state: outcome ? { state: 'done' } : { state: 'running', done: 7, total: 15 },
+      },
+      { task: 'testQuery', state: { state: 'waiting' } },
+    ],
+    outcome,
+    measures: true,
+    benchmark,
+  };
+}
+
 /** Opens a Radix select and picks an option by its text. */
 function choose(trigger: HTMLElement, option: string) {
   fireEvent.keyDown(trigger, { key: 'Enter' });
@@ -44,6 +79,8 @@ describe('SettingsPanel', () => {
   beforeEach(() => {
     useSettingsStore.setState({ settings: null });
     useWizardStore.setState(initialWizard);
+    // A failed benchmark stays on screen until the next one; one test must not see another's.
+    useBenchmarkStore.setState({ job: null });
     usePanelStore.setState({ view: 'settings' });
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(prefers-color-scheme: dark)',
@@ -111,7 +148,7 @@ describe('SettingsPanel', () => {
   it('names the active engine and runs the engine actions', async () => {
     const transport = mount();
     expect(await screen.findByText('KataGo 1.18.2 · Metal')).toBeInTheDocument();
-    expect(screen.getByText('权重 kata1-tf3-b11c768-s12382M-d6533M · 4 线程')).toBeInTheDocument();
+    expect(screen.getByText('权重 kata1-tf3-b11c768-s12382M-d6533M')).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '重启引擎' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '停止引擎' })));
     expect(transport.requests.map((r) => r.type)).toEqual(
@@ -119,6 +156,122 @@ describe('SettingsPanel', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '重新设置引擎' }));
     expect(useWizardStore.getState()).toMatchObject({ open: true, rerun: true });
+  });
+
+  it('says whether the search thread count was measured', async () => {
+    mount();
+    expect(await screen.findByText('搜索线程：4（默认值，未测速）')).toBeInTheDocument();
+  });
+
+  it('names the measured speed once the count was measured', async () => {
+    mount({
+      setupInstalled: () => ({
+        type: 'setupInstalled',
+        active: { ...active, threads: 10, visitsPerSecond: 24.93 },
+        unusedBytes: 0,
+      }),
+    });
+    expect(await screen.findByText('搜索线程：10（已测速，25 次/秒）')).toBeInTheDocument();
+  });
+
+  it('runs the benchmark from settings, shows its progress there, then the new count', async () => {
+    let summary = active;
+    const transport = setupTransport({
+      setupInstalled: () => ({ type: 'setupInstalled', active: summary, unusedBytes: 0 }),
+    });
+    renderWithProviders(<WithProgress />, transport, ready);
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: '测速' })));
+    expect(transport.requests).toContainEqual({
+      type: 'setupInstall',
+      engine: active.engine,
+      network: active.network,
+      acceptLicences: [],
+      benchmark: true,
+    });
+
+    act(() =>
+      transport.emit({
+        type: 'setupProgress',
+        job: benchmarkJob(null, {
+          testing: 10,
+          positionsDone: 2,
+          tested: [{ threads: 6, visitsPerSecond: 23.3 }],
+        }),
+      }),
+    );
+    expect(screen.getByText('正在测试 10 个搜索线程')).toBeInTheDocument();
+    expect(screen.getByText('6 个线程：23 次/秒')).toBeInTheDocument();
+    // The job stays on the settings page: the wizard never sees it.
+    expect(useWizardStore.getState()).toMatchObject({ open: false, job: null });
+    expect(screen.queryByRole('button', { name: '测速' })).not.toBeInTheDocument();
+
+    summary = { ...active, threads: 10, visitsPerSecond: 24.93 };
+    await act(async () =>
+      transport.emit({
+        type: 'setupProgress',
+        job: benchmarkJob({ outcome: 'installed' }, null),
+      }),
+    );
+    expect(await screen.findByText('搜索线程：10（已测速，25 次/秒）')).toBeInTheDocument();
+    expect(screen.queryByText('正在测试 10 个搜索线程')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '测速' })).toBeEnabled();
+  });
+
+  it('holds the engine buttons and delete while a benchmark runs', async () => {
+    const transport = setupTransport({
+      setupInstalled: () => ({ type: 'setupInstalled', active, unusedBytes: 1_000_000 }),
+    });
+    renderWithProviders(<WithProgress />, transport, ready);
+    await screen.findByRole('button', { name: '测速' });
+    const held = ['重启引擎', '停止引擎', '重新设置引擎', '删除'];
+    for (const name of held) expect(screen.getByRole('button', { name })).toBeEnabled();
+
+    act(() =>
+      transport.emit({
+        type: 'setupProgress',
+        job: benchmarkJob(null, { testing: null, positionsDone: 0, tested: [] }),
+      }),
+    );
+    for (const name of held) expect(screen.getByRole('button', { name })).toBeDisabled();
+
+    await act(async () =>
+      transport.emit({ type: 'setupProgress', job: benchmarkJob({ outcome: 'cancelled' }, null) }),
+    );
+    for (const name of held) expect(screen.getByRole('button', { name })).toBeEnabled();
+  });
+
+  it('cancels a running benchmark, and says why one failed', async () => {
+    const transport = setupTransport({
+      setupInstalled: () => ({ type: 'setupInstalled', active, unusedBytes: 0 }),
+    });
+    renderWithProviders(<WithProgress />, transport, ready);
+    await screen.findByText('搜索线程：4（默认值，未测速）');
+    act(() =>
+      transport.emit({
+        type: 'setupProgress',
+        job: benchmarkJob(null, { testing: null, positionsDone: 0, tested: [] }),
+      }),
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '取消' })));
+    expect(transport.requests).toContainEqual({ type: 'setupCancel' });
+
+    act(() =>
+      transport.emit({
+        type: 'setupProgress',
+        job: benchmarkJob(
+          {
+            outcome: 'failed',
+            failure: 'timedOut',
+            stderrTail: [],
+            offer: null,
+            driver: null,
+          },
+          null,
+        ),
+      }),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('测速失败：KataGo 响应超时。');
+    expect(useWizardStore.getState().open).toBe(false);
   });
 
   it('disables restart while the engine starts, and shows engineBusy when refused', async () => {
@@ -133,13 +286,14 @@ describe('SettingsPanel', () => {
       },
     });
     await act(async () => fireEvent.click(await screen.findByRole('button', { name: '重启引擎' })));
-    expect(screen.getByRole('alert')).toHaveTextContent('正在安装引擎并测速，请在完成后再试。');
+    expect(screen.getByRole('alert')).toHaveTextContent('引擎正在安装或测速，请在完成后再试。');
   });
 });
 
 describe('Unused downloaded files', () => {
   beforeEach(() => {
     useSettingsStore.setState({ settings: storedSettings });
+    useBenchmarkStore.setState({ job: null });
     usePanelStore.setState({ view: 'settings' });
   });
 

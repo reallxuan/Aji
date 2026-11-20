@@ -120,6 +120,7 @@ it('a setup progress event leaves the engine store alone', () => {
       network: 'n',
       tasks: [],
       outcome: null,
+      measures: false,
       benchmark: null,
     },
   });

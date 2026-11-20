@@ -398,6 +398,7 @@ mod tests {
             network: "n".into(),
             tasks: vec![],
             outcome: None,
+            measures: false,
             benchmark: None,
         }
     }
@@ -408,7 +409,7 @@ mod tests {
         assert_eq!(
             value,
             json!({"type": "setupProgress", "job": {"id": 1, "engine": "e", "backend": "metal",
-                   "network": "n", "tasks": [], "outcome": null, "benchmark": null}})
+                   "network": "n", "tasks": [], "outcome": null, "measures": false, "benchmark": null}})
         );
     }
 

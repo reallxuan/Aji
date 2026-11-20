@@ -99,6 +99,8 @@ pub struct JobSnapshot {
     pub network: String,
     pub tasks: Vec<TaskRow>,
     pub outcome: Option<JobOutcome>,
+    /// The job measures the thread count with the benchmark: settings asked for it, and shows it.
+    pub measures: bool,
     /// Where the benchmark is, once it has started: the count under test and those measured.
     pub benchmark: Option<Box<BenchmarkProgress>>,
 }
@@ -390,6 +392,7 @@ impl Installer {
                 network: network.id().to_string(),
                 tasks: rows(runtime.is_some(), request.benchmark),
                 outcome: None,
+                measures: request.benchmark,
                 benchmark: None,
             };
             jobs.current = Some(Current {

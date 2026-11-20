@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,7 @@ import { usePanelStore } from '../app/panelStore';
 import { useEngineStore } from '../engine/engineStore';
 import { formatBytes } from '../setup/format';
 import { backendName } from '../setup/labels';
+import { useBenchmarkStore } from '../setup/benchmarkStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { getInstalled, removeUnused, restartEngine, stopEngine } from '../transport/api';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
@@ -28,6 +29,7 @@ import type { DiscField } from '../transport/generated/DiscField';
 import type { UiSettings } from '../transport/generated/UiSettings';
 import { toTransportError, type Transport } from '../transport/transport';
 import { useTransport } from '../transport/TransportProvider';
+import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
 import { PanelTitle } from './NoticeView';
 import { useSettingsStore } from './settingsStore';
@@ -268,7 +270,10 @@ function VisitLimit({
   );
 }
 
-/** The active engine, G1's restart and stop, set up again, and the unused-files cleanup. */
+/**
+ * The active engine and its thread count with the benchmark on request, G1's restart and stop,
+ * set up again, and the unused-files cleanup.
+ */
 function EngineSection({ transport }: { transport: Transport }) {
   const { t, i18n } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
@@ -279,6 +284,7 @@ function EngineSection({ transport }: { transport: Transport }) {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const reload = useCallback(() => setRefresh((n) => n + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -312,8 +318,11 @@ function EngineSection({ transport }: { transport: Transport }) {
 
   const state = engine?.state ?? null;
   const noEngine = state === null || state === 'notConfigured';
-  // While KataGo starts (an install's benchmark included) restart is refused with engineBusy.
-  const busy = state === 'starting';
+  // A benchmark started here holds the engine and the files until it ends, as the backend
+  // refuses restart, setup and delete meanwhile.
+  const measuring = useBenchmarkStore((s) => s.job !== null && s.job.outcome === null);
+  // While KataGo starts restart is refused with engineBusy.
+  const busy = state === 'starting' || measuring;
   const active = installed?.active ?? null;
   const unused = installed && installed.unusedBytes > 0 ? installed.unusedBytes : null;
   const unusedSize = unused === null ? '' : formatBytes(unused, i18n.language);
@@ -330,8 +339,11 @@ function EngineSection({ transport }: { transport: Transport }) {
               })}
             </p>
             <p className="mt-1 text-[13px] text-text-muted">
-              {t('settings.networkLine', { network: active.networkName, threads: active.threads })}
+              {t('settings.networkLine', { network: active.networkName })}
             </p>
+            <div className="mt-3">
+              <BenchmarkRow active={active} disabled={noEngine || busy} onMeasured={reload} />
+            </div>
           </>
         ) : (
           installed && <p className="text-text-muted">{t('settings.noEngine')}</p>
@@ -354,7 +366,7 @@ function EngineSection({ transport }: { transport: Transport }) {
         >
           {t('engine.action.stop')}
         </Button>
-        <Button variant="outline" size="sm" onClick={setUpAgain}>
+        <Button variant="outline" size="sm" disabled={measuring} onClick={setUpAgain}>
           {t('engine.action.setupAgain')}
         </Button>
       </div>
@@ -367,7 +379,12 @@ function EngineSection({ transport }: { transport: Transport }) {
         <div className="flex items-center gap-3 text-[14px]">
           <span className="flex-1">{t('settings.unused')}</span>
           <span className="text-[13px] text-text-muted tabular-nums">{unusedSize}</span>
-          <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={measuring}
+            onClick={() => setConfirming(true)}
+          >
             {t('settings.delete')}
           </Button>
         </div>

@@ -834,6 +834,9 @@ async fn an_install_without_the_benchmark_uses_the_default_thread_count() {
     let set = record.active_set().expect("an active set");
     assert_eq!(set.threads, 16);
     assert!(set.benchmark.is_empty());
+    let summary = w.installer.active_summary().expect("a summary");
+    assert_eq!((summary.threads, summary.visits_per_second), (16, None));
+    assert!(!job.measures);
     assert!(
         !w.root
             .root()
@@ -871,6 +874,13 @@ async fn the_benchmark_reports_its_progress() {
         .map(|s| (s.threads, s.visits_per_second))
         .collect();
     assert_eq!(tested, [(8, 100.0), (16, 180.0), (32, 185.0)]);
+    // 16 is the smallest count within 95% of the best; the summary carries its speed.
+    let summary = w.installer.active_summary().expect("a summary");
+    assert_eq!(
+        (summary.threads, summary.visits_per_second),
+        (16, Some(180.0))
+    );
+    assert!(job.measures);
 }
 
 #[tokio::test]
@@ -1283,6 +1293,7 @@ async fn remove_unused_deletes_them_and_keeps_the_active_set() {
             network: NET.into(),
             network_name: NET.into(),
             threads: 8,
+            visits_per_second: Some(60.0),
         })
     );
 }

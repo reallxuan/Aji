@@ -340,6 +340,7 @@ const SCRIPTS: Record<ScenarioName, Script> = {
       network: 'kata1-tf3-b11c768-s12382M-d6533M',
       networkName: 'kata1-tf3-b11c768-s12382M-d6533M',
       threads: 16,
+      visitsPerSecond: null,
     },
   },
   'no-engine': pcCuda,
@@ -424,6 +425,7 @@ export function scenarioTransport(
       network: networkId,
       tasks: kinds.map((task) => ({ task, state: { state: 'waiting' } })),
       outcome: null,
+      measures: benchmark,
       benchmark: null,
     };
     publish();
@@ -489,6 +491,8 @@ export function scenarioTransport(
           network: networkId,
           networkName: networkId,
           threads: hardware.cpu.threads,
+          // A measured count names its speed, as the backend reads it from the benchmark.
+          visitsPerSecond: benchmark ? 180 : null,
         };
       });
     }

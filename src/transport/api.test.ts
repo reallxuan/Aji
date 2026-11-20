@@ -84,6 +84,7 @@ describe('M5 helpers', () => {
     network: 'n',
     tasks: [],
     outcome: null,
+    measures: false,
     benchmark: null,
   } as const;
 

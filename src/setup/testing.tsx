@@ -148,6 +148,7 @@ export const runningJob: JobSnapshot = {
     { task: 'testQuery', state: { state: 'waiting' } },
   ],
   outcome: null,
+  measures: false,
   benchmark: null,
 };
 

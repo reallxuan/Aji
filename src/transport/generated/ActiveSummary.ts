@@ -8,4 +8,9 @@ export type ActiveSummary = { engine: string, version: string, backend: Backend,
 /**
  * The network's display name: its id, or an imported file's name.
  */
-networkName: string, threads: number, };
+networkName: string, threads: number, 
+/**
+ * The benchmark's speed at `threads`, or `None` when the count is the backend's default
+ * and was never measured.
+ */
+visitsPerSecond: number | null, };

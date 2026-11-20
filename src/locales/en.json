@@ -31,7 +31,7 @@
     "setupUnknownNetwork": "That network is not in the list.",
     "setupImportFailed": "That file is not a KataGo network.",
     "setupInvalidSource": "A download source must be a web address starting with http:// or https://.",
-    "engineBusy": "An engine install is measuring KataGo right now. Try again when it has finished."
+    "engineBusy": "The engine is being installed or measured. Try again when that has finished."
   },
   "engine": {
     "state": {
@@ -245,7 +245,11 @@
     "visitLimitNote": "Analysis stops at the limit and the graphics card idles; it starts again on the next move.",
     "engine": "Engine",
     "engineLine": "KataGo {{version}} · {{backend}}",
-    "networkLine": "Network {{network}} · {{threads}} threads",
+    "networkLine": "Network {{network}}",
+    "threadsDefault": "Search threads: {{threads}} (default, not measured)",
+    "threadsMeasured": "Search threads: {{threads}} (measured, {{speed}} visits/s)",
+    "benchmark": "Measure speed",
+    "benchmarkFailed": "Speed test failed: {{reason}}",
     "noEngine": "No engine is set up",
     "unused": "Unused downloaded files",
     "delete": "Delete",

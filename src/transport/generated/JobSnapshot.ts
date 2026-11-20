@@ -6,6 +6,10 @@ import type { TaskRow } from "./TaskRow";
 
 export type JobSnapshot = { id: number, engine: string, backend: Backend, network: string, tasks: Array<TaskRow>, outcome: JobOutcome | null, 
 /**
+ * The job measures the thread count with the benchmark: settings asked for it, and shows it.
+ */
+measures: boolean, 
+/**
  * Where the benchmark is, once it has started: the count under test and those measured.
  */
 benchmark: BenchmarkProgress | null, };

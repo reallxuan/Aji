@@ -13,6 +13,7 @@ const job = (outcome: JobSnapshot['outcome']): JobSnapshot => ({
   network: 'n',
   tasks: [],
   outcome,
+  measures: false,
   benchmark: null,
 });
 

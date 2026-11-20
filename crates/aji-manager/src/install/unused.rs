@@ -13,7 +13,7 @@ use super::{InstallRoot, Installed};
 use crate::manifest::Backend;
 
 /// The active engine set, as the settings page names it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ActiveSummary {
@@ -24,6 +24,9 @@ pub struct ActiveSummary {
     /// The network's display name: its id, or an imported file's name.
     pub network_name: String,
     pub threads: u32,
+    /// The benchmark's speed at `threads`, or `None` when the count is the backend's default
+    /// and was never measured.
+    pub visits_per_second: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +58,11 @@ pub fn active_summary(installed: &Installed) -> Option<ActiveSummary> {
         network: set.network.clone(),
         network_name: network.name.clone(),
         threads: set.threads,
+        visits_per_second: set
+            .benchmark
+            .iter()
+            .find(|s| s.threads == set.threads)
+            .map(|s| s.visits_per_second),
     })
 }
 
