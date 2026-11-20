@@ -1,0 +1,35 @@
+/* The bundled fonts (roadmap O6): subsets made by scripts/subset-fonts.py, OFL-1.1, see
+   src/assets/fonts/SOURCE.md. `block` keeps text from showing first in a fallback font. */
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/Inter-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: block;
+  src: url('../assets/fonts/Inter-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'LXGW WenKai';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/LXGWWenKai-Regular.woff2') format('woff2');
+}
+
+/* No Bold is bundled: bold headings use Medium (M5 design 5.6). */
+@font-face {
+  font-family: 'LXGW WenKai';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: block;
+  src: url('../assets/fonts/LXGWWenKai-Medium.woff2') format('woff2');
+}
