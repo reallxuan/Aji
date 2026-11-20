@@ -4,8 +4,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -238,26 +238,14 @@ pub fn update_settings(
     f(&mut map);
     let mut text = serde_json::to_string_pretty(&map).map_err(SettingsError::Parse)?;
     text.push('\n');
-    replace_file(path, text.as_bytes()).map_err(SettingsError::Write)
+    replace_file(path, &text).map_err(SettingsError::Write)
 }
 
-fn replace_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let dir = match path.parent() {
-        Some(dir) if !dir.as_os_str().is_empty() => dir,
-        _ => Path::new("."),
-    };
-    fs::create_dir_all(dir)?;
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-    let written = File::create(&temp).and_then(|mut file| {
-        file.write_all(bytes)?;
-        file.sync_all()
-    });
-    let result = written.and_then(|()| fs::rename(&temp, path));
-    if result.is_err() {
-        let _ = fs::remove_file(&temp);
+fn replace_file(path: &Path, text: &str) -> io::Result<()> {
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        fs::create_dir_all(dir)?;
     }
-    result
+    crate::platform::write_atomically(path, text)
 }
 
 /// Records `hashes` as accepted now, keeping the time of an earlier acceptance.

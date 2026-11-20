@@ -218,7 +218,7 @@ the time it was accepted.
 
 ## Interface preferences
 
-The settings page writes four more fields. Each is read on its own: a value Aji cannot read is
+The settings page writes five more fields. Each is read on its own: a value Aji cannot read is
 logged and that field alone takes its default.
 
 ```json
@@ -226,13 +226,29 @@ logged and that field alone takes its default.
   "language": "system",
   "theme": "system",
   "discLines": ["winrate", "scoreLead"],
-  "visitLimit": null
+  "visitLimit": null,
+  "defaultRules": { "kind": "chinese" }
 }
 ```
 
 `language` is `system`, `zh-CN` or `en`; `theme` is `system`, `dark` or `light`; `discLines` is two
 different values of `winrate`, `scoreLead` and `visits`; `visitLimit` is a positive number of visits
-per position, or `null` for no limit.
+per position, or `null` for no limit. `defaultRules` is what new games, and files that name neither
+rules nor komi, are analysed with: `{ "kind": "chinese" }`, `{ "kind": "japaneseKorean" }`, or
+`{ "kind": "custom", "komi": 7, "scoring": "area" }` (`scoring` is `area` or `territory`; `komi` is a
+multiple of 0.5 from -150 to 150).
+
+## Recent files and the macOS menu
+
+`recent.json`, beside `settings.json`, lists the last 10 game files opened or saved, newest first,
+with their full paths. Deleting it empties the list; an unreadable one is ignored and replaced on
+the next open.
+
+All interface text lives in `src/locales/`, with one exception: the macOS menu bar is built in
+Rust, which cannot read those files, so its labels are a table in `src-tauri/src/platform/menu.rs`
+with both languages. When a menu label changes, change both languages there; the locale parity
+tests do not see it. The interface tells Rust which language it resolved (`menu_set_language`), so
+the menu follows the language setting, including `system`.
 
 ## What Aji forces on the command line
 

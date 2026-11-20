@@ -1,5 +1,6 @@
 pub mod game;
 mod ipc;
+pub mod platform;
 pub mod protocol;
 pub mod service;
 pub mod settings;
@@ -27,9 +28,11 @@ use tokio::sync::watch;
 
 use game::GameSession;
 pub use ipc::{EVENT_CHANNEL, TauriEventSink};
+use platform::DesktopFiles;
+use platform::menu::MenuLanguage;
 use protocol::{AppEvent, OsKind};
 use service::{AppContext, EventSink, FilePicker};
-use settings::Settings;
+use settings::{LanguagePreference, Settings};
 
 /// How long exit waits for an install job and KataGo to stop before giving up on them.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
@@ -41,7 +44,17 @@ const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Registers the `rpc` command. Generic over the runtime so tests can use Tauri's mock runtime;
 /// they `.manage` their own [`AppContext`].
 pub fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![ipc::rpc])
+    builder.invoke_handler(tauri::generate_handler![
+        ipc::rpc,
+        platform::files_pick_open,
+        platform::files_open_path,
+        platform::files_open_recent,
+        platform::files_remember,
+        platform::files_recent,
+        platform::files_clear_recent,
+        platform::files_save_as,
+        platform::menu_set_language,
+    ])
 }
 
 fn fit_main_window(app: &tauri::App) {
@@ -262,12 +275,22 @@ pub fn run() {
     let app = configure(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .on_menu_event(|app, event| platform::forward_menu_events(app, event.id().as_ref()))
         .setup(move |app| {
             fit_main_window(app);
             let sink: Arc<dyn EventSink> = Arc::new(TauriEventSink(app.handle().clone()));
             let (config_dir, data_dir) = app_dirs(app);
             let settings_path = config_dir.join("settings.json");
             let settings = load_settings(&settings_path);
+            // The interface reports the language it resolved; until then an explicit choice,
+            // else English.
+            let language = match settings.ui.language {
+                LanguagePreference::ZhCn => MenuLanguage::ZhCn,
+                _ => MenuLanguage::En,
+            };
+            let files_platform = DesktopFiles::new(&config_dir, language);
+            files_platform.rebuild_menu(app.handle(), &files_platform.recent_entries());
+            app.manage(files_platform);
             let root = InstallRoot::new(data_dir.clone());
             let installed = load_installed(&root.record_file());
             let files = engine_files(&settings, &installed, &root);

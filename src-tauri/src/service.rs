@@ -233,7 +233,7 @@ async fn remove_unused(ctx: &AppContext) -> Result<Response, ProtocolError> {
     }
 }
 
-fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolError {
+pub(crate) fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolError {
     ProtocolError {
         code,
         message: message.into(),
