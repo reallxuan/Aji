@@ -1,3 +1,4 @@
+import { asImage, type CanvasFactory, domCanvas } from './canvasFactory';
 import { boardGeometry } from './geometry';
 import { woodTexture } from './wood';
 
@@ -17,18 +18,22 @@ export interface BoardView {
 }
 
 /**
- * Draws the empty board into a canvas whose backing store is `cssSize × dpr` pixels. Pure: the
+ * Draws the empty board (wood, grid, star points, coordinates) into a canvas whose backing store is `cssSize × dpr` pixels. Pure: the
  * same view always draws the same pixels. Works in device pixels throughout, so 1 px lines land
  * on whole pixels and stay sharp at any ratio.
  */
-export function drawBoard(ctx: CanvasRenderingContext2D, view: BoardView): void {
+export function drawBoard(
+  ctx: CanvasRenderingContext2D,
+  view: BoardView,
+  create: CanvasFactory = domCanvas,
+): void {
   const { cssSize, dpr, boardSize } = view;
-  const wood = woodTexture(cssSize, dpr);
+  const wood = woodTexture(cssSize, dpr, create);
   if (!wood) return;
   const geometry = boardGeometry(cssSize, boardSize);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(wood, 0, 0);
+  ctx.drawImage(asImage(wood), 0, 0);
 
   const lineWidth = Math.max(1, Math.round(dpr));
   const edgeWidth = Math.max(lineWidth + 1, Math.round(1.6 * dpr));
@@ -68,13 +73,14 @@ export function drawBoard(ctx: CanvasRenderingContext2D, view: BoardView): void 
     ctx.fill();
   }
 
-  const labelSize = Math.min(LABEL_SIZE, geometry.margin * 0.5);
+  // Coordinates sit in the band outside the stones, so an edge stone never covers one.
+  const labelSize = Math.min(LABEL_SIZE, geometry.labelBand * 0.65);
   if (labelSize < 6) return;
   ctx.fillStyle = LABEL_INK;
   ctx.font = `${labelSize * dpr}px Inter, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const band = (geometry.margin / 2) * dpr;
+  const band = (geometry.labelBand / 2) * dpr;
   for (const { label, x } of geometry.columns) ctx.fillText(label, x * dpr, band);
   for (const { label, y } of geometry.rows) ctx.fillText(label, band, y * dpr);
 }

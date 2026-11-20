@@ -49,6 +49,25 @@ describe('boardGeometry', () => {
     expect(Math.abs(g.spacing - 788 / 18)).toBeLessThan(1);
   });
 
+  it('keeps every stone on the wood and clear of the coordinates', () => {
+    for (const n of [9, 13, 19]) {
+      for (const size of [300, 500, 868, 1400]) {
+        const g = boardGeometry(size, n);
+        expect(g.stoneRadius).toBeCloseTo(g.spacing * 0.48);
+        expect(g.labelBand).toBeGreaterThan(0);
+        // The band between the board's edge and an edge stone holds the coordinates.
+        expect(g.lines[0] - g.stoneRadius).toBeCloseTo(g.labelBand);
+        expect(size - (g.lines[n - 1] + g.stoneRadius)).toBeCloseTo(g.labelBand);
+      }
+    }
+  });
+
+  it('keeps a legible band for coordinates on a small board', () => {
+    expect(boardGeometry(400, 19).labelBand).toBe(12);
+    expect(boardGeometry(868, 19).labelBand).toBeCloseTo(19, 0);
+    expect(boardGeometry(100, 19).labelBand).toBe(5);
+  });
+
   it('returns no lines for an empty board area', () => {
     const g = boardGeometry(0, 19);
     expect(g.spacing).toBe(0);

@@ -1,3 +1,5 @@
+import { type CanvasFactory, domCanvas, type OffscreenCanvasLike } from './canvasFactory';
+
 /** The honey base tone of the board (interface design 5.1). */
 export const WOOD_BASE = { r: 0xdd, g: 0xb0, b: 0x67 };
 /** The darker lower edge that gives the board its thickness, in CSS pixels. */
@@ -55,21 +57,26 @@ function grainProfile(width: number, random: () => number): Float32Array {
   return profile;
 }
 
-let cached: { key: string; canvas: HTMLCanvasElement } | null = null;
+type Texture = HTMLCanvasElement | OffscreenCanvasLike;
+
+let cached: { key: string; create: CanvasFactory; canvas: Texture } | null = null;
 
 /**
  * The wood texture for a board of `cssSize` CSS pixels at `dpr`, in device pixels. Generated once
- * per (size, ratio) and cached, since the per-pixel pass is the slow part of a redraw.
+ * per (size, ratio) and cached, since the per-pixel pass is the slow part of a redraw. `create`
+ * makes the canvas: a DOM one in the app, a Skia one in the screenshot tests.
  */
-export function woodTexture(cssSize: number, dpr: number): HTMLCanvasElement | null {
+export function woodTexture(
+  cssSize: number,
+  dpr: number,
+  create: CanvasFactory = domCanvas,
+): Texture | null {
   const size = Math.round(cssSize * dpr);
   if (size <= 0) return null;
   const key = `${cssSize}@${dpr}`;
-  if (cached?.key === key) return cached.canvas;
+  if (cached?.key === key && cached.create === create) return cached.canvas;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  const canvas = create(size, size);
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
@@ -96,6 +103,6 @@ export function woodTexture(cssSize: number, dpr: number): HTMLCanvasElement | n
     }
   }
   ctx.putImageData(image, 0, 0);
-  cached = { key, canvas };
+  cached = { key, create, canvas };
   return canvas;
 }

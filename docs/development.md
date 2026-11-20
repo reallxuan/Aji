@@ -298,3 +298,17 @@ python3 -I crates/aji-core/tests/fixtures/sgf/make.py
 ```
 
 Run it after changing `make.py`, then `cargo test -p aji-core --test sgf_fixtures`. The tests check that every fixture opens or fails as it should, that names in every encoding read correctly, and that saving a saved file gives the same bytes.
+
+## Board screenshots
+
+`src/board/screenshots.test.ts` draws empty 9×9, 13×13 and 19×19 boards and a game position with
+Skia (`@napi-rs/canvas`, no browser) and compares each with its PNG in `src/board/__screenshots__/`.
+A test fails when more than 0.1% of the pixels differ. After an intended change to the board's
+drawing, write new baselines and look at each before committing:
+
+```bash
+UPDATE_SCREENSHOTS=1 pnpm test src/board/screenshots
+```
+
+Skia draws a little differently from WebKit and WebView2, so these guard against regressions in
+the drawing code, not against the WebView; the exit check looks at the real app.
