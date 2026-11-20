@@ -99,7 +99,15 @@ fn context() -> AppContext {
         settings_path: PathBuf::from("no-such-aji-folder").join("settings.json"),
         files: Arc::new(Cancelled),
         source,
+        events: Arc::new(Discard),
     }
+}
+
+/// Drops events a request causes; these tests check replies only.
+struct Discard;
+
+impl aji_lib::service::EventSink for Discard {
+    fn emit(&self, _: aji_lib::protocol::AppEvent) {}
 }
 
 fn invoke_rpc(body: Value) -> Result<Value, Value> {

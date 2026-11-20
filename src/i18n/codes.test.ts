@@ -14,6 +14,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   setupUnknownNetwork: true,
   setupImportFailed: true,
   setupInvalidSource: true,
+  engineBusy: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {

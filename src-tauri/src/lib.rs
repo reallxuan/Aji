@@ -1,4 +1,3 @@
-mod dev_install;
 mod ipc;
 pub mod protocol;
 pub mod service;
@@ -8,7 +7,7 @@ mod test_support;
 pub mod window;
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use aji_core::{BoardSize, Komi, Position, Rules};
@@ -75,22 +74,49 @@ fn fit_main_window(app: &tauri::App) {
     }
 }
 
-/// `settings.json` in the app config folder. Without one, a folder of this run's own in the
-/// temp directory: nothing is kept between runs, and no other folder is touched.
-fn settings_path(app: &tauri::App) -> PathBuf {
-    let dir = app.path().app_config_dir().unwrap_or_else(|error| {
+/// The variable that moves both folders under one root, so first-run setup can be seen without
+/// touching the real ones (`docs/development.md`).
+const DATA_ROOT_VARIABLE: &str = "AJI_DATA_ROOT";
+
+/// The config folder and the local data folder: `<root>/config` and `<root>/data` when an
+/// absolute override root is given, else the OS folders passed in.
+pub fn data_dirs(
+    override_root: Option<&Path>,
+    config: PathBuf,
+    data: PathBuf,
+) -> (PathBuf, PathBuf) {
+    match override_root.filter(|root| root.is_absolute()) {
+        Some(root) => (root.join("config"), root.join("data")),
+        None => (config, data),
+    }
+}
+
+/// The config folder and the local data folder. Without the OS folders, a folder of this run's
+/// own in the temp directory: nothing is kept between runs, and no other folder is touched.
+fn app_dirs(app: &tauri::App) -> (PathBuf, PathBuf) {
+    let config = app.path().app_config_dir().unwrap_or_else(|error| {
         eprintln!("aji: settings are not kept between runs: {error}");
         std::env::temp_dir().join(format!("aji-config-{}", std::process::id()))
     });
-    dir.join("settings.json")
-}
-
-/// The install root and manifest cache folder, with the same fallback as [`settings_path`].
-fn local_data_dir(app: &tauri::App) -> PathBuf {
-    app.path().app_local_data_dir().unwrap_or_else(|error| {
+    let data = app.path().app_local_data_dir().unwrap_or_else(|error| {
         eprintln!("aji: installs and the manifest cache are not kept between runs: {error}");
         std::env::temp_dir().join(format!("aji-data-{}", std::process::id()))
-    })
+    });
+    let root = std::env::var_os(DATA_ROOT_VARIABLE).map(PathBuf::from);
+    match &root {
+        Some(root) if root.is_absolute() => {
+            eprintln!(
+                "aji: {DATA_ROOT_VARIABLE} puts settings and installs under {}",
+                root.display()
+            );
+        }
+        Some(root) => eprintln!(
+            "aji: ignoring {DATA_ROOT_VARIABLE}: {} is not an absolute path",
+            root.display()
+        ),
+        None => {}
+    }
+    data_dirs(root.as_deref(), config, data)
 }
 
 /// The settings, or the defaults when they cannot be read.
@@ -134,20 +160,26 @@ fn engine_files(
     files
 }
 
-fn start_engine(files: Option<EngineFiles>, sink: Arc<dyn EventSink>) -> Engine {
+fn start_engine(
+    files: Option<EngineFiles>,
+    visit_limit: Option<u32>,
+    sink: Arc<dyn EventSink>,
+) -> Engine {
     tauri::async_runtime::block_on(async {
         Engine::spawn(
             files,
             default_position(),
-            EngineOptions::default(),
+            EngineOptions {
+                visit_limit,
+                ..EngineOptions::default()
+            },
             service::forward_engine_events(sink),
         )
     })
 }
 
 /// The installer, with a download client of its own: the manifest client's whole-request limit
-/// would cut every large download. Its progress goes out as `setupProgress` events, and with
-/// the development trigger set it is logged too.
+/// would cut every large download. Its progress goes out as `setupProgress` events.
 fn start_installer(
     version: &str,
     root: InstallRoot,
@@ -171,18 +203,7 @@ fn start_installer(
         options: InstallOptions::default(),
         platform: Platform::this(),
     };
-    let logged = dev_install::dev_install_value().map(|_| Mutex::new(None::<JobSnapshot>));
-    let on_progress = move |job: JobSnapshot| {
-        if let Some(logged) = &logged {
-            let mut last = logged.lock().unwrap_or_else(|e| e.into_inner());
-            let before = last.as_ref().filter(|before| before.id == job.id);
-            for line in dev_install::progress_lines(before, &job) {
-                eprintln!("{line}");
-            }
-            *last = Some(job.clone());
-        }
-        sink.emit(AppEvent::SetupProgress { job });
-    };
+    let on_progress = move |job: JobSnapshot| sink.emit(AppEvent::SetupProgress { job });
     // Jobs run on the runtime current when the installer is made: Tauri's.
     Ok(tauri::async_runtime::block_on(async {
         Installer::new(parts, on_progress)
@@ -246,16 +267,17 @@ pub fn run() {
     let version = context.package_info().version.to_string();
     let app = configure(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             fit_main_window(app);
             let sink: Arc<dyn EventSink> = Arc::new(TauriEventSink(app.handle().clone()));
-            let settings_path = settings_path(app);
+            let (config_dir, data_dir) = app_dirs(app);
+            let settings_path = config_dir.join("settings.json");
             let settings = load_settings(&settings_path);
-            let data_dir = local_data_dir(app);
             let root = InstallRoot::new(data_dir.clone());
             let installed = load_installed(&root.record_file());
             let files = engine_files(&settings, &installed, &root);
-            let engine = start_engine(files, Arc::clone(&sink));
+            let engine = start_engine(files, settings.ui.visit_limit, Arc::clone(&sink));
             let setup = start_setup(&version, data_dir.join("manifest"));
             let source = watch::Sender::new(download_source(&settings));
             let installer = start_installer(
@@ -264,17 +286,8 @@ pub fn run() {
                 Arc::clone(&setup),
                 engine.clone(),
                 source.subscribe(),
-                sink,
+                Arc::clone(&sink),
             )?;
-            if let Some(value) = dev_install::dev_install_value() {
-                let configured = settings.dev_engine.is_some() || installed.active.is_some();
-                dev_install::start(
-                    value,
-                    configured,
-                    Arc::clone(&setup),
-                    Arc::clone(&installer),
-                );
-            }
             app.manage(AppContext {
                 version,
                 os: OsKind::current(),
@@ -285,6 +298,7 @@ pub fn run() {
                 settings_path,
                 files: Arc::new(DialogPicker(app.handle().clone())),
                 source,
+                events: sink,
             });
             Ok(())
         })
@@ -320,6 +334,29 @@ mod tests {
     use super::*;
 
     use crate::test_support::{apple_m5, installer, setup, unconfigured};
+
+    #[test]
+    fn the_data_root_override_moves_both_folders() {
+        let (config, data) = (PathBuf::from("/os/config"), PathBuf::from("/os/data"));
+        let root = if cfg!(windows) {
+            "C:\\scratch"
+        } else {
+            "/scratch"
+        };
+        let root = Path::new(root);
+        assert_eq!(
+            data_dirs(Some(root), config.clone(), data.clone()),
+            (root.join("config"), root.join("data"))
+        );
+        assert_eq!(
+            data_dirs(None, config.clone(), data.clone()),
+            (config.clone(), data.clone())
+        );
+        assert_eq!(
+            data_dirs(Some(Path::new("relative")), config.clone(), data.clone()),
+            (config, data)
+        );
+    }
 
     /// Quitting runs on the event loop's thread, outside the runtime. It panicked there ("no
     /// reactor running"), so the job and KataGo were never stopped.

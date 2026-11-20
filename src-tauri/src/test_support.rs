@@ -49,35 +49,6 @@ pub fn apple_m5() -> HardwareReport {
     }
 }
 
-/// M3's synthetic Windows PC: an RTX 5070 with driver 591.44, which CUDA 13.2 supports.
-pub fn rtx_5070() -> HardwareReport {
-    HardwareReport {
-        os: OsReport {
-            kind: OsKind::Windows,
-            version: String::new(),
-            arch: "x86_64".into(),
-        },
-        cpu: CpuReport {
-            name: "cpu".into(),
-            cores: 8,
-            threads: 16,
-            avx2: true,
-        },
-        memory_bytes: 16 << 30,
-        gpus: vec![GpuReport {
-            vendor: GpuVendor::Nvidia,
-            name: "NVIDIA GeForce RTX 5070".into(),
-            memory_bytes: Some(8 << 30),
-            driver_version: Some("591.44".into()),
-            pci_device_id: None,
-            apple_gpu_cores: None,
-            compute_capability: Some("12.0".into()),
-            software: false,
-        }],
-        problems: Vec::new(),
-    }
-}
-
 /// The bundled manifest, never refreshed, answering for `report`.
 pub fn setup(report: HardwareReport) -> Arc<Setup> {
     // The cache folder does not exist and the store is never refreshed, so the bundled

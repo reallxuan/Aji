@@ -16,7 +16,8 @@
     "setupBusy": "An install is already running.",
     "setupUnknownNetwork": "That network is not in the list.",
     "setupImportFailed": "That file is not a KataGo network.",
-    "setupInvalidSource": "A download source must be a web address starting with http:// or https://."
+    "setupInvalidSource": "A download source must be a web address starting with http:// or https://.",
+    "engineBusy": "An engine install is measuring KataGo right now. Try again when it has finished."
   },
   "engine": {
     "state": {

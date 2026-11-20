@@ -22,11 +22,14 @@ aji-manager = { path = "../crates/aji-manager" }
 tokio = { version = "1.54.1", features = ["rt", "sync", "time"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ts-rs = "12.0.1"
 
 [dev-dependencies]
+# The installer's test seams, for the service tests.
+aji-manager = { path = "../crates/aji-manager", features = ["test-seams"] }
 tauri = { version = "2", features = ["test"] }
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
 tempfile = "3.27.0"

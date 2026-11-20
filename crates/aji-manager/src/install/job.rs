@@ -315,6 +315,12 @@ impl Installer {
         self.panic_next.store(true, Ordering::SeqCst);
     }
 
+    /// Sets what [`Installer::holds_engine`] reports. Tests only.
+    #[cfg(feature = "test-seams")]
+    pub fn set_holds_engine(&self, held: bool) {
+        self.holds_engine.store(held, Ordering::SeqCst);
+    }
+
     /// True while a job has stopped the engine for its benchmark and test query: restarting or
     /// resuming the engine then would skew the numbers.
     pub fn holds_engine(&self) -> bool {

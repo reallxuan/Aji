@@ -8,11 +8,15 @@ use aji_core::PositionKey;
 use aji_engine::{AnalysisUpdate, EngineState};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
-use aji_manager::install::{DownloadSource, ImportedNetwork, JobSnapshot, LicenceInfo};
+use aji_manager::install::{
+    ActiveSummary, DownloadSource, ImportedNetwork, JobSnapshot, LicenceInfo,
+};
 use aji_manager::manifest::Backend;
 use aji_manager::recommend::{BackendRecommendation, EngineVersionChoice, NetworkList};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::settings::UiSettings;
 
 /// A request from the UI. Serialised as `{"type": "<camelCase variant>", ...fields}`, with
 /// camelCase field names.
@@ -30,7 +34,11 @@ pub enum Request {
     EngineStop,
     AnalysisPause,
     AnalysisResume,
-    SetupDetect,
+    /// The hardware report. `refresh` detects again, for example after a driver update.
+    SetupDetect {
+        #[serde(default)]
+        refresh: bool,
+    },
     SetupBackends,
     SetupVersions {
         backend: Backend,
@@ -57,11 +65,24 @@ pub enum Request {
     },
     /// Asks the user for a network file and imports it.
     SetupImportNetwork,
+    /// The active engine set and the size of everything it does not use.
+    SetupInstalled,
+    /// Deletes everything the active set does not use.
+    SetupRemoveUnused,
+    SettingsGet,
+    /// Replaces the interface preferences.
+    SettingsSet {
+        settings: UiSettings,
+    },
 }
 
 /// The answer to a [`Request`], tagged the same way.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 #[ts(export)]
 pub enum Response {
     AppInfo(AppInfo),
@@ -96,6 +117,18 @@ pub enum Response {
         /// `None` when the user cancelled the file dialog.
         network: Option<ImportedNetwork>,
     },
+    SetupInstalled {
+        active: Option<ActiveSummary>,
+        #[ts(type = "number")]
+        unused_bytes: u64,
+    },
+    SetupRemoved {
+        #[ts(type = "number")]
+        freed_bytes: u64,
+    },
+    Settings {
+        settings: UiSettings,
+    },
     Ok,
 }
 
@@ -113,6 +146,10 @@ pub enum AppEvent {
     /// The install job changed.
     SetupProgress {
         job: JobSnapshot,
+    },
+    /// The interface preferences changed, here or in another client.
+    SettingsChanged {
+        settings: UiSettings,
     },
 }
 
@@ -146,6 +183,8 @@ pub enum ErrorCode {
     /// The chosen file is not a gzip file, so not a KataGo network.
     SetupImportFailed,
     SetupInvalidSource,
+    /// An install job has the engine for its benchmark and test query.
+    EngineBusy,
 }
 
 #[cfg(test)]
@@ -261,7 +300,35 @@ mod tests {
     #[test]
     fn setup_request_json_shapes() {
         for (value, request) in [
-            (json!({"type": "setupDetect"}), Request::SetupDetect),
+            (
+                json!({"type": "setupDetect"}),
+                Request::SetupDetect { refresh: false },
+            ),
+            (
+                json!({"type": "setupDetect", "refresh": true}),
+                Request::SetupDetect { refresh: true },
+            ),
+            (json!({"type": "setupInstalled"}), Request::SetupInstalled),
+            (
+                json!({"type": "setupRemoveUnused"}),
+                Request::SetupRemoveUnused,
+            ),
+            (json!({"type": "settingsGet"}), Request::SettingsGet),
+            (
+                json!({"type": "settingsSet", "settings": {"language": "en", "theme": "light",
+                       "discLines": ["visits", "scoreLead"], "visitLimit": null}}),
+                Request::SettingsSet {
+                    settings: UiSettings {
+                        language: crate::settings::LanguagePreference::En,
+                        theme: crate::settings::ThemePreference::Light,
+                        disc_lines: [
+                            crate::settings::DiscField::Visits,
+                            crate::settings::DiscField::ScoreLead,
+                        ],
+                        visit_limit: None,
+                    },
+                },
+            ),
             (json!({"type": "setupBackends"}), Request::SetupBackends),
             (
                 json!({"type": "setupVersions", "backend": "cuda"}),
@@ -415,6 +482,39 @@ mod tests {
         assert_eq!(
             serde_json::to_value(e).unwrap(),
             json!({"code": "internal", "message": "boom"})
+        );
+    }
+
+    #[test]
+    fn m5_response_and_event_json_shapes() {
+        assert_eq!(
+            serde_json::to_value(Response::SetupInstalled {
+                active: None,
+                unused_bytes: 7,
+            })
+            .unwrap(),
+            json!({"type": "setupInstalled", "active": null, "unusedBytes": 7})
+        );
+        assert_eq!(
+            serde_json::to_value(Response::SetupRemoved { freed_bytes: 9 }).unwrap(),
+            json!({"type": "setupRemoved", "freedBytes": 9})
+        );
+        let settings = UiSettings::default();
+        assert_eq!(
+            serde_json::to_value(Response::Settings {
+                settings: settings.clone()
+            })
+            .unwrap(),
+            json!({"type": "settings", "settings": {"language": "system", "theme": "system",
+                   "discLines": ["winrate", "scoreLead"], "visitLimit": null}})
+        );
+        assert_eq!(
+            serde_json::to_value(AppEvent::SettingsChanged { settings }).unwrap()["type"],
+            "settingsChanged"
+        );
+        assert_eq!(
+            serde_json::to_value(ErrorCode::EngineBusy).unwrap(),
+            json!("engineBusy")
         );
     }
 }

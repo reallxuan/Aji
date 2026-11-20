@@ -16,7 +16,8 @@
     "setupBusy": "已有安装正在进行。",
     "setupUnknownNetwork": "列表中没有这个网络。",
     "setupImportFailed": "该文件不是 KataGo 网络文件。",
-    "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。"
+    "setupInvalidSource": "下载源必须是以 http:// 或 https:// 开头的网址。",
+    "engineBusy": "正在安装引擎并测速，请在完成后再试。"
   },
   "engine": {
     "state": {

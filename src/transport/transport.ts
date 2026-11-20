@@ -34,6 +34,7 @@ const KNOWN_CODES: Record<ErrorCode, true> = {
   setupUnknownNetwork: true,
   setupImportFailed: true,
   setupInvalidSource: true,
+  engineBusy: true,
 };
 
 function isKnownCode(value: unknown): value is ErrorCode {
