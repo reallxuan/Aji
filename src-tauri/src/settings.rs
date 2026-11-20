@@ -1,5 +1,6 @@
-//! `settings.json` in the app config directory: the development engine, the download source
-//! and the accepted licences.
+//! `settings.json` in the app config directory: the development engine, the download source,
+//! the accepted licences and the interface preferences. Each field is read on its own, so one
+//! value Aji cannot read (a typo, or a value from a newer Aji) costs only that field.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -11,18 +12,77 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use aji_engine::EngineFiles;
 use aji_manager::install::DownloadSource;
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use ts_rs::TS;
 
-/// The contents of `settings.json`. Unknown fields are ignored, and a missing field takes its
-/// default.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+/// The contents of `settings.json`. Unknown fields are ignored, and a missing or unreadable
+/// field takes its default.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Settings {
     pub dev_engine: Option<DevEngine>,
     pub download_source: DownloadSource,
     /// The SHA-256 of each accepted licence text, to the RFC 3339 time it was accepted.
     pub accepted_licences: BTreeMap<String, String>,
+    /// Stored flat: `language`, `theme`, `discLines` and `visitLimit`.
+    pub ui: UiSettings,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum LanguagePreference {
+    #[default]
+    System,
+    #[serde(rename = "zh-CN")]
+    #[ts(rename = "zh-CN")]
+    ZhCn,
+    En,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ThemePreference {
+    #[default]
+    System,
+    Dark,
+    Light,
+}
+
+/// A value a candidate disc can show on one of its two lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum DiscField {
+    Winrate,
+    ScoreLead,
+    Visits,
+}
+
+/// The preferences the settings page edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct UiSettings {
+    pub language: LanguagePreference,
+    pub theme: ThemePreference,
+    /// Two different fields, top line first.
+    pub disc_lines: [DiscField; 2],
+    /// The most visits per position; `None` for no limit.
+    pub visit_limit: Option<u32>,
+}
+
+impl Default for UiSettings {
+    fn default() -> Self {
+        UiSettings {
+            language: LanguagePreference::System,
+            theme: ThemePreference::System,
+            disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
+            visit_limit: None,
+        }
+    }
 }
 
 /// The three files KataGo needs. All must be absolute in `settings.json`.
@@ -95,7 +155,21 @@ pub fn load_settings(path: &Path) -> Result<Settings, SettingsError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Settings::default()),
         Err(e) => return Err(SettingsError::Read(e)),
     };
-    let settings: Settings = serde_json::from_str(&text).map_err(SettingsError::Parse)?;
+    let map: Map<String, Value> = serde_json::from_str(&text).map_err(SettingsError::Parse)?;
+    let defaults = UiSettings::default();
+    let settings = Settings {
+        dev_engine: field(&map, "devEngine"),
+        download_source: field(&map, "downloadSource").unwrap_or_default(),
+        accepted_licences: field(&map, "acceptedLicences").unwrap_or_default(),
+        ui: UiSettings {
+            language: field(&map, "language").unwrap_or_default(),
+            theme: field(&map, "theme").unwrap_or_default(),
+            disc_lines: field::<[DiscField; 2]>(&map, "discLines")
+                .filter(|[a, b]| a != b)
+                .unwrap_or(defaults.disc_lines),
+            visit_limit: field::<u32>(&map, "visitLimit").filter(|limit| *limit > 0),
+        },
+    };
     if let Some(dev) = &settings.dev_engine {
         for (field, path) in [
             ("katago", &dev.katago),
@@ -108,6 +182,30 @@ pub fn load_settings(path: &Path) -> Result<Settings, SettingsError> {
         }
     }
     Ok(settings)
+}
+
+/// `map[key]` read as a `T`; `None` when it is missing, `null`, or not a `T`, which is logged.
+fn field<T: DeserializeOwned>(map: &Map<String, Value>, key: &str) -> Option<T> {
+    let value = map.get(key).filter(|v| !v.is_null())?;
+    match serde_json::from_value(value.clone()) {
+        Ok(value) => Some(value),
+        Err(e) => {
+            eprintln!("aji: settings.json: ignoring {key}: {e}");
+            None
+        }
+    }
+}
+
+/// Writes the interface preferences, keeping every other field.
+pub fn save_ui_settings(path: &Path, ui: &UiSettings) -> Result<(), SettingsError> {
+    let value = serde_json::to_value(ui).map_err(SettingsError::Parse)?;
+    update_settings(path, |map| {
+        if let Value::Object(fields) = value {
+            for (key, value) in fields {
+                map.insert(key, value);
+            }
+        }
+    })
 }
 
 /// Serialises every read-modify-write of `settings.json` in this process, so two requests
@@ -416,5 +514,96 @@ mod tests {
         assert_eq!(rfc3339(1_795_132_800), "2026-11-20T00:00:00Z");
         assert_eq!(rfc3339(951_868_799), "2000-02-29T23:59:59Z");
         assert_eq!(rfc3339(4_107_542_400), "2100-03-01T00:00:00Z");
+    }
+    // ------------------------------------------------------------ M5: interface preferences
+
+    #[test]
+    fn a_bad_field_falls_back_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{"theme":"sepia","language":"en","visitLimit":-5,
+            "discLines":["visits","winrate"],"downloadSource":{"kind":"future"}}"#;
+        let settings = load_settings(&write(&dir, json)).unwrap();
+        assert_eq!(settings.ui.theme, ThemePreference::System);
+        assert_eq!(settings.ui.language, LanguagePreference::En);
+        assert_eq!(settings.ui.visit_limit, None);
+        assert_eq!(
+            settings.ui.disc_lines,
+            [DiscField::Visits, DiscField::Winrate]
+        );
+        assert_eq!(settings.download_source, DownloadSource::Direct);
+    }
+
+    #[test]
+    fn equal_disc_lines_fall_back_to_the_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = load_settings(&write(&dir, r#"{"discLines":["visits","visits"]}"#)).unwrap();
+        assert_eq!(settings.ui.disc_lines, UiSettings::default().disc_lines);
+    }
+
+    #[test]
+    fn zero_visit_limit_reads_as_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = load_settings(&write(&dir, r#"{"visitLimit":0}"#)).unwrap();
+        assert_eq!(settings.ui.visit_limit, None);
+        let settings = load_settings(&write(&dir, r#"{"visitLimit":5000}"#)).unwrap();
+        assert_eq!(settings.ui.visit_limit, Some(5000));
+    }
+
+    #[test]
+    fn ui_defaults() {
+        assert_eq!(
+            UiSettings::default(),
+            UiSettings {
+                language: LanguagePreference::System,
+                theme: ThemePreference::System,
+                disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
+                visit_limit: None,
+            }
+        );
+    }
+
+    #[test]
+    fn saving_ui_settings_keeps_unknown_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write(
+            &dir,
+            r#"{"future":{"x":1},"downloadSource":{"kind":"direct"}}"#,
+        );
+        let ui = UiSettings {
+            language: LanguagePreference::ZhCn,
+            theme: ThemePreference::Dark,
+            disc_lines: [DiscField::Winrate, DiscField::Visits],
+            visit_limit: Some(5000),
+        };
+        save_ui_settings(&path, &ui).unwrap();
+        let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(value["future"], serde_json::json!({"x": 1}));
+        assert_eq!(load_settings(&path).unwrap().ui, ui);
+        let none = UiSettings {
+            visit_limit: None,
+            ..ui
+        };
+        save_ui_settings(&path, &none).unwrap();
+        let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(value["visitLimit"], Value::Null);
+    }
+
+    #[test]
+    fn ui_settings_json_shape() {
+        let ui = UiSettings {
+            language: LanguagePreference::ZhCn,
+            theme: ThemePreference::Dark,
+            disc_lines: [DiscField::Winrate, DiscField::Visits],
+            visit_limit: Some(5000),
+        };
+        assert_eq!(
+            serde_json::to_value(&ui).unwrap(),
+            serde_json::json!({"language":"zh-CN","theme":"dark",
+                "discLines":["winrate","visits"],"visitLimit":5000})
+        );
+        assert_eq!(
+            serde_json::from_value::<UiSettings>(serde_json::to_value(&ui).unwrap()).unwrap(),
+            ui
+        );
     }
 }
