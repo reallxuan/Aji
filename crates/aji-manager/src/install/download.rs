@@ -113,6 +113,10 @@ impl Downloader {
         let mut partial = Partial::new(&item.digest);
         let mut index = 0;
         let mut tries = 0;
+        // The longest the part file has been on this URL. A drop counts as progress, and uses
+        // up no try, only when it got past this: a server that starts over on every request and
+        // drops at the same byte must still run out of tries.
+        let mut best = 0;
         let mut tried_any = false;
         let mut all_bad = true;
         let mut last = String::from("no URL to fetch from");
@@ -157,19 +161,28 @@ impl Downloader {
                     );
                     return Ok(target);
                 }
-                Outcome::Mismatch { resumed } => {
+                Outcome::Mismatch { resumed, reason } => {
                     tried_any = true;
-                    eprintln!("aji: {} from {host} does not match its checksum", item.name);
+                    eprintln!("aji: {} from {host}: {reason}", item.name);
                     truncate(&part, 0).await?;
                     partial = Partial::new(&item.digest);
+                    best = 0;
                     if resumed {
                         // The resumed bytes may have come from another host or another file.
                         continue;
                     }
                     remove(&part).await?;
-                    last = format!("{host}: the file does not match its checksum");
+                    last = format!("{host}: {reason}");
                     index += 1;
                     tries = 0;
+                }
+                Outcome::WrongFile(reason) => {
+                    tried_any = true;
+                    eprintln!("aji: {} from {host}: {reason}", item.name);
+                    last = format!("{host}: {reason}");
+                    index += 1;
+                    tries = 0;
+                    best = 0;
                 }
                 Outcome::Refused(reason) => {
                     tried_any = true;
@@ -178,11 +191,14 @@ impl Downloader {
                     last = format!("{host}: {reason}");
                     index += 1;
                     tries = 0;
+                    best = 0;
                 }
                 Outcome::Transient { reason, progressed } => {
                     eprintln!("aji: {} from {host}: {reason}", item.name);
                     last = format!("{host}: {reason}");
-                    if !progressed {
+                    if progressed && partial.len > best {
+                        best = partial.len;
+                    } else {
                         tries += 1;
                     }
                     if tries >= self.options.tries_per_url {
@@ -190,6 +206,7 @@ impl Downloader {
                         all_bad = false;
                         index += 1;
                         tries = 0;
+                        best = 0;
                         continue;
                     }
                     let backoff = &self.options.backoff;
@@ -202,14 +219,14 @@ impl Downloader {
                         biased;
                         () = cancel.cancelled() => return Err(DownloadError::Cancelled),
                         () = source_changed(&mut source) => {
-                            (index, tries, tried_any, all_bad) = (0, 0, false, true);
+                            (index, tries, best, tried_any, all_bad) = (0, 0, 0, false, true);
                         }
                         () = tokio::time::sleep(pause) => {}
                     }
                 }
                 Outcome::SourceChanged => {
                     eprintln!("aji: download source changed; {} starts over", item.name);
-                    (index, tries, tried_any, all_bad) = (0, 0, false, true);
+                    (index, tries, best, tried_any, all_bad) = (0, 0, 0, false, true);
                 }
             }
         }
@@ -241,7 +258,7 @@ impl Downloader {
             return Ok(if partial.matches(&item.digest) {
                 Outcome::Complete { transferred: 0 }
             } else {
-                Outcome::Mismatch { resumed }
+                Outcome::mismatch(resumed)
             });
         }
 
@@ -261,6 +278,16 @@ impl Downloader {
         };
         let status = response.status();
         match status.as_u16() {
+            // A length other than the file's is not this file: an error page from a proxy, or
+            // a stale copy on a mirror. Retrying would get the same answer.
+            200 if response
+                .content_length()
+                .is_some_and(|length| length != item.size) =>
+            {
+                let length = response.content_length().unwrap_or_default();
+                let reason = format!("the server offers {length} bytes, not {}", item.size);
+                return Ok(Outcome::WrongFile(reason));
+            }
             200 => {
                 if have > 0 {
                     // The server ignored the range: start over from its first byte.
@@ -280,9 +307,17 @@ impl Downloader {
                     let reason = format!("unexpected Content-Range {range:?}");
                     return Ok(Outcome::transient(&reason, false));
                 }
+                // `bytes <first>-<last>/<total>`; a total of `*` is unknown.
+                let total = range
+                    .rsplit_once('/')
+                    .and_then(|(_, t)| t.parse::<u64>().ok());
+                if let Some(total) = total.filter(|&total| total != item.size) {
+                    let reason = format!("the server's copy has {total} bytes, not {}", item.size);
+                    return Ok(Outcome::WrongFile(reason));
+                }
             }
             // The server's file is shorter than the bytes already here: not this file.
-            416 if have > 0 => return Ok(Outcome::Mismatch { resumed: true }),
+            416 if have > 0 => return Ok(Outcome::mismatch(true)),
             408 | 429 => return Ok(Outcome::transient(&format!("HTTP {status}"), false)),
             400..=499 => return Ok(Outcome::Refused(format!("HTTP {status}"))),
             _ => return Ok(Outcome::transient(&format!("HTTP {status}"), false)),
@@ -309,8 +344,13 @@ impl Downloader {
             let bytes = match chunk {
                 Err(_) => break Outcome::transient("stalled", have > from),
                 Ok(Err(e)) => break Outcome::transient(&describe(e), have > from),
+                // The body ended cleanly, short: the server sent a shorter file. A connection that
+                // drops mid-body ends with an error instead, above.
                 Ok(Ok(None)) if have < item.size => {
-                    break Outcome::transient("the connection ended early", have > from);
+                    break Outcome::Mismatch {
+                        resumed,
+                        reason: format!("the file ended at {have} of {} bytes", item.size),
+                    };
                 }
                 Ok(Ok(None)) => {
                     break if partial.matches(&item.digest) {
@@ -318,13 +358,16 @@ impl Downloader {
                             transferred: have - from,
                         }
                     } else {
-                        Outcome::Mismatch { resumed }
+                        Outcome::mismatch(resumed)
                     };
                 }
                 Ok(Ok(Some(bytes))) => bytes,
             };
             if have + bytes.len() as u64 > item.size {
-                break Outcome::Mismatch { resumed };
+                break Outcome::Mismatch {
+                    resumed,
+                    reason: format!("the file is longer than {} bytes", item.size),
+                };
             }
             writer.write_all(&bytes).await.map_err(io)?;
             partial.update(&bytes);
@@ -332,6 +375,10 @@ impl Downloader {
             progress(have, item.size);
         };
         writer.flush().await.map_err(io)?;
+        if let Outcome::Complete { .. } = outcome {
+            // On disk before it is renamed into place and recorded.
+            writer.get_ref().sync_all().await.map_err(io)?;
+        }
         Ok(outcome)
     }
 }
@@ -343,9 +390,13 @@ enum Outcome {
     /// The bytes do not match the digest or the size. `resumed`: some came before this request.
     Mismatch {
         resumed: bool,
+        reason: String,
     },
     /// A 4xx: this URL will not serve the file.
     Refused(String),
+    /// The server declares a size other than the file's, before any byte arrives: it has
+    /// another file. The part file is kept, since none of it came from this server.
+    WrongFile(String),
     /// Worth another try. `progressed`: bytes arrived before it dropped.
     Transient {
         reason: String,
@@ -355,6 +406,13 @@ enum Outcome {
 }
 
 impl Outcome {
+    fn mismatch(resumed: bool) -> Outcome {
+        Outcome::Mismatch {
+            resumed,
+            reason: "the file does not match its checksum".to_string(),
+        }
+    }
+
     fn transient(reason: &str, progressed: bool) -> Outcome {
         Outcome::Transient {
             reason: reason.to_string(),

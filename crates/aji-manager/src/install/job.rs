@@ -19,7 +19,8 @@ use super::{
     FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed, InstalledEngine,
     InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, analysis_config, benchmark_config,
     benchmark_plan, check_space, choose_threads, engine_files, extract_size, load_installed,
-    run_benchmark, run_test_query, save_installed, unpack_engine, unpack_runtime,
+    run_benchmark, run_test_query, runtime_is_complete, unpack_engine, unpack_runtime,
+    update_installed,
 };
 use crate::atomic::write_atomically;
 use crate::manifest::{self, Backend, Network, Runtime, archive_file_name};
@@ -463,7 +464,7 @@ impl Installer {
     /// The job's sequence (design 5.3 to 5.9).
     async fn work(&self, job: &Job) -> Result<(), Stop> {
         check_licences(job)?;
-        let installed = self.installed();
+        let installed = self.without_missing_files(self.installed(), job);
         self.check_room(job, &installed)?;
         self.install_engine(job, &installed).await?;
         self.install_runtime(job, &installed).await?;
@@ -493,6 +494,47 @@ impl Installer {
             eprintln!("aji: cannot restart the engine that ran before: {e}");
         }
         result
+    }
+
+    /// `installed` without the job's recorded components whose files are gone or damaged, so
+    /// the job installs them again: after a manual delete, an antivirus quarantine or a power
+    /// cut, the record alone is not trusted.
+    fn without_missing_files(&self, mut installed: Installed, job: &Job) -> Installed {
+        let missing = |what: &str, id: &str| {
+            eprintln!(
+                "aji: {what} {id} is recorded but its files are missing or damaged; \
+                 installing it again"
+            );
+        };
+        let id = &job.engine.id;
+        if let Some(engine) = installed.engines.get(id)
+            && !non_empty_file(&self.root.engine_dir(id).join(&engine.binary))
+        {
+            missing("engine", id);
+            installed.engines.remove(id);
+        }
+        if let Some(runtime) = &job.runtime
+            && installed.runtimes.contains_key(&runtime.id)
+        {
+            let patterns = runtime
+                .components
+                .iter()
+                .flat_map(|c| c.extract.iter().map(String::as_str));
+            if !runtime_is_complete(&self.root.runtime_dir(&runtime.id), patterns) {
+                missing("runtime", &runtime.id);
+                installed.runtimes.remove(&runtime.id);
+            }
+        }
+        if let JobNetwork::Manifest(network) = &job.network
+            && let Some(recorded) = installed.networks.get(&network.id)
+        {
+            let size = fs::metadata(self.root.network_file(&recorded.file)).map(|m| m.len());
+            if size.ok() != Some(network.file.size) {
+                missing("network", &network.id);
+                installed.networks.remove(&network.id);
+            }
+        }
+        installed
     }
 
     /// Free space for what is not recorded yet, with the plan's estimates: 4 × an engine zip,
@@ -842,11 +884,8 @@ impl Installer {
     fn write_record(&self, change: impl FnOnce(&mut Installed)) -> Result<Installed, String> {
         let _record = lock(&self.record);
         let path = self.root.record_file();
-        let mut record = load_installed(&path);
-        change(&mut record);
-        save_installed(&path, &record)
-            .map_err(|e| format!("aji: cannot save {}: {e}", path.display()))?;
-        Ok(record)
+        update_installed(&path, change)
+            .map_err(|e| format!("aji: cannot update {}: {e}", path.display()))
     }
 
     fn write_config(&self, rel: &Path, text: &str) -> Result<(), String> {
@@ -940,6 +979,10 @@ fn check_licences(job: &Job) -> Result<(), Stop> {
 }
 
 /// The rows in order: engine, runtime (when there is one), network, benchmark, test query.
+fn non_empty_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() > 0)
+}
+
 fn rows(runtime: bool) -> Vec<TaskRow> {
     [
         Some(TaskKind::Engine),

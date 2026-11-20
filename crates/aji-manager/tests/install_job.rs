@@ -717,6 +717,46 @@ async fn a_runtime_folder_is_first_on_the_path() {
     w.engine_runs().await;
 }
 
+/// Recorded files that went missing or were damaged (a manual delete, an antivirus quarantine,
+/// a power cut) are installed again instead of being trusted.
+#[tokio::test]
+async fn recorded_files_that_went_missing_are_installed_again() {
+    let mut scenario = working(opencl_speeds());
+    scenario["requirePathEntry"] = RT.into();
+    let w = world(Spec {
+        opencl: scenario,
+        opencl_runtime: true,
+        ..Spec::default()
+    });
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    std::fs::remove_file(w.root.engine_dir(OPENCL).join(common::fake::EXE)).unwrap();
+    std::fs::remove_file(w.root.runtime_dir(RT).join("x.dll")).unwrap();
+    let network = w.root.network_file("net.bin.gz");
+    let bytes = std::fs::read(&network).unwrap();
+    std::fs::write(&network, &bytes[..bytes.len() / 2]).unwrap();
+
+    let job = w.install_with(OPENCL, NET, &[LICENCE_HASH]).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert_eq!(w.requests_for("/opencl.zip"), 2);
+    assert_eq!(w.requests_for("/rt/x.zip"), 2);
+    assert_eq!(w.requests_for("/net.bin.gz"), 2);
+    assert!(w.root.engine_dir(OPENCL).join(common::fake::EXE).is_file());
+    assert!(w.root.runtime_dir(RT).join("x.dll").is_file());
+    assert_eq!(std::fs::read(&network).unwrap(), bytes);
+}
+
+/// Recorded files that are all there are reused: nothing is fetched again.
+#[tokio::test]
+async fn intact_recorded_files_are_reused() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let job = w.install(OPENCL).await;
+    assert_eq!(job.outcome, Some(JobOutcome::Installed), "{job:?}");
+    assert_eq!(w.requests_for("/opencl.zip"), 1);
+    assert_eq!(w.requests_for("/net.bin.gz"), 1);
+}
+
 #[tokio::test]
 async fn installs_from_a_root_with_cjk_and_spaces() {
     let w = world(Spec {

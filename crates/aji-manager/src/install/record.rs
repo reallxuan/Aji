@@ -131,22 +131,29 @@ impl Installed {
 /// Reads the record. A missing file gives an empty record. A malformed one, a newer schema,
 /// or one naming a path that is not a plain name, is renamed to `installed.json.bad-<unix
 /// seconds>` and logged, and an empty record is returned: nothing is silently overwritten.
+/// A record that exists but cannot be read is logged and gives an empty record too; it is left
+/// in place, and [`update_installed`] refuses to write over it.
 pub fn load_installed(path: &Path) -> Installed {
+    read_installed(path).unwrap_or_else(|e| {
+        eprintln!("aji: cannot read {}: {e}", path.display());
+        Installed::default()
+    })
+}
+
+/// [`load_installed`], except that a record that exists but cannot be read is an error.
+fn read_installed(path: &Path) -> io::Result<Installed> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Installed::default(),
-        Err(e) => {
-            eprintln!("aji: cannot read {}: {e}", path.display());
-            return Installed::default();
-        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Installed::default()),
+        Err(e) => return Err(e),
     };
-    match parse_installed(&bytes) {
+    Ok(match parse_installed(&bytes) {
         Ok(installed) => installed,
         Err(why) => {
             keep_aside(path, &why);
             Installed::default()
         }
-    }
+    })
 }
 
 fn parse_installed(bytes: &[u8]) -> Result<Installed, String> {
@@ -229,6 +236,16 @@ fn keep_aside(path: &Path, why: &str) {
             path.display()
         ),
     }
+}
+
+/// Loads the record, applies `change` and saves it. The caller serialises record writes. A
+/// record that exists but cannot be read (a sharing violation, a permission) is an error, so
+/// an empty record never replaces it; an unusable one has been kept aside and starts empty.
+pub fn update_installed(path: &Path, change: impl FnOnce(&mut Installed)) -> io::Result<Installed> {
+    let mut record = read_installed(path)?;
+    change(&mut record);
+    save_installed(path, &record)?;
+    Ok(record)
 }
 
 /// Writes the record through a unique temporary file that is then renamed over it.
@@ -326,6 +343,66 @@ mod tests {
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .filter(|name| name.starts_with("installed.json.bad-"))
             .collect()
+    }
+
+    /// Makes `path` unreadable, or returns `false` where that is not possible (root ignores
+    /// file modes).
+    #[cfg(unix)]
+    fn make_unreadable(path: &Path) -> bool {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        std::fs::read(path).is_err()
+    }
+
+    #[cfg(unix)]
+    fn make_readable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
+
+    /// A record that exists but cannot be read is not replaced by an empty one: the change
+    /// fails and the record keeps every set.
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_record_is_not_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("installed.json");
+        save_installed(&path, &sample()).unwrap();
+        if !make_unreadable(&path) {
+            return;
+        }
+        let result = update_installed(&path, |record| record.active = None);
+        make_readable(&path);
+        assert!(result.is_err(), "{result:?}");
+        assert_eq!(load_installed(&path), sample());
+    }
+
+    /// The reviewer's reproduction: importing a network while the record cannot be read.
+    #[cfg(unix)]
+    #[test]
+    fn an_import_does_not_erase_an_unreadable_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = InstallRoot::new(dir.path().join("aji"));
+        let path = root.record_file();
+        save_installed(&path, &sample()).unwrap();
+        let network = dir.path().join("net.bin.gz");
+        std::fs::write(&network, [0x1f, 0x8b, 8, 0]).unwrap();
+        if !make_unreadable(&path) {
+            return;
+        }
+        let result = crate::install::import_network(&root, &network);
+        make_readable(&path);
+        assert!(result.is_err(), "{result:?}");
+        assert_eq!(load_installed(&path), sample());
+    }
+
+    #[test]
+    fn a_change_to_a_missing_record_starts_from_an_empty_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("installed.json");
+        let saved = update_installed(&path, |record| record.active = sample().active).unwrap();
+        assert_eq!(saved.active, sample().active);
+        assert_eq!(load_installed(&path), saved);
     }
 
     #[test]

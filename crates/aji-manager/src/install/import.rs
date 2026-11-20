@@ -8,7 +8,7 @@ use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 use ts_rs::TS;
 
-use super::{InstallRoot, InstalledNetwork, load_installed, save_installed};
+use super::{InstallRoot, InstalledNetwork, update_installed};
 use crate::atomic::temporary;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -62,16 +62,15 @@ pub fn import_network(root: &InstallRoot, file: &Path) -> Result<ImportedNetwork
     }
     let name = display_name(file).unwrap_or_else(|| id.clone());
     let record_file = root.record_file();
-    let mut record = load_installed(&record_file);
-    record.networks.insert(
-        id.clone(),
-        InstalledNetwork {
-            file: file_name,
-            name: name.clone(),
-            imported: true,
-        },
-    );
-    save_installed(&record_file, &record).map_err(|e| io_error(&record_file, e))?;
+    let network = InstalledNetwork {
+        file: file_name,
+        name: name.clone(),
+        imported: true,
+    };
+    update_installed(&record_file, |record| {
+        record.networks.insert(id.clone(), network);
+    })
+    .map_err(|e| io_error(&record_file, e))?;
     Ok(ImportedNetwork {
         id,
         name,

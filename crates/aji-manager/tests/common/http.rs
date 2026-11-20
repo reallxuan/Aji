@@ -169,6 +169,12 @@ pub enum FileMode {
     /// Like `Normal`, but sends nothing past this offset of the file: the connection stays open
     /// and silent. A request starting at or past it is served in full.
     StallAfter(usize),
+    /// Always answers `200` with the whole body, chunked: no `Content-Length`, so its size shows
+    /// only when the body ends.
+    Chunked,
+    /// Always answers `200` declaring the whole body's length, sends this many bytes, then closes
+    /// the connection.
+    DropAfter(usize),
 }
 
 #[derive(Clone)]
@@ -259,7 +265,7 @@ fn answer_file(
                 .write_all(b"HTTP/1.1 404 X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             return;
         }
-        FileMode::IgnoreRange => 0,
+        FileMode::IgnoreRange | FileMode::Chunked | FileMode::DropAfter(_) => 0,
         _ => range
             .as_deref()
             .and_then(|r| r.strip_prefix("bytes="))
@@ -276,6 +282,15 @@ fn answer_file(
         return;
     }
     let total = body.len();
+    if let FileMode::Chunked = reply.mode {
+        let head = "HTTP/1.1 200 X\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(head.as_bytes());
+        let _ = stream.write_all(format!("{total:x}\r\n").as_bytes());
+        let _ = stream.write_all(&body);
+        let _ = stream.write_all(b"\r\n0\r\n\r\n");
+        let _ = stream.flush();
+        return;
+    }
     let head = if start > 0 {
         format!(
             "HTTP/1.1 206 X\r\nContent-Range: bytes {start}-{}/{total}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -288,6 +303,12 @@ fn answer_file(
     let _ = stream.write_all(head.as_bytes());
     let end = match reply.mode {
         FileMode::StallAfter(at) if start < at => at.min(total),
+        FileMode::DropAfter(at) => {
+            let _ = stream.write_all(&body[..at.min(total)]);
+            let _ = stream.flush();
+            // Closing the socket ends the body short of its declared length.
+            return;
+        }
         _ => total,
     };
     let _ = stream.write_all(&body[start..end]);

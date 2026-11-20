@@ -2,7 +2,7 @@
 //! its own, which is then renamed into place.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -15,8 +15,9 @@ pub(crate) fn temporary(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!("{name}.{}-{n}.tmp", std::process::id()))
 }
 
-/// Writes `bytes` to `path` through a temporary file in the same folder. A failed write
-/// removes its temporary file and leaves `path` as it was.
+/// Writes `bytes` to `path` through a temporary file in the same folder. The temporary file
+/// reaches the disk before the rename, so a power cut leaves the old file or the new one, not
+/// an empty one. A failed write removes its temporary file and leaves `path` as it was.
 pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let name = path
@@ -24,7 +25,12 @@ pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let tmp = temporary(dir, &name);
-    let result = fs::write(&tmp, bytes).and_then(|()| fs::rename(&tmp, path));
+    let result = fs::File::create(&tmp)
+        .and_then(|mut file| {
+            file.write_all(bytes)?;
+            file.sync_all()
+        })
+        .and_then(|()| fs::rename(&tmp, path));
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
     }

@@ -203,6 +203,9 @@ fn write_entry(entry: &mut impl io::Read, dest: &Path) -> Result<(), UnpackError
     }
     let mut file = File::create(dest).map_err(|e| io_error(dest, e))?;
     io::copy(entry, &mut file).map_err(|e| io_error(dest, e))?;
+    // On disk before the folder is renamed into place and recorded: a power cut must not leave
+    // a recorded engine or runtime with empty files.
+    file.sync_all().map_err(|e| io_error(dest, e))?;
     // The file closes here, before its folder is renamed.
     drop(file);
     Ok(())
@@ -248,6 +251,25 @@ fn io_error(path: &Path, e: io::Error) -> UnpackError {
 
 /// Removes `com.apple.quarantine` from everything under `dir`. Returns how many carried it.
 #[cfg(target_os = "macos")]
+/// Whether `dir` still holds a runtime: each pattern matches at least one file in it that is
+/// not empty. That is what `unpack_runtime` left there.
+pub(crate) fn runtime_is_complete<'p>(
+    dir: &Path,
+    patterns: impl IntoIterator<Item = &'p str>,
+) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    let files: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.metadata().is_ok_and(|m| m.is_file() && m.len() > 0))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    patterns
+        .into_iter()
+        .all(|pattern| files.iter().any(|name| pattern_matches(pattern, name)))
+}
+
 pub fn clear_quarantine(dir: &Path) -> io::Result<usize> {
     let mut count = usize::from(clear_quarantine_on(dir)?);
     for entry in fs::read_dir(dir)? {
