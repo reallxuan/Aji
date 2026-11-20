@@ -47,6 +47,16 @@ impl Selected {
     pub(super) fn candidate(&self) -> Option<&Candidate> {
         self.candidate.as_ref()
     }
+
+    /// `manifest` as given, reported as bundled.
+    pub(super) fn fixed(manifest: Manifest) -> Selected {
+        Selected {
+            manifest,
+            source: Source::Bundled,
+            rejected: Vec::new(),
+            candidate: None,
+        }
+    }
 }
 
 fn check(

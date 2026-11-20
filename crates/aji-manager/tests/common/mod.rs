@@ -1,6 +1,7 @@
 //! Helpers shared by the integration tests. Each test binary uses only some of them.
 #![allow(dead_code)]
 
+pub mod engine_zip;
 pub mod fake;
 pub mod http;
 
