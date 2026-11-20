@@ -197,7 +197,11 @@ pub fn build<R: Runtime>(
         .item(&PredefinedMenuItem::quit(app, Some(l.quit))?)
         .build()?;
     let new_game = SubmenuBuilder::new(app, l.new_game)
-        .item(&item(app, MenuAction::New19, l.size19)?)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::New19.id(), l.size19)
+                .accelerator("CmdOrCtrl+N")
+                .build(app)?,
+        )
         .item(&item(app, MenuAction::New13, l.size13)?)
         .item(&item(app, MenuAction::New9, l.size9)?)
         .build()?;

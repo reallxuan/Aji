@@ -69,6 +69,7 @@ describe('development scenarios', () => {
       'd-crashed',
       'no-engine',
       'mac',
+      'game',
     ]);
     expect(scenarioTransport('nope')).toBeNull();
   });

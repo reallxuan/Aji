@@ -225,7 +225,9 @@
     "previous": "上一手",
     "next": "下一手",
     "last": "最后一手",
-    "settings": "设置"
+    "settings": "设置",
+    "jumpFrom": "第 {{current}} 手，点击跳到其他手数",
+    "jumpTo": "跳到第几手"
   },
   "noEngine": {
     "title": "尚未设置引擎",
@@ -284,5 +286,67 @@
       "illegalMoves": "棋谱里有不合规则的着手，已在对应位置标出",
       "komiUnreadable": "棋谱中的贴目无法读取，已按当前显示的规则分析"
     }
+  },
+  "rules": {
+    "title": "分析规则",
+    "rule": "规则",
+    "komi": "贴目",
+    "scoring": "计分",
+    "chinese": "中国规则",
+    "japaneseKorean": "日韩规则",
+    "custom": "自定义",
+    "area": "数子",
+    "territory": "数目",
+    "fixedKomi": "{{komi}} 目",
+    "fixedHint": "{{scoring}} · 由规则决定",
+    "stepHint": "每次 0.5 目",
+    "komiDown": "减少贴目",
+    "komiUp": "增加贴目",
+    "short": {
+      "chinese": "中国",
+      "japaneseKorean": "日韩",
+      "custom": "自定义"
+    },
+    "chip": "{{rules}} · {{komi}}",
+    "chipChanged": "{{rules}} · {{komi}}，已改动",
+    "described": {
+      "chinese": "中国规则",
+      "japaneseKorean": "日韩规则",
+      "custom": "自定义规则（{{scoring}}，贴 {{komi}} 目）"
+    },
+    "source": {
+      "sameLead": "与棋谱一致：棋谱记载",
+      "readAs": "，按{{rules}}读取。",
+      "changedLead": "已改动。棋谱记载",
+      "wasReadAs": "，原按{{rules}}读取。",
+      "none": "棋谱没有写规则或贴目，使用默认设置。",
+      "changedNone": "已改动。棋谱没有写规则或贴目，原按默认设置读取。",
+      "restore": "恢复棋谱设定"
+    }
+  },
+  "gameInfo": {
+    "title": "棋局信息",
+    "result": "结果",
+    "date": "日期",
+    "event": "赛事",
+    "place": "地点",
+    "handicap": "让子",
+    "empty": "棋谱没有记录对局信息",
+    "black": "黑方",
+    "white": "白方"
+  },
+  "menu": {
+    "newGame": "新建棋局",
+    "size19": "19 路",
+    "size13": "13 路",
+    "size9": "9 路",
+    "open": "打开棋谱…",
+    "openRecent": "打开最近",
+    "noRecent": "暂无最近打开的棋谱",
+    "missing": "已移动或删除",
+    "clearRecent": "清除最近记录",
+    "saveAs": "另存为…",
+    "today": "今天",
+    "yesterday": "昨天"
   }
 }

@@ -36,7 +36,7 @@ export function EngineIndicator() {
   return (
     <button
       type="button"
-      className={`size-2.5 rounded-full ${colour} disabled:cursor-default`}
+      className={`size-2.5 flex-none rounded-full ${colour} disabled:cursor-default`}
       data-state={state ?? 'unknown'}
       aria-label={
         action === 'setUp' ? t('noEngine.setup') : action ? t(`engine.action.${action}`) : stateText

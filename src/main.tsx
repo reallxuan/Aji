@@ -27,9 +27,10 @@ async function chooseBackend(): Promise<{ transport: Transport; files: PlatformF
     const name = new URLSearchParams(window.location.search).get('scenario');
     if (name) {
       const { scenarioTransport, SCENARIOS } = await import('./dev/scenarios');
+      const { SAMPLE_FILES } = await import('./dev/fakeGame');
       const { createFakeFiles } = await import('./platform/fakeFiles');
       const transport = scenarioTransport(name);
-      if (transport) return { transport, files: createFakeFiles() };
+      if (transport) return { transport, files: createFakeFiles(SAMPLE_FILES) };
       console.warn(`Unknown scenario "${name}". Known: ${SCENARIOS.join(', ')}`);
     }
   }

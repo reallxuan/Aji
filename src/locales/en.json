@@ -225,7 +225,9 @@
     "previous": "Previous move",
     "next": "Next move",
     "last": "Last move",
-    "settings": "Settings"
+    "settings": "Settings",
+    "jumpFrom": "Move {{current}}; click to go to another move",
+    "jumpTo": "Go to move"
   },
   "noEngine": {
     "title": "No engine is set up",
@@ -284,5 +286,67 @@
       "illegalMoves": "Some moves break the rules; they are marked where they occur",
       "komiUnreadable": "The file's komi could not be read; the rules shown are used instead"
     }
+  },
+  "rules": {
+    "title": "Analysis rules",
+    "rule": "Rules",
+    "komi": "Komi",
+    "scoring": "Scoring",
+    "chinese": "Chinese",
+    "japaneseKorean": "Japanese/Korean",
+    "custom": "Custom",
+    "area": "Area",
+    "territory": "Territory",
+    "fixedKomi": "{{komi}} points",
+    "fixedHint": "{{scoring}} · set by the rules",
+    "stepHint": "Steps of 0.5",
+    "komiDown": "Lower komi",
+    "komiUp": "Raise komi",
+    "short": {
+      "chinese": "Chinese",
+      "japaneseKorean": "Japanese",
+      "custom": "Custom"
+    },
+    "chip": "{{rules}} · {{komi}}",
+    "chipChanged": "{{rules}} · {{komi}}, changed from the file",
+    "described": {
+      "chinese": "Chinese rules",
+      "japaneseKorean": "Japanese/Korean rules",
+      "custom": "custom rules ({{scoring}}, komi {{komi}})"
+    },
+    "source": {
+      "sameLead": "Matches the file, which records",
+      "readAs": ", read as {{rules}}.",
+      "changedLead": "Changed. The file records",
+      "wasReadAs": ", first read as {{rules}}.",
+      "none": "The file names no rules or komi, so the default is used.",
+      "changedNone": "Changed. The file names no rules or komi; the default was used.",
+      "restore": "Restore the file's setting"
+    }
+  },
+  "gameInfo": {
+    "title": "Game",
+    "result": "Result",
+    "date": "Date",
+    "event": "Event",
+    "place": "Place",
+    "handicap": "Handicap",
+    "empty": "The record names no players or event",
+    "black": "Black",
+    "white": "White"
+  },
+  "menu": {
+    "newGame": "New Game",
+    "size19": "19×19",
+    "size13": "13×13",
+    "size9": "9×9",
+    "open": "Open…",
+    "openRecent": "Open Recent",
+    "noRecent": "No recent games",
+    "missing": "Moved or deleted",
+    "clearRecent": "Clear Recent",
+    "saveAs": "Save As…",
+    "today": "Today",
+    "yesterday": "Yesterday"
   }
 }

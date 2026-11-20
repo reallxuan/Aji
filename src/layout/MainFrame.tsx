@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { BoardCanvas } from '../board/BoardCanvas';
+import { useWheelNavigation } from '../board/useWheelNavigation';
 import { useGameStore } from '../game/gameStore';
 import { computeFrame } from './frame';
 import { useWindowSize } from './useWindowSize';
@@ -12,10 +13,12 @@ export function MainFrame({ panel }: { panel: ReactNode }) {
   const { width, height } = useWindowSize();
   const { board, panel: panelBox } = computeFrame(width, height);
   const snapshot = useGameStore((s) => s.snapshot);
+  const boardArea = useRef<HTMLDivElement>(null);
+  useWheelNavigation(boardArea);
 
   return (
     <div className="relative h-full w-full">
-      <div className="absolute" style={{ left: board.x, top: board.y }}>
+      <div ref={boardArea} className="absolute" style={{ left: board.x, top: board.y }}>
         <BoardCanvas
           cssSize={board.size}
           boardSize={snapshot?.size ?? 19}

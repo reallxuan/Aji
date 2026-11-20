@@ -182,6 +182,15 @@ emits install progress on timers. Nothing is downloaded and no KataGo runs.
 | `d-crashed` | The analysis panel with a crashed engine, and "set up again" |
 | `no-engine` | Choose "set up later" to see the no-engine panel |
 | `mac` | The Metal path on Apple silicon |
+| `game` | A ready engine and a game to step through: open the samples from the title menu |
+
+Every scenario plays games through a stand-in for the backend's game session
+(`src/dev/fakeGame.ts`): it knows one record, the 2025 Samsung Cup final's second game, and
+picks a canned result by the file's name. The open dialog and the recent list offer samples
+for each case: `samsung-30-final-2.sgf` opens cleanly, `野狐-gbk.sgf` with a guessed encoding
+and extra games, `truncated.sgf` cut at move 183, `illegal-ko.sgf` a 9×9 game with a move onto
+an occupied point, and `size-19x13.sgf` fails as a non-square board. `moved-away.sgf` is in the
+recent list but not on the fake disk.
 
 The language follows the browser until you switch it in the title row or in settings. Reload
 the page to start a scenario again. Scenarios exist only in a development build: `main.tsx`
