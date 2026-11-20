@@ -1,6 +1,7 @@
 //! Helpers shared by the integration tests. Each test binary uses only some of them.
 #![allow(dead_code)]
 
+pub mod fake;
 pub mod http;
 
 use std::io::Cursor;
