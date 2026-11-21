@@ -87,18 +87,19 @@ Left to right:
 - **Game title**, with a chevron. Clicking it opens the **game menu**: 新建棋局 (19, 13 or 9 路), 打开棋谱…, 打开最近 and 另存为…. **[Decided in M6]** The game library stays closed in Phase 1; an earlier mockup with a permanent sidebar cost the board too much room.
 - **Rules chip** beside the title: the rules and komi KataGo analyses with (`中国 · 7.5`), with an amber dot when they differ from the file's reading. Clicking it opens the game information and the analysis rules. **[Decided in M6]**
 - **Navigation**: first move, previous, `38 / 247`, next, last move. In a narrow panel (under 500 px) the chip shows only the komi and the first and last buttons step aside, so the title keeps room. **[Decided in M6]**
-- **Engine indicator**: a green dot when analysis is running. Clicking it pauses and resumes analysis; details such as version and visits per second appear on hover. **[Proposed]**
+- **Engine indicator**: a green dot when analysis is running, and a hollow green ring when the position stopped at its visit limit. Clicking it pauses, resumes, or searches one more visit limit at the limit; Space does the same. Hovering it for 300 ms opens a card with the state, speed, visits, engine and network, and what a click does. **[Decided in M7]**
 - **Settings**.
 
 There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no "try a move", "let the AI continue" or "pause analysis" buttons. **[Decided]**
 
 ### 4.2 Win rate and trend
 
-- **Win-rate bar**: a black segment and a white segment whose widths are the two win rates. Each side's percentage is written inside its own segment, white on black and black on white. **[Decided]** Score lead and its uncertainty sit to the right of the bar as text (`黑领先 1.8 目 · 误差 ±6.4`).
+- **Win-rate bar**: a black segment and a white segment whose widths are the two win rates, across the full panel width. Each side's percentage is written inside its own segment, white on black and black on white. **[Decided]** The score lead (`领先 1.8 目`) sits in the leading side's segment beside its percentage, and hides when the segment cannot hold both. There is no uncertainty figure; the candidate table carries each move's lead. **[Decided in M7]**
 - **Trend graph**: win rate and score lead are always drawn together, win rate against a left axis of 0–100% and score lead against a right axis in points. There is no switch between them. **[Decided]**
 - Mistakes are short bars along the bottom of the graph, in the muted text colour so they do not compete with the accent.
 - A dashed vertical line marks the current move.
-- The line under the graph carries the legend and a one-line verdict on the previous move (`上一手 白 H8 缓手，损失 2.3 目`).
+- The line under the graph carries the legend only: 黑胜率, 黑领先目数, 失误. There is no verdict line. **[Decided in M7]**
+- Moves without a result leave a gap in the lines; nothing bridges it. **[Decided in M7]**
 
 ### 4.3 Candidate table
 
@@ -208,7 +209,7 @@ A four-segment progress line sits at the top of the panel on every step. Each st
 
 - The opened game library.
 - Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎"). The engine section's "搜索线程" line and its "测速" button run the benchmark in place (M5 design 5.4).
-- Hover preview of a candidate's continuation, and the right-click menus of section 6.
+- The right-click menus of section 6. (The hover preview of a candidate's continuation is designed in M7: solid numbered stones, frozen while hovered, stepped with the wheel.)
 - Ownership and territory display, policy heatmap, move-quality marks on stones.
 - Playing against the AI.
 - Layouts for windows wider or smaller than the reference size, and for touch.

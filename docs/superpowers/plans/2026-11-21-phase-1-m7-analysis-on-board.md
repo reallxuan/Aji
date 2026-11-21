@@ -15,6 +15,30 @@
 
 **Spec:** [M7 analysis on the board design](../specs/2026-11-21-m7-analysis-on-board-design.md), approved by the owner on 2026-11-21. Its mockups are [`trend-graph.html`](../../design/mockups/m7/trend-graph.html) and [`board-analysis.html`](../../design/mockups/m7/board-analysis.html). Section numbers below (5.2 and so on) refer to the design.
 
+**Status:** Built on 2026-11-21, except the items under Outstanding.
+- **Checks.** Every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 650 Rust tests, `pnpm lint`, `pnpm typecheck`, 421 TypeScript tests, `cargo deny check licenses`, the npm licence check, the notices staleness check and unchanged generated bindings.
+- **Final review.** A fresh review of the whole branch found nothing critical and five important issues. Each was fixed with a test that failed first and folded into the commit it corrects:
+  - the engine kept only KataGo's first 20 candidates, which could cut the move played next (it now keeps all a 19×19 board can have);
+  - the hover was identified by rank, so a reorder under a still pointer counted as a new hover and the table highlight jumped rows (it is now the move);
+  - a hover outlived its candidate when a deeper search dropped it or F or Z hid them, leaving the line up and swallowing the board's wheel;
+  - a node that adds no move (a comment) has its parent's key, and got no trend point;
+  - an open engine card counted as a busy popover, so the keys stopped while it showed.
+  Twelve minor findings are deferred to M8 planning.
+- **Mac exit check** with the app from `pnpm tauri build --bundles app` (11.61 MiB, not notarised):
+  - Item 2's guarantee runs as automated tests: 120 snapshots in two seconds with late updates never show another position's analysis; a burst of positions sent to the engine ends on the last one, with no update for an earlier position after it; and the submission gate's leading and trailing timing has its own tests. No test yet counts the queries a burst sends (a deferred minor).
+  - Discs, table, bar, graph, the hover line and the wheel stepping it, the engine card, the limit ring and Continue, the catching-up fade, Space, PageUp/PageDown, F and Z were walked in `pnpm dev` (the `analysing` scenario) in the browser pane, in light and dark, in Chinese and English, at 1024×700 and 1440×900. The walk found three faults, all fixed: the table's last column wrapped in a 360 px panel, and the fake feed missed a lowered limit and drew the lead on top of the win rate.
+- **Feedback round 1** (design 13), after the owner tried the built app:
+  - one black/white perspective for the discs, the table and the graph, switched from the legend;
+  - no mistake bars, and the legend reads 胜率 and 目差;
+  - the played ring flush with its disc, and no ring on variation stones;
+  - a flat board without edge strips;
+  - a setting to hide the coordinates;
+  - no text selection anywhere.
+  Each change has a test that failed first. The wood grain was declined until board themes. Walking it in `pnpm dev` found one more fault, now fixed: a board a few dozen pixels wide threw on a negative disc radius and blanked the window. Checks after the round: 653 Rust and 434 TypeScript tests, every other check as above.
+- **Outstanding.**
+  - The native-window items with real KataGo, which are the owner's steps on the built app: items 1 to 7 of design 9, the wheel and trackpad, whether the engine card opens from the indicator while it is disabled (WKWebView), and the font timing of the first discs; plus the open M6 native-window items.
+  - The PC check, optional until M8.
+
 ## Global Constraints
 
 - **Everything from M1 to M6 still holds:**
