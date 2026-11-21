@@ -1218,6 +1218,7 @@ mod tests {
             visit_limit: Some(800),
             default_rules: AnalysisRules::JapaneseKorean,
             show_coordinates: false,
+            perspective: crate::settings::Perspective::White,
         };
         assert_eq!(
             handle(

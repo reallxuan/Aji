@@ -4,6 +4,8 @@ import { afterEach, expect, it } from 'vitest';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { createEngineStore, EngineStoreProvider, type EngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
+import { storedSettings } from '../setup/testing';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
@@ -15,6 +17,7 @@ import { CandidateTable } from './CandidateTable';
 afterEach(() => {
   resetGameStore();
   resetViewStore();
+  useSettingsStore.setState({ settings: null });
 });
 
 const KEY = 'abababababababab';
@@ -208,4 +211,25 @@ it('shows how far the wheel has stepped a hovered line beside its point', () => 
   expect(within(rows()[0]).queryByText('3 / 3')).toBeNull();
   act(() => useViewStore.getState().setStep(2));
   expect(within(rows()[0]).getByText('2 / 3')).toBeInTheDocument();
+});
+
+it('shows White’s numbers in White’s perspective, and the difference of what it shows', () => {
+  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+  mount();
+  // Black to move; Black's best is 54.2% and +0.8 for Black.
+  expect(within(rows()[0]).getByText('45.8%')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('−0.8')).toBeInTheDocument();
+  // Black's 52.4% is White's 47.6%: 1.8 points better for White than after Black's best.
+  expect(within(rows()[1]).getByText('47.6%')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('+1.8%')).toBeInTheDocument();
+});
+
+it('shows Black’s numbers in Black’s perspective when White is to move', () => {
+  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'black' });
+  mount({ toPlay: 'white' });
+  // Black's numbers, not White's 45.8% and 47.6%.
+  expect(within(rows()[0]).getByText('54.2%')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('最佳')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('52.4%')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
 });

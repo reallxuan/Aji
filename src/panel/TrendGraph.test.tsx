@@ -1,7 +1,9 @@
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resetTrendStore, useTrendStore } from '../analysis/trendStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
+import { storedSettings } from '../setup/testing';
 import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import type { TrendNode } from '../transport/generated/TrendNode';
@@ -12,6 +14,7 @@ afterEach(() => {
   vi.useRealTimers();
   resetGameStore();
   resetTrendStore();
+  useSettingsStore.setState({ settings: null });
 });
 
 const WIDTH = 540;
@@ -72,8 +75,8 @@ it('shows a move’s numbers on hover, or says it has none', () => {
   mount();
   fireEvent.mouseMove(svg(), { clientX: xOf(72), clientY: 40 });
   expect(screen.getByText('第 72 手 白 R14')).toBeInTheDocument();
-  expect(screen.getByText(/黑胜率 49\.5%/)).toBeInTheDocument();
-  expect(screen.getByText('白领先 0.1 目')).toBeInTheDocument();
+  expect(screen.getByText(/^胜率 49\.5%/)).toBeInTheDocument();
+  expect(screen.getByText('目差 −0.1')).toBeInTheDocument();
   fireEvent.mouseMove(svg(), { clientX: xOf(50), clientY: 40 });
   expect(screen.getByText('尚未分析')).toBeInTheDocument();
   fireEvent.mouseLeave(svg());
@@ -130,4 +133,38 @@ it('draws no mistake bars, however large a loss', () => {
     snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
   });
   expect(svg().querySelectorAll('[data-mistake]')).toHaveLength(0);
+});
+
+it('draws and names White’s numbers in White’s perspective', () => {
+  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+  const nodes = line();
+  nodes[42] = { ...nodes[42], stats: { winrate: 0.8, scoreLead: 6, visits: 200 } };
+  useTrendStore.getState().setNodes(nodes);
+  renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+  });
+  // The lone node at 42: Black's 80% is White's 20%, plotted from the top of a 116 px plot.
+  const lone = svg().querySelector('circle[data-line="winrate"]')!;
+  expect(Number(lone.getAttribute('cy'))).toBeCloseTo(12 + 0.8 * 116);
+  fireEvent.mouseMove(svg(), { clientX: xOf(72), clientY: 40 });
+  expect(screen.getByText(/^胜率 50\.5%/)).toBeInTheDocument();
+  expect(screen.getByText('目差 +0.1')).toBeInTheDocument();
+});
+
+it('switches the perspective from the legend, and remembers it', async () => {
+  useSettingsStore.getState().apply(storedSettings);
+  useTrendStore.getState().setNodes(line());
+  const { requests } = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    answer: (request) =>
+      request.type === 'settingsSet' ? { type: 'settings', settings: request.settings } : undefined,
+  });
+  const toggle = screen.getByRole('radiogroup', { name: '视角' });
+  expect(within(toggle).getByRole('radio', { name: '黑' })).toHaveAttribute('aria-checked', 'true');
+  await act(async () => fireEvent.click(within(toggle).getByRole('radio', { name: '白' })));
+  expect(within(toggle).getByRole('radio', { name: '白' })).toHaveAttribute('aria-checked', 'true');
+  const saved = requests.filter((r) => r.type === 'settingsSet');
+  expect(saved).toEqual([
+    { type: 'settingsSet', settings: { ...storedSettings, perspective: 'white' } },
+  ]);
 });

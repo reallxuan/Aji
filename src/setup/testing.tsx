@@ -225,6 +225,7 @@ export const storedSettings: UiSettings = {
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
   showCoordinates: true,
+  perspective: 'black',
 };
 
 /** Answers every setup request from the fixtures; `overrides` replace single request types. */

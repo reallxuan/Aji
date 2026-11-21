@@ -11,9 +11,9 @@ export interface ShownCandidate {
   /** 1-based over the shown set. */
   rank: number;
   tier: Tier;
-  /** 0–1, for the side to move. */
+  /** 0–1, for the chosen perspective's side. */
   winrate: number;
-  /** In points, for the side to move. */
+  /** In points, for the chosen perspective's side. */
   scoreLead: number;
   visits: number;
   /** The side to move's win-rate loss against the best, in percentage points. */
@@ -48,12 +48,14 @@ export function moveKey(move: Move): string {
 
 /**
  * KataGo's candidates by its order: at most ten, each with at least 2% of the top candidate's
- * visits, plus the move played next if KataGo reported it. In the side to move's view.
+ * visits, plus the move played next if KataGo reported it. Win rate and lead are `perspective`'s
+ * (design 13.1); loss and tier rate each move for the side to move, whoever is watching.
  */
 export function shownCandidates(
   update: AnalysisUpdate,
   toPlay: Color,
   nextMove: Move | null,
+  perspective: Color,
 ): ShownCandidate[] {
   const ordered = [...update.candidates].sort((a, b) => a.order - b.order);
   if (ordered.length === 0) return [];
@@ -64,15 +66,15 @@ export function shownCandidates(
 
   const forMover = (blackWinrate: number) => (toPlay === 'black' ? blackWinrate : 1 - blackWinrate);
   const best = forMover(picked[0].winrate);
+  const black = perspective === 'black';
   return picked.map((c, i) => {
-    const winrate = forMover(c.winrate);
-    const loss = (best - winrate) * 100;
+    const loss = (best - forMover(c.winrate)) * 100;
     return {
       move: c.move,
       rank: i + 1,
       tier: tierFor(loss, i === 0),
-      winrate,
-      scoreLead: toPlay === 'black' ? c.scoreLead : -c.scoreLead,
+      winrate: black ? c.winrate : 1 - c.winrate,
+      scoreLead: black ? c.scoreLead : -c.scoreLead,
       visits: c.visits,
       loss,
       played: c === played,

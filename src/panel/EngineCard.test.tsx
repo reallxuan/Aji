@@ -53,6 +53,7 @@ function mount(
       visitLimit: 10_000,
       defaultRules: { kind: 'chinese' },
       showCoordinates: true,
+      perspective: 'black',
     },
   });
   store.getState().applyEvent({ type: 'engineState', engine });

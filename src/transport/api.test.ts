@@ -79,6 +79,7 @@ describe('M5 helpers', () => {
     visitLimit: null,
     defaultRules: { kind: 'chinese' },
     showCoordinates: true,
+    perspective: 'black',
   };
   const hardware = {
     os: { kind: 'macos', version: '27', arch: 'aarch64' },

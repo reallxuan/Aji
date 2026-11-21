@@ -50,8 +50,11 @@ export function CandidateTable() {
     </span>
   ) : null;
 
+  // The difference of the win rates shown, so it reads with the 胜率 column (design 13.1).
+  const bestWinrate = shown[0]?.winrate ?? 0;
   const against = (c: ShownCandidate) => {
-    const diff = c.rank === 1 ? t('analysis.best') : formatPercent(-c.loss / 100, lang, true);
+    const diff =
+      c.rank === 1 ? t('analysis.best') : formatPercent(c.winrate - bestWinrate, lang, true);
     if (!c.played) return <span className={c.rank === 1 ? 'font-semibold' : ''}>{diff}</span>;
     return (
       <span className="font-semibold">

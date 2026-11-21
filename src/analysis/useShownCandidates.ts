@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import { catchingUp, shownCandidates, type ShownCandidate } from './candidates';
 
@@ -23,9 +24,10 @@ export function useShownCandidates(): Shown {
   const current = analysis && key !== null && analysis.position === key ? analysis : null;
   const toPlay = snapshot?.nextColor ?? 'black';
   const nextMove = snapshot?.nextMove ?? null;
+  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
   const shown = useMemo(
-    () => (current ? shownCandidates(current, toPlay, nextMove) : NONE),
-    [current, toPlay, nextMove],
+    () => (current ? shownCandidates(current, toPlay, nextMove, perspective) : NONE),
+    [current, toPlay, nextMove, perspective],
   );
   return { current, shown, fading: current !== null && catchingUp(current) };
 }

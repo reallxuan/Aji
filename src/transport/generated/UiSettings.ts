@@ -2,6 +2,7 @@
 import type { AnalysisRules } from "./AnalysisRules";
 import type { DiscField } from "./DiscField";
 import type { LanguagePreference } from "./LanguagePreference";
+import type { Perspective } from "./Perspective";
 import type { ThemePreference } from "./ThemePreference";
 
 /**
@@ -23,4 +24,8 @@ defaultRules: AnalysisRules,
 /**
  * Coordinates in the board's margin; hidden, the margin shrinks to a thin edge.
  */
-showCoordinates: boolean, };
+showCoordinates: boolean, 
+/**
+ * Whose numbers the analysis shows; switched from the graph's legend.
+ */
+perspective: Perspective, };

@@ -129,13 +129,17 @@
         "winrate": "胜率",
         "scoreLead": "目差"
       },
+      "perspective": {
+        "label": "视角",
+        "black": "黑",
+        "white": "白"
+      },
       "move": "第 {{n}} 手 {{color}} {{point}}",
       "moveOnly": "第 {{n}} 手",
       "black": "黑",
       "white": "白",
-      "winrate": "黑胜率 {{winrate}}",
-      "blackLeads": "黑领先 {{points}} 目",
-      "whiteLeads": "白领先 {{points}} 目",
+      "winrate": "胜率 {{winrate}}",
+      "lead": "目差 {{lead}}",
       "notAnalysed": "尚未分析",
       "label": "胜率走势"
     }

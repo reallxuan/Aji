@@ -543,7 +543,8 @@ mod tests {
             (
                 json!({"type": "settingsSet", "settings": {"language": "en", "theme": "light",
                        "discLines": ["visits", "scoreLead"], "visitLimit": null,
-                       "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false}}),
+                       "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false,
+                       "perspective": "white"}}),
                 Request::SettingsSet {
                     settings: UiSettings {
                         language: crate::settings::LanguagePreference::En,
@@ -555,6 +556,7 @@ mod tests {
                         visit_limit: None,
                         default_rules: AnalysisRules::JapaneseKorean,
                         show_coordinates: false,
+                        perspective: crate::settings::Perspective::White,
                     },
                 },
             ),
@@ -750,7 +752,8 @@ mod tests {
             .unwrap(),
             json!({"type": "settings", "settings": {"language": "system", "theme": "system",
                    "discLines": ["winrate", "scoreLead"], "visitLimit": null,
-                   "defaultRules": {"kind": "chinese"}, "showCoordinates": true}})
+                   "defaultRules": {"kind": "chinese"}, "showCoordinates": true,
+                   "perspective": "black"}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::SettingsChanged { settings }).unwrap()["type"],

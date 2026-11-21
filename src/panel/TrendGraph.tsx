@@ -1,10 +1,14 @@
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
+import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
-import { formatPercent } from '../analysis/format';
+import { formatLead, formatPercent } from '../analysis/format';
 import { plotRuns, plotted, scoreRange } from '../analysis/trend';
 import { useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
+import type { Perspective } from '../transport/generated/Perspective';
+import { useTransport } from '../transport/TransportProvider';
 import { useFrameNavigate } from '../game/useFrameNavigate';
 import { usePanelWidth } from '../layout/usePanelWidth';
 import type { TrendNode } from '../transport/generated/TrendNode';
@@ -25,8 +29,18 @@ function ticks(nodes: readonly TrendNode[]): Array<{ index: number; label: numbe
   return out;
 }
 
+/** The trend as `perspective`'s side sees it: the stored stats are Black's (design 13.1). */
+function viewed(nodes: readonly TrendNode[], perspective: Perspective): readonly TrendNode[] {
+  if (perspective === 'black') return nodes;
+  return nodes.map((n) =>
+    n.stats
+      ? { ...n, stats: { ...n.stats, winrate: 1 - n.stats.winrate, scoreLead: -n.stats.scoreLead } }
+      : n,
+  );
+}
+
 /**
- * Black's win rate and lead over the main line (design 5.5): one slot per main-line node, gaps
+ * The chosen side's win rate and lead over the main line (design 5.5, 13.1): one slot per main-line node, gaps
  * left empty, the current node dashed. Hover shows a node's
  * numbers; click or drag goes there. `width` is for tests; the panel's width otherwise.
  */
@@ -35,7 +49,9 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
   const lang = i18n.language;
   const panelWidth = usePanelWidth();
   const W = width ?? panelWidth;
-  const nodes = useTrendStore((s) => s.nodes);
+  const stored = useTrendStore((s) => s.nodes);
+  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const nodes = useMemo(() => viewed(stored, perspective), [stored, perspective]);
   const lineIndex = useGameStore((s) => s.snapshot?.lineIndex ?? 0);
   const boardSize = useGameStore((s) => s.snapshot?.size ?? 19);
   const go = useFrameNavigate();
@@ -245,12 +261,7 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
                 })}
                 {' · '}
                 <span className="text-score">
-                  {t(
-                    hovered.stats!.scoreLead >= 0
-                      ? 'analysis.graph.blackLeads'
-                      : 'analysis.graph.whiteLeads',
-                    { points: Math.abs(hovered.stats!.scoreLead).toFixed(1) },
-                  )}
+                  {t('analysis.graph.lead', { lead: formatLead(hovered.stats!.scoreLead, lang) })}
                 </span>
               </div>
             ) : (
@@ -271,7 +282,55 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
           <span className="h-0.5 w-3.5 rounded-[1px] bg-score" />
           {t('analysis.graph.legend.scoreLead')}
         </span>
+        <PerspectiveToggle />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Whose numbers the discs, the table and the graph show (design 13.1): a black and a white half
+ * at the legend's right end, saved with the other settings.
+ */
+function PerspectiveToggle() {
+  const { t } = useTranslation();
+  const transport = useTransport();
+  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const choose = (next: Perspective) => {
+    const current = useSettingsStore.getState().settings;
+    if (!current || current.perspective === next) return;
+    // A failure puts the previous choice back.
+    useSettingsStore
+      .getState()
+      .save(transport, { ...current, perspective: next })
+      .catch(() => undefined);
+  };
+  const sides: Array<[Perspective, string, string]> = [
+    ['black', t('analysis.graph.perspective.black'), 'bg-bar-black'],
+    ['white', t('analysis.graph.perspective.white'), 'bg-bar-white'],
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('analysis.graph.perspective.label')}
+      className="ml-auto inline-flex overflow-hidden rounded-md border border-hairline"
+    >
+      {sides.map(([side, label, stone]) => (
+        <button
+          key={side}
+          type="button"
+          role="radio"
+          aria-checked={perspective === side}
+          onClick={() => choose(side)}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-2 py-0.5 not-first:border-l not-first:border-hairline',
+            perspective === side ? 'bg-divider-soft font-medium text-text' : 'text-text-muted',
+          )}
+        >
+          <span className={cn('size-2.5 rounded-full ring-1 ring-line ring-inset', stone)} />
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

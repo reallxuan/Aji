@@ -10,6 +10,7 @@ const initial: UiSettings = {
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
   showCoordinates: true,
+  perspective: 'black',
 };
 
 describe('useSettingsStore.save', () => {

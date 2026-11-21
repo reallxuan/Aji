@@ -414,6 +414,7 @@ export function scenarioTransport(
     visitLimit: null,
     defaultRules: { kind: 'chinese' },
     showCoordinates: true,
+    perspective: 'black',
   };
   const accepted = new Set(script.accepted);
   const installed = new Set<string>();
