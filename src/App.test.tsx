@@ -58,7 +58,7 @@ describe('App panel switch', () => {
   });
 
   it('the gear opens settings and the arrow returns', async () => {
-    renderApp({ state: 'ready', version: '1.18.2' });
+    renderApp({ state: 'ready', version: '1.18.2', limitReached: false });
     await act(async () => {});
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '设置' })));
     expect(screen.getByRole('heading', { name: '设置' })).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('App panel switch', () => {
   });
 
   it('on a re-run over a working engine, offers cancel instead and returns to analysis', async () => {
-    renderApp({ state: 'ready', version: '1.18.2' });
+    renderApp({ state: 'ready', version: '1.18.2', limitReached: false });
     await act(async () => {});
     expect(screen.queryByText('准备 AI 引擎')).not.toBeInTheDocument();
     act(() => useWizardStore.getState().openWizard(true));

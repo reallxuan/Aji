@@ -22,6 +22,7 @@ function update(position: string, rootVisits: number): AnalysisUpdate {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
 }
 
@@ -51,6 +52,7 @@ it('keeps the latest analysis update', () => {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   expect(store.getState().analysis).toEqual(analysis);
@@ -67,6 +69,7 @@ it('an analysis update does not block the status reply', () => {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   store.getState().applyStatus(status({ state: 'analysing', version: '1' }));
@@ -153,7 +156,9 @@ it('clearPosition drops the analysis and ignores late updates', () => {
   store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 9) });
   expect(store.getState().analysis).toBeNull();
   // A status reply that still names the old position does not bring it back.
-  store.getState().applyStatus(status({ state: 'ready', version: '1' }, A, update(A, 9)));
+  store
+    .getState()
+    .applyStatus(status({ state: 'ready', version: '1', limitReached: false }, A, update(A, 9)));
   expect(store.getState().position).toBeNull();
   expect(store.getState().analysis).toBeNull();
   store.getState().setPosition(A);
@@ -163,6 +168,6 @@ it('clearPosition drops the analysis and ignores late updates', () => {
 
 it('a status reply with no position sets none', () => {
   const store = createEngineStore();
-  store.getState().applyStatus(status({ state: 'ready', version: '1' }, null));
+  store.getState().applyStatus(status({ state: 'ready', version: '1', limitReached: false }, null));
   expect(store.getState().position).toBeNull();
 });

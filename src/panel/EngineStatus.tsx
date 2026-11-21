@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
-import { useSettingsStore } from '../settings/settingsStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { restartEngine } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
@@ -17,8 +16,6 @@ export function EngineStatus() {
   const transport = useTransport();
   const { t } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
-  const rootVisits = useEngineStore((s) => s.analysis?.rootVisits ?? null);
-  const visitLimit = useSettingsStore((s) => s.settings?.visitLimit ?? null);
   const illegal = useGameStore((s) => s.snapshot?.illegal ?? null);
   const running =
     engine?.state === 'ready' || engine?.state === 'analysing' || engine?.state === 'paused';
@@ -30,6 +27,8 @@ export function EngineStatus() {
     );
   }
   if (!engine || engine.state === 'analysing' || engine.state === 'paused') return null;
+  // Stopped at the visit limit: the engine dot and its card say so (design 5.2).
+  if (engine.state === 'ready' && engine.limitReached) return null;
 
   const crashed = engine.state === 'crashed' ? engine : null;
   const exit = crashed?.exit ?? null;
@@ -41,16 +40,9 @@ export function EngineStatus() {
         : null
     : null;
 
-  // KataGo stops at the visit limit and the engine goes back to ready (M5 design 5.9).
-  const limitReached =
-    engine.state === 'ready' &&
-    visitLimit !== null &&
-    rootVisits !== null &&
-    rootVisits >= visitLimit;
-
   return (
     <div className="px-6 py-3 text-sm text-text-muted">
-      <p>{limitReached ? t('engine.limitReached') : t(`engine.state.${engine.state}`)}</p>
+      <p>{t(`engine.state.${engine.state}`)}</p>
       {crashed && (
         <>
           <p>{t(`engine.crash.${crashed.reason}`)}</p>

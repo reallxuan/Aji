@@ -32,6 +32,7 @@ function renderWith(candidates: Candidate[]) {
       scoreLead: 0,
       isFinal: false,
       candidates,
+      previousVisits: 0,
     },
   });
   const wrap = ({ children }: { children: ReactNode }) => (

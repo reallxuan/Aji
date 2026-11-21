@@ -96,6 +96,7 @@ mod tests {
             score_lead: 0.0,
             is_final,
             candidates: vec![],
+            previous_visits: 0,
         }
     }
 

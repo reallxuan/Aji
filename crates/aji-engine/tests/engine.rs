@@ -115,6 +115,26 @@ fn paused() -> EngineState {
 fn ready() -> EngineState {
     EngineState::Ready {
         version: VERSION.into(),
+        limit_reached: false,
+    }
+}
+
+/// Ready because the position reached its visit limit.
+fn at_limit() -> EngineState {
+    EngineState::Ready {
+        version: VERSION.into(),
+        limit_reached: true,
+    }
+}
+
+fn is_ready(state: &EngineState) -> bool {
+    matches!(state, EngineState::Ready { .. })
+}
+
+fn capped(limit: u32) -> EngineOptions {
+    EngineOptions {
+        visit_limit: Some(limit),
+        ..options()
     }
 }
 
@@ -812,28 +832,29 @@ async fn capped_position_is_not_reanalysed() {
         ..options()
     };
     let mut p = start_with(Some(files("normal")), p1(), options);
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
 
     // On resume.
     assert_eq!(bounded(p.engine.pause()).await, Ok(()));
     assert_eq!(p.next_state().await, paused());
     assert_eq!(bounded(p.engine.resume()).await, Ok(()));
-    assert_eq!(p.next_state().await, ready());
+    assert_eq!(p.next_state().await, at_limit());
 
     // After the version reply of a new process.
     assert_eq!(bounded(p.engine.restart()).await, Ok(()));
     let seen = p.until_state(|s| *s != EngineState::Starting).await;
-    assert_eq!(states(&seen), [&EngineState::Starting, &ready()]);
+    assert_eq!(states(&seen), [&EngineState::Starting, &at_limit()]);
 
     // On switching back: the cached entry is emitted at once, and nothing is submitted.
     assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(is_ready).await;
     assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
     let back = p.drain();
-    assert_eq!(back.len(), 1, "{back:?}");
-    let EngineEvent::Analysis(cached) = &back[0] else {
-        panic!("expected the cached update, got {back:?}");
-    };
+    // The cached update, and `ready` now at P1's limit (P2's final is below 100 visits).
+    let shown = updates(&back);
+    assert_eq!(shown.len(), 1, "{back:?}");
+    assert!(states(&back).iter().all(|s| **s == at_limit()), "{back:?}");
+    let cached = shown[0];
     assert_eq!(cached.position, p1().key());
     assert!(cached.is_final && cached.root_visits >= 100);
     let quiet = p.collect_for(Duration::from_millis(500)).await;
@@ -841,7 +862,7 @@ async fn capped_position_is_not_reanalysed() {
         quiet.is_empty(),
         "a capped position was analysed: {quiet:?}"
     );
-    assert_eq!(p.engine.state(), ready());
+    assert_eq!(p.engine.state(), at_limit());
     bounded(p.engine.shutdown()).await;
 }
 
@@ -1187,7 +1208,7 @@ async fn lowering_the_limit_below_current_visits_terminates_the_query() {
     p.until_state(|s| *s == analysing()).await;
     until_visits(&mut p, 107).await;
     assert_eq!(bounded(p.engine.set_visit_limit(Some(100))).await, Ok(()));
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
     let quiet = p.collect_for(Duration::from_millis(500)).await;
     assert!(
         states(&quiet).is_empty(),
@@ -1203,7 +1224,7 @@ async fn raising_the_limit_resubmits_a_capped_position() {
         ..options()
     };
     let mut p = start_with(Some(files("normal")), p1(), options);
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
     // P1's final has 315 visits: below 1000, so it is searched again.
     assert_eq!(bounded(p.engine.set_visit_limit(Some(1000))).await, Ok(()));
     p.until_state(|s| *s == analysing()).await;
@@ -1217,7 +1238,7 @@ async fn removing_the_limit_resubmits_a_capped_position() {
         ..options()
     };
     let mut p = start_with(Some(files("normal")), p1(), options);
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
     assert_eq!(bounded(p.engine.set_visit_limit(None)).await, Ok(()));
     p.until_state(|s| *s == analysing()).await;
     bounded(p.engine.shutdown()).await;
@@ -1230,7 +1251,7 @@ async fn a_limit_change_while_paused_does_not_submit() {
         ..options()
     };
     let mut p = start_with(Some(files("normal")), p1(), options);
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
     assert_eq!(bounded(p.engine.pause()).await, Ok(()));
     assert_eq!(p.next_state().await, paused());
     assert_eq!(bounded(p.engine.set_visit_limit(None)).await, Ok(()));
@@ -1246,20 +1267,21 @@ async fn the_limit_is_kept_across_restart_and_set_files() {
     p.until_state(|s| *s == ready()).await;
     // The cached final has 315 visits; a limit of 100 caps it from now on.
     assert_eq!(bounded(p.engine.set_visit_limit(Some(100))).await, Ok(()));
+    assert_eq!(p.next_state().await, at_limit());
     assert_eq!(bounded(p.engine.restart()).await, Ok(()));
     let seen = p.until_state(|s| *s != EngineState::Starting).await;
-    assert_eq!(states(&seen), [&EngineState::Starting, &ready()]);
+    assert_eq!(states(&seen), [&EngineState::Starting, &at_limit()]);
     assert_eq!(
         bounded(p.engine.set_files(Some(files("normal")))).await,
         Ok(())
     );
     // New files clear the cache, so P1 is searched again, to its final.
-    p.until_state(|s| *s == ready()).await;
+    p.until_state(|s| *s == at_limit()).await;
     // Its 315-visit final is at or above the kept limit: resume does not search again.
     assert_eq!(bounded(p.engine.pause()).await, Ok(()));
     assert_eq!(p.next_state().await, paused());
     assert_eq!(bounded(p.engine.resume()).await, Ok(()));
-    assert_eq!(p.next_state().await, ready());
+    assert_eq!(p.next_state().await, at_limit());
     bounded(p.engine.shutdown()).await;
 }
 
@@ -1348,6 +1370,100 @@ async fn waiting_for_the_gate_is_analysing_and_not_a_hang() {
         states(&events).iter().all(|s| **s == analysing()),
         "the state left analysing while waiting: {:?}",
         states(&events)
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+// P1's recorded final has 315 visits, and the fake ignores `maxVisits`: it always replays the
+// whole recording.
+
+#[tokio::test]
+async fn stopping_at_the_limit_reports_limit_reached() {
+    let mut p = start_with(Some(files("normal")), p1(), capped(100));
+    let seen = p.until_state(is_ready).await;
+    assert_eq!(states(&seen).last(), Some(&&at_limit()));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn continue_searches_again_from_the_cached_depth() {
+    let mut p = start_with(Some(files("normal")), p1(), capped(100));
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    assert_eq!(p.next_state().await, analysing());
+    let seen = p.until_state(is_ready).await;
+    let new = updates(&seen);
+    assert!(!new.is_empty());
+    assert!(new.iter().all(|u| u.previous_visits == 315), "{new:?}");
+    // The new target is 315 + 100, which the recording never reaches.
+    assert_eq!(states(&seen).last(), Some(&&ready()));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_raised_target_survives_navigation() {
+    let mut p = start_with(Some(files("normal")), p1(), capped(100));
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    p.until_final().await;
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    p.until_state(is_ready).await;
+    // Back on P1: 315 visits are below its raised target of 415, so it is searched again,
+    // where the plain limit of 100 would leave it alone.
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
+    let back = p
+        .until(|e| matches!(e, EngineEvent::Analysis(u) if !u.is_final))
+        .await;
+    assert!(states(&back).contains(&&analysing()), "{back:?}");
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn continue_without_a_limit_does_nothing() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    let quiet = p.collect_for(Duration::from_millis(400)).await;
+    assert!(quiet.is_empty(), "{quiet:?}");
+    assert_eq!(p.engine.state(), ready());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn set_files_clears_targets() {
+    let mut p = start_with(Some(files("normal")), p1(), capped(100));
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(
+        bounded(p.engine.set_files(Some(files("normal")))).await,
+        Ok(())
+    );
+    // Without the raised target, 315 visits are at the limit again.
+    let seen = p.until_state(is_ready).await;
+    assert_eq!(states(&seen).last(), Some(&&at_limit()));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn resume_carries_previous_visits() {
+    let mut p = start(Some(files("slow")), p1());
+    p.until_state(|s| *s == analysing()).await;
+    let mut deepest = 0;
+    while deepest == 0 {
+        deepest = deepest.max(p.next_analysis().await.root_visits);
+    }
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    p.until_state(|s| *s == paused()).await;
+    // Let the terminated query's partial final reach the cache.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    p.drain();
+    assert_eq!(bounded(p.engine.resume()).await, Ok(()));
+    let first = p.next_analysis().await;
+    assert!(
+        first.previous_visits >= deepest,
+        "{} < {deepest}",
+        first.previous_visits
     );
     bounded(p.engine.shutdown()).await;
 }

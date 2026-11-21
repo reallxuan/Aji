@@ -154,6 +154,7 @@ enum Command {
     SetFiles(Option<EngineFiles>, Reply<Outcome>),
     Stop(Reply<Outcome>),
     SetVisitLimit(Option<u32>, Reply<Outcome>),
+    Continue(Reply<Outcome>),
     Shutdown(Reply<()>),
 }
 
@@ -219,6 +220,7 @@ impl Engine {
             paused: false,
             cache,
             queries: HashMap::new(),
+            targets: HashMap::new(),
             current: None,
             next_id: 1,
             generation: 0,
@@ -298,6 +300,13 @@ impl Engine {
     pub async fn set_visit_limit(&self, limit: Option<u32>) -> Result<(), EngineError> {
         self.outcome(|reply| Command::SetVisitLimit(limit, reply))
             .await
+    }
+
+    /// Searches the current position past its visit limit: its own target becomes its cached
+    /// visits plus one limit, kept until the engine's files change. Does nothing without a
+    /// limit; a paused engine stays paused and searches on resume.
+    pub async fn continue_analysis(&self) -> Result<(), EngineError> {
+        self.outcome(Command::Continue).await
     }
 
     /// Stops KataGo like `stop` and ends the actor. Later calls report `NotRunning`.
@@ -438,9 +447,12 @@ struct Actor {
     gate: SubmitGate,
     /// A query for the current position waits for the gate until then.
     submit_at: Option<Instant>,
-    /// In-flight analysis queries, with the position each was submitted for. A terminated
-    /// query stays until its final, `noResults` or error arrives.
-    queries: HashMap<String, Position>,
+    /// In-flight analysis queries, with the position each was submitted for and the root
+    /// visits the cache held for it then. A terminated query stays until its final,
+    /// `noResults` or error arrives.
+    queries: HashMap<String, (Position, u32)>,
+    /// Per-position visit targets raised by `continue_analysis`.
+    targets: HashMap<PositionKey, u32>,
     /// The query for the current position that has not been terminated.
     current: Option<Active>,
     next_id: u64,
@@ -505,6 +517,9 @@ impl Actor {
             Command::SetVisitLimit(limit, reply) => {
                 let _ = reply.send(self.set_visit_limit(limit));
             }
+            Command::Continue(reply) => {
+                let _ = reply.send(self.continue_analysis());
+            }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
                 self.shutdown();
@@ -566,15 +581,40 @@ impl Actor {
         if self.paused {
             return Ok(());
         }
+        let limit = self.limit_for(self.position.key());
         if let Some(active) = &self.current {
             let reached = limit.is_some_and(|l| active.visits >= l);
             self.terminate_current();
             if reached {
-                self.set_state(EngineState::Ready { version });
+                self.set_state(EngineState::Ready {
+                    version,
+                    limit_reached: true,
+                });
                 return Ok(());
             }
         }
         self.analyse_or_idle(version);
+        Ok(())
+    }
+
+    fn continue_analysis(&mut self) -> Outcome {
+        if !self.running() {
+            return Err(EngineError::NotRunning);
+        }
+        let Some(limit) = self.options.visit_limit else {
+            return Ok(());
+        };
+        if self.cleared {
+            return Ok(());
+        }
+        let key = self.position.key();
+        let cached = self.cached_visits(key);
+        self.targets.insert(key, cached.saturating_add(limit));
+        if let Some(version) = self.ready_version()
+            && self.current.is_none()
+        {
+            self.analyse_or_idle(version);
+        }
         Ok(())
     }
 
@@ -624,6 +664,7 @@ impl Actor {
         }
         self.files = files;
         self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
+        self.targets.clear();
         self.throttle = Throttle::new(self.options.throttle);
         lock(&self.snapshot).analysis = None;
         if self.files.is_some() {
@@ -1019,10 +1060,11 @@ impl Actor {
     }
 
     fn on_analysis(&mut self, raw: RawAnalysis) {
-        let Some(position) = self.queries.get(&raw.id) else {
+        let Some((position, previous)) = self.queries.get(&raw.id) else {
             return;
         };
-        let update = to_update(&raw, position, self.options.max_candidates);
+        let mut update = to_update(&raw, position, self.options.max_candidates);
+        update.previous_visits = *previous;
         if let Some(active) = self.current.as_mut().filter(|a| a.id == raw.id)
             && raw.root_info.visits > active.visits
         {
@@ -1060,7 +1102,8 @@ impl Actor {
         self.current = None;
         if let EngineState::Analysing { version } = &self.state {
             let version = version.clone();
-            self.set_state(EngineState::Ready { version });
+            let state = self.ready_state(version);
+            self.set_state(state);
         }
     }
 
@@ -1077,7 +1120,7 @@ impl Actor {
             self.submit_or_defer(Instant::now());
         }
         let state = match (&self.current, self.submit_at) {
-            (None, None) => EngineState::Ready { version },
+            (None, None) => self.ready_state(version),
             _ => EngineState::Analysing { version },
         };
         self.set_state(state);
@@ -1085,13 +1128,13 @@ impl Actor {
 
     fn wants_analysis(&mut self) -> bool {
         // The position given at spawn is not validated; `analysis_query` would refuse it.
-        !self.cleared
-            && self.position.validate().is_ok()
-            && self.cache.get(self.position.key()).is_none_or(|cached| {
-                self.options
-                    .visit_limit
-                    .is_none_or(|limit| cached.root_visits < limit)
-            })
+        !self.cleared && self.position.validate().is_ok() && {
+            let key = self.position.key();
+            let limit = self.limit_for(key);
+            self.cache
+                .get(key)
+                .is_none_or(|cached| limit.is_none_or(|l| cached.root_visits < l))
+        }
     }
 
     /// Submits now if the gate allows, else arms `submit_at`, which re-enters
@@ -1109,22 +1152,48 @@ impl Actor {
     fn submit(&mut self) {
         let id = format!("aji-{}", self.next_id);
         self.next_id += 1;
+        let key = self.position.key();
         let Ok(line) = analysis_query(
             &id,
             &self.position,
-            self.options.visit_limit,
+            self.limit_for(key),
             self.options.report_every,
         ) else {
             return;
         };
         self.send(line);
         self.gate.submitted(Instant::now());
-        self.queries.insert(id.clone(), self.position.clone());
+        let previous = self.cached_visits(key);
+        self.queries
+            .insert(id.clone(), (self.position.clone(), previous));
         self.current = Some(Active {
             id,
             visits: 0,
             progress_at: Instant::now(),
         });
+    }
+
+    /// The most visits for `key`: the larger of the setting and its raised target.
+    fn limit_for(&self, key: PositionKey) -> Option<u32> {
+        let target = self.targets.get(&key).copied().unwrap_or(0);
+        self.options.visit_limit.map(|limit| limit.max(target))
+    }
+
+    fn cached_visits(&mut self, key: PositionKey) -> u32 {
+        self.cache.get(key).map_or(0, |cached| cached.root_visits)
+    }
+
+    /// `ready`, saying whether the current position stopped at its limit.
+    fn ready_state(&mut self, version: String) -> EngineState {
+        let key = self.position.key();
+        let limit_reached = !self.cleared
+            && self
+                .limit_for(key)
+                .is_some_and(|limit| self.cached_visits(key) >= limit);
+        EngineState::Ready {
+            version,
+            limit_reached,
+        }
     }
 
     fn terminate_current(&mut self) {

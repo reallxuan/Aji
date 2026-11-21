@@ -381,6 +381,7 @@ mod tests {
             score_lead: 0.0,
             is_final: false,
             candidates: vec![],
+            previous_visits: 0,
         };
         let value = serde_json::to_value(AppEvent::AnalysisUpdate { analysis: update }).unwrap();
         assert_eq!(value["type"], "analysisUpdate");

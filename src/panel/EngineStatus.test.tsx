@@ -74,32 +74,13 @@ describe('M5 additions', () => {
     expect(useWizardStore.getState()).toMatchObject({ open: true, rerun: true });
   });
 
-  it('says the visit limit was reached when a ready engine stopped at it', () => {
-    useSettingsStore.setState({
-      settings: {
-        language: 'zh-CN',
-        theme: 'system',
-        discLines: ['winrate', 'scoreLead'],
-        visitLimit: 500,
-        defaultRules: { kind: 'chinese' },
-      },
-    });
+  it('shows no line when the engine stopped at the visit limit: the dot says it', () => {
     const store = createEngineStore();
     store.setState({
-      engine: { state: 'ready', version: '1.18.2' },
+      engine: { state: 'ready', version: '1.18.2', limitReached: true },
       sawEvent: true,
-      position: 'aaaaaaaaaaaaaaaa',
-      analysis: {
-        position: 'aaaaaaaaaaaaaaaa',
-        boardSize: 19,
-        rootVisits: 512,
-        winrate: 0.5,
-        scoreLead: 0,
-        isFinal: true,
-        candidates: [],
-      },
     });
-    render(
+    const { container } = render(
       <I18nextProvider i18n={createI18n('zh-CN')}>
         <TransportProvider transport={createFakeTransport(() => ({ type: 'ok' }))}>
           <EngineStoreProvider store={store}>
@@ -108,7 +89,7 @@ describe('M5 additions', () => {
         </TransportProvider>
       </I18nextProvider>,
     );
-    expect(screen.getByText('已达到每步上限')).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 });
 
@@ -119,7 +100,12 @@ describe('on an illegal node', () => {
     'says the position cannot be analysed while the engine is %s',
     (state) => {
       useGameStore.getState().apply(makeSnapshot({ illegal: 'occupied', positionKey: null }));
-      renderWith('zh-CN', { state, version: '1.18.2' });
+      renderWith(
+        'zh-CN',
+        state === 'ready'
+          ? { state, version: '1.18.2', limitReached: false }
+          : { state, version: '1.18.2' },
+      );
       expect(
         screen.getByText('这一步在棋谱中不合法（落在已有棋子上），无法分析这个局面。'),
       ).toBeInTheDocument();
@@ -133,7 +119,7 @@ describe('on an illegal node', () => {
     ['offBoard', 'it is off the board'],
   ] as const)('names the reason %s in English', (illegal, reason) => {
     useGameStore.getState().apply(makeSnapshot({ illegal, positionKey: null }));
-    renderWith('en', { state: 'ready', version: '1.18.2' });
+    renderWith('en', { state: 'ready', version: '1.18.2', limitReached: false });
     expect(
       screen.getByText(`This move breaks the rules (${reason}); the position cannot be analysed.`),
     ).toBeInTheDocument();

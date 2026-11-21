@@ -6,4 +6,9 @@ import type { PositionKey } from "./PositionKey";
  * A snapshot of the analysis of one position. Winrate and score lead are Black's,
  * guaranteed by the launch override `reportAnalysisWinratesAs=BLACK`.
  */
-export type AnalysisUpdate = { position: PositionKey, boardSize: number, rootVisits: number, winrate: number, scoreLead: number, isFinal: boolean, candidates: Array<Candidate>, };
+export type AnalysisUpdate = { position: PositionKey, boardSize: number, rootVisits: number, winrate: number, scoreLead: number, isFinal: boolean, candidates: Array<Candidate>, 
+/**
+ * The root visits the position had in the cache when this search started: a new search
+ * starts from zero, and is catching up while it has fewer (design 5.2).
+ */
+previousVisits: number, };

@@ -5,7 +5,11 @@ import type { ExitInfo } from "./ExitInfo";
 /**
  * Where the engine is. One `State` event is emitted per transition.
  */
-export type EngineState = { "state": "notConfigured" } | { "state": "starting" } | { "state": "ready", version: string, } | { "state": "analysing", version: string, } | { "state": "paused", version: string, } | { "state": "stopped" } | { "state": "crashed", reason: CrashReason, 
+export type EngineState = { "state": "notConfigured" } | { "state": "starting" } | { "state": "ready", version: string, 
+/**
+ * The current position stopped at its visit limit; `analysisContinue` searches on.
+ */
+limitReached: boolean, } | { "state": "analysing", version: string, } | { "state": "paused", version: string, } | { "state": "stopped" } | { "state": "crashed", reason: CrashReason, 
 /**
  * `null` when there was no process to exit (`spawnFailed`).
  */

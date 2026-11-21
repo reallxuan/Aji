@@ -13,7 +13,7 @@ import type { Response } from '../transport/generated/Response';
 import { SettingsPanel } from './SettingsPanel';
 import { useSettingsStore } from './settingsStore';
 
-const ready: EngineState = { state: 'ready', version: '1.18.2' };
+const ready: EngineState = { state: 'ready', version: '1.18.2', limitReached: false };
 const active = {
   engine: 'katago-v1.18.2-metal-macos-arm64',
   version: '1.18.2',

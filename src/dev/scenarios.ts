@@ -360,7 +360,7 @@ const SCRIPTS: Record<ScenarioName, Script> = {
     hardware: () => mac,
     recommendation: () => macRecommendation,
     accepted: [],
-    engine: { state: 'ready', version: '1.18.2' },
+    engine: { state: 'ready', version: '1.18.2', limitReached: false },
     active: {
       engine: 'katago-v1.18.2-metal-macos-arm64',
       version: '1.18.2',
@@ -420,7 +420,11 @@ export function scenarioTransport(
   };
   const startEngine = () => {
     setEngine({ state: 'starting' });
-    setTimeout(() => setEngine({ state: 'ready', version: active?.version ?? '1.18.2' }), tick * 2);
+    setTimeout(
+      () =>
+        setEngine({ state: 'ready', version: active?.version ?? '1.18.2', limitReached: false }),
+      tick * 2,
+    );
   };
   const publish = () => {
     if (job) transport.emit({ type: 'setupProgress', job: structuredClone(job) });
