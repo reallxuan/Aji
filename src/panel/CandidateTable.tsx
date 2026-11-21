@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { catchingUp, shownCandidates, type ShownCandidate } from '../analysis/candidates';
+import type { ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import { formatLead, formatPercent, formatVisits } from '../analysis/format';
+import { useShownCandidates } from '../analysis/useShownCandidates';
 import { useViewStore } from '../analysis/viewStore';
 import { moveLabel } from '../board/coordinates';
 import { useEngineStore } from '../engine/engineStore';
@@ -21,17 +22,13 @@ const COLUMNS =
 export function CandidateTable() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const analysis = useEngineStore((s) => s.analysis);
+  const { current, shown, fading } = useShownCandidates();
   const rejected = useEngineStore((s) => s.rejected);
   const snapshot = useGameStore((s) => s.snapshot);
   const hidden = useViewStore((s) => s.hidden || s.held);
   const hover = useViewStore((s) => s.hover);
   const setHover = useViewStore((s) => s.setHover);
 
-  const current =
-    analysis && snapshot && analysis.position === snapshot.positionKey ? analysis : null;
-  const shown = current ? shownCandidates(current, snapshot!.nextColor, snapshot!.nextMove) : [];
-  const fading = current !== null && catchingUp(current);
   const grouped = new Intl.NumberFormat(lang);
 
   const total = hidden ? (

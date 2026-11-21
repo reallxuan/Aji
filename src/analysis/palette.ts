@@ -8,7 +8,7 @@ export interface TierStyle {
   fillAlpha: number;
   ring: string;
   ringAlpha: number;
-  /** In pixels at the board's 19×19 scale. */
+  /** In CSS pixels. */
   ringWidth: number;
   text: string;
   bold: boolean;

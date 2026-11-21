@@ -30,6 +30,11 @@ export function formatLead(n: number, lang: string): string {
   return signed(n, lang);
 }
 
+/** A fraction as a percentage figure with one decimal and no sign: `37.2`, as on a disc. */
+export function formatPercentFigure(x: number, lang: string): string {
+  return fixed1(x * 100, lang);
+}
+
 /** A fraction as a percentage with one decimal: `37.2%`, or signed: `−1.8%`. */
 export function formatPercent(x: number, lang: string, withSign = false): string {
   const points = x * 100;

@@ -1,7 +1,8 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Color } from '../transport/generated/Color';
 import { BoardCanvas } from './BoardCanvas';
+import { boardGeometry } from './geometry';
 import * as stones from './stones';
 
 vi.mock('./stones', async (importOriginal) => {
@@ -32,13 +33,14 @@ describe('BoardCanvas', () => {
     vi.mocked(stones.makeStoneSprites).mockClear();
   });
 
-  it('sizes both layers at the CSS size times the device pixel ratio', () => {
+  it('sizes every layer at the CSS size times the device pixel ratio', () => {
     stubRatio(2);
     const { container } = render(
       <BoardCanvas cssSize={400} boardSize={19} stones={empty(19)} lastMove={null} />,
     );
     const canvases = container.querySelectorAll('canvas');
-    expect(canvases).toHaveLength(2);
+    // Wood and grid, stones, candidate discs.
+    expect(canvases).toHaveLength(3);
     for (const canvas of canvases) {
       expect(canvas.width).toBe(800);
       expect(canvas.height).toBe(800);
@@ -80,5 +82,57 @@ describe('BoardCanvas', () => {
     expect(stones.makeStoneSprites).toHaveBeenCalledTimes(1);
     rerender(<BoardCanvas cssSize={320} boardSize={9} stones={two} lastMove={null} />);
     expect(stones.makeStoneSprites).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('BoardCanvas candidates', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const best = {
+    move: { type: 'play' as const, x: 3, y: 3 },
+    rank: 1,
+    tier: 'best' as const,
+    winrate: 0.54,
+    scoreLead: 1.8,
+    visits: 1240,
+    loss: 0,
+    played: false,
+    pv: [],
+  };
+
+  it('fades the candidate layer while a new search catches up', () => {
+    stubRatio(1);
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const { container, rerender } = render(
+      <BoardCanvas {...props} candidates={[best]} catchingUp />,
+    );
+    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="candidates"]')!;
+    expect(layer).toHaveStyle({ opacity: '0.6' });
+    expect(layer.style.transition).toBe('opacity 200ms');
+    rerender(<BoardCanvas {...props} candidates={[best]} catchingUp={false} />);
+    expect(layer).toHaveStyle({ opacity: '1' });
+  });
+
+  it('reports the hovered candidate when the pointer enters and leaves its disc', () => {
+    stubRatio(1);
+    const onHover = vi.fn();
+    const { container } = render(
+      <BoardCanvas
+        cssSize={400}
+        boardSize={19}
+        stones={empty(19)}
+        lastMove={null}
+        candidates={[best]}
+        onHoverCandidate={onHover}
+      />,
+    );
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19);
+    fireEvent.mouseMove(area, { clientX: g.lines[3], clientY: g.lines[3] });
+    fireEvent.mouseMove(area, { clientX: g.lines[3] + 1, clientY: g.lines[3] });
+    fireEvent.mouseMove(area, { clientX: g.lines[5], clientY: g.lines[3] });
+    fireEvent.mouseMove(area, { clientX: g.lines[3], clientY: g.lines[3] });
+    fireEvent.mouseLeave(area);
+    expect(onHover.mock.calls).toEqual([[1], [null], [1], [null]]);
   });
 });
