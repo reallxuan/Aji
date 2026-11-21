@@ -6,7 +6,7 @@
 // (crates/aji-manager/manifest/manifest.json).
 
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
-import { createFakeGame } from './fakeGame';
+import { createFakeGame, fakeAnalysis } from './fakeGame';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import type { Backend } from '../transport/generated/Backend';
 import type { BackendRecommendation } from '../transport/generated/BackendRecommendation';
@@ -37,6 +37,7 @@ export const SCENARIOS = [
   'no-engine',
   'mac',
   'game',
+  'analysing',
 ] as const;
 
 export type ScenarioName = (typeof SCENARIOS)[number];
@@ -273,6 +274,25 @@ const pcCuda: Script = {
   failure: () => null,
 };
 
+// A Mac with the engine running, for the game header, navigation and file commands. The open
+// dialog, drops and recent list offer the sample files in `fakeGame.ts`.
+const gameScript: Script = {
+  hardware: () => mac,
+  recommendation: () => macRecommendation,
+  accepted: [],
+  engine: { state: 'ready', version: '1.18.2', limitReached: false },
+  active: {
+    engine: 'katago-v1.18.2-metal-macos-arm64',
+    version: '1.18.2',
+    backend: 'metal',
+    network: 'kata1-tf3-b11c768-s12382M-d6533M',
+    networkName: 'kata1-tf3-b11c768-s12382M-d6533M',
+    threads: 12,
+    visitsPerSecond: null,
+  },
+  failure: () => null,
+};
+
 const SCRIPTS: Record<ScenarioName, Script> = {
   'pc-cuda': pcCuda,
   'pc-old-driver': {
@@ -354,25 +374,16 @@ const SCRIPTS: Record<ScenarioName, Script> = {
     active: null,
     failure: () => null,
   },
-  // A Mac with the engine running, for the game header, navigation and file commands. The open
-  // dialog, drops and recent list offer the sample files in `fakeGame.ts`.
-  game: {
-    hardware: () => mac,
-    recommendation: () => macRecommendation,
-    accepted: [],
-    engine: { state: 'ready', version: '1.18.2', limitReached: false },
-    active: {
-      engine: 'katago-v1.18.2-metal-macos-arm64',
-      version: '1.18.2',
-      backend: 'metal',
-      network: 'kata1-tf3-b11c768-s12382M-d6533M',
-      networkName: 'kata1-tf3-b11c768-s12382M-d6533M',
-      threads: 12,
-      visitsPerSecond: null,
-    },
-    failure: () => null,
-  },
+  game: gameScript,
+  // The game scenario with KataGo analysing: a fake feed of candidates every 100 ms, for the
+  // discs, the table, the trend graph and hovering. It honours the visit limit, Continue, Pause
+  // and Resume, and a revisited position searches again, catching up on what is cached.
+  analysing: { ...gameScript, engine: { state: 'analysing', version: '1.18.2' } },
 };
+
+/** How often the analysing scenario reports, and how many visits each report adds. */
+const FEED_MS = 100;
+const FEED_VISITS = 50;
 
 // --- The scripted engine side -----------------------------------------------------------------
 
@@ -426,6 +437,81 @@ export function scenarioTransport(
       tick * 2,
     );
   };
+  const feed = name === 'analysing' ? startFeed() : null;
+
+  /** The analysing scenario's engine: one search at a time, on the position on the board. */
+  function startFeed() {
+    const version = '1.18.2';
+    // The deepest search per position, and targets raised by Continue.
+    const reached = new Map<string, number>();
+    const targets = new Map<string, number>();
+    let key: string | null = null;
+    let visits = 0;
+    let previous = 0;
+    let paused = false;
+    const target = (k: string) => Math.max(settings.visitLimit ?? Infinity, targets.get(k) ?? 0);
+    const current = () => {
+      const reply = game({ type: 'gameSnapshot' });
+      return reply?.type === 'game' ? reply.snapshot : null;
+    };
+    const atLimit = () => {
+      if (engine.state !== 'ready' || !engine.limitReached)
+        setEngine({ state: 'ready', version, limitReached: true });
+    };
+    setInterval(() => {
+      const snapshot = current();
+      if (paused || !snapshot) return;
+      const k = snapshot.positionKey;
+      if (k === null) {
+        key = null;
+        return;
+      }
+      if (k !== key) {
+        key = k;
+        previous = reached.get(k) ?? 0;
+        if (previous >= target(k)) {
+          // A position searched to its limit: the cached analysis, and no new search.
+          visits = previous;
+          transport.emit({ type: 'analysisUpdate', analysis: fakeAnalysis(snapshot, previous) });
+          atLimit();
+          return;
+        }
+        visits = 0;
+      }
+      if (visits >= target(k)) {
+        // A limit lowered below the search's depth stops it at once, as in the engine.
+        atLimit();
+        return;
+      }
+      visits = Math.min(target(k), visits + FEED_VISITS);
+      reached.set(k, Math.max(reached.get(k) ?? 0, visits));
+      if (engine.state !== 'analysing') setEngine({ state: 'analysing', version });
+      transport.emit({
+        type: 'analysisUpdate',
+        analysis: fakeAnalysis(snapshot, visits, previous),
+      });
+      if (visits >= target(k)) atLimit();
+    }, FEED_MS);
+    return {
+      pause() {
+        paused = true;
+        setEngine({ state: 'paused', version });
+      },
+      resume() {
+        paused = false;
+        setEngine({ state: 'analysing', version });
+      },
+      continue() {
+        if (key === null || settings.visitLimit === null) return;
+        // As the engine does: a new search, aiming one limit past the cached depth.
+        previous = reached.get(key) ?? 0;
+        targets.set(key, previous + settings.visitLimit);
+        visits = 0;
+        setEngine({ state: 'analysing', version });
+      },
+    };
+  }
+
   const publish = () => {
     if (job) transport.emit({ type: 'setupProgress', job: structuredClone(job) });
   };
@@ -563,8 +649,14 @@ export function scenarioTransport(
         setEngine({ state: 'stopped' });
         return { type: 'ok' };
       case 'analysisPause':
+        feed?.pause();
+        return { type: 'ok' };
       case 'analysisResume':
+        feed?.resume();
+        return { type: 'ok' };
       case 'analysisContinue':
+        feed?.continue();
+        return { type: 'ok' };
       case 'setupSetDownloadSource':
         return { type: 'ok' };
       case 'setupDetect':

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AppEvent } from '../transport/generated/AppEvent';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
+import type { Move } from '../transport/generated/Move';
 import type { Request } from '../transport/generated/Request';
 import { TransportError } from '../transport/transport';
-import { createFakeGame } from './fakeGame';
+import { createFakeGame, fakeAnalysis } from './fakeGame';
 
 function setUp() {
   const events: AppEvent[] = [];
@@ -31,7 +32,8 @@ describe('the scenarios’ fake game', () => {
     // Every move leaves a stone, less the ones captured.
     expect(count(end)).toBe(242 - byBlack - byWhite);
     expect(end).toMatchObject({ atEnd: true, nextColor: 'black' });
-    expect(events.map((e) => e.type)).toEqual(['gameSnapshot', 'gameSnapshot']);
+    // Opening pushes the trend too, as the backend does.
+    expect(events.map((e) => e.type)).toEqual(['gameSnapshot', 'gameTrend', 'gameSnapshot']);
   });
 
   it('flags a move onto an occupied point and gives it no position', () => {
@@ -81,5 +83,30 @@ describe('the scenarios’ fake game', () => {
     expect(reply.nodes).toHaveLength(243);
     expect(reply.nodes[0]).toEqual({ moveNumber: 0, mover: null, move: null, stats: null });
     expect(reply.nodes[2]).toMatchObject({ moveNumber: 2, mover: 'white' });
+  });
+});
+
+describe('the fake analysis', () => {
+  it('is deterministic and on empty points', () => {
+    const { ask } = setUp();
+    ask({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    const snapshot = ask({ type: 'gameNavigate', to: { move: 120 } }).snapshot;
+    const a = fakeAnalysis(snapshot, 400);
+    expect(fakeAnalysis(snapshot, 400)).toEqual(a);
+    expect(a.position).toBe(snapshot.positionKey);
+    expect(a.rootVisits).toBe(400);
+    expect(a.candidates).toHaveLength(6);
+    const where = (m: Move) => (m.type === 'play' ? m.y * 19 + m.x : -1);
+    const empty = (m: Move) => m.type === 'play' && snapshot.stones[where(m)] === null;
+    expect(new Set(a.candidates.map((c) => where(c.move))).size).toBe(6);
+    for (const c of a.candidates) {
+      expect(empty(c.move)).toBe(true);
+      expect(c.pv[0]).toEqual(c.move);
+      expect(c.pv.length).toBeGreaterThan(1);
+      expect(c.pv.every(empty)).toBe(true);
+      expect(new Set(c.pv.map(where)).size).toBe(c.pv.length);
+    }
+    const other = ask({ type: 'gameNavigate', to: { move: 121 } }).snapshot;
+    expect(fakeAnalysis(other, 400).candidates).not.toEqual(a.candidates);
   });
 });

@@ -1,3 +1,4 @@
+import { useTrendSync } from './analysis/useTrendSync';
 import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
 import { useEngineStore } from './engine/engineStore';
@@ -24,6 +25,7 @@ export default function App() {
   useEngineSync();
   useSetupProgress();
   const { ready } = useGameSync();
+  useTrendSync();
   usePlatformSync();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);

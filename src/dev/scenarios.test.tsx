@@ -10,6 +10,10 @@ import { createI18n } from '../i18n/createI18n';
 import { useSettingsStore } from '../settings/settingsStore';
 import { initialWizard, useWizardStore } from '../setup/wizardStore';
 import { TransportProvider } from '../transport/TransportProvider';
+import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
+import type { AppEvent } from '../transport/generated/AppEvent';
+import type { EngineState } from '../transport/generated/EngineState';
+import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import { SCENARIOS, scenarioTransport } from './scenarios';
 
 vi.mock('../platform/openExternal', () => ({ openExternal: async () => {} }));
@@ -70,6 +74,7 @@ describe('development scenarios', () => {
       'no-engine',
       'mac',
       'game',
+      'analysing',
     ]);
     expect(scenarioTransport('nope')).toBeNull();
   });
@@ -152,5 +157,86 @@ describe('development scenarios', () => {
     await throughTheWizard();
     expect(await screen.findByText('KataGo 已就绪。', undefined, settle)).toBeInTheDocument();
     expect(transport.unhandled).toEqual([]);
+  });
+
+  it('analysing feeds the position on the board, stops at the limit and continues', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = scenarioTransport('analysing')!;
+      const events: AppEvent[] = [];
+      transport.subscribe((event) => events.push(event));
+      const updates = () =>
+        events.flatMap((e): AnalysisUpdate[] => (e.type === 'analysisUpdate' ? [e.analysis] : []));
+      const states = () =>
+        events.flatMap((e): EngineState[] => (e.type === 'engineState' ? [e.engine] : []));
+      const settings = await transport.request({ type: 'settingsGet' });
+      if (settings.type !== 'settings') throw new Error('no settings');
+      await transport.request({
+        type: 'settingsSet',
+        settings: { ...settings.settings, visitLimit: 300 },
+      });
+      await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '' });
+      const at = async (move: number) => {
+        const reply = await transport.request({ type: 'gameNavigate', to: { move } });
+        return (reply as { snapshot: GameSnapshot }).snapshot;
+      };
+      const fifty = await at(50);
+      events.length = 0;
+
+      vi.advanceTimersByTime(1000);
+      const first = updates();
+      expect(first.length).toBeGreaterThan(3);
+      expect(first.every((u) => u.position === fifty.positionKey)).toBe(true);
+      expect(first.map((u) => u.rootVisits)).toEqual(
+        [...first.map((u) => u.rootVisits)].sort((a, b) => a - b),
+      );
+      expect(first.at(-1)!.rootVisits).toBe(300);
+      expect(states().at(-1)).toEqual({ state: 'ready', version: '1.18.2', limitReached: true });
+
+      // Continue searches again from zero, catching up on the 300 visits already cached.
+      events.length = 0;
+      await transport.request({ type: 'analysisContinue' });
+      vi.advanceTimersByTime(300);
+      expect(states()[0]).toEqual({ state: 'analysing', version: '1.18.2' });
+      expect(updates()[0]).toMatchObject({ previousVisits: 300 });
+      expect(updates()[0].rootVisits).toBeLessThan(300);
+      vi.advanceTimersByTime(2000);
+      expect(updates().at(-1)!.rootVisits).toBe(600);
+
+      // Pausing stops the feed.
+      await at(51);
+      await transport.request({ type: 'analysisPause' });
+      events.length = 0;
+      vi.advanceTimersByTime(500);
+      expect(updates()).toEqual([]);
+      await transport.request({ type: 'analysisResume' });
+      vi.advanceTimersByTime(500);
+      expect(updates().length).toBeGreaterThan(0);
+      expect(transport.unhandled).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('analysing stops at once when the limit is lowered below the search', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = scenarioTransport('analysing')!;
+      const states: EngineState[] = [];
+      transport.subscribe((e) => {
+        if (e.type === 'engineState') states.push(e.engine);
+      });
+      vi.advanceTimersByTime(1000);
+      const settings = await transport.request({ type: 'settingsGet' });
+      if (settings.type !== 'settings') throw new Error('no settings');
+      await transport.request({
+        type: 'settingsSet',
+        settings: { ...settings.settings, visitLimit: 100 },
+      });
+      vi.advanceTimersByTime(200);
+      expect(states.at(-1)).toEqual({ state: 'ready', version: '1.18.2', limitReached: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

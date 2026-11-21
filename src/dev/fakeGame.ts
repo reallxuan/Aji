@@ -1,5 +1,7 @@
 import { makeSnapshot, noInfo } from '../game/testing';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
+import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
+import type { Candidate } from '../transport/generated/Candidate';
 import type { AppEvent } from '../transport/generated/AppEvent';
 import type { Color } from '../transport/generated/Color';
 import type { GameInfo } from '../transport/generated/GameInfo';
@@ -9,6 +11,7 @@ import type { Illegal } from '../transport/generated/Illegal';
 import type { Move } from '../transport/generated/Move';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
+import type { TrendNode } from '../transport/generated/TrendNode';
 import { TransportError } from '../transport/transport';
 
 /**
@@ -140,6 +143,101 @@ function openByName(name: string): { record: Record; warnings: GameWarning[] } {
   return { record: samsung(stem), warnings: [] };
 }
 
+/** A small deterministic random source (mulberry32). */
+function random(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Six candidates: their share of the visits and the side to move's win-rate loss in points,
+// so every tier of design 5.3 shows.
+const SHARES = [0.42, 0.22, 0.14, 0.1, 0.07, 0.05];
+const LOSSES = [0, 1.2, 2.8, 3.6, 6.5, 11];
+
+/**
+ * A made-up analysis of `snapshot` at `visits` root visits, for the development scenarios: six
+ * candidates with lines on empty points, the same for the same position. The move played next is
+ * among them, so the played-move ring shows. Black's view, as KataGo reports it.
+ */
+export function fakeAnalysis(
+  snapshot: GameSnapshot,
+  visits = 500,
+  previousVisits = 0,
+): AnalysisUpdate {
+  const position = snapshot.positionKey ?? '0000000000000000';
+  const next = random(parseInt(position.slice(-8), 16) * 2654435761);
+  const { size, stones } = snapshot;
+  const taken = new Set(stones.flatMap((stone, i) => (stone ? [i] : [])));
+  const pick = (used: Set<number>): Move | null => {
+    if (used.size >= size * size) return null;
+    for (;;) {
+      const i = Math.floor(next() * size * size);
+      if (!used.has(i)) {
+        used.add(i);
+        return { type: 'play', x: i % size, y: Math.floor(i / size) };
+      }
+    }
+  };
+  const where = (m: Move) => (m.type === 'play' ? m.y * size + m.x : -1);
+
+  // The win rate wanders over the game, so the trend graph has a shape.
+  const winrate =
+    0.5 + 0.38 * Math.sin(snapshot.lineIndex / 23) * Math.cos(snapshot.lineIndex / 61);
+  // Not proportional to the win rate, so the graph's two lines do not lie on top of each other.
+  const scoreLead = (winrate - 0.5) * 28 + 2.5 * Math.sin(snapshot.lineIndex / 7);
+  const sign = snapshot.nextColor === 'black' ? 1 : -1;
+
+  const played =
+    snapshot.nextMove?.type === 'play' && !taken.has(where(snapshot.nextMove))
+      ? snapshot.nextMove
+      : null;
+  const firsts = new Set(taken);
+  if (played) firsts.add(where(played));
+  const moves: Move[] = [];
+  for (let i = 0; i < SHARES.length; i++) {
+    const move = i === 2 && played ? played : pick(firsts);
+    if (!move) break;
+    moves.push(move);
+  }
+  const candidates: Candidate[] = moves.map((move, order) => {
+    const used = new Set(taken);
+    used.add(where(move));
+    const pv: Move[] = [move];
+    const length = 6 + Math.floor(next() * 18);
+    while (pv.length < length) {
+      const m = pick(used);
+      if (!m) break;
+      pv.push(m);
+    }
+    const loss = LOSSES[order];
+    return {
+      move,
+      order,
+      visits: Math.round(SHARES[order] * visits),
+      winrate: Math.min(1, Math.max(0, winrate - (sign * loss) / 100)),
+      scoreLead: scoreLead - sign * loss * 0.35,
+      prior: SHARES[order] * 0.9,
+      pv,
+    };
+  });
+  return {
+    position,
+    boardSize: size,
+    rootVisits: visits,
+    winrate,
+    scoreLead,
+    isFinal: false,
+    candidates,
+    previousVisits,
+  };
+}
+
 export function createFakeGame(emit: (event: AppEvent) => void) {
   let record: Record = {
     name: null,
@@ -187,10 +285,22 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     });
   }
 
-  function changed(withWarnings = false): Response {
+  /** One node per main-line node; the backend fills in its cached stats, the fake has none. */
+  function trend(): TrendNode[] {
+    return nodes.map((node, i) => ({
+      moveNumber: i,
+      mover: i === 0 ? null : i % 2 ? 'black' : 'white',
+      move: node.lastMove,
+      stats: null,
+    }));
+  }
+
+  function changed(withWarnings = false, withTrend = false): Response {
     revision += 1;
     const next = snapshot();
     emit({ type: 'gameSnapshot', snapshot: next });
+    // As the backend does on open, new and a rules change.
+    if (withTrend) emit({ type: 'gameTrend', nodes: trend() });
     return { type: 'game', snapshot: next, warnings: withWarnings ? warnings : [] };
   }
 
@@ -200,7 +310,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     index = 0;
     rules = record.fromFile;
     warnings = nextWarnings;
-    return changed(true);
+    return changed(true, true);
   }
 
   /** The answer to a `game*` request, or `null` for any other request. */
@@ -251,7 +361,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         if (JSON.stringify(next) === JSON.stringify(rules))
           return { type: 'game', snapshot: snapshot(), warnings: [] };
         rules = next;
-        return changed();
+        return changed(false, true);
       }
       case 'gamePreview':
         return {
@@ -259,15 +369,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
           preview: { stones: nodes[index].stones, captured: [], illegalAt: null },
         };
       case 'gameTrend':
-        return {
-          type: 'trend',
-          nodes: nodes.map((node, i) => ({
-            moveNumber: i,
-            mover: i === 0 ? null : i % 2 ? 'black' : 'white',
-            move: node.lastMove,
-            stats: null,
-          })),
-        };
+        return { type: 'trend', nodes: trend() };
       case 'gameExport':
         if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
         return {
