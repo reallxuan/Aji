@@ -4,7 +4,7 @@
 // whole image; these say what a feature must look like, so they fail for the right reason.
 
 import { createCanvas } from '@napi-rs/canvas';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ShownCandidate } from '../analysis/candidates';
 import type { Color } from '../transport/generated/Color';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
@@ -53,6 +53,17 @@ describe('board pixels', () => {
     const aboveBottom = brightness(ctx, columns, rows(SIZE - 10 * VIEW.dpr));
     expect(Math.abs(top / belowTop - 1)).toBeLessThan(0.02);
     expect(Math.abs(bottom / aboveBottom - 1)).toBeLessThan(0.02);
+  });
+
+  it('draws coordinates unless they are hidden', () => {
+    const shown = canvas();
+    const spy = vi.spyOn(shown.ctx, 'fillText');
+    drawBoard(shown.ctx, VIEW, skia);
+    expect(spy).toHaveBeenCalledTimes(38);
+    const hidden = canvas();
+    const none = vi.spyOn(hidden.ctx, 'fillText');
+    drawBoard(hidden.ctx, { ...VIEW, coordinates: false }, skia);
+    expect(none).not.toHaveBeenCalled();
   });
 
   it('the played ring touches its disc, with no wood between', () => {

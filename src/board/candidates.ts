@@ -35,7 +35,7 @@ export function drawCandidates(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
   const r = geometry.stoneRadius * dpr;
   const px = (css: number) => css * dpr;
 
@@ -86,10 +86,10 @@ export function drawCandidates(
 export function candidateAt(
   cssX: number,
   cssY: number,
-  view: Pick<BoardView, 'cssSize' | 'boardSize'>,
+  view: Pick<BoardView, 'cssSize' | 'boardSize' | 'coordinates'>,
   discs: readonly ShownCandidate[],
 ): Move | null {
-  const geometry = boardGeometry(view.cssSize, view.boardSize);
+  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
   for (const c of discs) {
     if (c.move.type !== 'play') continue;
     const dx = cssX - geometry.lines[c.move.x];
@@ -119,7 +119,7 @@ export function drawVariationNumbers(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
   const spacing = geometry.spacing * dpr;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

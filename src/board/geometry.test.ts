@@ -11,6 +11,17 @@ function starNames(n: number): string[] {
 }
 
 describe('boardGeometry', () => {
+  it('hidden coordinates shrink the band to a thin edge, and the grid grows', () => {
+    const shown = boardGeometry(560, 19);
+    const hidden = boardGeometry(560, 19, false);
+    expect(hidden.labelBand).toBeCloseTo(560 * 0.01);
+    expect(hidden.spacing).toBeGreaterThan(shown.spacing * 1.02);
+    // Still centred: as much wood beyond the last stone as before the first.
+    const last = hidden.lines[18] + hidden.stoneRadius;
+    expect(560 - last).toBeCloseTo(hidden.labelBand);
+    expect(boardGeometry(560, 19, true)).toEqual(shown);
+  });
+
   it('labels 19×19 columns A to T without I, and rows 19 to 1 from the top', () => {
     const g = boardGeometry(868, 19);
     expect(letters(19).join('')).toBe('ABCDEFGHJKLMNOPQRST');

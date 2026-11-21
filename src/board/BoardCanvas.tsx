@@ -40,6 +40,8 @@ export interface BoardCanvasProps {
    * discs, which still answer the pointer so the hover holds; `stones` are the line's board.
    */
   variation?: { numbers: ReadonlyArray<{ point: Point; n: number }>; newest: Point | null } | null;
+  /** Coordinates in the margin (settings `showCoordinates`); hidden, the grid grows. */
+  coordinates?: boolean;
 }
 
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
@@ -62,6 +64,7 @@ export function BoardCanvas({
   onHoverCandidate,
   hoveredCandidate,
   variation = null,
+  coordinates = true,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -86,27 +89,41 @@ export function BoardCanvas({
 
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
-    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize });
-  }, [cssSize, dpr, boardSize, fontsLoaded]);
+    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates });
+  }, [cssSize, dpr, boardSize, coordinates, fontsLoaded]);
 
-  const spacing = boardGeometry(cssSize, boardSize).spacing;
+  const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
   // spacing and ratio, then stamped.
   const sprites = useMemo(() => makeStoneSprites(spacing, dpr, domCanvas), [spacing, dpr]);
 
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
-    if (ctx && cssSize > 0) drawStones(ctx, { cssSize, dpr, boardSize }, stones, lastMove, sprites);
-  }, [cssSize, dpr, boardSize, stones, lastMove, sprites]);
+    if (ctx && cssSize > 0) {
+      drawStones(ctx, { cssSize, dpr, boardSize, coordinates }, stones, lastMove, sprites);
+    }
+  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites]);
 
   const [first, second] = discLines;
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize };
+    const view = { cssSize, dpr, boardSize, coordinates };
     if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
     else drawCandidates(ctx, view, candidates, [first, second], lang);
-  }, [cssSize, dpr, boardSize, candidates, first, second, lang, fontsLoaded, variation, stones]);
+  }, [
+    cssSize,
+    dpr,
+    boardSize,
+    coordinates,
+    candidates,
+    first,
+    second,
+    lang,
+    fontsLoaded,
+    variation,
+    stones,
+  ]);
 
   useEffect(() => {
     if (hoveredCandidate !== undefined) hovered.current = hoveredCandidate;
@@ -121,7 +138,7 @@ export function BoardCanvas({
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
-    hover(candidateAt(x, y, { cssSize, boardSize }, candidates));
+    hover(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates));
   };
 
   const backing = Math.max(0, Math.round(cssSize * dpr));

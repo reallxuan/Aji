@@ -78,6 +78,7 @@ describe('M5 helpers', () => {
     discLines: ['winrate', 'visits'],
     visitLimit: null,
     defaultRules: { kind: 'chinese' },
+    showCoordinates: true,
   };
   const hardware = {
     os: { kind: 'macos', version: '27', arch: 'aarch64' },

@@ -14,6 +14,7 @@ const stored: UiSettings = {
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
+  showCoordinates: true,
 };
 
 function Probe() {

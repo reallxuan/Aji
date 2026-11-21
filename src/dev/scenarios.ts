@@ -413,6 +413,7 @@ export function scenarioTransport(
     discLines: ['winrate', 'scoreLead'],
     visitLimit: null,
     defaultRules: { kind: 'chinese' },
+    showCoordinates: true,
   };
   const accepted = new Set(script.accepted);
   const installed = new Set<string>();

@@ -1217,6 +1217,7 @@ mod tests {
             disc_lines: [DiscField::ScoreLead, DiscField::Visits],
             visit_limit: Some(800),
             default_rules: AnalysisRules::JapaneseKorean,
+            show_coordinates: false,
         };
         assert_eq!(
             handle(

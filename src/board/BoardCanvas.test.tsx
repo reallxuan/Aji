@@ -137,6 +137,29 @@ describe('BoardCanvas candidates', () => {
     expect(onHover.mock.calls).toEqual([[best.move], [null], [best.move], [null]]);
   });
 
+  it('hit-tests the discs where they are drawn with the coordinates hidden', () => {
+    stubRatio(1);
+    const onHover = vi.fn();
+    const corner: ShownCandidate = { ...best, move: { type: 'play', x: 18, y: 18 } };
+    const { container } = render(
+      <BoardCanvas
+        cssSize={400}
+        boardSize={19}
+        stones={empty(19)}
+        lastMove={null}
+        candidates={[corner]}
+        coordinates={false}
+        onHoverCandidate={onHover}
+      />,
+    );
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19, false);
+    // Near the disc's outer edge, where the shown-coordinates layout would miss it.
+    const x = g.lines[18] + g.stoneRadius * 0.9;
+    fireEvent.mouseMove(area, { clientX: x, clientY: g.lines[18] });
+    expect(onHover.mock.calls).toEqual([[corner.move]]);
+  });
+
   it('a reorder under a still pointer is not a new hover', () => {
     stubRatio(1);
     const onHover = vi.fn();

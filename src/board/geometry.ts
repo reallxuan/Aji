@@ -13,6 +13,8 @@ export const STONE_RADIUS_SHARE = 0.48;
 const LABEL_BAND_SHARE = (40 - (STONE_RADIUS_SHARE * 788) / 18) / 868;
 /** On small boards the band keeps room for legible coordinates, up to a twentieth of the board. */
 const MIN_LABEL_BAND = 12;
+/** With the coordinates hidden, the band is a thin edge of wood (M7 design 13.5). */
+const HIDDEN_BAND_SHARE = 0.01;
 
 export interface BoardGeometry {
   /** CSS pixels from the board's edge to the outermost line. */
@@ -59,10 +61,19 @@ function starPoints(boardSize: number): Array<[number, number]> {
   return points;
 }
 
-/** Lays out the grid for a square board area of `cssSize` CSS pixels. Pure. */
-export function boardGeometry(cssSize: number, boardSize: number): BoardGeometry {
+/**
+ * Lays out the grid for a square board area of `cssSize` CSS pixels. Without `coordinates` the
+ * band they would sit in shrinks to a thin edge, so the grid grows. Pure.
+ */
+export function boardGeometry(
+  cssSize: number,
+  boardSize: number,
+  coordinates = true,
+): BoardGeometry {
   const size = Math.max(0, cssSize);
-  const labelBand = Math.min(size * 0.05, Math.max(size * LABEL_BAND_SHARE, MIN_LABEL_BAND));
+  const labelBand = coordinates
+    ? Math.min(size * 0.05, Math.max(size * LABEL_BAND_SHARE, MIN_LABEL_BAND))
+    : size * HIDDEN_BAND_SHARE;
   // size = 2 × (band + radius) + (lines − 1) × spacing, with radius = share × spacing.
   const spacing =
     boardSize > 1 ? (size - 2 * labelBand) / (boardSize - 1 + 2 * STONE_RADIUS_SHARE) : 0;

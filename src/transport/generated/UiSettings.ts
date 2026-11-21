@@ -19,4 +19,8 @@ visitLimit: number | null,
 /**
  * The rules new games, and files that name neither rules nor komi, start with.
  */
-defaultRules: AnalysisRules, };
+defaultRules: AnalysisRules, 
+/**
+ * Coordinates in the board's margin; hidden, the margin shrinks to a thin edge.
+ */
+showCoordinates: boolean, };

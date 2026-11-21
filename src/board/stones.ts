@@ -149,7 +149,7 @@ export function drawStones(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
   const half = sprites.black.width / 2;
   for (let y = 0; y < boardSize; y++) {
     for (let x = 0; x < boardSize; x++) {

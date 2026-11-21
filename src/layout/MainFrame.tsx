@@ -30,6 +30,7 @@ export function MainFrame({ panel, boardOverlay }: { panel: ReactNode; boardOver
   const { shown, fading } = useShownCandidates();
   const hidden = useViewStore((s) => s.hidden || s.held);
   const discLines = useSettingsStore((s) => s.settings?.discLines);
+  const coordinates = useSettingsStore((s) => s.settings?.showCoordinates ?? true);
   useVariation();
   const variation = useViewStore((s) => s.variation);
   const step = useViewStore((s) => s.step);
@@ -58,6 +59,7 @@ export function MainFrame({ panel, boardOverlay }: { panel: ReactNode; boardOver
           lastMove={line ? null : (snapshot?.lastMove ?? null)}
           candidates={hidden ? NO_DISCS : shown}
           discLines={discLines}
+          coordinates={coordinates}
           lang={i18n.language}
           catchingUp={fading}
           onHoverCandidate={onHoverCandidate}

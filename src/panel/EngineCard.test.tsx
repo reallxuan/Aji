@@ -52,6 +52,7 @@ function mount(
       discLines: ['winrate', 'scoreLead'],
       visitLimit: 10_000,
       defaultRules: { kind: 'chinese' },
+      showCoordinates: true,
     },
   });
   store.getState().applyEvent({ type: 'engineState', engine });

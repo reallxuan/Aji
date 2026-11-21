@@ -125,6 +125,18 @@ describe('SettingsPanel', () => {
     expect(sets(transport.requests).at(-1)).toMatchObject({ language: 'en', theme: 'light' });
   });
 
+  it('shows or hides the board coordinates', async () => {
+    const transport = mount();
+    const row = await screen.findByRole('radiogroup', { name: '棋盘坐标' });
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    expect(within(row).getByRole('radio', { name: '显示' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ showCoordinates: false });
+  });
+
   it("swaps the disc lines when one takes the other line's field, and previews them", async () => {
     const transport = mount();
     await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
