@@ -221,7 +221,7 @@ export function LayoutFrame({
   const hit = coarse ? HAIRLINE_HIT_COARSE : HAIRLINE_HIT;
   return (
     <div ref={container} className="relative h-full w-full">
-      <MainBoard rect={frame.board} overlay={boardOverlay} />
+      <MainBoard rect={frame.board} overlay={boardOverlay} lines={drawn.lines} />
       {frame.columns.map((column) => {
         const node = drawn.root.children[column.index];
         const leftOfBoard = column.index < boardIndex;

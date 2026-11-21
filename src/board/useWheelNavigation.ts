@@ -4,7 +4,7 @@ import { useViewStore } from '../analysis/viewStore';
 import { useFrameNavigate } from '../game/useFrameNavigate';
 
 /** Pixels of trackpad scrolling per move. */
-const PIXELS_PER_MOVE = 50;
+export const PIXELS_PER_MOVE = 50;
 
 /**
  * The wheel over the board steps through the game (design 5.7): down is next, up is previous.

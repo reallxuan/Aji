@@ -11,13 +11,23 @@ import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import type { Move } from '../transport/generated/Move';
 import type { Rect } from './frameGeometry';
+import type { Layout } from './model';
 
 /** An empty 19×19 board, until the first game snapshot arrives. */
 const EMPTY_19 = Array.from({ length: 19 * 19 }, () => null);
 const NO_DISCS: never[] = [];
 
 /** The main board at `rect`, with its discs, hover line and wheel; `overlay` lies over it. */
-export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }) {
+export function MainBoard({
+  rect,
+  overlay,
+  lines = 'board',
+}: {
+  rect: Rect;
+  overlay?: ReactNode;
+  /** Where the hovered line is drawn: here, or (Thinking) on the first sub-board. */
+  lines?: Layout['lines'];
+}) {
   const snapshot = useGameStore((s) => s.snapshot);
   const boardArea = useRef<HTMLDivElement>(null);
   useWheelNavigation(boardArea);
@@ -33,10 +43,10 @@ export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }
   const hoveredCandidate = useViewStore((s) => (s.hover?.source === 'board' ? s.hover.move : null));
   const line = useMemo(
     () =>
-      variation && snapshot && step !== null
+      lines === 'board' && variation && snapshot && step !== null
         ? variationBoard(snapshot.stones, snapshot.size, variation, step)
         : null,
-    [variation, snapshot, step],
+    [lines, variation, snapshot, step],
   );
   const onHoverCandidate = useCallback((move: Move | null) => {
     const { hover, setHover } = useViewStore.getState();
@@ -48,6 +58,7 @@ export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }
     <div
       ref={boardArea}
       data-board
+      data-line={line ? 'shown' : undefined}
       className="absolute"
       style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
     >

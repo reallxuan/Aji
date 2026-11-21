@@ -5,6 +5,7 @@ import { TrendGraph } from '../panel/TrendGraph';
 import { WinrateBar } from '../panel/WinrateBar';
 import { MIN_SIZES } from './constants';
 import type { PanelKind, PanelRef } from './model';
+import { SubBoard } from '../panel/SubBoard';
 
 /** The legend line under the trend graph, which the graph's height leaves room for. */
 const TREND_LEGEND = 36;
@@ -51,8 +52,7 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     labelKey: 'layout.panels.subboard',
     hideable: true,
     minSize: MIN_SIZES.subboard,
-    // The sub-board arrives in Task 7 of the M1 plan.
-    Component: () => null,
+    Component: ({ panel }) => <SubBoard rank={panel.rank ?? 1} />,
   },
 };
 

@@ -1,5 +1,5 @@
+import { MIN_SIZES } from './constants';
 import { layoutFrame } from './frameGeometry';
-import { panelMinSize } from './registry';
 import { validateLayout } from './validate';
 
 let first: boolean | null = null;
@@ -13,7 +13,8 @@ export function startedNarrow(storedLayout: unknown): boolean {
     validateLayout(storedLayout),
     window.innerWidth,
     window.innerHeight,
-    panelMinSize,
+    // The registry's sizes, read from the constants so this imports no panel component.
+    (ref) => MIN_SIZES[ref.kind],
   ).narrow;
   return first;
 }
