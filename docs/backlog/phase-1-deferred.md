@@ -8,7 +8,8 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 
 ## First after v0.1.0
 
-- **Discs in the side to move's view (owner, 2026-11-21, during the walk):** the candidate discs on the board should show the win rate of the player to move, instead of the black/white perspective chosen in the graph legend (M7 design 13.1). Decide with the owner whether the table follows the discs, and keep the graph and the bar in a fixed colour, since a graph that switches sides every move would zigzag.
+- ~~**Discs in the side to move's view (owner, 2026-11-21, during the walk):**~~ Fixed in Phase 2 M1 (design 5.10): the discs and the table show the side to move; the graph keeps its colour.
+  Original note: the candidate discs on the board should show the win rate of the player to move, instead of the black/white perspective chosen in the graph legend (M7 design 13.1). Decide with the owner whether the table follows the discs, and keep the graph and the bar in a fixed colour, since a graph that switches sides every move would zigzag.
 
 ## Engine and engine manager
 
@@ -64,23 +65,23 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 
 ## Analysis interface
 
-- **M7 minor 7:** the wheel over a table row scrolls the table instead of stepping the hovered line.
+- ~~**M7 minor 7:** the wheel over a table row scrolls the table instead of stepping the hovered line.~~ Fixed in Phase 2 M1.
 - **M7 minor 8:** the trend can race between a fetch or push and live updates.
-- **M7 minor 9:** Z can stick on macOS while Cmd is held (no keyup).
-- **M7 minor 10:** font loading awaits only 12px Inter 400 before the discs draw.
+- ~~**M7 minor 9:** Z can stick on macOS while Cmd is held (no keyup).~~ Fixed in Phase 2 M1.
+- ~~**M7 minor 10:** font loading awaits only 12px Inter 400 before the discs draw.~~ Fixed in Phase 2 M1.
 - **M7 minor 12:**
   - a cached update keeps its stored `previous_visits`;
   - test placement in `update.rs`;
-  - the bar's `toFixed` is not locale-aware;
-  - "黑领先 0.0 目" at an even lead.
+  - ~~the bar's `toFixed` is not locale-aware;~~ Fixed in Phase 2 M1.
+  - ~~"黑领先 0.0 目" at an even lead.~~ Fixed in Phase 2 M1: it reads 均势 / Even.
 
 ## Wizard and settings
 
-- **M5 minor 1:** a failed settings save snaps the control back with no message.
+- ~~**M5 minor 1:** a failed settings save snaps the control back with no message.~~ Fixed in Phase 2 M1: 保存失败 shows beside the control.
 - **M5 minor 2:** a relative `devEngine` path makes the whole settings read fall back to defaults (developer-only).
 - **M5 minor 3:** `settingsSet` replaces the whole object and does not validate (visit limit 0, two equal disc lines from a non-UI client).
 - **M5 minor 4:** the focus 4 test has no write half for an unreadable `downloadSource`.
-- **M5 minor 5:** the first frame uses the system language and theme before settings arrive, and the analysis panel flashes before the first `engineStatus`.
+- **M5 minor 5:** the first frame uses the system language and theme before settings arrive, and the analysis panel flashes before the first `engineStatus`. Partly fixed in Phase 2 M1: the panels wait for the device settings and the first game snapshot, so nothing flashes in the side; the header may still show the system language for a frame.
 - **M5 minor 7:** Restart and Stop disable on `starting` only, and Stop stays disabled for an engine hanging at start.
 - **M5 minor 8:**
   - a job resumed after a reload loses `rerun` (the left link reads 暂不设置, not 取消);

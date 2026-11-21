@@ -126,12 +126,12 @@ These are as drawn in the layouts mockup. The window widths are examples.
 | Preset | Root row |
 |---|---|
 | 默认 Default | board · column(header, winrate + trend, candidates) |
-| 经典 Classic | column(winrate, trend, candidates¹) · board · column(header, subboard rank 1¹) |
+| 经典 Classic | column(winrate, trend) · board · column(header, candidates, subboard rank 1)¹ |
 | 极简 Minimal | board · column(header, winrate, candidates limited to 3 rows) |
 | 思考 Thinking | board · column(header, subboard rank 1, winrate, candidates); `lines: 'subboard'` |
 | 四盘 Four boards | board · column(header, row(subboard 1, subboard 2), row(subboard 3, column(winrate, trend))) |
 
-¹ The mockup's Classic puts the bar, the graph and comments on the left, and candidates and the tree on the right. Comments and the tree arrive in M3. Until then the candidates sit on the left and the sub-board on the right. M3 changes the preset to the mockup's.
+¹ The mockup's Classic puts the bar, the graph and comments on the left, and candidates and the tree on the right. After trying the built app the owner put the candidates above the sub-board on the right and kept the left for the bar and the graph, leaving room for more there later (owner, 2026-11-22). Comments and the tree arrive in M3, which places them.
 
 - **Default is responsive.** While the layout is the untouched default, its column splits into two once it is wider than 760 px (layouts mockup, section 7): the analysis panels on the left, the record panels on the right. The record panels (tree, comments, sub-board) come from M3. In M1 the second column holds the sub-board. **[Proposed]**
 - **Any drag, resize or hide makes the layout `custom`,** and fixes it as it is. Choosing a preset replaces it.
@@ -144,11 +144,11 @@ These are as drawn in the layouts mockup. The window widths are examples.
 - **Tabs** show a quiet tab row (layouts mockup, section 1). A panel alone in its place has no title row.
 - **Resizing.** The hairline between two siblings is draggable with an 8 px hit area, or 20 px for a coarse pointer. Minimum sizes hold. A double-click or double-tap on a hairline evens the two sides.
 - **Everything uses pointer events with pointer capture,** so mouse, pen and touch behave the same. HTML drag-and-drop is not used.
-- **The 布局 menu**, in the game menu (the title chevron) and in 设置 → 界面, offers:
+- **The 布局 menu**, in 设置 → 界面, and on Windows and in the browser in the header's 视图 button, offers (owner, 2026-11-22: the game menu keeps to the game):
   - the five presets;
   - a checkbox for each panel that can be hidden;
   - 恢复默认.
-  - On macOS, the native menu bar gets a 布局 submenu under 显示 with the presets. **[Proposed]**
+  - On macOS there is no 视图 button: the native menu bar's 显示 → 布局 has the presets. **[Decided]**
 - Layout changes save within a second of the drag ending.
 
 ### 5.4 Rendering
@@ -192,7 +192,7 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
   - the line restarts when the position changes or the candidate's first move changes. While it shows the whole line, it follows the analysis as the line deepens, at most twice a second. Once the user steps it, it is frozen, as a hovered line is (M7 design), until it restarts. **[Proposed]**
   - With the candidates hidden (F, or the Z peek), sub-boards show the bare position, so they do not give away the engine's answer. **[Proposed]**
   - It shows numbered stones as the hovered line does (M7 design), and no discs.
-  - Clicking or tapping its label shows that line on the main board, as a hover would.
+  - Clicking or tapping its label shows that line on the main board, as a hover would. The label names its rank only when the layout has more than one sub-board (owner, 2026-11-22).
   - A sub-board with no such candidate shows the position with a quiet "no candidate" line.
 - `useWheelNavigation` and the board's hover handling are scoped to their own board instance, so two boards do not fight. **[Proposed]**
 
@@ -204,7 +204,7 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
   - walnut with slate and shell;
   - printed with flat.
   - These are as approved in the board styles mockup. **[Decided]**
-- **Settings, 设置 → 界面 → 棋盘:** four thumbnails, one per set, and a 自定义 choice that shows two selects, board and stones. The default is honey with slate and shell, in both themes.
+- **Settings, 设置 → 界面 → 棋盘:** four thumbnails, one per set, and a 自定义 tile of the same size (a dashed square, or the mix in use) that shows two selects, board and stones. The default is honey with slate and shell, in both themes.
 - **A board style is data:**
   - the base colour;
   - the grain colours, density and amplitude, or none;
@@ -240,19 +240,19 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
 
 - **Interface scale:** 设置 → 界面 → 界面缩放, with steps of 90, 100, 110, 125 and 150%. It sets the root font size, so the panels' text and controls scale (Tailwind sizes in rem). The board is unaffected, since the window sizes it. It applies at once, with no restart (audit P2-G5).
 - **Capture counts:** read from the snapshot's `captures`. They appear in the trend panel's legend line as 提子 黑 3 · 白 5, and under the win-rate bar in the phone layout (audit P2-G9).
-- **Always on top:** desktop only, via Tauri's window API. It is set from the game menu, and on macOS from the 窗口 menu. Stored per device.
+- **Always on top:** desktop only, via Tauri's window API. It is set in 设置 → 界面 only (owner, 2026-11-22). Stored per device.
 - **Screenshots:**
-  - The game menu gets 截图, with three targets (棋盘, 副盘, 走势图) and two actions each (保存…, 复制).
+  - 截图 has three targets (棋盘, 副盘, 走势图) and two actions each (保存…, 复制). On macOS it is the menu bar's 文件 → 导出图片, which says when a target is not on screen; on Windows and in the browser it is in the header's 视图 button (owner, 2026-11-22).
   - The board image composites its layers at twice the CSS size, as currently shown: discs, a shown line, coordinates.
   - The graph image renders its SVG to PNG.
   - Saving goes through `PlatformFiles` as bytes.
-  - Copying uses the webview's clipboard API with a PNG **[To verify on WKWebView and WebView2]**. Tauri's clipboard plugin (MIT or Apache-2.0) is the fallback.
+  - In the desktop app, copying writes the system clipboard through Tauri's clipboard plugin (`tauri-plugin-clipboard-manager`, MIT or Apache-2.0; its Windows crates are BSL-1.0), since a menu-bar click is no click in the page and WebKit refuses the page's clipboard write. The browser uses the webview's clipboard API. **[Decided]** (owner, 2026-11-22)
   - Copying a game record stays out (charter 7.10).
 
 ### 5.10 The side to move's view, and the score option
 
 - **The discs and the candidate table** show the win rate and lead of the player to move (decision P3). The engine keeps reporting Black's numbers; the interface converts them.
-- **The win-rate bar and the trend graph** keep the colour chosen by the legend's toggle (black or white), so the graph does not zigzag. The toggle's label says it applies to the graph and the bar.
+- **The trend graph** keeps the colour chosen by the legend's toggle (black or white), so it does not zigzag. The toggle is labelled 走势图视角 (Graph perspective). The win-rate bar keeps Black on the left and shows both sides' numbers, so it never zigzags either and needs no toggle (decided while building M1; see the [M1 plan](../plans/2026-11-21-phase-2-m1-layout.md)'s Status).
 - **The score option**, in 设置 → 分析 → 目差: 含贴目 (KataGo's lead, the default) or 盘面 (the board count without komi). It applies everywhere a lead is shown. This covers charter 7.3's "Black's perspective or alternating; board score or score including komi".
 
 ### 5.11 Commands and the keymap
@@ -281,7 +281,7 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
 
 - No new requests or events.
 - The backend's `UiSettings` keeps its fields through M1 (5.8).
-- Always on top and screenshot saving use the existing platform layer: a window call, and `PlatformFiles` with bytes.
+- Always on top and screenshots use the platform layer: a window call, and `PlatformFiles` with bytes (`files_save_image`, `files_copy_image`).
 
 ## 7. Testing
 
@@ -327,6 +327,6 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
 - **Interface design:**
   - section 4's [Open] items on wider windows and on small-screen and touch layouts are answered by 5.2 and 5.5;
   - section 5.1 gets the board styles;
-  - section 4.2's toggle applies to the bar and the graph only (5.10).
+  - section 4.2's toggle applies to the graph only (5.10).
 - **Phase 2 plan, 4.1:** language and theme stay shared settings (5.8).
 - **Charter:** none.

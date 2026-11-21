@@ -146,6 +146,8 @@ One branch per milestone, for example `feat/p2-m1-layout`. Each ends with CI gre
 
 ### M1. Layout, board styles and input
 
+**Status:** built on 2026-11-22. Detailed plan and design: [2026-11-21-phase-2-m1-layout.md](2026-11-21-phase-2-m1-layout.md), [the M1 design](../specs/2026-11-21-p2-m1-layout-design.md). The exit check results and what is left for the built app are in the plan's Status.
+
 **Before building, to the owner:**
 
 - the board and stone visual designs (P1);

@@ -88,6 +88,7 @@ Left to right:
 - **Rules chip** beside the title: the rules and komi KataGo analyses with (`中国 · 7.5`), with an amber dot when they differ from the file's reading. Clicking it opens the game information and the analysis rules. **[Decided in M6]**
 - **Navigation**: first move, previous, `38 / 247`, next, last move. In a narrow panel (under 500 px) the chip shows only the komi and the first and last buttons step aside, so the title keeps room. **[Decided in M6]**
 - **Engine indicator**: a green dot when analysis is running, and a hollow green ring when the position stopped at its visit limit. Clicking it pauses, resumes, or searches one more visit limit at the limit; Space does the same. Hovering it for 300 ms opens a card with the state, speed, visits, engine and network, and what a click does. **[Decided in M7]**
+- **View** (视图), on Windows and in the browser only: 布局 and 截图. On macOS they live in the menu bar (显示 → 布局, 文件 → 导出图片), and the game menu keeps to the game everywhere. **[Decided in Phase 2 M1]** (owner, 2026-11-22)
 - **Settings**.
 
 There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no "try a move", "let the AI continue" or "pause analysis" buttons. **[Decided]**
@@ -98,7 +99,7 @@ There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no
 - **Trend graph**: win rate and score lead are always drawn together, win rate against a left axis of 0–100% and score lead against a right axis in points. There is no switch between them. **[Decided]**
 - There are no mistake bars. **[Decided in M7, after the first build]**
 - A dashed vertical line marks the current move.
-- The line under the graph carries the legend, 胜率 and 目差, and at its right end the black/white perspective toggle. There is no verdict line. **[Decided in M7]** Since Phase 2 M1 the toggle sets whose numbers the bar and the graph show; the discs and the table show the side to move (P2 M1 design 5.10).
+- The line under the graph carries the legend, 胜率 and 目差, and at its right end the black/white perspective toggle. There is no verdict line. **[Decided in M7]** Since Phase 2 M1 the toggle sets whose numbers the graph shows; the bar keeps Black on the left with both sides' numbers, and the discs and the table show the side to move (P2 M1 design 5.10).
 - Moves without a result leave a gap in the lines; nothing bridges it. **[Decided in M7]**
 
 ### 4.3 Candidate table

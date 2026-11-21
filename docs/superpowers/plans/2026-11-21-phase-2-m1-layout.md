@@ -17,7 +17,43 @@
 
 **Spec:** [Phase 2 M1 design](../specs/2026-11-21-p2-m1-layout-design.md), approved by the owner on 2026-11-21. Its mockups are [`board-styles.html`](../../design/mockups/p2-m1/board-styles.html) and [`layouts.html`](../../design/mockups/p2-m1/layouts.html). Section numbers below (5.1 and so on) refer to the design. The phase plan is [Phase 2 plan](2026-11-21-phase-2-roadmap.md).
 
-**Status:** Not started.
+**Status:** Built on 2026-11-22, except the items under Outstanding.
+- **Checks.** Every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 665 Rust tests, `pnpm lint`, `pnpm typecheck`, 620 TypeScript tests, `cargo deny check licenses`, the npm licence check, the notices staleness check and the generated bindings. One dependency was added in the feedback round: `tauri-plugin-clipboard-manager` (MIT or Apache-2.0), whose Windows crates `clipboard-win` and `error-code` are BSL-1.0, now on the licence allow list with its text in `scripts/licence-texts`.
+- **Final review.** A fresh review of the whole branch found nothing critical and six important issues; one minor (the sheet's close during an install) was re-graded important. Each was fixed with a test that failed first and folded into the commit it corrects:
+  - a newer or unreadable `aji.device` was overwritten by the one-time copy from the backend settings (it is now left alone until the user changes something);
+  - a hairline resize cut short by the window losing focus, a window resize or Escape kept its half-dragged size (it is now undone);
+  - a small landscape window squeezed the narrow board to keep 160 px of panels (the board now keeps its 320 px floor first);
+  - the sub-board's label named the point and its numbers while F or Z hid the candidates;
+  - the default board style was decided per session, so a window launched narrow once flipped it (the first launch now decides it for the device, `startedNarrow`);
+  - in the narrow arrangement, Thinking sent the hovered line to a sub-board tab that was not showing (the line now goes to the board unless sub-board 1 is on screen);
+  - the wizard's sheet could be closed mid-install and came straight back (it has no close control from pressing install until the install ends).
+  The capabilities file's formatting was restored, and design 5.10, its section 10 and interface design 4.2 now say the legend's toggle sets the graph only: the bar keeps Black on the left with both sides' numbers.
+- **Mac exit check** (design 8) in `pnpm dev` (the `analysing` scenario) in the browser pane, and with the app from `pnpm tauri build --bundles app` (12.24 MiB from `6a936eb`, not notarised):
+  - at 375 × 812 with touch emulation: the bottom bar navigates, the eye hides and shows the candidates, the engine dot pauses and resumes, a tap pins a candidate's line and sideways swipes step it without moving the game, and settings open as a sheet that closes back to the board;
+  - a layout cut off mid-write reads as the default and stays stored unchanged;
+  - at 1920 × 1080 the default splits into two columns; a 900 × 1200 window shows the narrow arrangement, and 1440 × 900 returns to wide;
+  - the board and graph images are valid PNGs at 2× with the theme's colours;
+  - an interface scale of 125% enlarges the panels and stacks the settings rows; the captures show in the legend and under the phone bar; an even lead reads 均势 / Even.
+  - after the review fixes: a 560 × 420 window keeps a 228 px board above the panels; a device whose first launch was narrow keeps the printed board with flat stones when relaunched at 1440 × 900; at 375 × 812 in Thinking with the candidates tab showing, a hovered candidate's line is drawn on the board; and with F the sub-board's label goes blank. The wizard sheet's missing close during an install is covered by its test only, since the scenarios have no install to walk.
+- **Feedback round 1**, after the owner tried the built app (2026-11-22). Each change has a test that failed first and is folded into the commit it corrects:
+  - Classic keeps the bar and the graph on the left, leaving room there for later, and puts the candidates above the sub-board on the right;
+  - the graph's black/white toggle was cut off when the legend wrapped in a narrow column: the chart now takes the height the legend leaves;
+  - a sub-board's label names its rank only when the layout has more than one sub-board;
+  - the board style's 自定义 is a tile like the sets (a dashed square, or the mix in use) instead of a bare word;
+  - 总在最前 moved to 设置 → 界面, its only place;
+  - the game menu keeps to the game: on macOS 截图 is the menu bar's 文件 → 导出图片 (save and copy each target; it says when a target is not on screen) and 布局 is 显示 → 布局; on Windows and in the browser a 视图 button in the header holds both;
+  - copying in the desktop app writes the system clipboard through `tauri-plugin-clipboard-manager`, since a menu-bar click is no click in the page and WebKit refuses the page's clipboard write.
+  Walked in the browser pane at 1440 × 900: Classic's columns, the toggle inside its panel, the label without a rank, the 自定义 tile and the 总在最前 row. The 视图 button is covered by tests only, since the development page reports macOS.
+- **Deferred minors** (for Phase 2 planning):
+  - panels remount when moved, so a moved panel loses its scroll position;
+  - column splits have no minimum height, and `layoutFrame` ignores minimum heights when choosing wide or narrow;
+  - panel minimum sizes do not follow the interface scale;
+  - board screenshots are soft on a 1× display, and the graph image falls back from Inter once rasterised;
+  - the wood-grain cache keeps every size and pixel ratio it has drawn;
+  - the phone reads 已隐藏（F） where there is no F key, and its sheet shows both ✕ and the panel's own back arrow;
+  - the phone shows the capture counts twice when the trend tab is active;
+  - at 375 px the candidate table keeps its full columns and crowds, since the narrow-columns threshold is 360 px.
+- **Outstanding.** The native-window items, which are the owner's steps on the built app: 文件 → 导出图片 (save each target through the real dialog, and copy one into Preview); 总在最前 from 设置 → 界面; device settings surviving an app update; and the fonts in the graph image. The 视图 button on Windows and the PC check are optional until Phase 2 acceptance.
 
 ## Global Constraints
 
