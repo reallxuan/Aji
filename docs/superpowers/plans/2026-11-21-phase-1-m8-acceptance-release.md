@@ -10,7 +10,12 @@
 
 **Spec:** [M8 design](../specs/2026-11-21-m8-acceptance-release-design.md), approved by the owner on 2026-11-21.
 
-**Status:** Planned on 2026-11-21.
+**Status:** Done on 2026-11-21.
+- **Tasks 1–5** were built natively. A fresh review of the whole branch found nothing critical and two important issues, each fixed with a test that failed first and folded into its commit: a manual CI run started from a tag could publish a release, and the Fox hint turned damaged UTF-8 into GB18030. Nine minor findings are in the backlog or settled by the record.
+- **Task 6:** the rehearsal run 44874364736 was green, and its dry run listed exactly the three installers and `SHA256SUMS.txt`. The coremltools notice was checked, and the owner confirmed the WenKai reading.
+- **Task 7:** `aji-manifest` needed one more fix (`df8978a`), because `deploy-pages` could not see the Pages upload made in its own job. The manifest is live at sequence 1795244252, the app uses it, and a tampered cache falls back to the bundled copy.
+- **Task 8:** the branch was merged into `main` (`dbf6bb7`), and `v0.1.0-rc.1` was published and checked on the Mac.
+- **Tasks 9 and 10:** the owner walked both machines, and both passed. `v0.1.0` is the `rc.1` commit with `rc.1`'s files. The owner's walk suggested the side-to-move disc view, which is the first item after `v0.1.0`.
 
 ## Global Constraints
 
