@@ -6,7 +6,7 @@
 
 use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview};
 use aji_core::{Color, Move, PositionKey};
-use aji_engine::{AnalysisUpdate, EngineState};
+use aji_engine::{AnalysisUpdate, EngineState, Rejection};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
 use aji_manager::install::{
@@ -186,6 +186,10 @@ pub enum AppEvent {
     },
     AnalysisUpdate {
         analysis: AnalysisUpdate,
+    },
+    /// KataGo refused the current position.
+    AnalysisRejected {
+        rejection: Rejection,
     },
     /// The install job changed.
     SetupProgress {

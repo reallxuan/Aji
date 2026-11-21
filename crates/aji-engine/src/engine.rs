@@ -26,7 +26,7 @@ use crate::query::{action_query, analysis_query, terminate_query};
 use crate::response::{KataLine, RawAnalysis, parse_line};
 use crate::state::{CrashReason, EngineState, ExitInfo};
 use crate::throttle::Throttle;
-use crate::update::{AnalysisUpdate, to_update};
+use crate::update::{AnalysisUpdate, Rejection, TrendStats, to_update};
 
 const VERSION_ID: &str = "aji-version";
 
@@ -43,7 +43,9 @@ pub struct EngineOptions {
     /// At most one query is submitted per this interval: the first after a quiet interval
     /// goes out at once, and during a burst the position current when it has passed does.
     pub submit_interval: Duration,
-    /// Candidates kept per update, by KataGo's `order`.
+    /// Candidates kept per update, by KataGo's `order`. The default keeps all a 19×19 board can
+    /// have: the interface shows the move played next whenever KataGo reported it, however
+    /// far down its order (M7 design 5.6), and picks its own top ten.
     pub max_candidates: usize,
     /// Positions the analysis cache keeps; the least recently used goes first.
     pub cache_entries: usize,
@@ -78,7 +80,7 @@ impl Default for EngineOptions {
             report_every: Duration::from_millis(100),
             throttle: Duration::from_millis(100),
             submit_interval: Duration::from_millis(100),
-            max_candidates: 20,
+            max_candidates: 19 * 19 + 1,
             cache_entries: DEFAULT_CACHE_ENTRIES,
             stderr_lines: 50,
             ping_every: Duration::from_secs(5),
@@ -98,6 +100,8 @@ impl Default for EngineOptions {
 pub enum EngineEvent {
     State(EngineState),
     Analysis(AnalysisUpdate),
+    /// KataGo refused the current position's query.
+    Rejected(Rejection),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,6 +132,7 @@ struct Snapshot {
     pid: Option<u32>,
     position: Option<PositionKey>,
     analysis: Option<AnalysisUpdate>,
+    rejected: Option<Rejection>,
 }
 
 /// The engine's state with the current position and the analysis shown for it.
@@ -140,6 +145,8 @@ pub struct EngineStatus {
     /// shown at once, or `None`. Otherwise only a newer emitted update replaces it, so
     /// pause, resume and restart keep it until the next report.
     pub analysis: Option<AnalysisUpdate>,
+    /// KataGo refused `position`'s query; cleared when the position changes.
+    pub rejected: Option<Rejection>,
 }
 
 type Reply<T> = oneshot::Sender<T>;
@@ -155,6 +162,7 @@ enum Command {
     Stop(Reply<Outcome>),
     SetVisitLimit(Option<u32>, Reply<Outcome>),
     Continue(Reply<Outcome>),
+    Summaries(Vec<PositionKey>, Reply<Vec<Option<TrendStats>>>),
     Shutdown(Reply<()>),
 }
 
@@ -197,6 +205,7 @@ impl Engine {
             pid: None,
             position: Some(position.key()),
             analysis: None,
+            rejected: None,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
@@ -244,6 +253,7 @@ impl Engine {
             state: snapshot.state.clone(),
             position: snapshot.position,
             analysis: snapshot.analysis.clone(),
+            rejected: snapshot.rejected.clone(),
         }
     }
 
@@ -307,6 +317,15 @@ impl Engine {
     /// limit; a paused engine stays paused and searches on resume.
     pub async fn continue_analysis(&self) -> Result<(), EngineError> {
         self.outcome(Command::Continue).await
+    }
+
+    /// The cached root of each position, in order; `None` for one never analysed. Reading
+    /// does not change which positions the cache keeps.
+    pub async fn summaries(&self, keys: Vec<PositionKey>) -> Vec<Option<TrendStats>> {
+        let wanted = keys.len();
+        self.ask(|reply| Command::Summaries(keys, reply))
+            .await
+            .unwrap_or_else(|| vec![None; wanted])
     }
 
     /// Stops KataGo like `stop` and ends the actor. Later calls report `NotRunning`.
@@ -520,6 +539,13 @@ impl Actor {
             Command::Continue(reply) => {
                 let _ = reply.send(self.continue_analysis());
             }
+            Command::Summaries(keys, reply) => {
+                let stats = keys
+                    .into_iter()
+                    .map(|key| self.cache.peek(key).map(TrendStats::of))
+                    .collect();
+                let _ = reply.send(stats);
+            }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
                 self.shutdown();
@@ -542,6 +568,7 @@ impl Actor {
             let mut snapshot = lock(&self.snapshot);
             snapshot.position = Some(self.position.key());
             snapshot.analysis = None;
+            snapshot.rejected = None;
         }
         if let Some(cached) = self.cache.get(self.position.key()).cloned() {
             self.throttle.admit(std::time::Instant::now(), true);
@@ -563,6 +590,7 @@ impl Actor {
             let mut snapshot = lock(&self.snapshot);
             snapshot.position = None;
             snapshot.analysis = None;
+            snapshot.rejected = None;
         }
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
@@ -1023,7 +1051,13 @@ impl Actor {
                 action,
                 version,
             } if action == "query_version" => self.on_version_reply(&id, version),
-            KataLine::NoResults { id } | KataLine::QueryError { id: Some(id), .. } => {
+            KataLine::NoResults { id } => self.query_ended(&id),
+            KataLine::QueryError {
+                id: Some(id),
+                message,
+                ..
+            } => {
+                self.on_rejected(&id, message);
                 self.query_ended(&id);
             }
             // KataGo already writes errors and warnings to stderr (`logToStderr=true`).
@@ -1091,6 +1125,23 @@ impl Actor {
         if is_final {
             self.query_ended(&raw.id);
         }
+    }
+
+    /// KataGo refused a query. Reported only for the active one: a refusal of a position the
+    /// user has left is not news.
+    fn on_rejected(&mut self, id: &str, message: String) {
+        if !self.is_active(id) {
+            return;
+        }
+        let Some((position, _)) = self.queries.get(id) else {
+            return;
+        };
+        let rejection = Rejection {
+            position: position.key(),
+            message,
+        };
+        lock(&self.snapshot).rejected = Some(rejection.clone());
+        self.emit(EngineEvent::Rejected(rejection));
     }
 
     /// A query ended with a final, `noResults` or an error. If it was the current one, the

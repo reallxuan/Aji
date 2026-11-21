@@ -68,6 +68,12 @@ impl AnalysisCache {
         better
     }
 
+    /// The entry for `key`, without counting as a use: for reading many entries at once
+    /// (the trend graph) without reordering what is evicted.
+    pub fn peek(&self, key: PositionKey) -> Option<&AnalysisUpdate> {
+        self.entries.get(&key).map(|(update, _)| update)
+    }
+
     /// The entry for `key`. Reading counts as a use.
     pub fn get(&mut self, key: PositionKey) -> Option<&AnalysisUpdate> {
         self.tick += 1;
@@ -134,5 +140,18 @@ mod tests {
         assert!(c.offer(upd_at(1, 20, false)));
         assert_eq!(c.get(PositionKey(1)).unwrap().root_visits, 20);
         assert!(c.get(PositionKey(2)).is_some());
+    }
+
+    #[test]
+    fn peek_does_not_refresh() {
+        let mut c = AnalysisCache::with_capacity(2);
+        c.offer(upd_at(1, 10, false));
+        c.offer(upd_at(2, 10, false));
+        assert_eq!(c.peek(PositionKey(1)).unwrap().root_visits, 10);
+        c.offer(upd_at(3, 10, false));
+        assert!(
+            c.peek(PositionKey(1)).is_none(),
+            "a peek is not a use, so 1 was still the least recently used"
+        );
     }
 }

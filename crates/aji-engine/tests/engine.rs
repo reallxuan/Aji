@@ -13,7 +13,7 @@ use std::time::Duration;
 use aji_core::{BoardSize, Color, Komi, Move, Point, Position, Rules};
 use aji_engine::{
     AnalysisUpdate, CrashReason, Engine, EngineError, EngineEvent, EngineFiles, EngineOptions,
-    EngineState, katago_launch,
+    EngineState, Rejection, TrendStats, katago_launch,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::{Instant, timeout, timeout_at};
@@ -246,7 +246,7 @@ fn updates(events: &[EngineEvent]) -> Vec<&AnalysisUpdate> {
         .iter()
         .filter_map(|e| match e {
             EngineEvent::Analysis(u) => Some(u),
-            EngineEvent::State(_) => None,
+            EngineEvent::State(_) | EngineEvent::Rejected(_) => None,
         })
         .collect()
 }
@@ -256,7 +256,7 @@ fn states(events: &[EngineEvent]) -> Vec<&EngineState> {
         .iter()
         .filter_map(|e| match e {
             EngineEvent::State(s) => Some(s),
-            EngineEvent::Analysis(_) => None,
+            EngineEvent::Analysis(_) | EngineEvent::Rejected(_) => None,
         })
         .collect()
 }
@@ -1466,4 +1466,80 @@ async fn resume_carries_previous_visits() {
         first.previous_visits
     );
     bounded(p.engine.shutdown()).await;
+}
+
+fn rejections(events: &[EngineEvent]) -> Vec<&Rejection> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::Rejected(r) => Some(r),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_rejected_position_is_reported() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.set_position(unrecorded())).await, Ok(()));
+    let seen = p.until_state(is_ready).await;
+    let rejected = rejections(&seen);
+    assert_eq!(rejected.len(), 1, "{seen:?}");
+    assert_eq!(rejected[0].position, unrecorded().key());
+    assert!(!rejected[0].message.is_empty());
+    assert_eq!(states(&seen).last(), Some(&&ready()));
+    assert_eq!(p.engine.status().rejected.as_ref(), Some(rejected[0]));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn navigating_away_clears_the_rejection() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.set_position(unrecorded())).await, Ok(()));
+    p.until(|e| matches!(e, EngineEvent::Rejected(_))).await;
+    assert_eq!(bounded(p.engine.set_position(p1())).await, Ok(()));
+    assert_eq!(p.engine.status().rejected, None);
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_rejection_after_navigating_away_is_not_reported() {
+    let mut p = start(Some(files("normal")), p1());
+    p.until_state(|s| *s == ready()).await;
+    assert_eq!(bounded(p.engine.set_position(unrecorded())).await, Ok(()));
+    assert_eq!(bounded(p.engine.set_position(p2())).await, Ok(()));
+    p.drain();
+    let after = p.until_final().await;
+    assert!(rejections(&after).is_empty(), "{after:?}");
+    assert_eq!(p.engine.status().rejected, None);
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn summaries_read_the_cache_in_order() {
+    let mut p = start(Some(files("normal")), p1());
+    let seen = p.until_final().await;
+    let last = *updates(&seen).last().unwrap();
+    let got = bounded(p.engine.summaries(vec![p2().key(), p1().key()])).await;
+    assert_eq!(
+        got,
+        vec![
+            None,
+            Some(TrendStats {
+                winrate: last.winrate,
+                score_lead: last.score_lead,
+                visits: last.root_visits,
+            })
+        ]
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+/// The move played next is shown whenever KataGo reported it (M7 design 5.6), however low its
+/// order, so the engine must not cut the list below a full board's moves.
+#[test]
+fn default_options_keep_every_candidate_katago_reports() {
+    assert!(EngineOptions::default().max_candidates > 19 * 19);
 }

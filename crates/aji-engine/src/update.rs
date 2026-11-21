@@ -40,6 +40,36 @@ pub struct AnalysisUpdate {
     pub previous_visits: u32,
 }
 
+/// KataGo refused to analyse a position, for example a superko repeat (design 5.1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Rejection {
+    pub position: PositionKey,
+    /// KataGo's own words: diagnostic text, shown as a tooltip.
+    pub message: String,
+}
+
+/// The root of a cached analysis, for the trend graph. Black's view.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendStats {
+    pub winrate: f64,
+    pub score_lead: f64,
+    pub visits: u32,
+}
+
+impl TrendStats {
+    pub fn of(update: &AnalysisUpdate) -> TrendStats {
+        TrendStats {
+            winrate: update.winrate,
+            score_lead: update.score_lead,
+            visits: update.root_visits,
+        }
+    }
+}
+
 /// Converts a raw response for `position`. Candidates are sorted by `order` and truncated
 /// to `max_candidates`; symmetry copies are kept. A candidate whose move does not parse is
 /// dropped, and a PV is cut at its first entry that does not parse.

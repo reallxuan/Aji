@@ -75,6 +75,7 @@ pub fn forward_engine_events(
         sink.emit(match event {
             EngineEvent::State(engine) => AppEvent::EngineState { engine },
             EngineEvent::Analysis(analysis) => AppEvent::AnalysisUpdate { analysis },
+            EngineEvent::Rejected(rejection) => AppEvent::AnalysisRejected { rejection },
         });
     }
 }
