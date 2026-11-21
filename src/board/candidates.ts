@@ -18,6 +18,8 @@ export function discText(c: ShownCandidate, field: DiscField, lang: string): str
   return formatVisits(c.visits, lang);
 }
 
+const THICKEST_RING = Math.max(...Object.values(TIER_STYLE).map((style) => style.ringWidth));
+
 /**
  * Clears the candidate layer and draws each disc on its point, a stone's radius across (design
  * 5.6): the tier's fill and ring, the played move's outer ring, and the two `lines` in the side
@@ -38,6 +40,9 @@ export function drawCandidates(
   const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
   const r = geometry.stoneRadius * dpr;
   const px = (css: number) => css * dpr;
+  // A board so small that a disc cannot hold its ring (a window being dragged narrow) shows no
+  // discs, rather than asking the canvas for a negative radius, which throws.
+  if (r <= px(THICKEST_RING)) return;
 
   for (const c of discs) {
     if (c.move.type !== 'play') continue;

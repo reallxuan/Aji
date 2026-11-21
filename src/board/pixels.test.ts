@@ -92,6 +92,23 @@ describe('board pixels', () => {
     expect(just).toBeLessThan(90);
   });
 
+  it('a board too small for a disc ring draws nothing rather than throwing', () => {
+    const tiny: BoardView = { cssSize: 30, dpr: 1, boardSize: 19 };
+    const layer = createCanvas(30, 30).getContext('2d') as unknown as CanvasRenderingContext2D;
+    const best: ShownCandidate = {
+      move: { type: 'play', x: 3, y: 3 },
+      rank: 1,
+      tier: 'best',
+      winrate: 0.5,
+      scoreLead: 0,
+      visits: 100,
+      loss: 0,
+      played: true,
+      pv: [],
+    };
+    expect(() => drawCandidates(layer, tiny, [best], ['winrate', 'scoreLead'], 'en')).not.toThrow();
+  });
+
   it('no ring marks the newest stone of a stepped variation', () => {
     const { ctx } = canvas();
     ctx.fillStyle = '#000000';
