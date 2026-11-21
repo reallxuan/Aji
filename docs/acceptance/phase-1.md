@@ -50,8 +50,8 @@ A result is **pass**, **fail** with a note, or **not walked**. A step nobody per
 | Check | Result |
 |---|---|
 | About notices: no "(no licence file; …)" entry | |
-| The Metal engine zip's `THIRD-PARTY-LICENSES.txt` holds the `katagocoreml` section, whose NOTICE covers coremltools | |
-| The owner confirms the LXGW WenKai reading | |
+| The Metal engine zip's `THIRD-PARTY-LICENSES.txt` holds the `katagocoreml` section, whose NOTICE covers coremltools | **Pass** (2026-11-21): `katago-v1.18.2-metal-macos-arm64.zip` from the `aji-manifest` release `katago-v1.18.2-metal` holds `LICENSE`, `THIRD-PARTY-LICENSES.txt` and `README.txt`; the `katagocoreml` section names Apple coremltools (Core ML proto definitions, MILBlob, ModelPackage) with Apple's copyright line and the full BSD-3-Clause text |
+| The owner confirms the LXGW WenKai reading | **Pass** (owner, 2026-11-21): the licence's additional permission for WOFF/WOFF2 subsets used only for web font delivery, and never offered as installable desktop fonts, covers Aji's bundled subsets |
 
 ## Not covered by Phase 1
 
