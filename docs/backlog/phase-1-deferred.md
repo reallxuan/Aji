@@ -6,6 +6,10 @@ Each item names where it came from: "M5 minor 3" is the third minor finding of M
 
 Two gaps in the sources: M5's plan counts sixteen minors but the notes list thirteen, and the M2 SDD ledger is gone, so M2's N1 to N4 below come from the notes alone.
 
+## First after v0.1.0
+
+- **Discs in the side to move's view (owner, 2026-11-21, during the walk):** the candidate discs on the board should show the win rate of the player to move, instead of the black/white perspective chosen in the graph legend (M7 design 13.1). Decide with the owner whether the table follows the discs, and keep the graph and the bar in a fixed colour, since a graph that switches sides every move would zigzag.
+
 ## Engine and engine manager
 
 - **M2 N1 (re-check):** no deadline after killing a KataGo that does not die. Assigned to M4.
@@ -39,9 +43,10 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
   - the service's cache-to-trend wiring;
   - superko rejection with real KataGo.
 - **M4 open:** the Metal thread counts. Speed fell as threads rose (6: 45.8 visits/s, 10: 36.8, 16: 26.0). Settings' 测速 measures them per machine.
-- **R4 in full:** CUDA 13.2, CUDA 12.8, DirectML and OpenCL on the RTX 5070 with the same networks. M8 measured only the default. `scripts/benchmark-windows.ps1` exists, but it takes the newest version with a CUDA engine (1.18.2), which has no DirectML or OpenCL build. Fix its version choice before using it.
+- **R4 in full:** CUDA 13.2, CUDA 12.8, DirectML and OpenCL on the RTX 5070 with the same networks. M8 proved that the default (CUDA 13.2) installs and runs; no backend speeds were measured. `scripts/benchmark-windows.ps1` exists, but it takes the newest version with a CUDA engine (1.18.2), which has no DirectML or OpenCL build. Fix its version choice before using it.
 - **The PC hardware capture:** `scripts/capture-hardware-windows.ps1` and the test `pc_capture_gives_the_rtx5070`, including a null `displayVersion`.
-- **The `gpuDriverTooOld` pattern** stays [To verify] unless an M8 failure settled it.
+- **The `gpuDriverTooOld` pattern** stays [To verify]: the PC's driver was new enough, so no failure showed it.
+- **M4 open, PC:** whether a missing DLL makes Windows show a SetErrorMode dialog. The walk passed, so it never came up.
 
 ## Game records and board
 
@@ -68,7 +73,6 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
   - test placement in `update.rs`;
   - the bar's `toFixed` is not locale-aware;
   - "黑领先 0.0 目" at an even lead.
-- **M7 minor 3:** a disabled HoverCard trigger in WKWebView may not open the engine card. M8 checks it in the walk; it stays here only if the walk found it working.
 
 ## Wizard and settings
 

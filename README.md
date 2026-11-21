@@ -2,7 +2,9 @@
 
 A cross-platform graphical interface for KataGo, for reviewing, analysing and playing Go. Aji aims to supersede [LizzieYzy](https://github.com/yzyray/lizzieyzy): easier to set up, faster, and better looking.
 
-**Status: Phase 1 in progress: the app skeleton builds; no engine support yet.**
+**Status: Phase 1 (v0.1.0): engine setup, opening game records, and live analysis on the board.**
+
+The [v0.1.0 release](https://github.com/reallxuan/Aji/releases/tag/v0.1.0) was checked by hand on Windows (RTX 5070, CUDA) and on macOS (Apple Silicon, Metal): from downloading the installer to analysis on the board, with no command line and no manual download ([acceptance record](docs/acceptance/phase-1.md)). The Linux AppImage is built but has not been checked. The installers are not signed yet, so Windows and macOS each ask once before Aji first opens.
 
 - Platforms: Windows, Linux, macOS; Android and iOS later, as clients of a desktop running the engine
 - Engine: KataGo only

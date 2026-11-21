@@ -168,7 +168,7 @@ This is the core of Phase 1 and Aji's largest difference from LizzieYzy.
 - NVIDIA runtimes (cuBLAS, NVRTC, cuDNN) are downloaded by Aji from NVIDIA's own servers as whole archives and checked against the SHA-256 that NVIDIA publishes; Aji never re-hosts them (R1, `docs/research/r1-nvidia-runtime.md`). They install only after the user accepts NVIDIA's licences in the wizard, which lists each component and its size and requires a tick before anything downloads (R1 section 6, done in M5). CUDA 13 dropped Maxwell, Pascal and Volta, hence the compute-capability split.
 - The driver thresholds come from each runtime's `minDriver` in the manifest, not from code. When the driver is too old for CUDA, the wizard keeps CUDA in the list as a disabled row that names the current and the required driver, with a link to NVIDIA's driver page and "detect again" (M5).
 - TensorRT is not offered in Phase 1: NVIDIA publishes no hash for its archive, and hashing it would mean downloading 1.94 GB to build the manifest.
-- The NVIDIA defaults are provisional until R4's benchmarks on the RTX 5070 arrive; their results are written back here.
+- The NVIDIA defaults were checked on the RTX 5070 in the Phase 1 acceptance (2026-11-21): CUDA 13.2, the default for driver 580 or newer and compute capability 7.5 or newer, installed from the wizard and ran. No backend speeds were measured; the full R4 comparison of CUDA 13.2, CUDA 12.8, DirectML and OpenCL waits in `docs/backlog/phase-1-deferred.md`.
 - The Metal build is self-contained (static protobuf and abseil), targets macOS 13 (minos 13.0; not yet run there), and benchmarked within 1% of Homebrew's KataGo on the M5 (R2 done).
 
 **Post-install verification.** After a download, Aji checks the file's digest (SHA-256, or MD5 for networks), unpacks, writes a generated config with the backend's default thread count, then sends a minimal analysis query to confirm results come back. KataGo's `benchmark`, which measures the thread count, runs from settings on request: it took minutes on the Mac and held the install with nothing for the user to do. **[Decided 2026-11-20]** (M5 design 5.4) If any step fails, Aji explains the cause in plain language and offers the fallback backend, which it installs only if the user agrees.
@@ -369,6 +369,8 @@ The riskiest part goes first. **[Decided]**
 - The UI–engine boundary of 6.1 is in place from the first line of code.
 
 **Acceptance:** on the Windows PC with the RTX 5070, going from downloading the installer to seeing analysis results takes no command line, no manual download and no config editing. The same holds on the development Mac.
+
+**Status:** done on 2026-11-21 and released as `v0.1.0`. The acceptance record is `docs/acceptance/phase-1.md`. Linux was not checked; that moved to Phase 8.
 
 **Two scope notes for Phase 1 [Proposed]:**
 
