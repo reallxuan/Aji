@@ -1,5 +1,6 @@
-/** Margin around the board on every side, in CSS pixels (interface design, section 4). */
-export const BOARD_MARGIN = 16;
+import { BOARD_MARGIN } from './constants';
+
+export { BOARD_MARGIN };
 /** The panel never gets narrower than this while the board can still shrink. */
 export const PANEL_MIN_WIDTH = 360;
 
