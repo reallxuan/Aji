@@ -5,6 +5,7 @@ import { useVariation } from '../analysis/useVariation';
 import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
+import { useBoardStyle } from '../board/useBoardStyle';
 import { useWheelNavigation } from '../board/useWheelNavigation';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
@@ -25,6 +26,7 @@ export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }
   const hidden = useViewStore((s) => s.hidden || s.held);
   const discLines = useDeviceStore((s) => s.settings.discLines);
   const coordinates = useDeviceStore((s) => s.settings.showCoordinates);
+  const style = useBoardStyle();
   useVariation();
   const variation = useViewStore((s) => s.variation);
   const step = useViewStore((s) => s.step);
@@ -58,6 +60,8 @@ export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }
         candidates={hidden ? NO_DISCS : shown}
         discLines={discLines}
         coordinates={coordinates}
+        boardStyle={style.board}
+        stoneStyle={style.stones}
         lang={i18n.language}
         catchingUp={fading}
         onHoverCandidate={onHoverCandidate}

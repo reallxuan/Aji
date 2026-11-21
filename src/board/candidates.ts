@@ -51,7 +51,8 @@ export function drawCandidates(
     const cy = geometry.lines[c.move.y] * dpr;
 
     ctx.save();
-    if (style.shadow) {
+    // The printed board is flat: nothing casts a shadow on it (P2 M1 design 5.7).
+    if (style.shadow && view.style !== 'printed') {
       ctx.shadowColor = BEST_SHADOW.color;
       ctx.shadowBlur = px(BEST_SHADOW.blur);
       ctx.shadowOffsetY = px(BEST_SHADOW.offsetY);

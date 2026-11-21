@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sameMove, type ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
+import type { BoardId, StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
@@ -42,6 +43,9 @@ export interface BoardCanvasProps {
   variation?: { numbers: ReadonlyArray<{ point: Point; n: number }>; newest: Point | null } | null;
   /** Coordinates in the margin (settings `showCoordinates`); hidden, the grid grows. */
   coordinates?: boolean;
+  /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
+  boardStyle?: BoardId;
+  stoneStyle?: StoneId;
 }
 
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
@@ -65,6 +69,8 @@ export function BoardCanvas({
   hoveredCandidate,
   variation = null,
   coordinates = true,
+  boardStyle = 'honey',
+  stoneStyle = 'slate',
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -89,13 +95,16 @@ export function BoardCanvas({
 
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
-    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates });
-  }, [cssSize, dpr, boardSize, coordinates, fontsLoaded]);
+    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates, style: boardStyle });
+  }, [cssSize, dpr, boardSize, coordinates, boardStyle, fontsLoaded]);
 
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
   // spacing and ratio, then stamped.
-  const sprites = useMemo(() => makeStoneSprites(spacing, dpr, domCanvas), [spacing, dpr]);
+  const sprites = useMemo(
+    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle),
+    [spacing, dpr, stoneStyle],
+  );
 
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
@@ -108,7 +117,7 @@ export function BoardCanvas({
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates };
+    const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
     if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
     else drawCandidates(ctx, view, candidates, [first, second], lang);
   }, [
@@ -116,6 +125,7 @@ export function BoardCanvas({
     dpr,
     boardSize,
     coordinates,
+    boardStyle,
     candidates,
     first,
     second,

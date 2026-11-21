@@ -1,10 +1,9 @@
 import { asImage, type CanvasFactory, domCanvas } from './canvasFactory';
 import { boardGeometry } from './geometry';
+import type { BoardId } from '../device/deviceSettings';
+import { BOARD_STYLES } from './styles';
 import { woodTexture } from './wood';
 
-/** Grid lines, star points and coordinates (interface design 5.1). */
-const INK = '#3A2A14';
-const LABEL_INK = 'rgba(58, 42, 20, 0.8)';
 /** Coordinates are 12 CSS px, and shrink on boards too small to fit them. */
 const LABEL_SIZE = 12;
 
@@ -17,6 +16,8 @@ export interface BoardView {
   boardSize: number;
   /** Coordinates in the margin; `false` hides them and shrinks the margin. Default `true`. */
   coordinates?: boolean;
+  /** The board style (P2 M1 design 5.7). Default honey. */
+  style?: BoardId;
 }
 
 /**
@@ -30,21 +31,22 @@ export function drawBoard(
   create: CanvasFactory = domCanvas,
 ): void {
   const { cssSize, dpr, boardSize } = view;
-  const wood = woodTexture(cssSize, dpr, create);
+  const style = BOARD_STYLES[view.style ?? 'honey'];
+  const wood = woodTexture(cssSize, dpr, create, style);
   if (!wood) return;
   const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(asImage(wood), 0, 0);
 
-  const lineWidth = Math.max(1, Math.round(dpr));
-  const edgeWidth = Math.max(lineWidth + 1, Math.round(1.6 * dpr));
+  const lineWidth = Math.max(1, Math.round(dpr * style.lineWeight));
+  const edgeWidth = Math.max(lineWidth + 1, Math.round(1.6 * dpr * style.lineWeight));
   // A line of odd device width is centred on a half pixel, an even one on a whole pixel.
   const snap = (css: number, width: number) => Math.round(css * dpr) + (width % 2 ? 0.5 : 0);
   const first = geometry.lines[0];
   const last = geometry.lines[geometry.lines.length - 1];
 
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = style.line;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   for (const position of geometry.lines.slice(1, -1)) {
@@ -61,7 +63,7 @@ export function drawBoard(
   const high = snap(last, edgeWidth);
   ctx.strokeRect(low, low, high - low, high - low);
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = style.star;
   const radius = Math.max(1.5, geometry.spacing * 0.11) * dpr;
   for (const [col, row] of geometry.stars) {
     ctx.beginPath();
@@ -79,7 +81,7 @@ export function drawBoard(
   if (view.coordinates === false) return;
   const labelSize = Math.min(LABEL_SIZE, geometry.labelBand * 0.65);
   if (labelSize < 6) return;
-  ctx.fillStyle = LABEL_INK;
+  ctx.fillStyle = style.label;
   ctx.font = `${labelSize * dpr}px Inter, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

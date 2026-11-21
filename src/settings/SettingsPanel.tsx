@@ -33,6 +33,7 @@ import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
 import { LayoutSettings } from '../layout/LayoutMenu';
+import { BoardStyleControl } from './BoardStyleControl';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
 import { useSettingsStore } from './settingsStore';
@@ -134,6 +135,9 @@ export function SettingsPanel() {
               onChange={(choice) => updateDevice({ showCoordinates: choice === 'show' })}
               options={coordinateOptions}
             />
+          </Row>
+          <Row label={t('settings.board.title')}>
+            <BoardStyleControl />
           </Row>
           <LayoutSettings />
         </Section>

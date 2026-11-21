@@ -21,6 +21,7 @@ import { type BoardView, drawBoard } from './drawBoard';
 import { drawCandidates, drawVariationNumbers } from './candidates';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
+import type { BoardId, StoneId } from '../device/deviceSettings';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, '__screenshots__');
@@ -68,6 +69,7 @@ function render(
   lastMove: Move | null,
   discs: { candidates: ShownCandidate[]; lines: [DiscField, DiscField] } | null = null,
   overlay: ((ctx: CanvasRenderingContext2D) => void) | null = null,
+  stoneStyle: StoneId = 'slate',
 ): PNG {
   const size = Math.round(view.cssSize * view.dpr);
   const canvas = createCanvas(size, size);
@@ -78,6 +80,7 @@ function render(
     boardGeometry(view.cssSize, view.boardSize).spacing,
     view.dpr,
     skia,
+    stoneStyle,
   );
   drawStones(
     upper.getContext('2d') as unknown as CanvasRenderingContext2D,
@@ -265,4 +268,103 @@ describe('board screenshots', () => {
       compare(`variation-${step === 8 ? 'full' : 'step-3'}@2x`, image);
     });
   }
+
+  // The sets of P2 M1 design 5.7, beside honey and slate above (whose baselines are Phase 1's).
+  const SET_SHOTS: Array<[BoardId, StoneId]> = [
+    ['kaya', 'yunzi'],
+    ['walnut', 'slate'],
+    ['printed', 'flat'],
+  ];
+  for (const [board, stones] of SET_SHOTS) {
+    it(`draws the ${board} board with ${stones} stones`, () => {
+      compare(
+        `set-${board}-${stones}`,
+        render(
+          { cssSize: CSS_SIZE, dpr: 1, boardSize: 19, style: board },
+          parse(SAMSUNG_58),
+          SAMSUNG_LAST,
+          { candidates: mockupDiscs(), lines: ['winrate', 'scoreLead'] },
+          null,
+          stones,
+        ),
+      );
+    });
+  }
+
+  const luminance = (png: PNG, x: number, y: number) => {
+    const i = (y * png.width + x) * 4;
+    return 0.299 * png.data[i] + 0.587 * png.data[i + 1] + 0.114 * png.data[i + 2];
+  };
+  /** How many pixels differ between two renders inside `box` (x0, y0, x1, y1). */
+  const changed = (
+    a: PNG,
+    b: PNG,
+    [x0, y0, x1, y1]: number[],
+    skip: (x: number, y: number) => boolean = () => false,
+  ) => {
+    let n = 0;
+    for (let y = y0; y < y1; y++)
+      for (let x = x0; x < x1; x++) {
+        if (skip(x, y)) continue;
+        const i = (y * a.width + x) * 4;
+        if ([0, 1, 2].some((k) => Math.abs(a.data[i + k] - b.data[i + k]) > 2)) n++;
+      }
+    return n;
+  };
+
+  it('walnut draws light coordinates', () => {
+    const image = render(
+      { cssSize: CSS_SIZE, dpr: 1, boardSize: 19, style: 'walnut' },
+      empty(19),
+      null,
+    );
+    const g = boardGeometry(CSS_SIZE, 19);
+    const band = Math.floor(g.labelBand);
+    let brightest = 0;
+    for (let y = 0; y < band; y++)
+      for (let x = band; x < CSS_SIZE - band; x++)
+        brightest = Math.max(brightest, luminance(image, x, y));
+    // Between lines, the wood is dark (about 80); the labels are cream, well above it.
+    const mid = Math.round((g.lines[9] + g.lines[10]) / 2);
+    const wood = luminance(image, mid, mid);
+    expect(wood).toBeLessThan(110);
+    expect(brightest - wood).toBeGreaterThan(60);
+  });
+
+  for (const [board, shadow] of [
+    ['printed', false],
+    ['honey', true],
+  ] as const) {
+    it(`${board} ${shadow ? 'shadows' : 'has no shadow under'} the best disc`, () => {
+      const view = { cssSize: CSS_SIZE, dpr: 1, boardSize: 19, style: board };
+      const discs = {
+        candidates: mockupDiscs().slice(0, 1),
+        lines: ['winrate', 'scoreLead'] as [DiscField, DiscField],
+      };
+      const bare = render(view, empty(19), null);
+      const withDisc = render(view, empty(19), null, discs);
+      const g = boardGeometry(CSS_SIZE, 19);
+      const [cx, cy] = [g.lines[10], g.lines[5]].map(Math.round);
+      const r = Math.ceil(g.stoneRadius);
+      // Just below the disc, where only the shadow can reach.
+      const below = changed(bare, withDisc, [cx - 4, cy + r + 2, cx + 4, cy + r + 6]);
+      if (shadow) expect(below).toBeGreaterThan(0);
+      else expect(below).toBe(0);
+    });
+  }
+
+  it('flat stones have no shadow pixels outside the outline', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 1, boardSize: 19, style: 'printed' as const };
+    const stones = empty(19);
+    stones[9 * 19 + 9] = 'black';
+    const bare = render(view, empty(19), null, null, null, 'flat');
+    const withStone = render(view, stones, null, null, null, 'flat');
+    const g = boardGeometry(CSS_SIZE, 19);
+    const c = Math.round(g.lines[9]);
+    // The outline is centred on the stone's edge; nothing may reach a pixel past it.
+    const reach = g.stoneRadius + Math.max(1, g.stoneRadius * 0.07) / 2 + 1;
+    const inside = (x: number, y: number) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= reach;
+    const R = Math.ceil(g.stoneRadius * 2);
+    expect(changed(bare, withStone, [c - R, c - R, c + R, c + R], inside)).toBe(0);
+  });
 });

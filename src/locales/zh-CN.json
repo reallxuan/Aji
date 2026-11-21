@@ -338,7 +338,25 @@
     "cancel": "取消",
     "about": "关于 Aji",
     "defaultRules": "新棋局默认规则",
-    "defaultRulesNote": "用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。"
+    "defaultRulesNote": "用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。",
+    "board": {
+      "title": "棋盘样式",
+      "board": "棋盘",
+      "set": "{{board}} · {{stones}}",
+      "custom": "自定义",
+      "boards": {
+        "honey": "蜜色",
+        "kaya": "榧木",
+        "walnut": "胡桃",
+        "printed": "印刷"
+      },
+      "stones": {
+        "title": "棋子",
+        "slate": "写实",
+        "yunzi": "云子",
+        "flat": "平面"
+      }
+    }
   },
   "game": {
     "players": "{{black}} 对 {{white}}"

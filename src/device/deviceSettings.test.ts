@@ -21,6 +21,7 @@ describe('parseDeviceSettings', () => {
       narrowTab: 'candidates',
       keymap: { ArrowLeft: 'nav.next' },
       boardStyle: { board: 'walnut', stones: 'yunzi' },
+      startedNarrow: true,
       interfaceScale: 125,
       showCoordinates: false,
       discLines: ['visits', 'winrate'],

@@ -338,7 +338,25 @@
     "cancel": "Cancel",
     "about": "About Aji",
     "defaultRules": "Default rules for new games",
-    "defaultRulesNote": "Used for new games, and for records that name neither rules nor komi. Games already open are not changed."
+    "defaultRulesNote": "Used for new games, and for records that name neither rules nor komi. Games already open are not changed.",
+    "board": {
+      "title": "Board style",
+      "board": "Board",
+      "set": "{{board}} · {{stones}}",
+      "custom": "Custom",
+      "boards": {
+        "honey": "Honey",
+        "kaya": "Kaya",
+        "walnut": "Walnut",
+        "printed": "Printed"
+      },
+      "stones": {
+        "title": "Stones",
+        "slate": "Slate and shell",
+        "yunzi": "Yunzi",
+        "flat": "Flat"
+      }
+    }
   },
   "game": {
     "players": "{{black}} vs {{white}}"

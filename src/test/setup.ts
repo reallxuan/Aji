@@ -19,10 +19,12 @@ if (typeof window !== 'undefined') {
   const { beforeEach } = await import('vitest');
   const { resetDeviceStore } = await import('../device/deviceStore');
   const { resetLayoutDraft } = await import('../layout/useLayout');
+  const { resetStartedNarrow } = await import('../layout/startedNarrow');
   beforeEach(() => {
     localStorage.clear();
     resetDeviceStore();
     resetLayoutDraft();
+    resetStartedNarrow();
   });
 }
 

@@ -24,6 +24,11 @@ export interface DeviceSettings {
   keymap: Record<string, string>;
   /** `null` is the default for the device (design 5.5). */
   boardStyle: { board: BoardId; stones: StoneId } | null;
+  /**
+   * Whether the device first launched in the phone layout, which picks the default style; `null`
+   * until the first launch decides it, so the default never changes with a later window size.
+   */
+  startedNarrow: boolean | null;
   interfaceScale: InterfaceScale;
   showCoordinates: boolean;
   /** Two different fields, top line first. */
@@ -43,6 +48,7 @@ export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   narrowTab: null,
   keymap: {},
   boardStyle: null,
+  startedNarrow: null,
   interfaceScale: 100,
   showCoordinates: true,
   discLines: ['winrate', 'scoreLead'],
@@ -90,6 +96,7 @@ export function parseDeviceSettings(raw: unknown): DeviceSettings {
     narrowTab: typeof raw.narrowTab === 'string' ? raw.narrowTab : d.narrowTab,
     keymap: parseKeymap(raw.keymap) ?? d.keymap,
     boardStyle: parseBoardStyle(raw.boardStyle) ?? d.boardStyle,
+    startedNarrow: typeof raw.startedNarrow === 'boolean' ? raw.startedNarrow : d.startedNarrow,
     interfaceScale: oneOf(INTERFACE_SCALES, raw.interfaceScale)
       ? raw.interfaceScale
       : d.interfaceScale,
