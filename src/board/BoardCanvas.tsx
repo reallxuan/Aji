@@ -54,6 +54,8 @@ export interface BoardCanvasProps {
 }
 
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
+/** The Inter faces the layers draw with: coordinates 400, disc lines 500 to 700. */
+const FONT_FACES = ['400 12px Inter', '500 12px Inter', '600 12px Inter', '700 12px Inter'];
 const DEFAULT_LINES: [DiscField, DiscField] = ['winrate', 'scoreLead'];
 
 /**
@@ -84,12 +86,15 @@ export function BoardCanvas({
   const candidateLayer = useRef<HTMLCanvasElement>(null);
   const hovered = useRef<Move | null>(null);
   const dpr = useDevicePixelRatio();
-  // Coordinates are drawn in Inter; redraw once the bundled font has loaded.
+  // Coordinates, discs and line numbers are drawn in Inter; redraw once every face they use has
+  // loaded (M7 minor 10).
   const [fontsLoaded, setFontsLoaded] = useState(0);
 
   useEffect(() => {
     let active = true;
-    document.fonts?.load('12px Inter').then(
+    const fonts = document.fonts;
+    if (!fonts) return;
+    Promise.all(FONT_FACES.map((face) => fonts.load(face))).then(
       () => {
         if (active) setFontsLoaded((n) => n + 1);
       },

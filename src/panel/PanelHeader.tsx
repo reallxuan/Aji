@@ -7,6 +7,8 @@ import { GameMenu } from './GameMenu';
 import { MoveCounter } from './MoveCounter';
 import { NavButtons } from './NavButtons';
 import { RulesChip } from './RulesChip';
+import { ViewMenu } from './ViewMenu';
+import { useOs } from '../app/useOs';
 
 const openSettings = () => usePanelStore.getState().show('settings');
 
@@ -26,6 +28,7 @@ export function PanelHeader({
   touch?: boolean;
 } = {}) {
   const { t } = useTranslation();
+  const os = useOs();
   return (
     <header
       className={cn('@container flex-none border-b border-hairline', compact ? 'h-[52px]' : 'h-14')}
@@ -43,6 +46,8 @@ export function PanelHeader({
           </>
         )}
         <EngineIndicator touch={touch} />
+        {/* On the Mac, 布局 and 截图 are in the menu bar's 显示 and 文件 menus. */}
+        {os !== null && os !== 'macos' && <ViewMenu touch={touch} />}
         <button
           type="button"
           className={cn(

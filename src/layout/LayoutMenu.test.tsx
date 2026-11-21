@@ -1,8 +1,7 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
 import { renderWithGame } from '../game/renderWithGame';
-import { GameMenu } from '../panel/GameMenu';
 import { LayoutFrame } from './LayoutFrame';
 import { LayoutSettings } from './LayoutMenu';
 import { panelsOf, refId } from './model';
@@ -78,29 +77,5 @@ describe('the 布局 choices in settings', () => {
     );
     choosePreset('经典');
     expect(document.querySelector('[data-panel="subboard:1"]')).not.toBeNull();
-  });
-});
-
-describe('the 布局 submenu of the game menu', () => {
-  it('lists the presets and applies one', async () => {
-    renderWithGame(<GameMenu />);
-    await act(async () => {});
-    const trigger = screen.getByRole('button', { name: '未命名棋局' });
-    await act(async () => {
-      fireEvent.keyDown(trigger, { key: 'Enter' });
-    });
-    const item = within(screen.getByRole('menu')).getByRole('menuitem', { name: '布局' });
-    await act(async () => {
-      item.focus();
-      fireEvent.keyDown(item, { key: 'ArrowRight' });
-    });
-    const sub = screen.getAllByRole('menu').at(-1) as HTMLElement;
-    for (const name of ['默认', '经典', '极简', '思考', '四盘'])
-      expect(within(sub).getByRole('menuitemradio', { name })).toBeInTheDocument();
-    expect(within(sub).getByRole('menuitemcheckbox', { name: '走势' })).toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(within(sub).getByRole('menuitemradio', { name: '四盘' }));
-    });
-    await waitFor(() => expect(stored().preset).toBe('four'));
   });
 });

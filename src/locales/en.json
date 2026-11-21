@@ -368,6 +368,12 @@
       "title": "Score",
       "withKomi": "With komi",
       "board": "Board count"
+    },
+    "saveFailed": "Not saved",
+    "alwaysOnTop": {
+      "title": "Always on top",
+      "on": "On",
+      "off": "Off"
     }
   },
   "game": {
@@ -466,7 +472,8 @@
     "clearRecent": "Clear Recent",
     "saveAs": "Save As…",
     "today": "Today",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "view": "View"
   },
   "layout": {
     "panels": {
@@ -519,5 +526,18 @@
       "toggleHidden": "Show or hide candidates",
       "peek": "Hide candidates while held"
     }
+  },
+  "screenshot": {
+    "title": "Screenshot",
+    "save": "Save {{target}}…",
+    "copy": "Copy {{target}}",
+    "targets": {
+      "board": "board",
+      "subboard": "sub-board",
+      "graph": "graph"
+    },
+    "copyFailed": "Could not copy",
+    "saveFailed": "The screenshot was not saved",
+    "notShown": "The {{target}} is not on screen"
   }
 }

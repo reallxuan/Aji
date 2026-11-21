@@ -24,4 +24,5 @@ allow = [
   "0BSD",
   "CC0-1.0",
   "Unicode-3.0",
+  "BSL-1.0", # clipboard-win and error-code, Windows-only, under the clipboard plugin
 ]

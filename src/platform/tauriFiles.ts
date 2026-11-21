@@ -13,6 +13,14 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
+/** Bytes as base64, in chunks small enough for `String.fromCharCode`'s arguments. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
 /** Calls `subscribe`, and unsubscribes even when that resolves after the caller gave up. */
 function listening(subscribe: () => Promise<() => void>): () => void {
   let active = true;
@@ -38,6 +46,19 @@ export function createTauriFiles(): PlatformFiles {
     recent: () => call<RecentEntry[]>('files_recent'),
     clearRecent: () => call<void>('files_clear_recent'),
     saveAs: (suggestedName, text) => call<string | null>('files_save_as', { suggestedName, text }),
+    saveImage: (suggestedName, bytes) =>
+      call<boolean>('files_save_image', { suggestedName, bytes: toBase64(bytes) }),
+    // The app writes the clipboard, not the webview: a click in the macOS menu bar is no click
+    // in the page, and WebKit refuses a page's write without one.
+    copyImage: async (bytes) => {
+      try {
+        await call<void>('files_copy_image', { bytes: toBase64(await bytes) });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    setAlwaysOnTop: (on) => getCurrentWindow().setAlwaysOnTop(on),
     setWindowTitle: (title) => getCurrentWindow().setTitle(title),
     setMenuLanguage: (language) => call<void>('menu_set_language', { language }),
     onDrag: (handler) =>

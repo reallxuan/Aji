@@ -20,13 +20,14 @@ aji-core = { path = "../crates/aji-core" }
 aji-engine = { path = "../crates/aji-engine" }
 aji-manager = { path = "../crates/aji-manager" }
 tokio = { version = "1.54.1", features = ["rt", "sync", "time"] }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 ts-rs = "12.0.1"
+tauri-plugin-clipboard-manager = "2"
 
 [dev-dependencies]
 # The installer's test seams, for the service tests.

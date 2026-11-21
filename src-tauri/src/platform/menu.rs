@@ -11,7 +11,7 @@ use tauri::menu::{
 use tauri::{AppHandle, Runtime};
 
 use super::recent::RecentEntry;
-use super::{LAYOUT_PRESETS, MenuAction};
+use super::{LAYOUT_PRESETS, MenuAction, SHOT_TARGETS};
 
 /// The language the menu is in: the one the interface resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +48,10 @@ pub struct Labels {
     pub no_recent: &'static str,
     pub clear_recent: &'static str,
     pub save_as: &'static str,
+    pub export_image: &'static str,
+    /// Save and copy, in the order of [`SHOT_TARGETS`].
+    pub save_image: [&'static str; 3],
+    pub copy_image: [&'static str; 3],
     pub edit: &'static str,
     pub undo: &'static str,
     pub redo: &'static str,
@@ -89,6 +93,9 @@ pub fn labels(language: MenuLanguage) -> Labels {
             no_recent: "暂无最近打开的棋谱",
             clear_recent: "清除最近记录",
             save_as: "另存为…",
+            export_image: "导出图片",
+            save_image: ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"],
+            copy_image: ["拷贝棋盘图片", "拷贝副盘图片", "拷贝走势图图片"],
             edit: "编辑",
             undo: "撤销",
             redo: "重做",
@@ -125,6 +132,17 @@ pub fn labels(language: MenuLanguage) -> Labels {
             no_recent: "No recent games",
             clear_recent: "Clear Menu",
             save_as: "Save As…",
+            export_image: "Export Image",
+            save_image: [
+                "Save Board Image…",
+                "Save Sub-board Image…",
+                "Save Graph Image…",
+            ],
+            copy_image: [
+                "Copy Board Image",
+                "Copy Sub-board Image",
+                "Copy Graph Image",
+            ],
             edit: "Edit",
             undo: "Undo",
             redo: "Redo",
@@ -189,6 +207,20 @@ fn recent_menu<R: Runtime>(
         .build()
 }
 
+/// 文件 → 导出图片 (owner, 2026-11-22): save, then copy, each of the board, the sub-board and the
+/// graph. The interface finds the target on screen and says so when it is not there.
+fn export_menu<R: Runtime>(app: &AppHandle<R>, l: &Labels) -> tauri::Result<Submenu<R>> {
+    let mut menu = SubmenuBuilder::new(app, l.export_image);
+    for (target, label) in SHOT_TARGETS.into_iter().zip(l.save_image) {
+        menu = menu.item(&item(app, MenuAction::SaveImage(target.to_owned()), label)?);
+    }
+    menu = menu.separator();
+    for (target, label) in SHOT_TARGETS.into_iter().zip(l.copy_image) {
+        menu = menu.item(&item(app, MenuAction::CopyImage(target.to_owned()), label)?);
+    }
+    menu.build()
+}
+
 /// The whole menu bar, with the recent list in 打开最近.
 pub fn build<R: Runtime>(
     app: &AppHandle<R>,
@@ -230,6 +262,7 @@ pub fn build<R: Runtime>(
                 .accelerator("CmdOrCtrl+Shift+S")
                 .build(app)?,
         )
+        .item(&export_menu(app, &l)?)
         .build()?;
     let edit = SubmenuBuilder::new(app, l.edit)
         .item(&PredefinedMenuItem::undo(app, Some(l.undo))?)
@@ -290,6 +323,42 @@ mod tests {
         }
         assert_eq!(MenuAction::from_id("layout:custom"), None);
         assert_eq!(MenuAction::from_id("layout:"), None);
+    }
+
+    #[test]
+    fn image_ids_round_trip() {
+        for target in SHOT_TARGETS {
+            for action in [
+                MenuAction::SaveImage(target.to_owned()),
+                MenuAction::CopyImage(target.to_owned()),
+            ] {
+                assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+            }
+        }
+        assert_eq!(
+            MenuAction::SaveImage("graph".into()).id(),
+            "saveImage:graph"
+        );
+        assert_eq!(MenuAction::from_id("copyImage:window"), None);
+    }
+
+    #[test]
+    fn both_languages_label_the_export_menu() {
+        // 文件 → 导出图片 (owner, 2026-11-22): the screenshots live in the menu bar on the Mac.
+        let zh = labels(MenuLanguage::ZhCn);
+        let en = labels(MenuLanguage::En);
+        assert_eq!(zh.export_image, "导出图片");
+        assert_eq!(
+            zh.save_image,
+            ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"]
+        );
+        assert_eq!(
+            zh.copy_image,
+            ["拷贝棋盘图片", "拷贝副盘图片", "拷贝走势图图片"]
+        );
+        assert_eq!(en.export_image, "Export Image");
+        assert_eq!(en.save_image[0], "Save Board Image…");
+        assert_eq!(en.copy_image[2], "Copy Graph Image");
     }
 
     #[test]

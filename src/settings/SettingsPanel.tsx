@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,15 +71,29 @@ export function SettingsPanel() {
   const device = useDeviceStore((s) => s.settings);
   const updateDevice = useDeviceStore((s) => s.update);
 
+  // The fields whose last save failed, said beside their controls for a moment (M5 minor 1).
+  const [failed, setFailed] = useState<string[]>([]);
+  const failedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (failedTimer.current) clearTimeout(failedTimer.current);
+    },
+    [],
+  );
   const save = (patch: Partial<UiSettings>) => {
     const current = useSettingsStore.getState().settings;
     if (!current) return;
-    // A failure puts the previous settings back; the control shows them again.
+    // A failure puts the previous settings back; the control shows them again, with a word why.
     useSettingsStore
       .getState()
       .save(transport, { ...current, ...patch })
-      .catch(() => undefined);
+      .catch(() => {
+        setFailed(Object.keys(patch));
+        if (failedTimer.current) clearTimeout(failedTimer.current);
+        failedTimer.current = setTimeout(() => setFailed([]), SAVE_FAILED_MS);
+      });
   };
+  const failedNote = (field: keyof UiSettings) => (failed.includes(field) ? <SaveFailed /> : null);
 
   const languageOptions: Array<[UiSettings['language'], string]> = [
     ['system', t('settings.followSystem')],
@@ -102,6 +116,11 @@ export function SettingsPanel() {
     ['show', t('settings.coordinatesShow')],
     ['hide', t('settings.coordinatesHide')],
   ];
+  const onTopOptions: Array<['on' | 'off', string]> = [
+    ['on', t('settings.alwaysOnTop.on')],
+    ['off', t('settings.alwaysOnTop.off')],
+  ];
+  const onTop = device.alwaysOnTop ? 'on' : 'off';
 
   /** Taking the other line's field swaps the two, so the lines stay different. */
   const setDiscLine = (index: 0 | 1, field: DiscField) => {
@@ -117,7 +136,7 @@ export function SettingsPanel() {
       <PanelTitle title={t('settings.title')} onBack={toMain} backLabel={t('settings.back')} />
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         <Section title={t('settings.interface')}>
-          <Row label={t('settings.language')}>
+          <Row label={t('settings.language')} note={failedNote(FIELD.language)}>
             <Choice
               label={t('settings.language')}
               value={settings.language}
@@ -126,7 +145,7 @@ export function SettingsPanel() {
               options={languageOptions}
             />
           </Row>
-          <Row label={t('settings.theme')}>
+          <Row label={t('settings.theme')} note={failedNote(FIELD.theme)}>
             <Choice
               label={t('settings.theme')}
               value={settings.theme}
@@ -167,6 +186,16 @@ export function SettingsPanel() {
             <BoardStyleControl />
           </Row>
           <LayoutSettings />
+          {/* Its only place (owner, 2026-11-22): a window preference, not a game action. */}
+          <Row label={t('settings.alwaysOnTop.title')}>
+            <Choice
+              label={t('settings.alwaysOnTop.title')}
+              value={onTop}
+              disabled={false}
+              onChange={(choice) => updateDevice({ alwaysOnTop: choice === 'on' })}
+              options={onTopOptions}
+            />
+          </Row>
         </Section>
 
         <Section title={t('settings.analysis')}>
@@ -216,8 +245,9 @@ export function SettingsPanel() {
             value={settings.defaultRules}
             onChange={(defaultRules) => save({ defaultRules })}
           />
+          {failedNote(FIELD.defaultRules)}
           <p className="text-[0.75rem] text-text-muted">{t('settings.defaultRulesNote')}</p>
-          <Row label={t('settings.visitLimit')}>
+          <Row label={t('settings.visitLimit')} note={failedNote(FIELD.visitLimit)}>
             <VisitLimit
               value={settings.visitLimit}
               disabled={!loaded}
@@ -251,11 +281,41 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** The saved settings whose controls can say a save failed. */
+const FIELD = {
+  language: 'language',
+  theme: 'theme',
+  defaultRules: 'defaultRules',
+  visitLimit: 'visitLimit',
+} as const satisfies Record<string, keyof UiSettings>;
+
+/** How long 保存失败 stays beside a control. */
+const SAVE_FAILED_MS = 3000;
+
+function SaveFailed() {
+  const { t } = useTranslation();
+  return (
+    <span role="status" className="text-[0.75rem] text-engine-error">
+      {t('settings.saveFailed')}
+    </span>
+  );
+}
+
+function Row({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  /** Said after the control: a failed save. */
+  note?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className={SETTINGS_ROW}>
       <span className={SETTINGS_LABEL}>{label}</span>
       {children}
+      {note}
     </div>
   );
 }

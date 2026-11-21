@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { useDeviceStore } from '../device/deviceStore';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
@@ -279,4 +279,29 @@ it('a narrow panel keeps the point, win rate and lead (P2 M1 layouts mockup)', (
 it('a panel of 360 px or more shows every column', () => {
   mount({ width: 360 });
   expect(within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')).toHaveLength(6);
+});
+
+it('wheel_over_a_row_steps_the_line', () => {
+  mount();
+  const row = rows()[0];
+  fireEvent.mouseEnter(row);
+  act(() =>
+    useViewStore.getState().setVariation({
+      moves: [3, 4, 5, 6].map((x) => ({ type: 'play' as const, x, y: x })),
+      colors: ['black', 'white', 'black', 'white'],
+      captured: [[], [], [], []],
+      illegalAt: null,
+    }),
+  );
+  expect(useViewStore.getState().step).toBe(4);
+  const table = screen.getByRole('table');
+  const up = createEvent.wheel(table, { deltaY: -100, deltaMode: 0 });
+  fireEvent(table, up);
+  // The line steps back instead of the table scrolling (M7 minor 7).
+  expect(up.defaultPrevented).toBe(true);
+  expect(useViewStore.getState().step).toBe(3);
+  fireEvent.mouseLeave(row);
+  const away = createEvent.wheel(table, { deltaY: -100, deltaMode: 0 });
+  fireEvent(table, away);
+  expect(away.defaultPrevented).toBe(false);
 });

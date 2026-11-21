@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useRowLineWheel } from '../board/useWheelNavigation';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { moveKey, sameMove, type ShownCandidate } from '../analysis/candidates';
@@ -40,6 +42,8 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
   const variation = useViewStore((s) => s.variation);
   const step = useViewStore((s) => s.step);
   const width = usePanelWidth();
+  const table = useRef<HTMLDivElement>(null);
+  useRowLineWheel(table);
   const narrow = width > 0 && width < FULL_WIDTH;
   const columns = narrow ? NARROW_COLUMNS : COLUMNS;
   const length = variation ? shownLength(variation) : 0;
@@ -95,7 +99,7 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
       ) : (
         !hidden &&
         shown.length > 0 && (
-          <div role="table" className="min-h-0 overflow-y-auto tabular-nums">
+          <div ref={table} role="table" className="min-h-0 overflow-y-auto tabular-nums">
             <div
               role="row"
               className={`${columns} sticky top-0 border-b border-hairline bg-panel px-1.5 pt-1 pb-1.5 text-xs text-text-muted`}

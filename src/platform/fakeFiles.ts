@@ -1,3 +1,4 @@
+import { copyImage } from './clipboard';
 import { TransportError } from '../transport/transport';
 import type { DragEvent, MenuCommand, PlatformFiles, RecentEntry } from './files';
 
@@ -15,6 +16,10 @@ export interface FakeFilesOptions {
 export interface FakeFiles extends PlatformFiles {
   remembered: Array<{ path: string; title: string }>;
   written: Map<string, string>;
+  /** Screenshots saved, by path. */
+  images: Map<string, Uint8Array>;
+  /** Every always-on-top state set, in order. */
+  alwaysOnTop: boolean[];
   saveRequests: string[];
   titles: string[];
   menuLanguages: string[];
@@ -53,6 +58,8 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
   const fake: FakeFiles = {
     remembered: [],
     written: new Map(),
+    images: new Map(),
+    alwaysOnTop: [],
     saveRequests: [],
     titles: [],
     menuLanguages: [],
@@ -97,6 +104,17 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
       fake.written.set(path, text);
       disk.set(path, text);
       return path;
+    },
+    async saveImage(suggestedName, bytes) {
+      const path = options.savePath === undefined ? `/fake/${suggestedName}.png` : options.savePath;
+      if (path === null) return false;
+      fake.images.set(path, bytes);
+      return true;
+    },
+    // The browser's own clipboard, as the development page has no app behind it.
+    copyImage: (bytes) => copyImage(bytes),
+    async setAlwaysOnTop(on) {
+      fake.alwaysOnTop.push(on);
     },
     async setWindowTitle(title) {
       fake.titles.push(title);

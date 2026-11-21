@@ -3,4 +3,4 @@
 /**
  * A menu item the UI acts on, sent on [`MENU_CHANNEL`].
  */
-export type MenuAction = "new19" | "new13" | "new9" | "open" | "saveAs" | { "recent": number } | "clearRecent" | { "layout": string };
+export type MenuAction = "new19" | "new13" | "new9" | "open" | "saveAs" | { "recent": number } | "clearRecent" | { "layout": string } | { "saveImage": string } | { "copyImage": string };

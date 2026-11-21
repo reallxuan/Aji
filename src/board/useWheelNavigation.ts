@@ -8,6 +8,48 @@ import type { NavTarget } from '../transport/generated/NavTarget';
 export const PIXELS_PER_MOVE = 50;
 
 /**
+ * Adds up wheel events into steps: `1` forward, `-1` back, `0` while short of one. Pixel deltas
+ * make a step per 50 px, a line or page delta one per notch; a reversal starts over, so turning
+ * the wheel back answers at once.
+ */
+export function wheelSteps(): (event: WheelEvent) => -1 | 0 | 1 {
+  let total = 0;
+  return (event) => {
+    if (event.deltaY === 0) return 0;
+    if (Math.sign(event.deltaY) !== Math.sign(total)) total = 0;
+    total +=
+      event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
+        ? event.deltaY
+        : Math.sign(event.deltaY) * PIXELS_PER_MOVE;
+    if (Math.abs(total) < PIXELS_PER_MOVE) return 0;
+    const step = total > 0 ? 1 : -1;
+    total = 0;
+    return step;
+  };
+}
+
+/**
+ * The wheel over the candidate table, while a row is hovered, steps that row's line instead of
+ * scrolling the table (M7 minor 7). Away from a row the table scrolls as before.
+ */
+export function useRowLineWheel(ref: RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const steps = wheelSteps();
+    const onWheel = (event: WheelEvent) => {
+      const view = useViewStore.getState();
+      if (event.ctrlKey || view.hover?.source !== 'table' || !view.variation) return;
+      event.preventDefault();
+      const step = steps(event);
+      if (step !== 0) stepLineOrGame(step > 0, () => {});
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  });
+}
+
+/**
  * One step of the wheel or a swipe over the main board: through the shown line while a candidate
  * is hovered or tapped (from one move to the whole line, never moving the game), else through
  * the game.
@@ -39,21 +81,12 @@ export function useWheelNavigation(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    let total = 0;
+    const steps = wheelSteps();
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) return;
       event.preventDefault();
-      if (event.deltaY === 0) return;
-      // A reversal starts over, so turning the wheel back answers at once.
-      if (Math.sign(event.deltaY) !== Math.sign(total)) total = 0;
-      total +=
-        event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
-          ? event.deltaY
-          : Math.sign(event.deltaY) * PIXELS_PER_MOVE;
-      if (Math.abs(total) < PIXELS_PER_MOVE) return;
-      const forward = total > 0;
-      total = 0;
-      stepLineOrGame(forward, go);
+      const step = steps(event);
+      if (step !== 0) stepLineOrGame(step > 0, go);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);

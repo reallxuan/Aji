@@ -368,6 +368,12 @@
       "title": "目差",
       "withKomi": "含贴目",
       "board": "盘面"
+    },
+    "saveFailed": "保存失败",
+    "alwaysOnTop": {
+      "title": "总在最前",
+      "on": "开",
+      "off": "关"
     }
   },
   "game": {
@@ -466,7 +472,8 @@
     "clearRecent": "清除最近记录",
     "saveAs": "另存为…",
     "today": "今天",
-    "yesterday": "昨天"
+    "yesterday": "昨天",
+    "view": "视图"
   },
   "layout": {
     "panels": {
@@ -519,5 +526,18 @@
       "toggleHidden": "显示或隐藏候选",
       "peek": "按住时隐藏候选"
     }
+  },
+  "screenshot": {
+    "title": "截图",
+    "save": "保存{{target}}…",
+    "copy": "复制{{target}}",
+    "targets": {
+      "board": "棋盘",
+      "subboard": "副盘",
+      "graph": "走势图"
+    },
+    "copyFailed": "无法复制",
+    "saveFailed": "截图未能保存",
+    "notShown": "{{target}}不在屏幕上"
   }
 }

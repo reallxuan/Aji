@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use base64::Engine as _;
 use serde::Serialize;
@@ -44,6 +45,9 @@ pub struct OpenedFile {
 /// The layout presets the 显示 → 布局 menu offers, as the interface names them (P2 M1 design 5.2).
 pub const LAYOUT_PRESETS: [&str; 5] = ["default", "classic", "minimal", "thinking", "four"];
 
+/// What 文件 → 导出图片 can save or copy, as the interface names them (P2 M1 design 5.9).
+pub const SHOT_TARGETS: [&str; 3] = ["board", "subboard", "graph"];
+
 /// A menu item the UI acts on, sent on [`MENU_CHANNEL`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +63,10 @@ pub enum MenuAction {
     ClearRecent,
     /// A layout preset, one of [`LAYOUT_PRESETS`].
     Layout(String),
+    /// Save one of [`SHOT_TARGETS`] as an image.
+    SaveImage(String),
+    /// Copy one of [`SHOT_TARGETS`] to the clipboard as an image.
+    CopyImage(String),
 }
 
 impl MenuAction {
@@ -67,6 +75,8 @@ impl MenuAction {
         match self {
             MenuAction::Recent(n) => format!("recent:{n}"),
             MenuAction::Layout(preset) => format!("layout:{preset}"),
+            MenuAction::SaveImage(target) => format!("saveImage:{target}"),
+            MenuAction::CopyImage(target) => format!("copyImage:{target}"),
             other => serde_json::to_value(other)
                 .ok()
                 .and_then(|v| v.as_str().map(str::to_owned))
@@ -77,6 +87,13 @@ impl MenuAction {
     pub fn from_id(id: &str) -> Option<MenuAction> {
         if let Some(n) = id.strip_prefix("recent:") {
             return n.parse().ok().map(MenuAction::Recent);
+        }
+        let target = |t: &str| SHOT_TARGETS.contains(&t).then(|| t.to_owned());
+        if let Some(t) = id.strip_prefix("saveImage:") {
+            return target(t).map(MenuAction::SaveImage);
+        }
+        if let Some(t) = id.strip_prefix("copyImage:") {
+            return target(t).map(MenuAction::CopyImage);
         }
         if let Some(preset) = id.strip_prefix("layout:") {
             return LAYOUT_PRESETS
@@ -96,9 +113,24 @@ impl MenuAction {
     }
 }
 
-fn has_sgf_extension(path: &Path) -> bool {
+fn has_extension(path: &Path, extension: &str) -> bool {
     path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("sgf"))
+        .is_some_and(|e| e.eq_ignore_ascii_case(extension))
+}
+
+fn has_sgf_extension(path: &Path) -> bool {
+    has_extension(path, "sgf")
+}
+
+/// `path`, with `.{extension}` added when it has another extension or none.
+fn with_extension_added(path: &Path, extension: &str) -> PathBuf {
+    if has_extension(path, extension) {
+        return path.to_path_buf();
+    }
+    let mut name = path.as_os_str().to_owned();
+    name.push(".");
+    name.push(extension);
+    PathBuf::from(name)
 }
 
 /// Reads an SGF file for `gameOpen`: its name and bytes. Refuses other extensions, files over
@@ -138,9 +170,9 @@ pub fn read_sgf_file(path: &Path) -> Result<(String, Vec<u8>), ProtocolError> {
     Ok((name, bytes))
 }
 
-/// Writes `text` to a temporary file beside `path`, then renames it over `path`, so a crash
+/// Writes `bytes` to a temporary file beside `path`, then renames it over `path`, so a crash
 /// leaves the old file or the new one, whole. The folder must exist.
-pub fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
+pub fn write_atomically(path: &Path, bytes: impl AsRef<[u8]>) -> io::Result<()> {
     let dir = match path.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir,
         _ => Path::new("."),
@@ -148,7 +180,7 @@ pub fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
     let written = File::create(&temp).and_then(|mut file| {
-        file.write_all(text.as_bytes())?;
+        file.write_all(bytes.as_ref())?;
         file.sync_all()
     });
     let result = written.and_then(|()| fs::rename(&temp, path));
@@ -160,21 +192,41 @@ pub fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
 
 /// `path`, with `.sgf` added when it has another extension or none.
 pub fn with_sgf_extension(path: &Path) -> PathBuf {
-    match has_sgf_extension(path) {
-        true => path.to_path_buf(),
-        false => {
-            let mut name = path.as_os_str().to_owned();
-            name.push(".sgf");
-            PathBuf::from(name)
-        }
-    }
+    with_extension_added(path, "sgf")
 }
 
 /// The existing file a save would replace without the dialog having asked: the user typed a
-/// name without `.sgf`, the dialog checked that name, and `<name>.sgf` is already there.
-pub fn unasked_overwrite(picked: &Path) -> Option<PathBuf> {
-    let target = with_sgf_extension(picked);
+/// name without `.{extension}`, the dialog checked that name, and `<name>.{extension}` is
+/// already there.
+fn unasked_overwrite_of(picked: &Path, extension: &str) -> Option<PathBuf> {
+    let target = with_extension_added(picked, extension);
     (target != picked && target.exists()).then_some(target)
+}
+
+/// [`unasked_overwrite_of`] for a game record.
+pub fn unasked_overwrite(picked: &Path) -> Option<PathBuf> {
+    unasked_overwrite_of(picked, "sgf")
+}
+
+/// Writes a screenshot (P2 M1 design 5.9): base64 PNG bytes from the UI, to `path` with `.png`
+/// added when missing. Returns the path written.
+pub fn write_image(path: &Path, base64: &str) -> Result<PathBuf, ProtocolError> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64)
+        .map_err(|e| error(ErrorCode::FileWriteFailed, format!("bad image bytes: {e}")))?;
+    let path = with_extension_added(path, "png");
+    write_atomically(&path, bytes).map_err(|e| error(ErrorCode::FileWriteFailed, e.to_string()))?;
+    Ok(path)
+}
+
+/// A screenshot for the clipboard: base64 PNG bytes from the UI, decoded to pixels.
+pub fn clipboard_image(base64: &str) -> Result<tauri::image::Image<'static>, ProtocolError> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64)
+        .map_err(|e| error(ErrorCode::FileWriteFailed, format!("bad image bytes: {e}")))?;
+    tauri::image::Image::from_bytes(&bytes)
+        .map(|image| image.to_owned())
+        .map_err(|e| error(ErrorCode::FileWriteFailed, format!("not a PNG: {e}")))
 }
 
 fn now_ms() -> u64 {
@@ -391,6 +443,57 @@ pub async fn files_save_as<R: Runtime>(
     Ok(Some(platform.token(path)))
 }
 
+/// Copies a screenshot to the system clipboard (P2 M1 design 5.9). The app writes it rather than
+/// the webview, since a click in the macOS menu bar is no click in the page, and WebKit refuses a
+/// page's clipboard write without one. `bytes` is the PNG in base64.
+#[tauri::command]
+pub async fn files_copy_image<R: Runtime>(
+    app: AppHandle<R>,
+    bytes: String,
+) -> Result<(), ProtocolError> {
+    let image = clipboard_image(&bytes)?;
+    app.clipboard()
+        .write_image(&image)
+        .map_err(|e| error(ErrorCode::Internal, format!("clipboard: {e}")))
+}
+
+/// The save dialog for a screenshot, then the write (P2 M1 design 5.9). `bytes` is the PNG in
+/// base64. `false` when the user cancels.
+#[tauri::command]
+pub async fn files_save_image<R: Runtime>(
+    app: AppHandle<R>,
+    suggested_name: String,
+    bytes: String,
+    platform: State<'_, DesktopFiles>,
+) -> Result<bool, ProtocolError> {
+    let dialog_app = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = dialog_app
+            .dialog()
+            .file()
+            .add_filter("PNG", &["png"])
+            .set_file_name(suggested_name);
+        if let Some(main) = dialog_app.get_webview_window("main") {
+            dialog = dialog.set_parent(&main);
+        }
+        dialog.blocking_save_file().and_then(|p| p.into_path().ok())
+    })
+    .await
+    .map_err(join_failed)?;
+    let Some(path) = picked else {
+        return Ok(false);
+    };
+    if let Some(existing) = unasked_overwrite_of(&path, "png")
+        && !confirm_replace(&app, &platform, &existing).await?
+    {
+        return Ok(false);
+    }
+    tauri::async_runtime::spawn_blocking(move || write_image(&path, &bytes))
+        .await
+        .map_err(join_failed)??;
+    Ok(true)
+}
+
 /// Asks, in the interface's language, before replacing a file the save dialog did not ask about.
 async fn confirm_replace<R: Runtime>(
     app: &AppHandle<R>,
@@ -442,6 +545,23 @@ pub async fn menu_set_language<R: Runtime>(
 mod tests {
     use super::*;
     use crate::protocol::ErrorCode;
+
+    #[test]
+    fn a_png_from_the_ui_becomes_a_clipboard_image() {
+        // A 2×1 PNG: one opaque red pixel, one transparent.
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAD0lEQVR4nGP4z8AARAwMAAz8Af9c/RSVAAAAAElFTkSuQmCC";
+        let image = clipboard_image(png).unwrap();
+        assert_eq!((image.width(), image.height()), (2, 1));
+        assert_eq!(image.rgba(), &[255, 0, 0, 255, 0, 0, 0, 0]);
+        assert_eq!(
+            clipboard_image("not base64!").unwrap_err().code,
+            ErrorCode::FileWriteFailed
+        );
+        assert_eq!(
+            clipboard_image("bm90IGEgcG5n").unwrap_err().code,
+            ErrorCode::FileWriteFailed
+        );
+    }
 
     #[test]
     fn an_added_extension_that_names_an_existing_file_needs_asking() {
@@ -518,6 +638,20 @@ mod tests {
             with_sgf_extension("a.txt".as_ref()),
             std::path::PathBuf::from("a.txt.sgf")
         );
+    }
+
+    #[test]
+    fn save_image_writes_the_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = [0x89, b'P', b'N', b'G', 0, 1, 2, 255];
+        let encoded = base64::engine::general_purpose::STANDARD.encode(png);
+        // A name typed without the extension gets `.png`.
+        let written = write_image(&dir.path().join("board"), &encoded).unwrap();
+        assert_eq!(written, dir.path().join("board.png"));
+        assert_eq!(std::fs::read(&written).unwrap(), png);
+        let error = write_image(&dir.path().join("x.png"), "not base64!").unwrap_err();
+        assert_eq!(error.code, ErrorCode::FileWriteFailed);
+        assert!(!dir.path().join("x.png").exists());
     }
 
     #[test]

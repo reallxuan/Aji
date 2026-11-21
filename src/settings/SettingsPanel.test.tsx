@@ -1,3 +1,4 @@
+import { TransportError } from '../transport/transport';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { useDeviceStore } from '../device/deviceStore';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,6 +127,14 @@ describe('SettingsPanel', () => {
     expect(sets(transport.requests).at(-1)).toMatchObject({ language: 'en', theme: 'light' });
   });
 
+  it('keeps the window on top from 界面, its only place (owner, 2026-11-22)', async () => {
+    mount();
+    const row = await screen.findByRole('radiogroup', { name: '总在最前' });
+    expect(within(row).getByRole('radio', { name: '关' })).toHaveAttribute('aria-checked', 'true');
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '开' })));
+    expect(useDeviceStore.getState().settings.alwaysOnTop).toBe(true);
+  });
+
   it('shows or hides the board coordinates', async () => {
     const transport = mount();
     const row = await screen.findByRole('radiogroup', { name: '棋盘坐标' });
@@ -137,6 +146,23 @@ describe('SettingsPanel', () => {
     await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
     expect(useDeviceStore.getState().settings.showCoordinates).toBe(false);
     expect(sets(transport.requests)).toEqual([]);
+  });
+
+  it('a_failed_save_shows_the_message', async () => {
+    mount({
+      settingsSet: () => {
+        throw new TransportError('internal', 'disk full');
+      },
+    });
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    const row = await screen.findByRole('radiogroup', { name: '主题' });
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '浅色' })));
+    // M5 minor 1: said beside the control, which shows the stored choice again.
+    expect(within(row.parentElement!).getByText('保存失败')).toBeInTheDocument();
+    expect(within(row).getByRole('radio', { name: '跟随系统' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 
   it('chooses the lead with komi or the board count', async () => {

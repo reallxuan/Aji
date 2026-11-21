@@ -161,6 +161,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
     <div>
       <div className="relative pt-1">
         <svg
+          data-trend-graph
           width={W}
           height={height}
           viewBox={`0 0 ${W} ${height}`}
