@@ -1,7 +1,7 @@
-import { useAnalysisKeys } from './analysis/useAnalysisKeys';
 import { useTrendSync } from './analysis/useTrendSync';
 import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
+import { useKeyDispatcher } from './commands/useKeyDispatcher';
 import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
 import { useGameSync } from './game/useGameSync';
@@ -26,13 +26,15 @@ export default function App() {
   const { ready } = useGameSync();
   useTrendSync();
   usePlatformSync();
-  useAnalysisKeys();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);
   const dismissed = useWizardStore((s) => s.dismissed);
   const job = useWizardStore((s) => s.job);
   const view = usePanelStore((s) => s.view);
   const mode = panelMode(engine, { open, dismissed }, view !== 'main', job);
+  const sideOpen = !ready || !deviceLoaded || mode === 'wizard' || mode === 'settings';
+  // The board's keys rest while the wizard, settings or About fill the side.
+  useKeyDispatcher(!sideOpen);
 
   // Before the first frame is ready the side area stays empty, so nothing flashes (M5 minor 5).
   const side =

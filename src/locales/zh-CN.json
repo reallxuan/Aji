@@ -463,5 +463,27 @@
       "reset": "恢复默认"
     },
     "subboardRank": "副盘 {{rank}}"
+  },
+  "commands": {
+    "nav": {
+      "previous": "上一手",
+      "next": "下一手",
+      "first": "第一手",
+      "last": "最后一手",
+      "pageBack": "后退十手",
+      "pageForward": "前进十手"
+    },
+    "file": {
+      "open": "打开棋谱…",
+      "saveAs": "另存为…",
+      "new19": "新建 19 路棋局"
+    },
+    "analysis": {
+      "toggle": "暂停或继续分析"
+    },
+    "candidates": {
+      "toggleHidden": "显示或隐藏候选",
+      "peek": "按住时隐藏候选"
+    }
   }
 }

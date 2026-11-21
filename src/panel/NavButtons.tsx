@@ -7,10 +7,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { navigate } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
-import { useActionContext } from '../game/useActionContext';
-import type { NavTarget } from '../transport/generated/NavTarget';
+import { useRunCommand } from '../commands/useKeyDispatcher';
+import type { CommandId } from '../commands/registry';
 import { MoveCounter } from './MoveCounter';
 
 /** Holding a button repeats it after this long, then at this interval (design 5.7). */
@@ -25,12 +24,12 @@ function NavButton({
   className = '',
 }: {
   className?: string;
-  to: NavTarget;
+  to: Step;
   label: string;
   icon: LucideIcon;
   disabled: boolean;
 }) {
-  const ctx = useActionContext();
+  const run = useRunCommand();
   const timers = useRef<{
     delay?: ReturnType<typeof setTimeout>;
     repeat?: ReturnType<typeof setInterval>;
@@ -40,7 +39,8 @@ function NavButton({
     clearInterval(timers.current.repeat);
     timers.current = {};
   };
-  const step = () => void navigate(ctx, to);
+  // The same commands as ← → Home End.
+  const step = () => run(COMMAND[to]);
   // Reaching the end disables the button under the pointer; stop repeating then.
   useEffect(() => {
     if (disabled) stop();
@@ -77,6 +77,13 @@ function NavButton({
 }
 
 const WIDE_ONLY = '@max-[500px]:hidden';
+
+const COMMAND: Record<Step, CommandId> = {
+  first: 'nav.first',
+  previous: 'nav.previous',
+  next: 'nav.next',
+  last: 'nav.last',
+};
 
 type Step = 'first' | 'previous' | 'next' | 'last';
 const BACK: Array<[Step, LucideIcon]> = [

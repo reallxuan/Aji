@@ -1,7 +1,6 @@
 import { SettingsIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePanelStore } from '../app/panelStore';
-import { useNavigationKeys } from '../game/useNavigationKeys';
 import { EngineIndicator } from './EngineIndicator';
 import { GameMenu } from './GameMenu';
 import { NavButtons } from './NavButtons';
@@ -17,7 +16,6 @@ const openSettings = () => usePanelStore.getState().show('settings');
  */
 export function PanelHeader() {
   const { t } = useTranslation();
-  useNavigationKeys();
   return (
     <header className="@container h-14 flex-none border-b border-hairline">
       <div className="flex h-full items-center gap-2.5 pr-[18px] pl-6 @max-[500px]:gap-1.5">

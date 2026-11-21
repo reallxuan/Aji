@@ -5,7 +5,7 @@ import { useSettingsStore } from '../settings/settingsStore';
 import { getEngineStatus } from '../transport/api';
 import type { RunningEngine } from '../transport/generated/RunningEngine';
 import { useTransport } from '../transport/TransportProvider';
-import { engineAction } from './EngineIndicator';
+import { engineAction } from '../engine/engineAction';
 
 /** Network names are cut in the middle to this many characters, keeping both ends. */
 const NETWORK_CHARS = 24;

@@ -463,5 +463,27 @@
       "reset": "Reset to default"
     },
     "subboardRank": "Sub-board {{rank}}"
+  },
+  "commands": {
+    "nav": {
+      "previous": "Previous move",
+      "next": "Next move",
+      "first": "First move",
+      "last": "Last move",
+      "pageBack": "Back ten moves",
+      "pageForward": "Forward ten moves"
+    },
+    "file": {
+      "open": "Open…",
+      "saveAs": "Save As…",
+      "new19": "New 19×19 game"
+    },
+    "analysis": {
+      "toggle": "Pause or resume analysis"
+    },
+    "candidates": {
+      "toggleHidden": "Show or hide candidates",
+      "peek": "Hide candidates while held"
+    }
   }
 }
