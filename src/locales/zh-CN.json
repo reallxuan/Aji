@@ -126,9 +126,8 @@
     },
     "graph": {
       "legend": {
-        "winrate": "黑胜率",
-        "scoreLead": "黑领先目数",
-        "mistake": "失误"
+        "winrate": "胜率",
+        "scoreLead": "目差"
       },
       "move": "第 {{n}} 手 {{color}} {{point}}",
       "moveOnly": "第 {{n}} 手",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Color } from '../transport/generated/Color';
 import type { TrendNode } from '../transport/generated/TrendNode';
-import { barTexts, mistakes, plotRuns, scoreRange } from './trend';
+import { barTexts, plotRuns, scoreRange } from './trend';
 
 /** Nodes from [winrate, lead, visits] triples (null for none), movers alternating from Black. */
 function nodes(
@@ -49,58 +49,6 @@ describe('scoreRange', () => {
       ),
     ).toBe(10);
     expect(scoreRange([])).toBe(10);
-  });
-});
-
-describe('mistakes', () => {
-  it('use the mover, not alternation', () => {
-    // After PL[W], White plays twice: each drop is White's loss.
-    const line = nodes(
-      [
-        [0.5, 0, 100],
-        [0.53, 1, 100],
-        [0.58, 2, 100],
-      ],
-      [null, 'white', 'white'],
-    );
-    const found = mistakes(line);
-    expect(found.map((m) => m.index)).toEqual([1, 2]);
-    expect(found[0].loss).toBeCloseTo(3);
-    expect(found[1].loss).toBeCloseTo(5);
-  });
-
-  it('need both neighbours plotted, and a mover', () => {
-    const line = nodes(
-      [[0.5, 0, 100], null, [0.4, -5, 100], [0.3, -9, 20], [0.2, -12, 100]],
-      [null, 'black', 'white', 'black', 'white'],
-    );
-    expect(mistakes(line)).toEqual([]);
-    const noMover = nodes(
-      [
-        [0.5, 0, 100],
-        [0.4, -5, 100],
-      ],
-      [null, null],
-    );
-    expect(mistakes(noMover)).toEqual([]);
-  });
-
-  it('count a lead drop double', () => {
-    // Black's win rate drops one point but the lead drops 1.5: the loss is 3.
-    const line = nodes([
-      [0.5, 0, 100],
-      [0.49, -1.5, 100],
-    ]);
-    expect(mistakes(line)).toEqual([{ index: 1, loss: 3 }]);
-    // Under 2 is no mistake.
-    expect(
-      mistakes(
-        nodes([
-          [0.5, 0, 100],
-          [0.49, -0.5, 100],
-        ]),
-      ),
-    ).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { TrendNode } from '../transport/generated/TrendNode';
-import { MISTAKE_MIN_LOSS, SCORE_RANGES, TREND_MIN_VISITS } from './constants';
+import { SCORE_RANGES, TREND_MIN_VISITS } from './constants';
 
 /** A node is plotted once its stats have enough visits to mean something (design 5.5). */
 export function plotted(node: TrendNode | undefined): boolean {
@@ -28,26 +28,6 @@ export function scoreRange(nodes: readonly TrendNode[]): number {
     0,
   );
   return SCORE_RANGES.find((range) => most <= range) ?? SCORE_RANGES[SCORE_RANGES.length - 1];
-}
-
-/**
- * Moves whose mover lost at least `MISTAKE_MIN_LOSS`: the larger of the drop in the mover's win
- * rate (points) and twice the drop in the mover's lead. Needs a mover, and both the node and the
- * one before it plotted. Colours come from each node's mover, never from alternation.
- */
-export function mistakes(nodes: readonly TrendNode[]): Array<{ index: number; loss: number }> {
-  const found: Array<{ index: number; loss: number }> = [];
-  for (let i = 1; i < nodes.length; i++) {
-    const { mover, stats } = nodes[i];
-    const before = nodes[i - 1].stats;
-    if (!mover || !plotted(nodes[i]) || !plotted(nodes[i - 1])) continue;
-    const sign = mover === 'black' ? 1 : -1;
-    const winrateDrop = (before!.winrate - stats!.winrate) * sign * 100;
-    const leadDrop = (before!.scoreLead - stats!.scoreLead) * sign;
-    const loss = Math.max(winrateDrop, 2 * leadDrop);
-    if (loss >= MISTAKE_MIN_LOSS) found.push({ index: i, loss });
-  }
-  return found;
 }
 
 /** The bar's text padding: left and right of a segment, and between its two texts. */

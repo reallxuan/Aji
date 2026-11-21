@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPercent } from '../analysis/format';
-import { mistakes, plotRuns, plotted, scoreRange } from '../analysis/trend';
+import { plotRuns, plotted, scoreRange } from '../analysis/trend';
 import { useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useGameStore } from '../game/gameStore';
@@ -27,7 +27,7 @@ function ticks(nodes: readonly TrendNode[]): Array<{ index: number; label: numbe
 
 /**
  * Black's win rate and lead over the main line (design 5.5): one slot per main-line node, gaps
- * left empty, mistake bars along the bottom, the current node dashed. Hover shows a node's
+ * left empty, the current node dashed. Hover shows a node's
  * numbers; click or drag goes there. `width` is for tests; the panel's width otherwise.
  */
 export function TrendGraph({ height, width }: { height: number; width?: number }) {
@@ -47,7 +47,6 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
   const gh = Math.max(0, height - PAD.top - PAD.bottom);
   const range = useMemo(() => scoreRange(nodes), [nodes]);
   const runs = useMemo(() => plotRuns(nodes), [nodes]);
-  const bars = useMemo(() => mistakes(nodes), [nodes]);
   const x = (i: number) => PAD.left + (i / last) * gw;
   const yWinrate = (w: number) => PAD.top + (1 - w) * gh;
   const yLead = (s: number) => PAD.top + (0.5 - s / (2 * range)) * gh;
@@ -171,21 +170,6 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
               {m}
             </text>
           ))}
-          {bars.map(({ index, loss }) => {
-            const h = Math.min(18, 3 + 1.2 * loss);
-            return (
-              <rect
-                key={index}
-                data-mistake={index}
-                x={x(index) - 1}
-                y={bottom - h}
-                width={2}
-                height={h}
-                fill="var(--text-muted)"
-                opacity={0.7}
-              />
-            );
-          })}
           {leadLine}
           {winrateLine}
           {current !== null && (
@@ -286,10 +270,6 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-0.5 w-3.5 rounded-[1px] bg-score" />
           {t('analysis.graph.legend.scoreLead')}
-        </span>
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-          <span className="h-[9px] w-0.5 bg-text-muted opacity-70" />
-          {t('analysis.graph.legend.mistake')}
         </span>
       </div>
     </div>

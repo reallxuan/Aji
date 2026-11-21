@@ -126,9 +126,8 @@
     },
     "graph": {
       "legend": {
-        "winrate": "Black win rate",
-        "scoreLead": "Black lead",
-        "mistake": "Mistake"
+        "winrate": "Win rate",
+        "scoreLead": "Lead"
       },
       "move": "Move {{n}} {{color}} {{point}}",
       "moveOnly": "Move {{n}}",

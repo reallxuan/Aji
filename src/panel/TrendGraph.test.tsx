@@ -112,9 +112,22 @@ it('scrubs while dragging, at most one navigation a frame', async () => {
   expect(navigations(requests)).toEqual([{ move: 14 }]);
 });
 
-it('has a legend of three items and no verdict', () => {
+it('has a legend of 胜率 and 目差, without 失误, and no verdict', () => {
   mount();
   const legend = screen.getByTestId('trend-legend');
-  expect(legend.children).toHaveLength(3);
-  expect(legend).toHaveTextContent('黑胜率黑领先目数失误');
+  expect(legend.textContent).toMatch(/^胜率目差/);
+  expect(legend).not.toHaveTextContent('失误');
+  expect(legend).not.toHaveTextContent('黑胜率');
+});
+
+it('draws no mistake bars, however large a loss', () => {
+  const nodes = line();
+  // Black's move 41 drops Black's win rate by 30 points.
+  nodes[40] = { ...nodes[40], stats: { winrate: 0.8, scoreLead: 8, visits: 200 } };
+  nodes[41] = { ...nodes[41], stats: { winrate: 0.5, scoreLead: 0, visits: 200 } };
+  useTrendStore.getState().setNodes(nodes);
+  renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+  });
+  expect(svg().querySelectorAll('[data-mistake]')).toHaveLength(0);
 });

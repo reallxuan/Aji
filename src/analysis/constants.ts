@@ -13,8 +13,6 @@ export const DOUBTFUL_LOSS = 4;
 export const TREND_MIN_VISITS = 50;
 /** The score axis is the first of these ranges, in points either way, that holds every lead. */
 export const SCORE_RANGES = [10, 20, 40, 80, 160] as const;
-/** A mistake bar is drawn for a loss of this much or more. */
-export const MISTAKE_MIN_LOSS = 2;
 /** The trend graph's height in pixels, and in a window shorter than `COMPACT_WINDOW_HEIGHT`. */
 export const GRAPH_HEIGHT = 150;
 export const GRAPH_HEIGHT_COMPACT = 100;
