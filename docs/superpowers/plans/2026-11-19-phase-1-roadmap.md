@@ -251,8 +251,10 @@ Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-instal
 
 ### M8. Acceptance and v0.1.0
 
+Design: [2026-11-21-m8-acceptance-release-design.md](../specs/2026-11-21-m8-acceptance-release-design.md), approved by the owner on 2026-11-21. Detailed plan: [2026-11-21-phase-1-m8-acceptance-release.md](2026-11-21-phase-1-m8-acceptance-release.md). v0.1.0 is the owner's own checkpoint. The PC is tested in the app, without the M3 scripts. The release candidates and `v0.1.0` are public GitHub releases, and the signed manifest is published before the walk. Deferred items M8 does not fix are in [`docs/backlog/phase-1-deferred.md`](../../backlog/phase-1-deferred.md).
+
 - Run the acceptance checklist on the PC and the Mac from new OS user accounts, and record the results and any system prompts (SmartScreen, "Open Anyway") in `docs/acceptance/phase-1.md`.
-- Linux: the AppImage installs on Ubuntu 22.04, opens a game and analyses on CPU or OpenCL. Measure board frame rate under WebKitGTK (R3).
+- ~~Linux: the AppImage installs on Ubuntu 22.04, opens a game and analyses on CPU or OpenCL. Measure board frame rate under WebKitGTK (R3).~~ Moved to Phase 8 (owner, 2026-11-21): there is no Linux machine. CI still builds the AppImage and runs the tests on Linux.
 - Update the README status. The owner tags `v0.1.0`, and the release carries the CI installers.
 
 ## 6. Phase-level review focus
@@ -274,6 +276,6 @@ These are the inputs most likely to break Phase 1 for a real user, each with the
 |---|---|
 | R1 NVIDIA runtime licence | S1, before M3 |
 | R2 Metal build | S2, before M3 |
-| R3 WebKitGTK on Linux | Measured in M8 |
+| R3 WebKitGTK on Linux | Moved to Phase 8 (owner, 2026-11-21) |
 | R4 Backend speed on the 5070 | S3; results written back into charter 6.3 |
 | D1 Mainland mirror | Measured at the end of M4; the owner decides |

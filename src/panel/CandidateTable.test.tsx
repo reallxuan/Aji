@@ -11,6 +11,7 @@ import { createI18n } from '../i18n/createI18n';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Candidate } from '../transport/generated/Candidate';
 import type { Color } from '../transport/generated/Color';
+import type { EngineState } from '../transport/generated/EngineState';
 import type { Move } from '../transport/generated/Move';
 import { CandidateTable } from './CandidateTable';
 
@@ -21,6 +22,7 @@ afterEach(() => {
 });
 
 const KEY = 'abababababababab';
+const ANALYSING: EngineState = { state: 'analysing', version: '1.18.2' };
 const play = (x: number, y = 3): Move => ({ type: 'play', x, y });
 
 function candidate(order: number, winrate: number, overrides: Partial<Candidate> = {}): Candidate {
@@ -58,9 +60,15 @@ function analysis(overrides: Partial<AnalysisUpdate> = {}): AnalysisUpdate {
 }
 
 function mount(
-  options: { update?: AnalysisUpdate | null; nextMove?: Move | null; toPlay?: Color } = {},
+  options: {
+    update?: AnalysisUpdate | null;
+    nextMove?: Move | null;
+    toPlay?: Color;
+    engine?: EngineState;
+  } = {},
 ) {
   const store: EngineStore = createEngineStore();
+  store.getState().applyEvent({ type: 'engineState', engine: options.engine ?? ANALYSING });
   useGameStore.getState().bindEngine(store);
   useGameStore.getState().apply(
     makeSnapshot({
@@ -132,6 +140,25 @@ it('fades the rows while catching up', () => {
     expect(row).toHaveAttribute('data-catching-up');
     expect(row).toHaveStyle({ opacity: '0.6' });
   }
+});
+
+it('a paused search shows its own total, not the catching-up header', () => {
+  mount({
+    update: analysis({ rootVisits: 640, previousVisits: 1000 }),
+    engine: { state: 'paused', version: '1.18.2' },
+  });
+  expect(screen.getByText('总计算量 640')).toBeInTheDocument();
+  expect(document.querySelector('[data-catching-up]')).toBeNull();
+  for (const row of rows()) expect(row).toHaveStyle({ opacity: '1' });
+});
+
+it('a restarting engine does not keep the catching-up header', () => {
+  mount({
+    update: analysis({ rootVisits: 640, previousVisits: 1000 }),
+    engine: { state: 'starting' },
+  });
+  expect(screen.queryByText('总计算量 640 / 1,000')).toBeNull();
+  expect(document.querySelector('[data-catching-up]')).toBeNull();
 });
 
 it('shows 已隐藏（F） and no rows while hidden', () => {

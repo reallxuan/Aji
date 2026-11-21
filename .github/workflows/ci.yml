@@ -5,6 +5,15 @@ on:
   pull_request:
   # Actions → CI → Run workflow builds installers for any branch on demand.
   workflow_dispatch:
+    inputs:
+      release-rehearsal:
+        description: Tag to rehearse a release for at this commit (for example v0.1.0-rc.1); publishes nothing
+        type: string
+        default: ''
+
+# Only the release job writes; it raises this for itself.
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -80,8 +89,10 @@ jobs:
           command: check licenses
 
   bundle:
-    # Installers are slow to build, so only for pushes to main or a manual run.
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    # Installers are slow to build, so only for pushes to main, version tags or a manual run.
+    if: >-
+      github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') ||
+      github.event_name == 'workflow_dispatch'
     needs: [frontend, rust, licenses]
     strategy:
       fail-fast: false
@@ -124,3 +135,37 @@ jobs:
           path: target/release/bundle/${{ matrix.bundle }}/*
           retention-days: 14
           if-no-files-found: error
+
+  # A version tag publishes the installers as a GitHub release (scripts/release.mjs). A manual
+  # run with release-rehearsal set does every read and publishes nothing.
+  release:
+    needs: [bundle]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.release-rehearsal != '')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags, to find the release candidate on this commit
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+      - name: Rehearse the release
+        if: github.event_name == 'workflow_dispatch' && inputs.release-rehearsal != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release-rehearsal }}
+        run: node scripts/release.mjs "$TAG" artifacts --dry-run
+      - name: Publish the release
+        # A manual run started from a tag has a tag ref too; only the push publishes.
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: node scripts/release.mjs "$TAG" artifacts

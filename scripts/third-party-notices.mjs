@@ -14,11 +14,43 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = path.join(ROOT, 'src', 'assets', 'notices', 'third-party.txt');
 const LICENCE_FILE = /^(licen[cs]e|copying|notice)([-._].*)?$/i;
+const TEXTS = path.join(ROOT, 'scripts', 'licence-texts');
+
+/**
+ * The SPDX ids whose texts are printed for a licence expression: every part of an `AND`, and from
+ * each choice (`OR`, or `/` in older Cargo manifests) MIT when it is offered, else the first.
+ */
+export function chooseLicence(expression) {
+  return expression
+    .replace(/[()]/g, '')
+    .split(/\s+AND\s+/)
+    .map((part) => {
+      const ids = part.split(/\s+OR\s+|\//).map((id) => id.trim());
+      return ids.includes('MIT') ? 'MIT' : ids[0];
+    });
+}
+
+/** The standard licence text for a component that ships no licence file. */
+export function fallbackText({ name, licence, authors }) {
+  const holders = authors.map((a) => a.replace(/\s*<[^>]*>/, '').trim()).filter(Boolean);
+  const copyright = holders.length > 0 ? holders.join(', ') : `the ${name} authors`;
+  return chooseLicence(licence)
+    .map((id) => {
+      let text;
+      try {
+        text = readFileSync(path.join(TEXTS, `${id}.txt`), 'utf8');
+      } catch {
+        throw new Error(`no licence text for ${name} (${id}); add scripts/licence-texts/${id}.txt`);
+      }
+      return text.replace(/\r\n?/g, '\n').trim().replaceAll('{{copyright}}', copyright);
+    })
+    .join('\n\n');
+}
 
 function run(command, args) {
   return execFileSync(command, args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 256 << 20 });
@@ -66,6 +98,7 @@ function rustPackages() {
       name: p.name,
       version: p.version,
       licence: p.license ?? (p.license_file ? `see ${p.license_file}` : 'unknown'),
+      authors: p.authors ?? [],
       texts: licenceTexts(path.dirname(p.manifest_path)),
     }));
 }
@@ -80,6 +113,7 @@ function npmPackages() {
           name: entry.name,
           version,
           licence,
+          authors: entry.author ? [entry.author] : [],
           texts: licenceTexts(entry.paths[index] ?? entry.paths[0]),
         });
       });
@@ -93,7 +127,7 @@ function render(title, packages) {
   // Each distinct licence file is printed once, after the packages that carry it.
   const groups = new Map();
   for (const pkg of packages) {
-    const texts = pkg.texts.length > 0 ? pkg.texts : [`(no licence file; ${pkg.licence})`];
+    const texts = pkg.texts.length > 0 ? pkg.texts : [fallbackText(pkg)];
     for (const text of texts) {
       if (!groups.has(text)) groups.set(text, []);
       groups.get(text).push(pkg);
@@ -129,22 +163,27 @@ function generate() {
     .concat('\n');
 }
 
-const text = generate();
-if (process.argv.includes('--check')) {
-  let current = '';
-  try {
-    current = readFileSync(OUTPUT, 'utf8');
-  } catch {
-    // Missing counts as stale.
+function main() {
+  const text = generate();
+  if (process.argv.includes('--check')) {
+    let current = '';
+    try {
+      current = readFileSync(OUTPUT, 'utf8');
+    } catch {
+      // Missing counts as stale.
+    }
+    if (current !== text) {
+      console.error(
+        `${path.relative(ROOT, OUTPUT)} is stale; run node scripts/third-party-notices.mjs`,
+      );
+      process.exit(1);
+    }
+    console.log('third-party notices are up to date');
+  } else {
+    writeFileSync(OUTPUT, text);
+    console.log(`wrote ${path.relative(ROOT, OUTPUT)} (${text.length} characters)`);
   }
-  if (current !== text) {
-    console.error(
-      `${path.relative(ROOT, OUTPUT)} is stale; run node scripts/third-party-notices.mjs`,
-    );
-    process.exit(1);
-  }
-  console.log('third-party notices are up to date');
-} else {
-  writeFileSync(OUTPUT, text);
-  console.log(`wrote ${path.relative(ROOT, OUTPUT)} (${text.length} characters)`);
 }
+
+// Run only when executed, so the tests can import the helpers.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
