@@ -77,8 +77,8 @@ Reference size 1440 × 900.
 - The board is a square as tall as the window minus a 16 px margin on each side. **[Decided]**
 - The panel takes the remaining width (about 540 px at the reference size) and runs the full height, flush with the window's right edge.
 - There is no application top bar. **[Decided]** The controls that used to live there are the first row of the panel.
-- **[Open]** How extra width is used on wider windows: a larger board is impossible once height is exhausted, so the choice is a wider panel, a second panel column, or side margins.
-- **[Open]** Small-screen and touch layouts for the remote client (charter Phase 3) are not designed.
+- How extra width is used on wider windows: the default layout splits its column into two once it is wider than 760 px. **[Decided in Phase 2 M1]** (P2 M1 design 5.2)
+- Small-screen and touch layouts: a narrow arrangement for windows taller than wide or too narrow for the board, with tabs below the board. **[Decided in Phase 2 M1]** (P2 M1 design 5.5). The panel layouts and presets are in the same design, sections 5.1 to 5.3.
 
 ### 4.1 Panel header row
 
@@ -98,7 +98,7 @@ There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no
 - **Trend graph**: win rate and score lead are always drawn together, win rate against a left axis of 0–100% and score lead against a right axis in points. There is no switch between them. **[Decided]**
 - There are no mistake bars. **[Decided in M7, after the first build]**
 - A dashed vertical line marks the current move.
-- The line under the graph carries the legend, 胜率 and 目差, and at its right end the black/white perspective toggle, which sets whose numbers the discs, the table and the graph show. There is no verdict line. **[Decided in M7]**
+- The line under the graph carries the legend, 胜率 and 目差, and at its right end the black/white perspective toggle. There is no verdict line. **[Decided in M7]** Since Phase 2 M1 the toggle sets whose numbers the bar and the graph show; the discs and the table show the side to move (P2 M1 design 5.10).
 - Moves without a result leave a gap in the lines; nothing bridges it. **[Decided in M7]**
 
 ### 4.3 Candidate table
@@ -119,7 +119,7 @@ Columns: rank chip, point, win rate, score lead, visits, difference from the bes
 
 ### 5.1 Surface
 
-- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain. **[Decided]** as a direction. It is a flat surface: the lit top edge and darker lower edge were removed after the M7 build. Other grains come with board themes, later.
+- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain. **[Decided]** as a direction. Since Phase 2 M1 it is the default of four board and stone sets (honey, kaya, walnut, printed; P2 M1 design 5.7). It is a flat surface: the lit top edge and darker lower edge were removed after the M7 build. Other grains come with board themes, later.
 - Grid lines and star points in dark brown; coordinates (A–T without I, 1–19) in the margin on the top and left, unless hidden in settings, when the margin shrinks to a thin edge.
 - The mockups build the grain from CSS gradients. Reviewed on screen it reads as a fairly even yellow panel with mechanical stripes. M5 replaced it with a procedural straight grain from summed value noise, generated once per size and pixel ratio from a fixed seed. **[Proposed]**
 
