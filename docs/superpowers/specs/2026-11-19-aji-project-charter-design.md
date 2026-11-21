@@ -244,11 +244,10 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Variation tree panel: move between branches, promote to main line, delete a branch, undo delete | 2 |
 | Comment panel: view and edit | 2 |
 | Markup tools (triangle, square, letters and so on) and freehand drawing | 2 |
-| Setup mode: add black or white stones, alternate, pass, insert a move, drag stones, swap move order | 2 |
+| Setup mode: add black or white stones, alternate, pass, insert a move, drag stones, change the side to move | 2 |
 | Try-out mode (试下) | 2 |
 | Board transforms: rotate, flip, swap colours | 2 |
 | Game information editing (players, ranks, rules, result) | 2 |
-| Paste a game from the clipboard; copy a game to the clipboard | 2 |
 | Option to keep or drop comments on save; save a single branch; save with analysis (see 6.7) | 2 |
 | Save or copy screenshots of the board, sub-board and winrate graph | 2 |
 | Click a stone to jump to its move, double-click to find a stone, find a move | 2 |
@@ -265,14 +264,12 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Hover a candidate to show its variation, with replay | 1 |
 | Start and pause analysis | 1 |
 | Hide the candidates while analysis keeps running (F; hold Z) | 1 |
-| Candidate list panel (sortable table) | 2 |
-| Winrate graph and score curve; click to jump; blunder bars | 1 (moved from Phase 2 in M7: drawn from the results already cached) |
+| Candidate list panel (sortable table) | 2 (Phase 1 shipped the table; Phase 2 adds sorting, columns and docking) |
+| Winrate graph and score curve; click to jump | 1 (moved from Phase 2 in M7: drawn from the results already cached). Mistake bars were removed in M7 at the owner's request (M7 design 13.2) |
 | Move quality marks (each move coloured by loss) | 2 |
 | Next-move hint (where the move actually played ranks among candidates) | 2 |
 | Ownership and territory display in several styles (square size, opacity and so on) | 2 |
 | Position estimate (形势判断) and final scoring (终局点目) | 2 |
-| Policy heatmap (first instinct) and post-search heatmap | 2 |
-| Raw network mode (no search) | 2 |
 | Sub-board showing the current best variation | 2 |
 | Black's perspective or alternating perspective; board score or score including komi | 2 |
 | Analysis region control: analyse only some points, avoid some points, lasso a forced region | 5 |
@@ -348,6 +345,9 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 - Other engines.
 - Automatic move placement into online game clients, and two-way sync.
 - Kifu sharing and lookup that depend on a private server.
+- The policy heatmap (first instinct) and the post-search heatmap; raw network mode (no search); pasting a game from the clipboard and copying a game to the clipboard. Reason: the maintainer's decision, 2026-11-21. Copying a screenshot image (7.2) is not affected.
+- Rectangular boards and boards larger than 19×19; Aji opens square boards from 5×5 to 19×19. Reason: KataGo's standard builds stop at 19×19, and rectangular boards are rare in review (Phase 2 menu check, P2-X4).
+- Gomoku. Reason: it is not Go (Phase 2 menu check, P2-X5).
 
 ## 8. Roadmap
 
@@ -433,13 +433,13 @@ Auto-update, code signing and notarisation, Linux packaging (AppImage, deb), mor
 |---|---|---|
 | D1 | Whether to pay for a download mirror reachable from mainland China | After download speeds are measured on a mainland network in Phase 1 |
 | D2 | Whether to buy an Apple developer account (needed for notarisation and for any iOS build on a real device) and a Windows code-signing certificate | Before Phase 7 for iOS, before Phase 8 for signing; earlier for an earlier public release |
-| D3 | Phase 2 acceptance is judged by the owner against their own habits. Before Phase 2 starts, the owner lists the features they use daily so those come first | Before Phase 2 starts |
+| D3 | Phase 2 acceptance is judged by the owner against their own habits. Before Phase 2 starts, the owner lists the features they use daily so those come first | Answered 2026-11-21: the owner agreed to the whole Phase 2 list instead of naming a subset (Phase 2 plan, section 1) |
 
 ## 10. Left to the implementer
 
 - Module layout inside each crate and the choice of specific libraries.
 - Field details of the manifest JSON and of the transport messages.
-- The visual design of the board and stones. A design draft goes to the owner before Phase 2 starts.
+- The visual design of the board and stones. A design draft goes to the owner at the start of Phase 2's first milestone, before anything is built (Phase 2 plan, P1).
 - Default key bindings.
 - The schema of the analysis cache.
 
