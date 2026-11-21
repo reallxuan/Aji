@@ -4,9 +4,10 @@ import type { EngineState } from "./EngineState";
 import type { GameSnapshot } from "./GameSnapshot";
 import type { JobSnapshot } from "./JobSnapshot";
 import type { Rejection } from "./Rejection";
+import type { TrendNode } from "./TrendNode";
 import type { UiSettings } from "./UiSettings";
 
 /**
  * A message the engine side pushes to the UI without being asked, tagged the same way.
  */
-export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "analysisRejected", rejection: Rejection, } | { "type": "setupProgress", job: JobSnapshot, } | { "type": "settingsChanged", settings: UiSettings, } | { "type": "gameSnapshot", snapshot: GameSnapshot, };
+export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "analysisRejected", rejection: Rejection, } | { "type": "setupProgress", job: JobSnapshot, } | { "type": "settingsChanged", settings: UiSettings, } | { "type": "gameSnapshot", snapshot: GameSnapshot, } | { "type": "gameTrend", nodes: Array<TrendNode>, };

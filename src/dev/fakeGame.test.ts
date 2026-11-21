@@ -62,4 +62,24 @@ describe('the scenarios’ fake game', () => {
     });
     expect(ask({ type: 'gameSetRules', rules: null }).snapshot.rules.changed).toBe(false);
   });
+
+  it('gives the line index and the move played next', () => {
+    const { ask } = setUp();
+    ask({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    const at3 = ask({ type: 'gameNavigate', to: { move: 3 } }).snapshot;
+    expect(at3.lineIndex).toBe(3);
+    // The record opens pd dd dp pq: the fourth move is pq, Q3.
+    expect(at3.nextMove).toEqual({ type: 'play', x: 15, y: 16 });
+    expect(ask({ type: 'gameNavigate', to: 'last' }).snapshot.nextMove).toBeNull();
+  });
+
+  it('answers the trend with a node per main-line node', () => {
+    const { ask, handle } = setUp();
+    ask({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    const reply = handle({ type: 'gameTrend' });
+    if (reply?.type !== 'trend') throw new Error('no trend');
+    expect(reply.nodes).toHaveLength(243);
+    expect(reply.nodes[0]).toEqual({ moveNumber: 0, mover: null, move: null, stats: null });
+    expect(reply.nodes[2]).toMatchObject({ moveNumber: 2, mover: 'white' });
+  });
 });

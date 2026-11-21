@@ -63,6 +63,8 @@ it('waits for the first snapshot and the first engine status, then follows event
       engine: { state: 'notConfigured' },
       position: null,
       analysis: null,
+      rejected: null,
+      running: null,
     }),
   );
   expect(ready).toBe(true);
@@ -85,6 +87,8 @@ it('is ready even when the snapshot request fails', async () => {
       engine: { state: 'ready', version: '1.18.2', limitReached: false },
       position: null,
       analysis: null,
+      rejected: null,
+      running: null,
     };
   });
   let ready = false;

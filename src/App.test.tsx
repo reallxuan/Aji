@@ -20,6 +20,8 @@ function renderApp(engine: EngineState) {
       engine,
       position: '0000000000000000',
       analysis: null,
+      rejected: null,
+      running: null,
     }),
     appInfo: () => ({ type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' }),
     // Detection never answers, so the wizard stays on its first step.

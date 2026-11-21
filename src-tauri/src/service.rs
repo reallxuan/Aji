@@ -7,17 +7,20 @@ use std::sync::Arc;
 
 use aji_core::Move;
 use aji_core::game::AnalysisRules;
-use aji_engine::{Engine, EngineError, EngineEvent, EngineFiles};
+use aji_engine::{Engine, EngineError, EngineEvent, EngineFiles, TrendStats};
 use aji_manager::Setup;
 use aji_manager::install::{
     DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
-    StartError, engine_files,
+    StartError, active_summary, engine_files,
 };
 use base64::Engine as _;
 use tokio::sync::{Mutex, watch};
 
-use crate::game::{GameSession, NavTarget, OpenError};
-use crate::protocol::{AppEvent, AppInfo, ErrorCode, OsKind, ProtocolError, Request, Response};
+use crate::game::{GameSession, LineNode, NavTarget, OpenError};
+use crate::protocol::{
+    AppEvent, AppInfo, ErrorCode, OsKind, ProtocolError, Request, Response, RunningEngine,
+    TrendNode,
+};
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
     update_settings,
@@ -62,6 +65,58 @@ pub fn startup_files(
     engine_files(root, installed, installed.active_set()?)
 }
 
+/// What the engine card names: the development engine named in the settings, else the active
+/// installed set, as [`startup_files`] chooses.
+pub fn running_engine(settings: &Settings, installed: &Installed) -> Option<RunningEngine> {
+    if let Some(dev) = &settings.dev_engine {
+        let network_name = dev.model.file_name()?.to_string_lossy().into_owned();
+        return Some(RunningEngine {
+            backend: None,
+            network_name,
+        });
+    }
+    active_summary(installed).map(|active| RunningEngine {
+        backend: Some(active.backend),
+        network_name: active.network_name,
+    })
+}
+
+/// Pairs each main-line node with its cached stats, in order.
+fn trend_nodes(line: Vec<LineNode>, stats: Vec<Option<TrendStats>>) -> Vec<TrendNode> {
+    line.into_iter()
+        .zip(stats)
+        .map(|(node, stats)| TrendNode {
+            move_number: node.move_number,
+            mover: node.mover,
+            mv: node.mv,
+            stats,
+        })
+        .collect()
+}
+
+/// The trend of the session's main line. Called with the session locked.
+async fn trend_of(ctx: &AppContext, session: &GameSession) -> Vec<TrendNode> {
+    let line = session.line();
+    // An illegal node has no position; a key no position can have keeps the order.
+    let keys = line
+        .iter()
+        .map(|n| n.key.unwrap_or(aji_core::PositionKey(0)))
+        .collect();
+    let mut stats = ctx.engine.summaries(keys).await;
+    for (slot, node) in stats.iter_mut().zip(&line) {
+        if node.key.is_none() {
+            *slot = None;
+        }
+    }
+    trend_nodes(line, stats)
+}
+
+/// Pushes the session's trend to every client.
+async fn push_trend(ctx: &AppContext, session: &GameSession) {
+    let nodes = trend_of(ctx, session).await;
+    ctx.events.emit(AppEvent::GameTrend { nodes });
+}
+
 /// Where pushed events go: the Tauri webview now, a WebSocket in Phase 3.
 pub trait EventSink: Send + Sync + 'static {
     fn emit(&self, event: AppEvent);
@@ -104,10 +159,15 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         })),
         Request::EngineStatus => {
             let status = ctx.engine.status();
+            let running = load_settings(&ctx.settings_path)
+                .ok()
+                .and_then(|settings| running_engine(&settings, &ctx.installer.installed()));
             Ok(Response::EngineStatus {
                 engine: status.state,
                 position: status.position,
                 analysis: status.analysis,
+                rejected: status.rejected,
+                running,
             })
         }
         Request::EngineRestart => {
@@ -116,6 +176,10 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         }
         Request::EngineStop => ctx.engine.stop().await.map(|()| Response::Ok),
         Request::AnalysisPause => ctx.engine.pause().await.map(|()| Response::Ok),
+        Request::AnalysisContinue => {
+            refuse_while_held(ctx)?;
+            ctx.engine.continue_analysis().await.map(|()| Response::Ok)
+        }
         Request::AnalysisResume => {
             refuse_while_held(ctx)?;
             ctx.engine.resume().await.map(|()| Response::Ok)
@@ -174,6 +238,12 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::GameNew { size } => return game_new(ctx, size).await,
         Request::GameOpen { name, bytes } => return game_open(ctx, name, bytes).await,
         Request::GameNavigate { to } => return game_navigate(ctx, to).await,
+        Request::GameTrend => {
+            let session = ctx.game.lock().await;
+            return Ok(Response::Trend {
+                nodes: trend_of(ctx, &session).await,
+            });
+        }
         Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
         Request::GameSetRules { rules } => return game_set_rules(ctx, rules).await,
         Request::GameSnapshot => {
@@ -303,7 +373,9 @@ async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError>
     let next = GameSession::new(size, default_rules(ctx))?;
     let mut session = ctx.game.lock().await;
     session.replace(next);
-    Ok(publish(ctx, &session, false).await)
+    let reply = publish(ctx, &session, false).await;
+    push_trend(ctx, &session).await;
+    Ok(reply)
 }
 
 /// Decoding and parsing a large file takes a while, so they run on the blocking pool, before
@@ -328,7 +400,9 @@ async fn game_open(
     .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
     let mut session = ctx.game.lock().await;
     session.replace(next);
-    Ok(publish(ctx, &session, true).await)
+    let reply = publish(ctx, &session, true).await;
+    push_trend(ctx, &session).await;
+    Ok(reply)
 }
 
 async fn game_navigate(ctx: &AppContext, to: NavTarget) -> Result<Response, ProtocolError> {
@@ -345,7 +419,11 @@ async fn game_set_rules(
 ) -> Result<Response, ProtocolError> {
     let mut session = ctx.game.lock().await;
     match session.set_rules(rules) {
-        Ok(true) => Ok(publish(ctx, &session, false).await),
+        Ok(true) => {
+            let reply = publish(ctx, &session, false).await;
+            push_trend(ctx, &session).await;
+            Ok(reply)
+        }
         Ok(false) => Ok(unchanged(&session)),
         Err(rules) => Err(error(
             ErrorCode::Internal,
@@ -881,6 +959,66 @@ mod tests {
         );
     }
 
+    #[test]
+    fn running_names_the_dev_engine_without_a_backend() {
+        let root = InstallRoot::new(std::env::temp_dir().join("aji-running").join("data"));
+        let installed = installed_with_an_active_set(&root);
+        let dev = DevEngine {
+            katago: "/dev/katago".into(),
+            model: "/dev/models/m.bin.gz".into(),
+            config: "/dev/a.cfg".into(),
+        };
+        let settings = Settings {
+            dev_engine: Some(dev),
+            ..Settings::default()
+        };
+        assert_eq!(
+            running_engine(&settings, &installed),
+            Some(RunningEngine {
+                backend: None,
+                network_name: "m.bin.gz".into()
+            })
+        );
+    }
+
+    #[test]
+    fn running_names_the_active_set() {
+        let root = InstallRoot::new(std::env::temp_dir().join("aji-running").join("data"));
+        let installed = installed_with_an_active_set(&root);
+        assert_eq!(
+            running_engine(&Settings::default(), &installed),
+            Some(RunningEngine {
+                backend: Some(Backend::Metal),
+                network_name: "net".into()
+            })
+        );
+        assert_eq!(
+            running_engine(&Settings::default(), &Installed::default()),
+            None
+        );
+    }
+
+    #[test]
+    fn a_rejection_is_forwarded_as_analysis_rejected() {
+        let recorder = Arc::new(Recorder::default());
+        let forward = forward_engine_events(recorder.clone());
+        let rejection = aji_engine::Rejection {
+            position: aji_core::PositionKey(9),
+            message: "no".into(),
+        };
+        forward(EngineEvent::Rejected(rejection.clone()));
+        assert_eq!(
+            *recorder.0.lock().unwrap(),
+            vec![AppEvent::AnalysisRejected { rejection }]
+        );
+    }
+
+    #[tokio::test]
+    async fn analysis_continue_reaches_the_engine() {
+        let error = handle(&ctx(), Request::AnalysisContinue).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::EngineNotRunning);
+    }
+
     #[tokio::test]
     async fn setup_backends_defaults_to_metal() {
         let Ok(Response::SetupBackends { recommendation }) =
@@ -1024,6 +1162,8 @@ mod tests {
                 engine: EngineState::NotConfigured,
                 position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
+                rejected: None,
+                running: None,
             })
         );
     }
@@ -1298,6 +1438,83 @@ mod tests {
             |g: &Game| -> Vec<_> { g.main_line().iter().map(|&n| g.last_move(n)).collect() };
         assert_eq!(moves(&again), moves(&game));
         assert!(text.contains("KM[7]"), "{text}");
+    }
+
+    #[test]
+    fn trend_nodes_pair_the_line_with_stats() {
+        let stats = aji_engine::TrendStats {
+            winrate: 0.5,
+            score_lead: 1.0,
+            visits: 60,
+        };
+        let line = vec![
+            LineNode {
+                move_number: 0,
+                mover: None,
+                mv: None,
+                key: Some(aji_core::PositionKey(1)),
+            },
+            LineNode {
+                move_number: 1,
+                mover: Some(aji_core::Color::Black),
+                mv: Some(Move::Pass),
+                key: None,
+            },
+        ];
+        let nodes = trend_nodes(line, vec![Some(stats), None]);
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].stats, Some(stats));
+        assert_eq!(nodes[1].mover, Some(aji_core::Color::Black));
+        assert_eq!(nodes[1].mv, Some(Move::Pass));
+        assert_eq!(nodes[1].stats, None);
+    }
+
+    #[tokio::test]
+    async fn game_trend_has_a_node_per_main_line_node() {
+        let ctx = ctx();
+        open(&ctx, "samsung.sgf", SAMSUNG).await.unwrap();
+        let Ok(Response::Trend { nodes }) = handle(&ctx, Request::GameTrend).await else {
+            panic!("expected a trend");
+        };
+        let game = reference(SAMSUNG);
+        assert_eq!(nodes.len(), game.main_line().len());
+        assert!(nodes.iter().all(|n| n.stats.is_none()), "no engine ran");
+    }
+
+    fn trend_events(recorded: &Recorded) -> usize {
+        recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| matches!(e, AppEvent::GameTrend { .. }))
+            .count()
+    }
+
+    #[tokio::test]
+    async fn game_trend_is_pushed_on_open_new_and_rules_change_not_on_navigate() {
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "samsung.sgf", SAMSUNG).await.unwrap();
+        assert_eq!(trend_events(&recorded), 1);
+        navigate(&ctx, NavTarget::Next).await;
+        navigate(&ctx, NavTarget::Last).await;
+        assert_eq!(trend_events(&recorded), 1);
+        handle(
+            &ctx,
+            Request::GameSetRules {
+                rules: Some(AnalysisRules::Custom {
+                    komi: Komi::new(0.5).unwrap(),
+                    scoring: Scoring::Area,
+                }),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(trend_events(&recorded), 2);
+        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        assert_eq!(trend_events(&recorded), 3);
     }
 
     #[tokio::test]

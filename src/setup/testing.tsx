@@ -266,6 +266,8 @@ export function setupTransport(
           engine: { state: 'notConfigured' },
           position: '0000000000000000',
           analysis: null,
+          rejected: null,
+          running: null,
         };
       case 'appInfo':
         return { type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' };

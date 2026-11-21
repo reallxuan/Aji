@@ -4,7 +4,7 @@
 
 use aji_core::game::{AnalysisRules, Game, GameError, Illegal, NodeId, Preview};
 use aji_core::sgf::{EncodingSource, SgfError, SgfNode, SgfTree, SgfWarning, decode, parse_sgf};
-use aji_core::{BoardSize, Move, Position};
+use aji_core::{BoardSize, Color, Move, Position, PositionKey};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -112,6 +112,16 @@ fn stem(name: &str) -> Option<String> {
     };
     let stem = stem.trim();
     (!stem.is_empty()).then(|| stem.to_owned())
+}
+
+/// One main-line node, for the trend graph (design 5.3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LineNode {
+    pub move_number: u32,
+    pub mover: Option<Color>,
+    pub mv: Option<Move>,
+    /// `None` on an illegal node.
+    pub key: Option<PositionKey>,
 }
 
 impl GameSession {
@@ -296,6 +306,36 @@ impl GameSession {
         Some((name, aji_core::sgf::write_sgf(&trees)))
     }
 
+    /// Every main-line node, first to last.
+    pub fn line(&self) -> Vec<LineNode> {
+        self.game
+            .main_line()
+            .iter()
+            .map(|&node| LineNode {
+                move_number: self.game.move_number(node),
+                mover: self.game.last_color(node),
+                mv: self.game.last_move(node),
+                key: self.game.position_at(node, &self.rules).map(|p| p.key()),
+            })
+            .collect()
+    }
+
+    /// The next main-line move, skipping nodes without one as long as they leave the board as it
+    /// is (comments); a node that changes it (setup stones) ends the search.
+    fn next_move(&self) -> Option<Move> {
+        let line = self.game.main_line();
+        let here = self.game.board_at(self.node()).stones();
+        for &node in &line[self.index + 1..] {
+            if let Some(mv) = self.game.last_move(node) {
+                return Some(mv);
+            }
+            if self.game.board_at(node).stones() != here {
+                return None;
+            }
+        }
+        None
+    }
+
     pub fn snapshot(&self) -> GameSnapshot {
         let node = self.node();
         let board = self.game.board_at(node);
@@ -317,6 +357,8 @@ impl GameSession {
             last_move: self.game.last_move(node),
             next_color: self.game.to_play(node),
             move_number: self.game.move_number(node),
+            line_index: self.index as u32,
+            next_move: self.next_move(),
             main_line_length: self.game.move_number(last),
             at_start: self.index == 0,
             at_end: self.index == self.last_index(),
@@ -398,5 +440,70 @@ mod tests {
             aji_core::Komi::new(7.5).unwrap(),
         );
         assert_eq!(session.position(), Some(m2));
+    }
+
+    /// Setup on the root, then B, W, a comment-only node and two White moves in a row's worth
+    /// of colours: movers come from the nodes, never from alternation.
+    const LINE: &[u8] = b"(;GM[1]FF[4]SZ[19]AB[dd];B[pd];W[dp];C[note];W[pp])";
+
+    fn play(x: u8, y: u8) -> Move {
+        Move::Play(aji_core::Point { x, y })
+    }
+
+    #[test]
+    fn line_has_a_node_per_main_line_node() {
+        let session = GameSession::open("line.sgf", LINE, AnalysisRules::Chinese).unwrap();
+        let line = session.line();
+        let numbers: Vec<u32> = line.iter().map(|n| n.move_number).collect();
+        assert_eq!(numbers, [0, 1, 2, 2, 3]);
+        let movers: Vec<Option<Color>> = line.iter().map(|n| n.mover).collect();
+        assert_eq!(
+            movers,
+            [
+                None,
+                Some(Color::Black),
+                Some(Color::White),
+                None,
+                Some(Color::White)
+            ]
+        );
+        assert_eq!(line[1].mv, Some(play(15, 3)));
+        assert_eq!(line[3].mv, None);
+        assert_eq!(line[2].key, session_key_at(&session, 2));
+        // A comment-only node has the same position as its parent.
+        assert_eq!(line[3].key, line[2].key);
+    }
+
+    fn session_key_at(session: &GameSession, index: usize) -> Option<aji_core::PositionKey> {
+        let node = session.game.main_line()[index];
+        session
+            .game
+            .position_at(node, &session.rules)
+            .map(|p| p.key())
+    }
+
+    #[test]
+    fn line_index_and_next_move_follow_navigation() {
+        let mut session = GameSession::open("line.sgf", LINE, AnalysisRules::Chinese).unwrap();
+        let s = session.snapshot();
+        assert_eq!(s.line_index, 0);
+        assert_eq!(s.next_move, Some(play(15, 3)));
+        session.navigate(NavTarget::Move(2));
+        let s = session.snapshot();
+        assert_eq!(s.line_index, 2);
+        // The comment-only node is skipped.
+        assert_eq!(s.next_move, Some(play(15, 15)));
+        session.navigate(NavTarget::Last);
+        let s = session.snapshot();
+        assert_eq!(s.line_index, 4);
+        assert_eq!(s.next_move, None);
+    }
+
+    #[test]
+    fn next_move_stops_at_a_node_that_changes_the_board_without_a_move() {
+        let text = b"(;GM[1]FF[4]SZ[19];B[pd];AW[dd];W[dp])";
+        let mut session = GameSession::open("setup.sgf", text, AnalysisRules::Chinese).unwrap();
+        session.navigate(NavTarget::Move(1));
+        assert_eq!(session.snapshot().next_move, None);
     }
 }

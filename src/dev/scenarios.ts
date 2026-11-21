@@ -547,7 +547,14 @@ export function scenarioTransport(
           arch: hardware.os.arch,
         };
       case 'engineStatus':
-        return { type: 'engineStatus', engine, position: '0000000000000000', analysis: null };
+        return {
+          type: 'engineStatus',
+          engine,
+          position: '0000000000000000',
+          analysis: null,
+          rejected: null,
+          running: active ? { backend: active.backend, networkName: active.networkName } : null,
+        };
       case 'engineRestart':
         if (!active) throw new TransportError('engineNotConfigured', 'no engine');
         startEngine();
@@ -557,6 +564,7 @@ export function scenarioTransport(
         return { type: 'ok' };
       case 'analysisPause':
       case 'analysisResume':
+      case 'analysisContinue':
       case 'setupSetDownloadSource':
         return { type: 'ok' };
       case 'setupDetect':

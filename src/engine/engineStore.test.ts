@@ -10,7 +10,7 @@ function status(
   position: string | null = A,
   analysis: AnalysisUpdate | null = null,
 ) {
-  return { engine, position, analysis };
+  return { engine, position, analysis, rejected: null, running: null };
 }
 
 function update(position: string, rootVisits: number): AnalysisUpdate {

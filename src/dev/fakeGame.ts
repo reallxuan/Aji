@@ -175,6 +175,8 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       lastMove: node.lastMove,
       nextColor: index % 2 ? 'white' : 'black',
       moveNumber: index,
+      lineIndex: index,
+      nextMove: index < last ? nodes[index + 1].lastMove : null,
       mainLineLength: last,
       atStart: index === 0,
       atEnd: index === last,
@@ -255,6 +257,16 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         return {
           type: 'gamePreview',
           preview: { stones: nodes[index].stones, captured: [], illegalAt: null },
+        };
+      case 'gameTrend':
+        return {
+          type: 'trend',
+          nodes: nodes.map((node, i) => ({
+            moveNumber: i,
+            mover: i === 0 ? null : i % 2 ? 'black' : 'white',
+            move: node.lastMove,
+            stats: null,
+          })),
         };
       case 'gameExport':
         if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
