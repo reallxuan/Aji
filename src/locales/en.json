@@ -437,5 +437,15 @@
     "saveAs": "Save As…",
     "today": "Today",
     "yesterday": "Yesterday"
+  },
+  "layout": {
+    "panels": {
+      "header": "Header",
+      "winrate": "Win rate",
+      "trend": "Trend",
+      "candidates": "Candidates",
+      "subboard": "Sub-board"
+    },
+    "noCandidate": "No candidate"
   }
 }

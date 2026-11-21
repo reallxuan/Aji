@@ -6,23 +6,17 @@ import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
 import { useWheelNavigation } from '../board/useWheelNavigation';
-import { useGameStore } from '../game/gameStore';
 import { useDeviceStore } from '../device/deviceStore';
+import { useGameStore } from '../game/gameStore';
 import type { Move } from '../transport/generated/Move';
-import { computeFrame } from './frame';
-import { useWindowSize } from './useWindowSize';
+import type { Rect } from './frameGeometry';
 
 /** An empty 19×19 board, until the first game snapshot arrives. */
 const EMPTY_19 = Array.from({ length: 19 * 19 }, () => null);
 const NO_DISCS: never[] = [];
 
-/**
- * The main screen: a square board area on the left, one panel running the full height on the
- * right. `boardOverlay` lies over the board (the drop target).
- */
-export function MainFrame({ panel, boardOverlay }: { panel: ReactNode; boardOverlay?: ReactNode }) {
-  const { width, height } = useWindowSize();
-  const { board, panel: panelBox } = computeFrame(width, height);
+/** The main board at `rect`, with its discs, hover line and wheel; `overlay` lies over it. */
+export function MainBoard({ rect, overlay }: { rect: Rect; overlay?: ReactNode }) {
   const snapshot = useGameStore((s) => s.snapshot);
   const boardArea = useRef<HTMLDivElement>(null);
   useWheelNavigation(boardArea);
@@ -49,31 +43,28 @@ export function MainFrame({ panel, boardOverlay }: { panel: ReactNode; boardOver
   }, []);
 
   return (
-    <div className="relative h-full w-full">
-      <div ref={boardArea} className="absolute" style={{ left: board.x, top: board.y }}>
-        <BoardCanvas
-          cssSize={board.size}
-          boardSize={snapshot?.size ?? 19}
-          stones={line?.stones ?? snapshot?.stones ?? EMPTY_19}
-          // The game's last-move dot is hidden while a line shows.
-          lastMove={line ? null : (snapshot?.lastMove ?? null)}
-          candidates={hidden ? NO_DISCS : shown}
-          discLines={discLines}
-          coordinates={coordinates}
-          lang={i18n.language}
-          catchingUp={fading}
-          onHoverCandidate={onHoverCandidate}
-          hoveredCandidate={hoveredCandidate}
-          variation={line}
-        />
-        {boardOverlay}
-      </div>
-      <aside
-        className="absolute inset-y-0 flex flex-col border-l border-hairline bg-panel"
-        style={{ left: panelBox.x, width: panelBox.width }}
-      >
-        {panel}
-      </aside>
+    <div
+      ref={boardArea}
+      data-board
+      className="absolute"
+      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+    >
+      <BoardCanvas
+        cssSize={rect.width}
+        boardSize={snapshot?.size ?? 19}
+        stones={line?.stones ?? snapshot?.stones ?? EMPTY_19}
+        // The game's last-move dot is hidden while a line shows.
+        lastMove={line ? null : (snapshot?.lastMove ?? null)}
+        candidates={hidden ? NO_DISCS : shown}
+        discLines={discLines}
+        coordinates={coordinates}
+        lang={i18n.language}
+        catchingUp={fading}
+        onHoverCandidate={onHoverCandidate}
+        hoveredCandidate={hoveredCandidate}
+        variation={line}
+      />
+      {overlay}
     </div>
   );
 }

@@ -13,10 +13,6 @@ export const DOUBTFUL_LOSS = 4;
 export const TREND_MIN_VISITS = 50;
 /** The score axis is the first of these ranges, in points either way, that holds every lead. */
 export const SCORE_RANGES = [10, 20, 40, 80, 160] as const;
-/** The trend graph's height in pixels, and in a window shorter than `COMPACT_WINDOW_HEIGHT`. */
-export const GRAPH_HEIGHT = 150;
-export const GRAPH_HEIGHT_COMPACT = 100;
-export const COMPACT_WINDOW_HEIGHT = 720;
 
 /** A variation shows at most this many moves. */
 export const MAX_VARIATION = 20;

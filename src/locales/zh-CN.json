@@ -437,5 +437,15 @@
     "saveAs": "另存为…",
     "today": "今天",
     "yesterday": "昨天"
+  },
+  "layout": {
+    "panels": {
+      "header": "标题栏",
+      "winrate": "胜率条",
+      "trend": "走势",
+      "candidates": "候选",
+      "subboard": "副盘"
+    },
+    "noCandidate": "无候选"
   }
 }

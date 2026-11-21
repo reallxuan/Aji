@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_SIZES } from './constants';
-import { type Frame, layoutFrame } from './layoutFrame';
+import { type Frame, layoutFrame } from './frameGeometry';
 import type { Layout, PanelRef } from './model';
 import { PRESET_IDS, presetLayout } from './presets';
 

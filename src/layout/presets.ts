@@ -60,9 +60,11 @@ export function presetLayout(id: PresetId): Layout {
       return layout(
         'classic',
         split('row', [
-          split('column', [p('winrate'), p('trend'), p('candidates')], [1, 1, 2]),
+          // The bar and the graph on the left, which leaves room for more later; the candidates
+          // above the sub-board on the right (owner, 2026-11-22).
+          split('column', [p('winrate'), p('trend')]),
           BOARD,
-          split('column', [p('header'), p('subboard', { rank: 1 })]),
+          split('column', [p('header'), p('candidates'), p('subboard', { rank: 1 })]),
         ]),
       );
     case 'minimal':

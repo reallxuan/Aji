@@ -20,10 +20,11 @@ const COLUMNS =
  * The candidate table (design 5.7): the same candidates as the discs, in the side to move's view.
  * Hovering a row previews its line, exactly as hovering its disc.
  */
-export function CandidateTable() {
+export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const { current, shown, fading } = useShownCandidates();
+  const { current, shown: all, fading } = useShownCandidates();
+  const shown = maxRows === undefined ? all : all.slice(0, maxRows);
   const rejected = useEngineStore((s) => s.rejected);
   const snapshot = useGameStore((s) => s.snapshot);
   const hidden = useViewStore((s) => s.hidden || s.held);
