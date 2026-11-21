@@ -16,12 +16,16 @@ import { usePlatformSync } from './platform/usePlatformSync';
 import { AboutPanel } from './settings/AboutPanel';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { useSettingsSync } from './settings/useSettingsSync';
+import { useDeviceSync } from './device/useDeviceSync';
+import { useDeviceStore } from './device/deviceStore';
 import { SetupPanel } from './setup/SetupPanel';
 import { useSetupProgress } from './setup/useSetupProgress';
 import { useWizardStore } from './setup/wizardStore';
 
 export default function App() {
   useSettingsSync();
+  useDeviceSync();
+  const deviceLoaded = useDeviceStore((s) => s.loaded);
   useEngineSync();
   useSetupProgress();
   const { ready } = useGameSync();
@@ -39,7 +43,7 @@ export default function App() {
       boardOverlay={<DropOverlay />}
       panel={
         // The first frame waits for both the engine status and the game, so neither flashes.
-        !ready ? null : mode === 'wizard' ? (
+        !ready || !deviceLoaded ? null : mode === 'wizard' ? (
           <SetupPanel />
         ) : mode === 'settings' ? (
           view === 'about' ? (

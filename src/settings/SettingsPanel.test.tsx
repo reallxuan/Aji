@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { useDeviceStore } from '../device/deviceStore';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePanelStore } from '../app/panelStore';
 import { setupTransport, storedSettings } from '../setup/testing';
@@ -134,7 +135,8 @@ describe('SettingsPanel', () => {
       'true',
     );
     await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
-    expect(sets(transport.requests).at(-1)).toMatchObject({ showCoordinates: false });
+    expect(useDeviceStore.getState().settings.showCoordinates).toBe(false);
+    expect(sets(transport.requests)).toEqual([]);
   });
 
   it("swaps the disc lines when one takes the other line's field, and previews them", async () => {
@@ -146,11 +148,12 @@ describe('SettingsPanel', () => {
 
     choose(screen.getByRole('combobox', { name: '选点第一行' }), '目差');
     await act(async () => {});
-    expect(sets(transport.requests).at(-1)?.discLines).toEqual(['scoreLead', 'winrate']);
+    expect(useDeviceStore.getState().settings.discLines).toEqual(['scoreLead', 'winrate']);
 
     choose(screen.getByRole('combobox', { name: '选点第二行' }), '计算量');
     await act(async () => {});
-    expect(sets(transport.requests).at(-1)?.discLines).toEqual(['scoreLead', 'visits']);
+    expect(useDeviceStore.getState().settings.discLines).toEqual(['scoreLead', 'visits']);
+    expect(sets(transport.requests)).toEqual([]);
     expect(screen.getByRole('img', { name: '选点预览' })).toHaveTextContent('1.2k');
   });
 

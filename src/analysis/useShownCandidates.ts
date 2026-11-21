@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
-import { useSettingsStore } from '../settings/settingsStore';
+import { useDeviceStore } from '../device/deviceStore';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import { catchingUp, shownCandidates, type ShownCandidate } from './candidates';
 
@@ -25,7 +25,7 @@ export function useShownCandidates(): Shown {
   const current = analysis && key !== null && analysis.position === key ? analysis : null;
   const toPlay = snapshot?.nextColor ?? 'black';
   const nextMove = snapshot?.nextMove ?? null;
-  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const perspective = useDeviceStore((s) => s.settings.perspective);
   const shown = useMemo(
     () => (current ? shownCandidates(current, toPlay, nextMove, perspective) : NONE),
     [current, toPlay, nextMove, perspective],

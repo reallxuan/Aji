@@ -25,6 +25,7 @@ import { useBenchmarkStore } from '../setup/benchmarkStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { getInstalled, removeUnused, restartEngine, stopEngine } from '../transport/api';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
+import { useDeviceStore } from '../device/deviceStore';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { UiSettings } from '../transport/generated/UiSettings';
 import { toTransportError, type Transport } from '../transport/transport';
@@ -63,6 +64,8 @@ export function SettingsPanel() {
   const stored = useSettingsStore((s) => s.settings);
   const settings = stored ?? DEFAULTS;
   const loaded = stored !== null;
+  const device = useDeviceStore((s) => s.settings);
+  const updateDevice = useDeviceStore((s) => s.update);
 
   const save = (patch: Partial<UiSettings>) => {
     const current = useSettingsStore.getState().settings;
@@ -84,7 +87,7 @@ export function SettingsPanel() {
     ['dark', t('settings.dark')],
     ['light', t('settings.light')],
   ];
-  const coordinates = settings.showCoordinates ? 'show' : 'hide';
+  const coordinates = device.showCoordinates ? 'show' : 'hide';
   const coordinateOptions: Array<['show' | 'hide', string]> = [
     ['show', t('settings.coordinatesShow')],
     ['hide', t('settings.coordinatesHide')],
@@ -92,11 +95,11 @@ export function SettingsPanel() {
 
   /** Taking the other line's field swaps the two, so the lines stay different. */
   const setDiscLine = (index: 0 | 1, field: DiscField) => {
-    const lines = [...settings.discLines] as [DiscField, DiscField];
+    const lines = [...device.discLines] as [DiscField, DiscField];
     const other = index === 0 ? 1 : 0;
     if (lines[other] === field) lines[other] = lines[index];
     lines[index] = field;
-    save({ discLines: lines });
+    updateDevice({ discLines: lines });
   };
 
   return (
@@ -126,8 +129,8 @@ export function SettingsPanel() {
             <Choice
               label={t('settings.coordinates')}
               value={coordinates}
-              disabled={!loaded}
-              onChange={(choice) => save({ showCoordinates: choice === 'show' })}
+              disabled={false}
+              onChange={(choice) => updateDevice({ showCoordinates: choice === 'show' })}
               options={coordinateOptions}
             />
           </Row>
@@ -142,8 +145,7 @@ export function SettingsPanel() {
                   label={t(index === 0 ? 'settings.discLine1' : 'settings.discLine2')}
                 >
                   <Select
-                    value={settings.discLines[index]}
-                    disabled={!loaded}
+                    value={device.discLines[index]}
                     onValueChange={(field) => setDiscLine(index, field as DiscField)}
                   >
                     <SelectTrigger
@@ -164,7 +166,7 @@ export function SettingsPanel() {
                 </Row>
               ))}
             </div>
-            <DiscPreview lines={settings.discLines} />
+            <DiscPreview lines={device.discLines} />
           </div>
           <RulesControl
             layout={RULES_LAYOUT}

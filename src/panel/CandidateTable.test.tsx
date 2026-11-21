@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useDeviceStore } from '../device/deviceStore';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { createEngineStore, EngineStoreProvider, type EngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { useSettingsStore } from '../settings/settingsStore';
-import { storedSettings } from '../setup/testing';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
@@ -241,7 +241,7 @@ it('shows how far the wheel has stepped a hovered line beside its point', () => 
 });
 
 it('shows White’s numbers in White’s perspective, and the difference of what it shows', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+  useDeviceStore.getState().update({ perspective: 'white' });
   mount();
   // Black to move; Black's best is 54.2% and +0.8 for Black.
   expect(within(rows()[0]).getByText('45.8%')).toBeInTheDocument();
@@ -252,7 +252,7 @@ it('shows White’s numbers in White’s perspective, and the difference of what
 });
 
 it('shows Black’s numbers in Black’s perspective when White is to move', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'black' });
+  useDeviceStore.getState().update({ perspective: 'black' });
   mount({ toPlay: 'white' });
   // Black's numbers, not White's 45.8% and 47.6%.
   expect(within(rows()[0]).getByText('54.2%')).toBeInTheDocument();

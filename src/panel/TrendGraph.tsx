@@ -6,9 +6,8 @@ import { plotRuns, plotted, scoreRange } from '../analysis/trend';
 import { useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useGameStore } from '../game/gameStore';
-import { useSettingsStore } from '../settings/settingsStore';
+import { useDeviceStore } from '../device/deviceStore';
 import type { Perspective } from '../transport/generated/Perspective';
-import { useTransport } from '../transport/TransportProvider';
 import { useFrameNavigate } from '../game/useFrameNavigate';
 import { usePanelWidth } from '../layout/usePanelWidth';
 import type { TrendNode } from '../transport/generated/TrendNode';
@@ -50,7 +49,7 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
   const panelWidth = usePanelWidth();
   const W = width ?? panelWidth;
   const stored = useTrendStore((s) => s.nodes);
-  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const perspective = useDeviceStore((s) => s.settings.perspective);
   const nodes = useMemo(() => viewed(stored, perspective), [stored, perspective]);
   const lineIndex = useGameStore((s) => s.snapshot?.lineIndex ?? 0);
   const boardSize = useGameStore((s) => s.snapshot?.size ?? 19);
@@ -294,16 +293,11 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
  */
 function PerspectiveToggle() {
   const { t } = useTranslation();
-  const transport = useTransport();
-  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const perspective = useDeviceStore((s) => s.settings.perspective);
   const choose = (next: Perspective) => {
-    const current = useSettingsStore.getState().settings;
-    if (!current || current.perspective === next) return;
-    // A failure puts the previous choice back.
-    useSettingsStore
-      .getState()
-      .save(transport, { ...current, perspective: next })
-      .catch(() => undefined);
+    if (useDeviceStore.getState().settings.perspective !== next) {
+      useDeviceStore.getState().update({ perspective: next });
+    }
   };
   const sides: Array<[Perspective, string, string]> = [
     ['black', t('analysis.graph.perspective.black'), 'bg-bar-black'],

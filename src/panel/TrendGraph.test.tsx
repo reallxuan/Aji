@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
+import { useDeviceStore } from '../device/deviceStore';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resetTrendStore, useTrendStore } from '../analysis/trendStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
@@ -136,7 +137,7 @@ it('draws no mistake bars, however large a loss', () => {
 });
 
 it('draws and names White’s numbers in White’s perspective', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+  useDeviceStore.getState().update({ perspective: 'white' });
   const nodes = line();
   nodes[42] = { ...nodes[42], stats: { winrate: 0.8, scoreLead: 6, visits: 200 } };
   useTrendStore.getState().setNodes(nodes);
@@ -163,8 +164,6 @@ it('switches the perspective from the legend, and remembers it', async () => {
   expect(within(toggle).getByRole('radio', { name: '黑' })).toHaveAttribute('aria-checked', 'true');
   await act(async () => fireEvent.click(within(toggle).getByRole('radio', { name: '白' })));
   expect(within(toggle).getByRole('radio', { name: '白' })).toHaveAttribute('aria-checked', 'true');
-  const saved = requests.filter((r) => r.type === 'settingsSet');
-  expect(saved).toEqual([
-    { type: 'settingsSet', settings: { ...storedSettings, perspective: 'white' } },
-  ]);
+  expect(useDeviceStore.getState().settings.perspective).toBe('white');
+  expect(requests.filter((r) => r.type === 'settingsSet')).toEqual([]);
 });
