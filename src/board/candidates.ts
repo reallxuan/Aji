@@ -67,7 +67,8 @@ export function drawCandidates(
       ctx.lineWidth = px(PLAYED_RING.width);
       ctx.strokeStyle = PLAYED_RING.color;
       ctx.beginPath();
-      ctx.arc(cx, cy, r + px(PLAYED_RING.width), 0, Math.PI * 2);
+      // Centred half its width outside the disc, so it starts where the disc ends (design 13.3).
+      ctx.arc(cx, cy, r + px(PLAYED_RING.width) / 2, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -104,7 +105,7 @@ const NUMBER_ON_WHITE = '#1d1b17';
 
 /**
  * Clears the layer and writes each line stone's move number in its centre (design 5.8). The
- * newest stone of a partial line gets a bold number and a thin ring.
+ * newest stone of a partial line gets a bold number; no stone gets a ring (design 13.4).
  */
 export function drawVariationNumbers(
   ctx: CanvasRenderingContext2D,
@@ -133,12 +134,5 @@ export function drawVariationNumbers(
     ctx.font = `${isNewest ? 700 : 600} ${0.42 * spacing}px Inter`;
     // Inter's figures sit a little high on the middle baseline.
     ctx.fillText(String(n), cx, cy + 0.03 * spacing);
-    if (isNewest) {
-      ctx.strokeStyle = ink;
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 0.37 * spacing, 0, Math.PI * 2);
-      ctx.stroke();
-    }
   }
 }

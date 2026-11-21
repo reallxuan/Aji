@@ -2,10 +2,6 @@ import { type CanvasFactory, domCanvas, type OffscreenCanvasLike } from './canva
 
 /** The honey base tone of the board (interface design 5.1). */
 export const WOOD_BASE = { r: 0xdd, g: 0xb0, b: 0x67 };
-/** The darker lower edge that gives the board its thickness, in CSS pixels. */
-export const LOWER_EDGE = 6;
-/** The lit band along the top edge, in CSS pixels. */
-const TOP_EDGE = 3;
 /** Fixed, so every launch draws the same grain. */
 const SEED = 0x41_6a_69;
 
@@ -86,15 +82,11 @@ export function woodTexture(
   const drift = valueNoise(random, 64);
   const image = ctx.createImageData(size, size);
   const data = image.data;
-  const top = TOP_EDGE * dpr;
-  const lower = size - LOWER_EDGE * dpr;
+  // A flat surface: no lit or dark strip along the edges (M7 design 13.5).
   for (let y = 0; y < size; y++) {
     const v = y / size;
-    let edge = 0;
-    if (y < top) edge = 0.06 * (1 - y / top);
-    else if (y >= lower) edge = -0.16 - 0.06 * ((y - lower) / (size - lower));
     for (let x = 0; x < size; x++) {
-      const shade = 1 + profile[x] + drift(x * 0.02 + v * 3) * 0.008 + edge;
+      const shade = 1 + profile[x] + drift(x * 0.02 + v * 3) * 0.008;
       const i = (y * size + x) * 4;
       data[i] = WOOD_BASE.r * shade;
       data[i + 1] = WOOD_BASE.g * shade;
