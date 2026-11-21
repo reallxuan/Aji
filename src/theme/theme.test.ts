@@ -22,6 +22,11 @@ it('defines the dark tokens from the interface design', () => {
     score: '#E3A548',
     'engine-ok': '#1E8E5A',
     'engine-error': '#E5484D',
+    // The win-rate bar and small cards (M7 mockups).
+    'bar-black': '#050506',
+    'bar-white': '#F4F2EC',
+    'bar-edge': '#3A3A40',
+    pop: '#2A2A2E',
   });
 });
 it('defines the light tokens from the interface design', () => {
@@ -36,6 +41,10 @@ it('defines the light tokens from the interface design', () => {
     score: '#B26A00',
     'engine-ok': '#1E8E5A',
     'engine-error': '#C62828',
+    'bar-black': '#1D1D1B',
+    'bar-white': '#FFFFFF',
+    'bar-edge': '#C9C9C4',
+    pop: '#FFFFFF',
   });
 });
 it('defines the dark tokens as the default before a theme is set', () => {

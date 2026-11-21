@@ -1,0 +1,120 @@
+import { act, fireEvent, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { resetTrendStore, useTrendStore } from '../analysis/trendStore';
+import { resetGameStore, useGameStore } from '../game/gameStore';
+import { renderWithGame } from '../game/renderWithGame';
+import { makeSnapshot } from '../game/testing';
+import type { TrendNode } from '../transport/generated/TrendNode';
+import { TrendGraph } from './TrendGraph';
+
+beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame'] }));
+afterEach(() => {
+  vi.useRealTimers();
+  resetGameStore();
+  resetTrendStore();
+});
+
+const WIDTH = 540;
+const PADL = 52;
+const PADR = 44;
+
+/** 101 nodes; plotted: 0–40, 42 alone, 60–100. Move 72 is White's at R14. */
+function line(): TrendNode[] {
+  return Array.from({ length: 101 }, (_, i) => {
+    const plotted = i <= 40 || i === 42 || i >= 60;
+    return {
+      moveNumber: i,
+      mover: i === 0 ? null : i % 2 ? 'black' : 'white',
+      move:
+        i === 0
+          ? null
+          : i === 72
+            ? { type: 'play', x: 16, y: 5 }
+            : { type: 'play', x: i % 19, y: 9 },
+      stats: plotted
+        ? { winrate: i === 72 ? 0.495 : 0.5, scoreLead: i === 72 ? -0.1 : 0, visits: 200 }
+        : null,
+    };
+  });
+}
+
+function mount() {
+  useTrendStore.getState().setNodes(line());
+  const result = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+  });
+  return result;
+}
+
+const xOf = (i: number) => PADL + (i / 100) * (WIDTH - PADL - PADR);
+const svg = () => document.querySelector('svg')!;
+
+it('draws one path per run for each line, and a dot for a lone node', () => {
+  mount();
+  expect(svg().querySelectorAll('path[data-line="winrate"]')).toHaveLength(2);
+  expect(svg().querySelectorAll('path[data-line="scoreLead"]')).toHaveLength(2);
+  expect(svg().querySelectorAll('circle[data-line="winrate"]')).toHaveLength(1);
+  expect(svg().querySelectorAll('circle[data-line="scoreLead"]')).toHaveLength(1);
+});
+
+it('draws the dashed current line at the line index', () => {
+  mount();
+  const current = svg().querySelector('[data-current]')!;
+  expect(Number(current.getAttribute('x1'))).toBeCloseTo(xOf(30));
+  expect(current.getAttribute('stroke-dasharray')).toBe('3 3');
+  act(() =>
+    useGameStore.getState().apply(makeSnapshot({ revision: 2, lineIndex: 70, moveNumber: 70 })),
+  );
+  expect(Number(svg().querySelector('[data-current]')!.getAttribute('x1'))).toBeCloseTo(xOf(70));
+});
+
+it('shows a move’s numbers on hover, or says it has none', () => {
+  mount();
+  fireEvent.mouseMove(svg(), { clientX: xOf(72), clientY: 40 });
+  expect(screen.getByText('第 72 手 白 R14')).toBeInTheDocument();
+  expect(screen.getByText(/黑胜率 49\.5%/)).toBeInTheDocument();
+  expect(screen.getByText('白领先 0.1 目')).toBeInTheDocument();
+  fireEvent.mouseMove(svg(), { clientX: xOf(50), clientY: 40 });
+  expect(screen.getByText('尚未分析')).toBeInTheDocument();
+  fireEvent.mouseLeave(svg());
+  expect(screen.queryByText('尚未分析')).toBeNull();
+});
+
+const navigations = (requests: { type: string }[]) =>
+  (requests.filter((r) => r.type === 'gameNavigate') as unknown as Array<{ to: unknown }>).map(
+    (r) => r.to,
+  );
+
+it('goes to a move on click', async () => {
+  const { requests } = mount();
+  fireEvent.mouseDown(svg(), { clientX: xOf(72), clientY: 40, buttons: 1 });
+  fireEvent.mouseUp(svg(), { clientX: xOf(72), clientY: 40 });
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  expect(navigations(requests)).toEqual([{ move: 72 }]);
+});
+
+it('scrubs while dragging, at most one navigation a frame', async () => {
+  const { requests } = mount();
+  fireEvent.mouseDown(svg(), { clientX: xOf(10), clientY: 40, buttons: 1 });
+  for (const i of [11, 12, 13, 14])
+    fireEvent.mouseMove(svg(), { clientX: xOf(i), clientY: 40, buttons: 1 });
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  expect(navigations(requests)).toEqual([{ move: 14 }]);
+  fireEvent.mouseUp(svg());
+  fireEvent.mouseMove(svg(), { clientX: xOf(20), clientY: 40, buttons: 0 });
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  expect(navigations(requests)).toEqual([{ move: 14 }]);
+});
+
+it('has a legend of three items and no verdict', () => {
+  mount();
+  const legend = screen.getByTestId('trend-legend');
+  expect(legend.children).toHaveLength(3);
+  expect(legend).toHaveTextContent('黑胜率黑领先目数失误');
+});

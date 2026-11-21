@@ -95,7 +95,26 @@
     },
     "best": "最佳",
     "played": "实战 {{diff}}",
-    "playedBest": "实战 · 最佳"
+    "playedBest": "实战 · 最佳",
+    "bar": {
+      "lead": "领先 {{points}} 目"
+    },
+    "graph": {
+      "legend": {
+        "winrate": "黑胜率",
+        "scoreLead": "黑领先目数",
+        "mistake": "失误"
+      },
+      "move": "第 {{n}} 手 {{color}} {{point}}",
+      "moveOnly": "第 {{n}} 手",
+      "black": "黑",
+      "white": "白",
+      "winrate": "黑胜率 {{winrate}}",
+      "blackLeads": "黑领先 {{points}} 目",
+      "whiteLeads": "白领先 {{points}} 目",
+      "notAnalysed": "尚未分析",
+      "label": "胜率走势"
+    }
   },
   "setup": {
     "failure": {

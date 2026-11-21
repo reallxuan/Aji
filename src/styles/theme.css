@@ -16,6 +16,11 @@
   --score: #e3a548;
   --engine-ok: #1e8e5a;
   --engine-error: #e5484d;
+  /* The win-rate bar (M7 design 5.4) and small floating cards. */
+  --bar-black: #050506;
+  --bar-white: #f4f2ec;
+  --bar-edge: #3a3a40;
+  --pop: #2a2a2e;
 }
 
 :root[data-theme='light'] {
@@ -29,6 +34,16 @@
   --score: #b26a00;
   --engine-ok: #1e8e5a;
   --engine-error: #c62828;
+  --bar-black: #1d1d1b;
+  --bar-white: #ffffff;
+  --bar-edge: #c9c9c4;
+  --pop: #ffffff;
+}
+
+/* The bar's texts keep their colour in both themes: light on the black segment, dark on white. */
+:root {
+  --bar-black-text: #f4f2ec;
+  --bar-white-text: #1d1d1b;
 }
 
 @theme inline {
@@ -43,6 +58,12 @@
   --color-engine-ok: var(--engine-ok);
   --color-engine-error: var(--engine-error);
   --color-board-base: var(--board-base);
+  --color-bar-black: var(--bar-black);
+  --color-bar-white: var(--bar-white);
+  --color-bar-edge: var(--bar-edge);
+  --color-bar-black-text: var(--bar-black-text);
+  --color-bar-white-text: var(--bar-white-text);
+  --color-pop: var(--pop);
 }
 
 /*

@@ -95,7 +95,26 @@
     },
     "best": "Best",
     "played": "Played {{diff}}",
-    "playedBest": "Played · best"
+    "playedBest": "Played · best",
+    "bar": {
+      "lead": "leads by {{points}}"
+    },
+    "graph": {
+      "legend": {
+        "winrate": "Black win rate",
+        "scoreLead": "Black lead",
+        "mistake": "Mistake"
+      },
+      "move": "Move {{n}} {{color}} {{point}}",
+      "moveOnly": "Move {{n}}",
+      "black": "B",
+      "white": "W",
+      "winrate": "Black {{winrate}}",
+      "blackLeads": "Black leads by {{points}}",
+      "whiteLeads": "White leads by {{points}}",
+      "notAnalysed": "Not analysed yet",
+      "label": "Win-rate trend"
+    }
   },
   "setup": {
     "failure": {
