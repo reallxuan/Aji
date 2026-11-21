@@ -142,6 +142,10 @@
       "lead": "Lead {{lead}}",
       "notAnalysed": "Not analysed yet",
       "label": "Win-rate trend"
+    },
+    "eye": {
+      "label": "Hide candidates",
+      "hint": "Tap to toggle, hold to hide for a moment"
     }
   },
   "setup": {

@@ -98,7 +98,7 @@ describe('the narrow arrangement', () => {
     const pv = [play(3), play(4), play(5)];
     h.analyse([candidate(0, 0.55, pv)]);
     await act(async () => {});
-    act(() => useViewStore.getState().setHover({ move: pv[0], source: 'board' }));
+    act(() => useViewStore.getState().setHover({ move: pv[0], source: 'board', pinned: true }));
     await act(async () => {});
     expect(useViewStore.getState().variation).not.toBeNull();
     const line = () => (document.querySelector('[data-board]') as HTMLElement).dataset.line;

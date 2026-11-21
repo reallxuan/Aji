@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useMemo, useRef } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { moveKey, sameMove } from '../analysis/candidates';
 import { formatLead, formatPercent } from '../analysis/format';
@@ -20,7 +20,10 @@ import { RankChip } from './RankChip';
 const LABEL = 34;
 const PAD = 8;
 
-/** The wheel over a sub-board steps its line, one move per notch or 50 px, never the game. */
+/**
+ * The wheel over a sub-board steps its line, one move per notch or 50 px, never the game.
+ * Returns the step, for a swipe; steps in one event build on each other.
+ */
 function useLineWheel(
   ref: RefObject<HTMLElement | null>,
   step: number | null,
@@ -31,6 +34,13 @@ function useLineWheel(
   useEffect(() => {
     latest.current = { step, length, setStep };
   });
+  const stepLine = useCallback((forward: boolean) => {
+    const { step: now, length: end, setStep: set } = latest.current;
+    if (now === null) return;
+    const next = Math.min(end, Math.max(1, now + (forward ? 1 : -1)));
+    latest.current.step = next;
+    set(next);
+  }, []);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -49,18 +59,18 @@ function useLineWheel(
       if (Math.abs(total) < PIXELS_PER_MOVE) return;
       const forward = total > 0;
       total = 0;
-      const { step: now, length: end, setStep: set } = latest.current;
-      if (now !== null) set(Math.min(end, Math.max(1, now + (forward ? 1 : -1))));
+      stepLine(forward);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
-  }, [ref]);
+  }, [ref, stepLine]);
+  return stepLine;
 }
 
 /**
  * A sub-board (P2 M1 design 5.6): the rank's candidate played out from the current position, as
- * numbered stones and no discs, under a label row (chip, point, win rate, lead). The wheel steps
- * the line. Clicking the label shows the line on the main board, as a hover does. In Thinking,
+ * numbered stones and no discs, under a label row (chip, point, win rate, lead). The wheel or a
+ * sideways swipe steps the line. Clicking the label shows the line on the main board, as a hover does. In Thinking,
  * the first sub-board shows the hovered line instead, and the main board keeps its discs.
  */
 export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
@@ -90,7 +100,8 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
     : ((borrowed && hover ? shown.find((c) => sameMove(c.move, hover.move)) : null) ??
       shown.find((c) => c.rank === rank) ??
       null);
-  useLineWheel(boardArea, step, line ? shownLength(line) : 0, setStep);
+  // A swipe steps the line as the wheel does (design 5.6), never the game.
+  const stepLine = useLineWheel(boardArea, step, line ? shownLength(line) : 0, setStep);
 
   const size = snapshot?.size ?? 19;
   const board = useMemo(
@@ -135,6 +146,7 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
       >
         {side > 0 && (
           <BoardCanvas
+            onSwipeStep={stepLine}
             cssSize={side}
             boardSize={size}
             stones={board?.stones ?? snapshot?.stones ?? []}

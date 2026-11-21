@@ -9,6 +9,11 @@ export interface Hover {
    */
   move: Move;
   source: 'board' | 'table';
+  /**
+   * Set by a tap (P2 M1 design 5.6): the line stays until a tap elsewhere or a navigation, so the
+   * pointer leaving the board does not end it.
+   */
+  pinned?: boolean;
 }
 
 export interface ViewState {

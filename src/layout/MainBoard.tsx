@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShownCandidates } from '../analysis/useShownCandidates';
+import { sameMove } from '../analysis/candidates';
 import { useVariation } from '../analysis/useVariation';
 import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
 import { useBoardStyle } from '../board/useBoardStyle';
-import { useWheelNavigation } from '../board/useWheelNavigation';
+import { stepLineOrGame, useWheelNavigation } from '../board/useWheelNavigation';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
+import { useFrameNavigate } from '../game/useFrameNavigate';
 import type { Move } from '../transport/generated/Move';
 import type { Rect } from './frameGeometry';
 import type { Layout } from './model';
@@ -51,8 +53,20 @@ export function MainBoard({
   const onHoverCandidate = useCallback((move: Move | null) => {
     const { hover, setHover } = useViewStore.getState();
     if (move !== null) setHover({ move, source: 'board' });
-    else if (hover?.source === 'board') setHover(null);
+    else if (hover?.source === 'board' && !hover.pinned) setHover(null);
   }, []);
+  // Touch (design 5.6): a tap pins a candidate's line, a tap elsewhere clears it. Tapping the
+  // pinned candidate again is M3's (it will play it), and does nothing yet.
+  const onTapCandidate = useCallback((move: Move | null) => {
+    const { hover, setHover } = useViewStore.getState();
+    if (move === null) {
+      if (hover) setHover(null);
+    } else if (!(hover?.pinned && sameMove(hover.move, move))) {
+      setHover({ move, source: 'board', pinned: true });
+    }
+  }, []);
+  const go = useFrameNavigate();
+  const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
 
   return (
     <div
@@ -76,6 +90,8 @@ export function MainBoard({
         lang={i18n.language}
         catchingUp={fading}
         onHoverCandidate={onHoverCandidate}
+        onTapCandidate={onTapCandidate}
+        onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
         variation={line}
       />

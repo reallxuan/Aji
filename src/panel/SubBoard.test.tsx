@@ -55,6 +55,26 @@ it('the wheel over the sub-board steps its line and does not navigate the game',
   expect(requests.filter((r) => r.type === 'gameNavigate')).toEqual([]);
 });
 
+it('a sideways swipe over the sub-board steps its line', async () => {
+  const { analyse, requests } = mount(1);
+  analyse([candidate(0, 0.55, line(4))]);
+  await settle();
+  const surface = sub().querySelector('[data-subboard-board] > div') as HTMLElement;
+  const touch = { pointerId: 1, pointerType: 'touch', button: 0, clientY: 100 };
+  fireEvent.pointerDown(surface, { ...touch, clientX: 100 });
+  for (const x of [110, 120, 130, 140, 150, 160, 170, 180])
+    fireEvent.pointerMove(surface, { ...touch, clientX: x });
+  fireEvent.pointerUp(surface, { ...touch, clientX: 180 });
+  // A finger moving right steps back, one move per 40 px.
+  expect(sub().dataset.step).toBe('2');
+  // A fast finger: two steps in one move still make two.
+  fireEvent.pointerDown(surface, { ...touch, clientX: 200 });
+  fireEvent.pointerMove(surface, { ...touch, clientX: 115 });
+  fireEvent.pointerUp(surface, { ...touch, clientX: 115 });
+  expect(sub().dataset.step).toBe('4');
+  expect(requests.filter((r) => r.type === 'gameNavigate')).toEqual([]);
+});
+
 it('with the candidates hidden, the label gives nothing away', async () => {
   const { analyse } = mount(1);
   analyse([candidate(0, 0.55, line(3))]);

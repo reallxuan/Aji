@@ -11,6 +11,7 @@ import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
+import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 
 export interface BoardCanvasProps {
@@ -43,6 +44,10 @@ export interface BoardCanvasProps {
   variation?: { numbers: ReadonlyArray<{ point: Point; n: number }>; newest: Point | null } | null;
   /** Coordinates in the margin (settings `showCoordinates`); hidden, the grid grows. */
   coordinates?: boolean;
+  /** A finger tapped a disc (its move) or anywhere else (`null`) (P2 M1 design 5.6). */
+  onTapCandidate?(move: Move | null): void;
+  /** A finger swiped one step across the board: forward when moving left. */
+  onSwipeStep?(forward: boolean): void;
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
@@ -71,6 +76,8 @@ export function BoardCanvas({
   coordinates = true,
   boardStyle = 'honey',
   stoneStyle = 'slate',
+  onTapCandidate,
+  onSwipeStep,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -144,7 +151,14 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
+  const gestures = useBoardGestures({
+    tap: (x, y) =>
+      onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
+    step: (forward) => onSwipeStep?.(forward),
+  });
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    // A browser follows a tap with mouse events; the hover is the mouse's alone.
+    if (gestures.afterTouch()) return;
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
@@ -156,9 +170,11 @@ export function BoardCanvas({
   return (
     <div
       className="relative"
-      style={{ width: cssSize, height: cssSize }}
+      // Sideways swipes are the board's; the page may still scroll up and down.
+      style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
       onMouseMove={onMouseMove}
-      onMouseLeave={() => hover(null)}
+      onMouseLeave={() => !gestures.afterTouch() && hover(null)}
+      {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
       <canvas

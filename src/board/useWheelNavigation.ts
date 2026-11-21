@@ -2,9 +2,27 @@ import { useEffect, type RefObject } from 'react';
 import { shownLength } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { useFrameNavigate } from '../game/useFrameNavigate';
+import type { NavTarget } from '../transport/generated/NavTarget';
 
 /** Pixels of trackpad scrolling per move. */
 export const PIXELS_PER_MOVE = 50;
+
+/**
+ * One step of the wheel or a swipe over the main board: through the shown line while a candidate
+ * is hovered or tapped (from one move to the whole line, never moving the game), else through
+ * the game.
+ */
+export function stepLineOrGame(forward: boolean, go: (to: NavTarget) => void): void {
+  const view = useViewStore.getState();
+  if (view.hover) {
+    if (view.variation && view.step !== null) {
+      const step = view.step + (forward ? 1 : -1);
+      view.setStep(Math.min(shownLength(view.variation), Math.max(1, step)));
+    }
+    return;
+  }
+  go(forward ? 'next' : 'previous');
+}
 
 /**
  * The wheel over the board steps through the game (design 5.7): down is next, up is previous.
@@ -35,15 +53,7 @@ export function useWheelNavigation(ref: RefObject<HTMLElement | null>): void {
       if (Math.abs(total) < PIXELS_PER_MOVE) return;
       const forward = total > 0;
       total = 0;
-      const view = useViewStore.getState();
-      if (view.hover) {
-        if (view.variation && view.step !== null) {
-          const step = view.step + (forward ? 1 : -1);
-          view.setStep(Math.min(shownLength(view.variation), Math.max(1, step)));
-        }
-        return;
-      }
-      go(forward ? 'next' : 'previous');
+      stepLineOrGame(forward, go);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);

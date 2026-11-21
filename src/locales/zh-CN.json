@@ -142,6 +142,10 @@
       "lead": "目差 {{lead}}",
       "notAnalysed": "尚未分析",
       "label": "胜率走势"
+    },
+    "eye": {
+      "label": "隐藏候选",
+      "hint": "点按切换，按住暂时隐藏"
     }
   },
   "setup": {

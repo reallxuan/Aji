@@ -10,6 +10,7 @@ import { moveLabel } from '../board/coordinates';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
 import { usePanelWidth } from '../layout/usePanelWidth';
+import { EyeButton } from './EyeButton';
 import { RankChip } from './RankChip';
 
 // Design 4.3: chip, point, win rate, lead, visits, against the best. The last column never
@@ -80,9 +81,12 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col px-6 pt-3 pb-2 text-sm">
-      <div className="mb-1.5 flex justify-between text-[12.5px] text-text-muted">
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-[12.5px] text-text-muted">
         <span>{t('analysis.table.title')}</span>
-        {total}
+        <span className="flex items-center gap-3">
+          {total}
+          <EyeButton />
+        </span>
       </div>
       {rejected ? (
         <p className="text-text-muted" title={rejected.message}>
