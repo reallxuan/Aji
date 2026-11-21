@@ -59,12 +59,14 @@ pub fn decode(bytes: &[u8]) -> Decoded {
     }
     let mut detector = EncodingDetector::new(Iso2022JpDetection::Deny);
     detector.feed(bytes, true);
-    let guess = detector.guess(None, Utf8Detection::Allow);
-    if guess.is_single_byte() && mostly_utf8(bytes) {
+    // Damaged UTF-8 is judged on the unhinted guess: the Fox hint would turn it into GBK.
+    let unhinted = detector.guess(None, Utf8Detection::Allow);
+    if unhinted.is_single_byte() && mostly_utf8(bytes) {
         // A UTF-8 file cut off mid-character, or with a stray byte, is not windows-1252: keep
         // what is valid and replace the rest.
         return with(UTF_8, bytes, EncodingSource::Utf8);
     }
+    let guess = detector.guess(tld_hint(bytes), Utf8Detection::Allow);
     if guess.is_single_byte() {
         // A declared charset beats a single-byte guess: a multi-byte one with a few bad bytes
         // is still closer than mojibake, and a single-byte one agrees with the guess's kind.
@@ -103,6 +105,25 @@ fn with(encoding: &'static Encoding, bytes: &[u8], source: EncodingSource) -> De
         source,
         replaced,
     }
+}
+
+/// A chardetng top-level-domain hint from the file itself: `cn` when an `AP` value names Fox
+/// (`foxwq`), whose exports are always GBK. Short GBK records (two names, no `CA`) are otherwise
+/// often read as EUC-KR. `RU` gives no hint: a `cn` hint for `RU[Chinese]` reads every Big5 record
+/// as GBK, and `jp` or `kr` read most GBK records with those rules wrongly (M8 design section 6).
+fn tld_hint(bytes: &[u8]) -> Option<&'static [u8]> {
+    let fox = bytes
+        .windows(3)
+        .enumerate()
+        .filter(|&(i, w)| w == b"AP[" && (i == 0 || !bytes[i - 1].is_ascii_uppercase()))
+        .any(|(i, _)| {
+            let value = &bytes[i + 3..];
+            let end = value.iter().position(|&b| b == b']').unwrap_or(value.len());
+            value[..end]
+                .windows(5)
+                .any(|w| w.eq_ignore_ascii_case(b"foxwq"))
+        });
+    fox.then_some(b"cn".as_slice())
 }
 
 /// The encoding named by the first `CA[...]` in the raw bytes, if `encoding_rs` knows the label.
@@ -208,6 +229,17 @@ mod tests {
     }
 
     #[test]
+    fn a_damaged_utf8_fox_record_stays_utf8() {
+        // The Fox hint must not turn damaged UTF-8 into GB18030 mojibake.
+        let text = format!("(;GM[1]FF[4]AP[foxwq]{}", &NAMES[1..]);
+        let bytes = text.as_bytes();
+        let cut = &bytes[..bytes.len() - 2];
+        let d = decode(cut);
+        assert_eq!((d.encoding, d.source), ("UTF-8", EncodingSource::Utf8));
+        assert!(d.text.contains("丁浩"), "{}", d.text);
+    }
+
+    #[test]
     fn utf8_with_a_stray_byte_stays_utf8() {
         let mut bytes = NAMES.as_bytes().to_vec();
         bytes.insert(20, 0xFF);
@@ -229,5 +261,77 @@ mod tests {
         let d = decode(b"(;CA[UTF-8]PB[a\xFFb])");
         assert!(d.replaced);
         assert!(d.text.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn short_fox_names_read_as_gbk() {
+        // Without a hint chardetng reads this pair as EUC-KR.
+        let bytes = gbk("(;GM[1]FF[4]SZ[19]PB[黑方]PW[柯洁]KM[375]RU[Chinese]AP[foxwq];B[pd])");
+        let d = decode(&bytes);
+        assert_eq!(d.encoding, "GBK");
+        assert!(d.text.contains("柯洁"));
+    }
+
+    #[test]
+    fn big5_with_chinese_rules_stays_big5() {
+        let s = "(;GM[1]FF[4]SZ[19]PB[周俊勳]PW[林海峰]RU[Chinese];B[pd])";
+        let (bytes, _, _) = encoding_rs::BIG5.encode(s);
+        assert_eq!(decode(&bytes).encoding, "Big5");
+    }
+
+    #[test]
+    fn fox_beats_japanese_rules() {
+        let bytes = gbk("(;GM[1]FF[4]SZ[19]PB[黑方]PW[柯洁]KM[0]HA[0]RU[Japanese]AP[foxwq];B[pd])");
+        assert_eq!(decode(&bytes).encoding, "GBK");
+    }
+
+    #[test]
+    fn korean_records_stay_euc_kr() {
+        for header in ["RU[Korean]", ""] {
+            let s = format!("(;GM[1]FF[4]SZ[19]PB[신진서]PW[박정환]{header};B[pd])");
+            let (bytes, _, _) = encoding_rs::EUC_KR.encode(&s);
+            assert_eq!(decode(&bytes).encoding, "EUC-KR", "header {header:?}");
+        }
+    }
+
+    #[test]
+    fn fox_name_pairs_read_as_gbk() {
+        // 20 names, 380 ordered pairs, each in a Fox header with no CA.
+        const NAMES: [&str; 20] = [
+            "柯洁",
+            "申真谞",
+            "朴廷桓",
+            "芈昱廷",
+            "辜梓豪",
+            "杨鼎新",
+            "丁浩",
+            "李轩豪",
+            "党毅飞",
+            "连笑",
+            "陈浩",
+            "陆敏全",
+            "邱峻",
+            "孔杰",
+            "古力",
+            "黑方",
+            "白方",
+            "棋友",
+            "於之莹",
+            "唐嘉雯",
+        ];
+        let mut misread = 0;
+        for a in NAMES {
+            for b in NAMES {
+                if a == b {
+                    continue;
+                }
+                let s =
+                    format!("(;GM[1]FF[4]SZ[19]PB[{a}]PW[{b}]KM[375]RU[Chinese]AP[foxwq];B[pd])");
+                if decode(&gbk(&s)).encoding != "GBK" {
+                    misread += 1;
+                }
+            }
+        }
+        assert_eq!(misread, 0, "{misread} of 380 misread");
     }
 }
