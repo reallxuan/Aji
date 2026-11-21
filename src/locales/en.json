@@ -480,7 +480,11 @@
       "panels": "Panels",
       "reset": "Reset to default"
     },
-    "subboardRank": "Sub-board {{rank}}"
+    "subboardRank": "Sub-board {{rank}}",
+    "narrow": {
+      "nav": "Game navigation",
+      "close": "Close"
+    }
   },
   "commands": {
     "nav": {

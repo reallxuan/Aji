@@ -1,3 +1,4 @@
+import { cn } from 'cn';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -96,7 +97,7 @@ const FORWARD: Array<[Step, LucideIcon]> = [
 ];
 
 /** First, previous, the move counter, next and last; the ends disable their buttons. */
-export function NavButtons() {
+export function NavButtons({ touch = false }: { touch?: boolean } = {}) {
   const { t } = useTranslation();
   const atStart = useGameStore((s) => s.snapshot?.atStart ?? true);
   const atEnd = useGameStore((s) => s.snapshot?.atEnd ?? true);
@@ -109,7 +110,10 @@ export function NavButtons() {
         icon={icon}
         disabled={disabled}
         // The ends step aside in a narrow panel; Home, End and the counter still reach them.
-        className={to === 'first' || to === 'last' ? WIDE_ONLY : ''}
+        className={cn(
+          to === 'first' || to === 'last' ? WIDE_ONLY : '',
+          touch && 'min-h-11 min-w-11',
+        )}
       />
     ));
   return (

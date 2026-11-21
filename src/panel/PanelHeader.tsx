@@ -1,8 +1,10 @@
 import { SettingsIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePanelStore } from '../app/panelStore';
+import { cn } from 'cn';
 import { EngineIndicator } from './EngineIndicator';
 import { GameMenu } from './GameMenu';
+import { MoveCounter } from './MoveCounter';
 import { NavButtons } from './NavButtons';
 import { RulesChip } from './RulesChip';
 
@@ -14,20 +16,39 @@ const openSettings = () => usePanelStore.getState().show('settings');
  * panel (under 500 px) the chip shows only the komi and the first and last buttons step aside,
  * so the title keeps room; Home, End and the counter still reach both ends.
  */
-export function PanelHeader() {
+export function PanelHeader({
+  compact = false,
+  touch = false,
+}: {
+  /** The phone header (P2 M1 design 5.5): title, move counter, engine dot and gear. */
+  compact?: boolean;
+  /** Touch targets of at least 44 px. */
+  touch?: boolean;
+} = {}) {
   const { t } = useTranslation();
   return (
-    <header className="@container h-14 flex-none border-b border-hairline">
+    <header
+      className={cn('@container flex-none border-b border-hairline', compact ? 'h-[52px]' : 'h-14')}
+    >
       <div className="flex h-full items-center gap-2.5 pr-[18px] pl-6 @max-[500px]:gap-1.5">
         <div className="flex min-w-0 flex-1 items-center">
           <GameMenu />
         </div>
-        <RulesChip />
-        <NavButtons />
-        <EngineIndicator />
+        {compact ? (
+          <MoveCounter />
+        ) : (
+          <>
+            <RulesChip />
+            <NavButtons touch={touch} />
+          </>
+        )}
+        <EngineIndicator touch={touch} />
         <button
           type="button"
-          className="flex size-7 flex-none items-center justify-center rounded-sm text-text-muted hover:text-text"
+          className={cn(
+            'flex flex-none items-center justify-center rounded-sm text-text-muted hover:text-text',
+            touch ? 'min-h-11 min-w-11' : 'size-7',
+          )}
           aria-label={t('panel.settings')}
           onClick={openSettings}
         >

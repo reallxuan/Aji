@@ -480,7 +480,11 @@
       "panels": "面板",
       "reset": "恢复默认"
     },
-    "subboardRank": "副盘 {{rank}}"
+    "subboardRank": "副盘 {{rank}}",
+    "narrow": {
+      "nav": "棋谱导航",
+      "close": "关闭"
+    }
   },
   "commands": {
     "nav": {

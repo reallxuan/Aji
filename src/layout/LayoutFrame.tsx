@@ -1,74 +1,21 @@
 import { cn } from 'cn';
-import { type PointerEvent, type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabRow } from '../panel/TabRow';
 import { FIXED_HEIGHT, HAIRLINE_HIT, HAIRLINE_HIT_COARSE } from './constants';
-import { type Frame, layoutFrame, minWidth } from './frameGeometry';
-import { Grip } from './Grip';
-import { Hairline, type Resize } from './Hairline';
+import { layoutFrame, minWidth } from './frameGeometry';
+import { Hairline } from './Hairline';
 import { MainBoard } from './MainBoard';
-import { type Node, type PanelRef, panelsOf, refId, sameRef } from './model';
+import { type Node, panelsOf, refId } from './model';
 import { evenSplit, movePanel, resize, selectTab } from './ops';
-import { panelLabelKey, panelMinSize, panelSpec } from './registry';
+import { NarrowFrame } from './NarrowFrame';
+import { type Actions, PanelView } from './PanelView';
+import { panelLabelKey, panelMinSize } from './registry';
 import { useCoarsePointer } from './useCoarsePointer';
 import { useDragPanel } from './useDragPanel';
 import { frameMinSize } from './useDrawnLayout';
-import { useElementSize } from './useElementSize';
 import { layoutCheckpoint, useLayout } from './useLayout';
-import { PanelSizeContext } from './usePanelWidth';
 import { useWindowSize } from './useWindowSize';
-
-/** What the panels and hairlines can do to the layout drawn now. */
-type Actions = {
-  coarse: boolean;
-  dragging: PanelRef | null;
-  startDrag(ref: PanelRef, e: PointerEvent): void;
-  selectTab(ref: PanelRef): void;
-  beginResize(path: number[], index: number, mins: [number, number]): () => Resize;
-  even(path: number[], index: number): void;
-};
-
-const STILL: Actions = {
-  coarse: false,
-  dragging: null,
-  startDrag: () => {},
-  selectTab: () => {},
-  beginResize: () => () => ({ move: () => {}, cancel: () => {} }),
-  even: () => {},
-};
-
-/** One panel: measured, so what it holds can size itself to it, with its grip at the top left. */
-function PanelView({ panel, actions }: { panel: PanelRef; actions: Actions }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const size = useElementSize(ref);
-  const [hovered, setHovered] = useState(false);
-  const { Component } = panelSpec(panel.kind);
-  const dragged = actions.dragging !== null && sameRef(actions.dragging, panel);
-  return (
-    <div
-      ref={ref}
-      data-panel={refId(panel)}
-      data-max-rows={panel.maxRows}
-      className={cn(
-        'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-        dragged && 'opacity-40',
-      )}
-      onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
-    >
-      {(hovered || actions.coarse || dragged) && (
-        <Grip
-          panel={panel}
-          coarse={actions.coarse}
-          onPointerDown={(e) => actions.startDrag(panel, e)}
-        />
-      )}
-      <PanelSizeContext.Provider value={size}>
-        <Component panel={panel} width={size.width} height={size.height} />
-      </PanelSizeContext.Provider>
-    </div>
-  );
-}
 
 const fixedHeight = (node: Node) => node.type === 'panel' && FIXED_HEIGHT.has(node.panel.kind);
 
@@ -144,47 +91,24 @@ function minHeightOf(node: Node | undefined): number | undefined {
   return undefined;
 }
 
-/** Until the narrow arrangement (M1 Task 8), a narrow window stacks the board over the panels. */
-function NarrowStack({
-  frame,
-  overlay,
-  side,
-}: {
-  frame: Frame;
-  overlay?: ReactNode;
-  side?: ReactNode;
-}) {
-  const { width, height } = useWindowSize();
-  const size = Math.max(0, Math.min(width, height) - 8);
-  const columns = frame.layout.root.children.filter((c) => c.type !== 'board');
-  return (
-    <div className="relative h-full w-full overflow-y-auto">
-      <div className="relative" style={{ height: size + 8 }}>
-        <MainBoard rect={{ x: 4, y: 4, width: size, height: size }} overlay={overlay} />
-      </div>
-      <div className="flex flex-col bg-panel">
-        {side ??
-          columns.map((node, i) => (
-            <div key={i} className="flex min-h-[480px]">
-              <NodeView node={node} path={[i]} actions={STILL} />
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
 /**
  * The screen drawn from the device's layout (P2 M1 design 5.4): the board, and each root column
  * beside it, absolutely placed from `layoutFrame`; inside a column, splits share the height by
- * weight. `side`, while given (the wizard, settings or About), takes the header's column.
+ * weight. `side`, while given (the wizard, settings or About), takes the header's column. A narrow
+ * window gets the phone arrangement instead (design 5.5).
  */
 export function LayoutFrame({
   boardOverlay,
   side,
+  onCloseSide,
+  sideLocked = false,
 }: {
   boardOverlay?: ReactNode;
   side?: ReactNode;
+  /** Closes `side`; in the narrow arrangement it shows as a sheet only when it can close. */
+  onCloseSide?(): void;
+  /** `side` cannot close for now (a running install): its sheet has no close control. */
+  sideLocked?: boolean;
 }) {
   const { t } = useTranslation();
   const { width, height } = useWindowSize();
@@ -192,8 +116,12 @@ export function LayoutFrame({
   const headerColumn = layout.root.children.findIndex((c) =>
     panelsOf(c).some((p) => p.kind === 'header'),
   );
-  const minSize = frameMinSize(Boolean(side));
-  const frame = layoutFrame(layout, width, height, minSize);
+  // Narrow or wide is decided without the side's wider column, so opening settings never flips
+  // the window into the phone arrangement; a side that does not fit takes the header's width.
+  const plain = layoutFrame(layout, width, height, frameMinSize(false));
+  const withSide = side ? layoutFrame(layout, width, height, frameMinSize(true)) : plain;
+  const minSize = frameMinSize(Boolean(side) && !withSide.narrow);
+  const frame = withSide.narrow ? plain : withSide;
   const container = useRef<HTMLDivElement>(null);
   const coarse = useCoarsePointer();
   // Every change starts from the layout as drawn: the untouched default may be in its wide form.
@@ -215,7 +143,15 @@ export function LayoutFrame({
     },
     even: (path, index) => setLayout(evenSplit(drawn, path, index)),
   };
-  if (frame.narrow) return <NarrowStack frame={frame} overlay={boardOverlay} side={side} />;
+  if (frame.narrow)
+    return (
+      <NarrowFrame
+        overlay={boardOverlay}
+        side={side}
+        onCloseSide={onCloseSide}
+        sideLocked={sideLocked}
+      />
+    );
 
   const boardIndex = drawn.root.children.findIndex((c) => c.type === 'board');
   const hit = coarse ? HAIRLINE_HIT_COARSE : HAIRLINE_HIT;

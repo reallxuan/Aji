@@ -1,3 +1,4 @@
+import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { HOVER_CARD_DELAY_MS } from '../analysis/constants';
@@ -13,7 +14,7 @@ import { EngineCard } from './EngineCard';
  * the position stopped at its visit limit. Click pauses, resumes or searches further; hovering
  * opens the engine card.
  */
-export function EngineIndicator() {
+export function EngineIndicator({ touch = false }: { touch?: boolean } = {}) {
   const transport = useTransport();
   const run = useRunCommand();
   const { t } = useTranslation();
@@ -39,7 +40,13 @@ export function EngineIndicator() {
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className={`size-2.5 flex-none rounded-full ${colour} disabled:cursor-default`}
+          className={cn(
+            'size-2.5 flex-none rounded-full disabled:cursor-default',
+            colour,
+            // On a touch screen the dot keeps its size and takes a 44 px target around it.
+            touch && "relative after:absolute after:-inset-[17px] after:content-['']",
+          )}
+          data-engine-dot
           data-state={atLimit ? 'limitReached' : (state ?? 'unknown')}
           aria-label={
             action === 'setUp'

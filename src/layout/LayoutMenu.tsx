@@ -1,3 +1,5 @@
+import { cn } from 'cn';
+import { SETTINGS_LABEL, SETTINGS_ROW } from '../settings/rowClasses';
 import { LayoutGridIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -108,8 +110,8 @@ export function LayoutSettings() {
   const choices = useLayoutChoices(true);
   return (
     <>
-      <div className="flex items-center gap-4 text-[14px]">
-        <span className="w-36 shrink-0">{t('layout.menu.title')}</span>
+      <div className={SETTINGS_ROW}>
+        <span className={SETTINGS_LABEL}>{t('layout.menu.title')}</span>
         <Select
           value={choices.preset}
           onValueChange={(id) => id !== 'custom' && choices.choose(id as PresetId)}
@@ -132,8 +134,8 @@ export function LayoutSettings() {
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-start gap-4 text-[14px]">
-        <span className="w-36 shrink-0">{t('layout.menu.panels')}</span>
+      <div className={cn(SETTINGS_ROW, '@sm:items-start')}>
+        <span className={SETTINGS_LABEL}>{t('layout.menu.panels')}</span>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           {choices.panels.map(({ ref, label, shown }) => (
             <label key={refId(ref)} className="flex items-center gap-2">
@@ -146,8 +148,8 @@ export function LayoutSettings() {
           ))}
         </div>
       </div>
-      <div className="flex gap-4 text-[14px]">
-        <span className="w-36 shrink-0" />
+      <div className={SETTINGS_ROW}>
+        <span className={cn(SETTINGS_LABEL, 'hidden @sm:block')} />
         <button
           type="button"
           className="text-[13px] text-text-muted underline-offset-2 hover:text-text hover:underline"

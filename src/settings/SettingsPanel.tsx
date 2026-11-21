@@ -36,6 +36,7 @@ import { LayoutSettings } from '../layout/LayoutMenu';
 import { BoardStyleControl } from './BoardStyleControl';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
+import { SETTINGS_LABEL, SETTINGS_ROW } from './rowClasses';
 import { useSettingsStore } from './settingsStore';
 
 /** What the controls show before the stored settings arrive; they stay disabled until then. */
@@ -105,7 +106,7 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="@container flex h-full min-h-0 flex-col">
       <PanelTitle title={t('settings.title')} onBack={toMain} backLabel={t('settings.back')} />
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         <Section title={t('settings.interface')}>
@@ -217,8 +218,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-4 text-[14px]">
-      <span className="w-36 shrink-0">{label}</span>
+    <div className={SETTINGS_ROW}>
+      <span className={SETTINGS_LABEL}>{label}</span>
       {children}
     </div>
   );

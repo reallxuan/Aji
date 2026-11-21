@@ -30,6 +30,7 @@ export default function App() {
   const open = useWizardStore((s) => s.open);
   const dismissed = useWizardStore((s) => s.dismissed);
   const job = useWizardStore((s) => s.job);
+  const starting = useWizardStore((s) => s.starting);
   const view = usePanelStore((s) => s.view);
   const mode = panelMode(engine, { open, dismissed }, view !== 'main', job);
   const sideOpen = !ready || !deviceLoaded || mode === 'wizard' || mode === 'settings';
@@ -50,5 +51,24 @@ export default function App() {
       )
     ) : undefined;
 
-  return <LayoutFrame boardOverlay={<DropOverlay />} side={side} />;
+  // In the narrow arrangement the side is a sheet, closed as its own back control would close it.
+  // A running install keeps the wizard, from pressing install on: its next progress would only
+  // bring the sheet back.
+  const installing = mode === 'wizard' && (starting || (job !== null && job.outcome === null));
+  const closeSide =
+    sideOpen && ready && deviceLoaded
+      ? () =>
+          mode === 'wizard'
+            ? useWizardStore.getState().close()
+            : usePanelStore.getState().show('main')
+      : undefined;
+
+  return (
+    <LayoutFrame
+      boardOverlay={<DropOverlay />}
+      side={side}
+      onCloseSide={closeSide}
+      sideLocked={installing}
+    />
+  );
 }
