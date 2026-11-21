@@ -67,3 +67,11 @@ export function panelsOf(node: Node): PanelRef[] {
   if (node.type === 'tabs') return node.panels;
   return node.children.flatMap(panelsOf);
 }
+
+/** The panel a `refId` names, or `null` for an unknown id. */
+export function refFromId(id: string): PanelRef | null {
+  const [kind, rank] = id.split(':');
+  if (!PANEL_KINDS.includes(kind as PanelKind)) return null;
+  if (kind !== 'subboard') return { kind: kind as PanelKind };
+  return { kind: 'subboard', rank: rank === '2' ? 2 : rank === '3' ? 3 : 1 };
+}

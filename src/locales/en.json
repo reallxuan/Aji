@@ -446,6 +446,22 @@
       "candidates": "Candidates",
       "subboard": "Sub-board"
     },
-    "noCandidate": "No candidate"
+    "noCandidate": "No candidate",
+    "move": "Move {{panel}}",
+    "resize": "Resize",
+    "menu": {
+      "title": "Layout",
+      "presets": {
+        "default": "Default",
+        "classic": "Classic",
+        "minimal": "Minimal",
+        "thinking": "Thinking",
+        "four": "Four boards"
+      },
+      "custom": "Custom",
+      "panels": "Panels",
+      "reset": "Reset to default"
+    },
+    "subboardRank": "Sub-board {{rank}}"
   }
 }

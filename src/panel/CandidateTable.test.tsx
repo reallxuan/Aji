@@ -13,6 +13,7 @@ import type { Candidate } from '../transport/generated/Candidate';
 import type { Color } from '../transport/generated/Color';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { Move } from '../transport/generated/Move';
+import { PanelSizeContext } from '../layout/usePanelWidth';
 import { CandidateTable } from './CandidateTable';
 
 afterEach(() => {
@@ -65,6 +66,8 @@ function mount(
     nextMove?: Move | null;
     toPlay?: Color;
     engine?: EngineState;
+    /** The panel's width; 0 is outside any panel. */
+    width?: number;
   } = {},
 ) {
   const store: EngineStore = createEngineStore();
@@ -83,7 +86,9 @@ function mount(
   render(
     <I18nextProvider i18n={createI18n('zh-CN')}>
       <EngineStoreProvider store={store}>
-        <CandidateTable />
+        <PanelSizeContext.Provider value={{ width: options.width ?? 0, height: 400 }}>
+          <CandidateTable />
+        </PanelSizeContext.Provider>
       </EngineStoreProvider>
     </I18nextProvider>,
   );
@@ -259,4 +264,19 @@ it('shows Black’s numbers in Black’s perspective when White is to move', () 
   expect(within(rows()[0]).getByText('最佳')).toBeInTheDocument();
   expect(within(rows()[1]).getByText('52.4%')).toBeInTheDocument();
   expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
+});
+
+it('a narrow panel keeps the point, win rate and lead (P2 M1 layouts mockup)', () => {
+  mount({ width: 286 });
+  const names = () =>
+    within(screen.getAllByRole('row')[0])
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent);
+  expect(names()).toEqual(['', '落点', '胜率', '目差']);
+  expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(4);
+});
+
+it('a panel of 360 px or more shows every column', () => {
+  mount({ width: 360 });
+  expect(within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')).toHaveLength(6);
 });

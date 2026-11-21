@@ -17,6 +17,7 @@ import { openFromPicker, openRecent, saveAs, startNewGame } from '../game/action
 import { useGameStore } from '../game/gameStore';
 import { gameTitle } from '../game/title';
 import { useActionContext } from '../game/useActionContext';
+import { LayoutMenuItems } from '../layout/LayoutMenu';
 import type { RecentEntry } from '../platform/files';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -67,7 +68,7 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
 
 /**
  * The title, which opens the game menu (design 5.7, mockup frame B): new game by size, open,
- * open recent, and save as.
+ * open recent, save as, and 布局 (P2 M1 design 5.3).
  */
 export function GameMenu() {
   const { t } = useTranslation();
@@ -156,6 +157,8 @@ export function GameMenu() {
           {t('menu.saveAs')}
           <DropdownMenuShortcut>{shortcut(os, S, true)}</DropdownMenuShortcut>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <LayoutMenuItems />
       </DropdownMenuContent>
     </DropdownMenu>
   );

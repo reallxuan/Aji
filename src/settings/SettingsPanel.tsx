@@ -32,6 +32,7 @@ import { toTransportError, type Transport } from '../transport/transport';
 import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
+import { LayoutSettings } from '../layout/LayoutMenu';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
 import { useSettingsStore } from './settingsStore';
@@ -134,6 +135,7 @@ export function SettingsPanel() {
               options={coordinateOptions}
             />
           </Row>
+          <LayoutSettings />
         </Section>
 
         <Section title={t('settings.analysis')}>

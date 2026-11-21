@@ -1,7 +1,9 @@
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
+import { useDeviceStore } from '../device/deviceStore';
 import { resetGameStore } from '../game/gameStore';
+import { validateLayout } from '../layout/validate';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
 import { createFakeTransport } from '../transport/fake';
@@ -41,4 +43,26 @@ it('tells the menu bar the language and runs menu commands', async () => {
     await i18n.changeLanguage('en');
   });
   expect(files.menuLanguages).toEqual(['zh-CN', 'en']);
+});
+
+it('applies a layout preset from the menu bar, and ignores an unknown one', async () => {
+  const files = createFakeFiles();
+  function Probe() {
+    usePlatformSync();
+    return null;
+  }
+  render(
+    <I18nextProvider i18n={createI18n('zh-CN')}>
+      <TransportProvider transport={createFakeTransport(() => ({ type: 'ok' }) as never)}>
+        <PlatformProvider files={files}>
+          <Probe />
+        </PlatformProvider>
+      </TransportProvider>
+    </I18nextProvider>,
+  );
+  await act(async () => files.emitMenu({ layout: 'nonsense' }));
+  await act(async () => files.emitMenu({ layout: 'four' }));
+  await waitFor(() =>
+    expect(validateLayout(useDeviceStore.getState().settings.layout).preset).toBe('four'),
+  );
 });

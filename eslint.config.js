@@ -48,6 +48,7 @@ export default defineConfig([
               'variant',
               'size',
               'orientation',
+              'dir',
               'position',
               'side',
               'align',

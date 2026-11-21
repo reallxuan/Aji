@@ -18,9 +18,11 @@ if (typeof window !== 'undefined') {
   // Device settings are a global store over localStorage: every test starts from the defaults.
   const { beforeEach } = await import('vitest');
   const { resetDeviceStore } = await import('../device/deviceStore');
+  const { resetLayoutDraft } = await import('../layout/useLayout');
   beforeEach(() => {
     localStorage.clear();
     resetDeviceStore();
+    resetLayoutDraft();
   });
 }
 

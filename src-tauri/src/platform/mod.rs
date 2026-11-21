@@ -41,8 +41,11 @@ pub struct OpenedFile {
     pub bytes: String,
 }
 
+/// The layout presets the 显示 → 布局 menu offers, as the interface names them (P2 M1 design 5.2).
+pub const LAYOUT_PRESETS: [&str; 5] = ["default", "classic", "minimal", "thinking", "four"];
+
 /// A menu item the UI acts on, sent on [`MENU_CHANNEL`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum MenuAction {
@@ -54,13 +57,16 @@ pub enum MenuAction {
     /// The recent file at this index.
     Recent(u32),
     ClearRecent,
+    /// A layout preset, one of [`LAYOUT_PRESETS`].
+    Layout(String),
 }
 
 impl MenuAction {
     /// The menu item id.
-    pub fn id(self) -> String {
+    pub fn id(&self) -> String {
         match self {
             MenuAction::Recent(n) => format!("recent:{n}"),
+            MenuAction::Layout(preset) => format!("layout:{preset}"),
             other => serde_json::to_value(other)
                 .ok()
                 .and_then(|v| v.as_str().map(str::to_owned))
@@ -71,6 +77,11 @@ impl MenuAction {
     pub fn from_id(id: &str) -> Option<MenuAction> {
         if let Some(n) = id.strip_prefix("recent:") {
             return n.parse().ok().map(MenuAction::Recent);
+        }
+        if let Some(preset) = id.strip_prefix("layout:") {
+            return LAYOUT_PRESETS
+                .contains(&preset)
+                .then(|| MenuAction::Layout(preset.to_owned()));
         }
         [
             MenuAction::New19,

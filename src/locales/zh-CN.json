@@ -446,6 +446,22 @@
       "candidates": "候选",
       "subboard": "副盘"
     },
-    "noCandidate": "无候选"
+    "noCandidate": "无候选",
+    "move": "移动{{panel}}",
+    "resize": "调整大小",
+    "menu": {
+      "title": "布局",
+      "presets": {
+        "default": "默认",
+        "classic": "经典",
+        "minimal": "极简",
+        "thinking": "思考",
+        "four": "四盘"
+      },
+      "custom": "自定义",
+      "panels": "面板",
+      "reset": "恢复默认"
+    },
+    "subboardRank": "副盘 {{rank}}"
   }
 }
