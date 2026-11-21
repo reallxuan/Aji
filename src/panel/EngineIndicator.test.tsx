@@ -8,7 +8,7 @@ import { createFakeTransport } from '../transport/fake';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { Request } from '../transport/generated/Request';
 import { TransportProvider } from '../transport/TransportProvider';
-import { EngineIndicator } from './EngineIndicator';
+import { engineAction, EngineIndicator } from './EngineIndicator';
 import { initialWizard, useWizardStore } from '../setup/wizardStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
@@ -34,7 +34,8 @@ it('pauses analysis when clicked while analysing', async () => {
   const requests: Request[] = [];
   renderWith({ state: 'analysing', version: '1' }, requests);
   const button = screen.getByRole('button', { name: 'Pause analysis' });
-  expect(button).toHaveAttribute('title', 'Analysing');
+  // The hover card names the state; a native tooltip would cover it.
+  expect(button).not.toHaveAttribute('title');
   fireEvent.click(button);
   expect(requests).toEqual([{ type: 'analysisPause' }]);
 });
@@ -70,4 +71,32 @@ it('turns grey while the open game’s position cannot be analysed', () => {
   } finally {
     resetGameStore();
   }
+});
+
+it('is a hollow ring when the position stopped at its visit limit', () => {
+  renderWith({ state: 'ready', version: '1', limitReached: true });
+  const dot = screen.getByRole('button', { name: 'Search further' });
+  expect(dot).toHaveAttribute('data-state', 'limitReached');
+  expect(dot).toHaveClass('bg-transparent', 'ring-2', 'ring-engine-ok', 'ring-inset');
+});
+
+it('continues the search when clicked at the limit', () => {
+  const requests: Request[] = [];
+  renderWith({ state: 'ready', version: '1', limitReached: true }, requests);
+  fireEvent.click(screen.getByRole('button', { name: 'Search further' }));
+  expect(requests).toEqual([{ type: 'analysisContinue' }]);
+});
+
+it.each<[EngineState | null, ReturnType<typeof engineAction>]>([
+  [null, null],
+  [{ state: 'notConfigured' }, 'setUp'],
+  [{ state: 'starting' }, null],
+  [{ state: 'ready', version: '1', limitReached: false }, null],
+  [{ state: 'ready', version: '1', limitReached: true }, 'continue'],
+  [{ state: 'analysing', version: '1' }, 'pause'],
+  [{ state: 'paused', version: '1' }, 'resume'],
+  [{ state: 'stopped' }, null],
+  [{ state: 'crashed', reason: 'exited', exit: null, stderrTail: [] }, null],
+])('the action for %j is %s', (state, action) => {
+  expect(engineAction(state)).toBe(action);
 });

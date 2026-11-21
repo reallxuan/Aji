@@ -66,7 +66,8 @@
       "resume": "继续分析",
       "restart": "重启引擎",
       "stop": "停止引擎",
-      "setupAgain": "重新设置引擎"
+      "setupAgain": "重新设置引擎",
+      "continue": "继续计算"
     },
     "limitReached": "已达到每步上限",
     "illegal": "这一步在棋谱中不合法（{{reason}}），无法分析这个局面。",
@@ -75,6 +76,30 @@
       "suicide": "自填最后一口气",
       "ko": "立即提回劫",
       "offBoard": "落在棋盘之外"
+    },
+    "card": {
+      "title": {
+        "notConfigured": "尚未设置引擎",
+        "starting": "正在启动",
+        "ready": "就绪",
+        "analysing": "分析中",
+        "paused": "已暂停",
+        "stopped": "已停止",
+        "crashed": "已停止运行"
+      },
+      "speed": "速度",
+      "visits": "计算量",
+      "engine": "引擎",
+      "network": "网络",
+      "speedValue": "{{speed}} 次/秒",
+      "visitsOfLimit": "{{visits}} / {{limit}}",
+      "engineValue": "KataGo {{version}}",
+      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "hint": {
+        "pause": "点击暂停",
+        "resume": "点击继续",
+        "continue": "点击继续计算 {{visits}} 次"
+      }
     }
   },
   "analysis": {

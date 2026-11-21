@@ -66,7 +66,8 @@
       "resume": "Resume analysis",
       "restart": "Restart engine",
       "stop": "Stop engine",
-      "setupAgain": "Set up the engine again"
+      "setupAgain": "Set up the engine again",
+      "continue": "Search further"
     },
     "limitReached": "Visit limit reached",
     "illegal": "This move breaks the rules ({{reason}}); the position cannot be analysed.",
@@ -75,6 +76,30 @@
       "suicide": "it takes its own last liberty",
       "ko": "it retakes a ko at once",
       "offBoard": "it is off the board"
+    },
+    "card": {
+      "title": {
+        "notConfigured": "No engine",
+        "starting": "Starting",
+        "ready": "Ready",
+        "analysing": "Analysing",
+        "paused": "Paused",
+        "stopped": "Stopped",
+        "crashed": "Stopped working"
+      },
+      "speed": "Speed",
+      "visits": "Visits",
+      "engine": "Engine",
+      "network": "Network",
+      "speedValue": "{{speed}} visits/s",
+      "visitsOfLimit": "{{visits}} / {{limit}}",
+      "engineValue": "KataGo {{version}}",
+      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "hint": {
+        "pause": "Click to pause",
+        "resume": "Click to resume",
+        "continue": "Click to search {{visits}} more visits"
+      }
     }
   },
   "analysis": {
