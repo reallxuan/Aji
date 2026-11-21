@@ -6,7 +6,7 @@ import { useEngineSync } from './engine/useEngineSync';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { MainFrame } from './layout/MainFrame';
-import { CandidateList } from './panel/CandidateList';
+import { CandidateTable } from './panel/CandidateTable';
 import { EngineStatus } from './panel/EngineStatus';
 import { NoEngine } from './panel/NoEngine';
 import { NoticeLine } from './panel/NoticeLine';
@@ -56,7 +56,7 @@ export default function App() {
             ) : (
               <>
                 <EngineStatus />
-                <CandidateList />
+                <CandidateTable />
               </>
             )}
             <footer className="mt-auto">

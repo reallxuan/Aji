@@ -80,11 +80,22 @@
   "analysis": {
     "columns": {
       "move": "落点",
-      "winrate": "黑方胜率",
-      "scoreLead": "黑方领先",
-      "visits": "计算量"
+      "winrate": "胜率",
+      "scoreLead": "目差",
+      "visits": "计算量",
+      "vsBest": "与最佳相比"
     },
-    "pass": "停一手"
+    "pass": "停一手",
+    "table": {
+      "title": "候选点",
+      "total": "总计算量 {{visits}}",
+      "catchingUp": "总计算量 {{visits}} / {{previous}}",
+      "hidden": "已隐藏（F）",
+      "rejected": "KataGo 无法分析这个局面"
+    },
+    "best": "最佳",
+    "played": "实战 {{diff}}",
+    "playedBest": "实战 · 最佳"
   },
   "setup": {
     "failure": {

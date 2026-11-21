@@ -1,0 +1,174 @@
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
+import { afterEach, expect, it } from 'vitest';
+import { resetViewStore, useViewStore } from '../analysis/viewStore';
+import { createEngineStore, EngineStoreProvider, type EngineStore } from '../engine/engineStore';
+import { resetGameStore, useGameStore } from '../game/gameStore';
+import { makeSnapshot } from '../game/testing';
+import { createI18n } from '../i18n/createI18n';
+import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
+import type { Candidate } from '../transport/generated/Candidate';
+import type { Color } from '../transport/generated/Color';
+import type { Move } from '../transport/generated/Move';
+import { CandidateTable } from './CandidateTable';
+
+afterEach(() => {
+  resetGameStore();
+  resetViewStore();
+});
+
+const KEY = 'abababababababab';
+const play = (x: number, y = 3): Move => ({ type: 'play', x, y });
+
+function candidate(order: number, winrate: number, overrides: Partial<Candidate> = {}): Candidate {
+  return {
+    move: play(15 - order),
+    order,
+    visits: 1200 - order * 200,
+    winrate,
+    scoreLead: (winrate - 0.5) * 20,
+    prior: 0.1,
+    pv: [play(15 - order)],
+    ...overrides,
+  };
+}
+
+const CANDIDATES = [
+  candidate(0, 0.542),
+  candidate(1, 0.524),
+  candidate(2, 0.531),
+  candidate(3, 0.49),
+];
+
+function analysis(overrides: Partial<AnalysisUpdate> = {}): AnalysisUpdate {
+  return {
+    position: KEY,
+    boardSize: 19,
+    rootVisits: 3104,
+    winrate: 0.542,
+    scoreLead: 0.8,
+    isFinal: false,
+    candidates: CANDIDATES,
+    previousVisits: 0,
+    ...overrides,
+  };
+}
+
+function mount(
+  options: { update?: AnalysisUpdate | null; nextMove?: Move | null; toPlay?: Color } = {},
+) {
+  const store: EngineStore = createEngineStore();
+  useGameStore.getState().bindEngine(store);
+  useGameStore.getState().apply(
+    makeSnapshot({
+      revision: 1,
+      positionKey: KEY,
+      nextColor: options.toPlay ?? 'black',
+      nextMove: options.nextMove ?? null,
+    }),
+  );
+  const update = options.update === undefined ? analysis() : options.update;
+  if (update) store.getState().applyEvent({ type: 'analysisUpdate', analysis: update });
+  render(
+    <I18nextProvider i18n={createI18n('zh-CN')}>
+      <EngineStoreProvider store={store}>
+        <CandidateTable />
+      </EngineStoreProvider>
+    </I18nextProvider>,
+  );
+  return store;
+}
+
+const rows = () => screen.queryAllByRole('row').filter((r) => r.dataset.rank);
+
+it('shows the total visits, or how far a new search has come', () => {
+  const store = mount();
+  expect(screen.getByText('候选点')).toBeInTheDocument();
+  expect(screen.getByText('总计算量 3.1k')).toBeInTheDocument();
+  act(() =>
+    store.getState().applyEvent({
+      type: 'analysisUpdate',
+      analysis: analysis({ rootVisits: 640, previousVisits: 1000 }),
+    }),
+  );
+  expect(screen.getByText('总计算量 640 / 1,000')).toBeInTheDocument();
+});
+
+it('has the columns of design 4.3 in order', () => {
+  mount();
+  const header = screen.getAllByRole('row')[0];
+  expect(
+    within(header)
+      .getAllByRole('columnheader')
+      .map((c) => c.textContent),
+  ).toEqual(['', '落点', '胜率', '目差', '计算量', '与最佳相比']);
+  const first = rows()[0];
+  expect(
+    within(first)
+      .getAllByRole('cell')
+      .map((c) => c.textContent),
+  ).toEqual(['1', 'Q16', '54.2%', '+0.8', '1.2k', '最佳']);
+  expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
+});
+
+it('labels the played move, in bold', () => {
+  mount({ nextMove: play(13) });
+  const played = within(rows()[2]).getByText('实战 −1.1%');
+  expect(played).toHaveClass('font-semibold');
+  expect(rows()[2].querySelector('[data-played]')).not.toBeNull();
+});
+
+it('reads 实战 · 最佳 when the played move is the best', () => {
+  mount({ nextMove: play(15) });
+  expect(within(rows()[0]).getByText('实战 · 最佳')).toBeInTheDocument();
+});
+
+it('fades the rows while catching up', () => {
+  mount({ update: analysis({ rootVisits: 640, previousVisits: 1000 }) });
+  for (const row of rows()) {
+    expect(row).toHaveAttribute('data-catching-up');
+    expect(row).toHaveStyle({ opacity: '0.6' });
+  }
+});
+
+it('shows 已隐藏（F） and no rows while hidden', () => {
+  mount();
+  act(() => useViewStore.getState().toggleHidden());
+  expect(screen.getByText('已隐藏（F）')).toBeInTheDocument();
+  expect(rows()).toHaveLength(0);
+  act(() => useViewStore.getState().toggleHidden());
+  act(() => useViewStore.getState().setHeld(true));
+  expect(rows()).toHaveLength(0);
+});
+
+it('hovering a row sets the hover, and a board hover highlights its row', () => {
+  mount();
+  fireEvent.mouseEnter(rows()[1]);
+  expect(useViewStore.getState().hover).toEqual({ rank: 2, source: 'table' });
+  expect(rows()[1]).toHaveAttribute('data-highlighted');
+  fireEvent.mouseLeave(rows()[1]);
+  expect(useViewStore.getState().hover).toBeNull();
+  act(() => useViewStore.getState().setHover({ rank: 3, source: 'board' }));
+  expect(rows()[2]).toHaveAttribute('data-highlighted');
+  expect(rows()[1]).not.toHaveAttribute('data-highlighted');
+});
+
+it('says KataGo cannot analyse a rejected position, with its message as the title', () => {
+  const store = mount({ update: null });
+  act(() =>
+    store.getState().applyEvent({
+      type: 'analysisRejected',
+      rejection: { position: KEY, message: 'Illegal move: superko' },
+    }),
+  );
+  const line = screen.getByText('KataGo 无法分析这个局面');
+  expect(line).toHaveAttribute('title', 'Illegal move: superko');
+  expect(rows()).toHaveLength(0);
+});
+
+it('a new revision clears the hover', () => {
+  mount();
+  act(() => useViewStore.getState().setHover({ rank: 1, source: 'table' }));
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, positionKey: KEY })));
+  expect(useViewStore.getState().hover).toBeNull();
+});

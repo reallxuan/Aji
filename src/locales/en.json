@@ -80,11 +80,22 @@
   "analysis": {
     "columns": {
       "move": "Move",
-      "winrate": "Black win rate",
-      "scoreLead": "Black lead",
-      "visits": "Visits"
+      "winrate": "Win rate",
+      "scoreLead": "Lead",
+      "visits": "Visits",
+      "vsBest": "vs best"
     },
-    "pass": "Pass"
+    "pass": "Pass",
+    "table": {
+      "title": "Candidates",
+      "total": "Total visits {{visits}}",
+      "catchingUp": "Total visits {{visits}} / {{previous}}",
+      "hidden": "Hidden (F)",
+      "rejected": "KataGo cannot analyse this position"
+    },
+    "best": "Best",
+    "played": "Played {{diff}}",
+    "playedBest": "Played · best"
   },
   "setup": {
     "failure": {
