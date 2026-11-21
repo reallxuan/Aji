@@ -27,11 +27,11 @@ describe('candidateAt', () => {
         disc(2, { type: 'play', x: last, y: 0 }),
       ];
       const [cx, cy] = [g.lines[2], g.lines[2]];
-      expect(candidateAt(cx, cy, view, discs)).toBe(1);
-      expect(candidateAt(cx + g.stoneRadius * 0.95, cy, view, discs)).toBe(1);
-      expect(candidateAt(cx, cy - g.stoneRadius * 0.95, view, discs)).toBe(1);
+      expect(candidateAt(cx, cy, view, discs)).toEqual(discs[0].move);
+      expect(candidateAt(cx + g.stoneRadius * 0.95, cy, view, discs)).toEqual(discs[0].move);
+      expect(candidateAt(cx, cy - g.stoneRadius * 0.95, view, discs)).toEqual(discs[0].move);
       expect(candidateAt(cx + g.stoneRadius * 1.05, cy, view, discs)).toBeNull();
-      expect(candidateAt(g.lines[last], g.lines[0], view, discs)).toBe(2);
+      expect(candidateAt(g.lines[last], g.lines[0], view, discs)).toEqual(discs[1].move);
     });
   }
 

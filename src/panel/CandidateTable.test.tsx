@@ -144,12 +144,32 @@ it('shows 已隐藏（F） and no rows while hidden', () => {
 it('hovering a row sets the hover, and a board hover highlights its row', () => {
   mount();
   fireEvent.mouseEnter(rows()[1]);
-  expect(useViewStore.getState().hover).toEqual({ rank: 2, source: 'table' });
+  expect(useViewStore.getState().hover).toEqual({ move: play(14), source: 'table' });
   expect(rows()[1]).toHaveAttribute('data-highlighted');
   fireEvent.mouseLeave(rows()[1]);
   expect(useViewStore.getState().hover).toBeNull();
-  act(() => useViewStore.getState().setHover({ rank: 3, source: 'board' }));
+  act(() => useViewStore.getState().setHover({ move: play(13), source: 'board' }));
   expect(rows()[2]).toHaveAttribute('data-highlighted');
+  expect(rows()[1]).not.toHaveAttribute('data-highlighted');
+});
+
+it('the highlight follows the hovered move when the ranks reorder', () => {
+  const store = mount();
+  fireEvent.mouseEnter(rows()[1]);
+  act(() =>
+    store.getState().applyEvent({
+      type: 'analysisUpdate',
+      analysis: analysis({
+        rootVisits: 3200,
+        candidates: [
+          candidate(0, 0.54, { move: play(14), pv: [play(14)] }),
+          candidate(1, 0.53, { move: play(15), pv: [play(15)] }),
+        ],
+      }),
+    }),
+  );
+  expect(useViewStore.getState().hover).toEqual({ move: play(14), source: 'table' });
+  expect(rows()[0]).toHaveAttribute('data-highlighted');
   expect(rows()[1]).not.toHaveAttribute('data-highlighted');
 });
 
@@ -168,7 +188,24 @@ it('says KataGo cannot analyse a rejected position, with its message as the titl
 
 it('a new revision clears the hover', () => {
   mount();
-  act(() => useViewStore.getState().setHover({ rank: 1, source: 'table' }));
+  act(() => useViewStore.getState().setHover({ move: play(15), source: 'table' }));
   act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, positionKey: KEY })));
   expect(useViewStore.getState().hover).toBeNull();
+});
+
+it('shows how far the wheel has stepped a hovered line beside its point', () => {
+  mount();
+  act(() => {
+    const view = useViewStore.getState();
+    view.setHover({ move: play(15), source: 'board' });
+    view.setVariation({
+      moves: [play(15), play(14), play(13)],
+      colors: ['black', 'white', 'black'],
+      captured: [[], [], []],
+      illegalAt: null,
+    });
+  });
+  expect(within(rows()[0]).queryByText('3 / 3')).toBeNull();
+  act(() => useViewStore.getState().setStep(2));
+  expect(within(rows()[0]).getByText('2 / 3')).toBeInTheDocument();
 });

@@ -12,12 +12,13 @@ import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { tierFor, type ShownCandidate } from '../analysis/candidates';
+import { variationBoard } from '../analysis/variation';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
 import { type BoardView, drawBoard } from './drawBoard';
-import { drawCandidates } from './candidates';
+import { drawCandidates, drawVariationNumbers } from './candidates';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 
@@ -66,6 +67,7 @@ function render(
   stones: (Color | null)[],
   lastMove: Move | null,
   discs: { candidates: ShownCandidate[]; lines: [DiscField, DiscField] } | null = null,
+  overlay: ((ctx: CanvasRenderingContext2D) => void) | null = null,
 ): PNG {
   const size = Math.round(view.cssSize * view.dpr);
   const canvas = createCanvas(size, size);
@@ -94,6 +96,11 @@ function render(
       discs.lines,
       'zh-CN',
     );
+    ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
+  }
+  if (overlay) {
+    const layer = createCanvas(size, size);
+    overlay(layer.getContext('2d') as unknown as CanvasRenderingContext2D);
     ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
   }
   return PNG.sync.read(canvas.toBuffer('image/png'));
@@ -227,6 +234,35 @@ describe('board screenshots', () => {
           lines: ['winrate', 'scoreLead'],
         }),
       );
+    });
+  }
+
+  // The mockup's line for the best candidate, L14 (board-analysis.html, section 2).
+  const COLUMNS = 'ABCDEFGHJKLMNOPQRST';
+  const point = (label: string) => ({
+    x: COLUMNS.indexOf(label[0]),
+    y: 19 - Number(label.slice(1)),
+  });
+  const L14_LINE = ['L14', 'M13', 'M14', 'N13', 'L12', 'M12', 'K12', 'N12'].map(point);
+
+  for (const step of [8, 3]) {
+    it(`draws a hovered line as numbered stones, ${step === 8 ? 'in full' : 'three moves in'}`, () => {
+      const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19 };
+      const board = variationBoard(
+        parse(SAMSUNG_58),
+        19,
+        {
+          moves: L14_LINE.map((p) => ({ type: 'play' as const, ...p })),
+          colors: L14_LINE.map((_, i) => (i % 2 ? 'white' : 'black')),
+          captured: L14_LINE.map(() => []),
+          illegalAt: null,
+        },
+        step,
+      );
+      const image = render(view, board.stones, null, null, (ctx) =>
+        drawVariationNumbers(ctx, view, board.numbers, board.newest, board.stones),
+      );
+      compare(`variation-${step === 8 ? 'full' : 'step-3'}@2x`, image);
     });
   }
 });

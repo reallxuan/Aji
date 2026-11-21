@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ShownCandidate } from '../analysis/candidates';
+import { moveKey, sameMove, type ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import { formatLead, formatPercent, formatVisits } from '../analysis/format';
 import { useShownCandidates } from '../analysis/useShownCandidates';
+import { shownLength } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { moveLabel } from '../board/coordinates';
 import { useEngineStore } from '../engine/engineStore';
@@ -28,6 +29,11 @@ export function CandidateTable() {
   const hidden = useViewStore((s) => s.hidden || s.held);
   const hover = useViewStore((s) => s.hover);
   const setHover = useViewStore((s) => s.setHover);
+  const variation = useViewStore((s) => s.variation);
+  const step = useViewStore((s) => s.step);
+  const length = variation ? shownLength(variation) : 0;
+  // The wheel has stepped the hovered line short of its end: "3 / 8" beside the point.
+  const stepped = variation && step !== null && step < length ? `${step} / ${length}` : null;
 
   const grouped = new Intl.NumberFormat(lang);
 
@@ -93,20 +99,20 @@ export function CandidateTable() {
               </span>
             </div>
             {shown.map((c) => {
-              const highlighted = hover?.rank === c.rank;
+              const highlighted = !!hover && sameMove(hover.move, c.move);
               return (
                 <div
-                  key={c.rank}
+                  key={moveKey(c.move)}
                   role="row"
                   data-rank={c.rank}
                   data-highlighted={highlighted || undefined}
                   data-catching-up={fading || undefined}
                   style={rowStyle}
                   className={`${COLUMNS} rounded border-b border-divider-soft px-1.5 py-2 ${highlighted ? 'bg-divider-soft' : ''}`}
-                  onMouseEnter={() => setHover({ rank: c.rank, source: 'table' })}
+                  onMouseEnter={() => setHover({ move: c.move, source: 'table' })}
                   onMouseLeave={() => {
                     const now = useViewStore.getState().hover;
-                    if (now?.source === 'table' && now.rank === c.rank) setHover(null);
+                    if (now?.source === 'table' && sameMove(now.move, c.move)) setHover(null);
                   }}
                 >
                   <span role="cell">
@@ -114,6 +120,9 @@ export function CandidateTable() {
                   </span>
                   <span role="cell" className="font-medium">
                     {moveLabel(c.move, snapshot!.size, t)}
+                    {highlighted && stepped && (
+                      <span className="ml-1.5 text-xs font-normal text-text-muted">{stepped}</span>
+                    )}
                   </span>
                   <span role="cell" className="text-right">
                     {formatPercent(c.winrate, lang)}

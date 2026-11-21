@@ -1,7 +1,10 @@
 import type { ShownCandidate } from '../analysis/candidates';
 import { formatLead, formatPercentFigure, formatVisits } from '../analysis/format';
 import { PLAYED_RING, TIER_STYLE, withAlpha } from '../analysis/palette';
+import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
+import type { Move } from '../transport/generated/Move';
+import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
 import { boardGeometry } from './geometry';
 
@@ -78,19 +81,64 @@ export function drawCandidates(
   }
 }
 
-/** The rank of the disc under a CSS point on the board, within the disc's radius; else `null`. */
+/** The move of the disc under a CSS point on the board, within the disc's radius; else `null`. */
 export function candidateAt(
   cssX: number,
   cssY: number,
   view: Pick<BoardView, 'cssSize' | 'boardSize'>,
   discs: readonly ShownCandidate[],
-): number | null {
+): Move | null {
   const geometry = boardGeometry(view.cssSize, view.boardSize);
   for (const c of discs) {
     if (c.move.type !== 'play') continue;
     const dx = cssX - geometry.lines[c.move.x];
     const dy = cssY - geometry.lines[c.move.y];
-    if (dx * dx + dy * dy <= geometry.stoneRadius * geometry.stoneRadius) return c.rank;
+    if (dx * dx + dy * dy <= geometry.stoneRadius * geometry.stoneRadius) return c.move;
   }
   return null;
+}
+
+/** Move numbers on a hovered line's stones: light on black, dark on white. */
+const NUMBER_ON_BLACK = '#f4f1ea';
+const NUMBER_ON_WHITE = '#1d1b17';
+
+/**
+ * Clears the layer and writes each line stone's move number in its centre (design 5.8). The
+ * newest stone of a partial line gets a bold number and a thin ring.
+ */
+export function drawVariationNumbers(
+  ctx: CanvasRenderingContext2D,
+  view: BoardView,
+  numbers: ReadonlyArray<{ point: Point; n: number }>,
+  newest: Point | null,
+  stones: readonly (Color | null)[],
+): void {
+  const { cssSize, dpr, boardSize } = view;
+  const size = Math.round(cssSize * dpr);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  if (size <= 0) return;
+  const geometry = boardGeometry(cssSize, boardSize);
+  const spacing = geometry.spacing * dpr;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const { point, n } of numbers) {
+    const stone = stones[point.y * boardSize + point.x];
+    if (!stone) continue;
+    const ink = stone === 'black' ? NUMBER_ON_BLACK : NUMBER_ON_WHITE;
+    const cx = geometry.lines[point.x] * dpr;
+    const cy = geometry.lines[point.y] * dpr;
+    const isNewest = newest !== null && newest.x === point.x && newest.y === point.y;
+    ctx.fillStyle = ink;
+    ctx.font = `${isNewest ? 700 : 600} ${0.42 * spacing}px Inter`;
+    // Inter's figures sit a little high on the middle baseline.
+    ctx.fillText(String(n), cx, cy + 0.03 * spacing);
+    if (isNewest) {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 0.37 * spacing, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
 }

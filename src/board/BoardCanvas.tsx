@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import type { ShownCandidate } from '../analysis/candidates';
+import { sameMove, type ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
-import { candidateAt, drawCandidates } from './candidates';
+import type { Point } from '../transport/generated/Point';
+import { candidateAt, drawCandidates, drawVariationNumbers } from './candidates';
 import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
 import { boardGeometry } from './geometry';
@@ -27,8 +28,18 @@ export interface BoardCanvasProps {
   lang?: string;
   /** A new search is still below the cached depth: the discs are faded (design 5.2). */
   catchingUp?: boolean;
-  /** The pointer entered a disc (its rank) or left every disc (`null`). */
-  onHoverCandidate?(rank: number | null): void;
+  /** The pointer entered a disc (its move) or left every disc (`null`). */
+  onHoverCandidate?(move: Move | null): void;
+  /**
+   * The move the store holds as hovered on the board, so a hover ended elsewhere (a new
+   * position) starts again on the next pointer move over a disc.
+   */
+  hoveredCandidate?: Move | null;
+  /**
+   * A hovered line's move numbers (design 5.8). While set, the numbers are drawn in place of the
+   * discs, which still answer the pointer so the hover holds; `stones` are the line's board.
+   */
+  variation?: { numbers: ReadonlyArray<{ point: Point; n: number }>; newest: Point | null } | null;
 }
 
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
@@ -49,11 +60,13 @@ export function BoardCanvas({
   lang = 'en',
   catchingUp = false,
   onHoverCandidate,
+  hoveredCandidate,
+  variation = null,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
   const candidateLayer = useRef<HTMLCanvasElement>(null);
-  const hovered = useRef<number | null>(null);
+  const hovered = useRef<Move | null>(null);
   const dpr = useDevicePixelRatio();
   // Coordinates are drawn in Inter; redraw once the bundled font has loaded.
   const [fontsLoaded, setFontsLoaded] = useState(0);
@@ -89,13 +102,20 @@ export function BoardCanvas({
   const [first, second] = discLines;
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
-    if (ctx) drawCandidates(ctx, { cssSize, dpr, boardSize }, candidates, [first, second], lang);
-  }, [cssSize, dpr, boardSize, candidates, first, second, lang, fontsLoaded]);
+    if (!ctx) return;
+    const view = { cssSize, dpr, boardSize };
+    if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
+    else drawCandidates(ctx, view, candidates, [first, second], lang);
+  }, [cssSize, dpr, boardSize, candidates, first, second, lang, fontsLoaded, variation, stones]);
 
-  const hover = (rank: number | null) => {
-    if (rank === hovered.current) return;
-    hovered.current = rank;
-    onHoverCandidate?.(rank);
+  useEffect(() => {
+    if (hoveredCandidate !== undefined) hovered.current = hoveredCandidate;
+  }, [hoveredCandidate]);
+
+  const hover = (move: Move | null) => {
+    if (move === hovered.current || sameMove(move, hovered.current)) return;
+    hovered.current = move;
+    onHoverCandidate?.(move);
   };
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -130,7 +150,7 @@ export function BoardCanvas({
         className="absolute inset-0"
         style={{
           ...style,
-          opacity: catchingUp ? CATCHING_UP_OPACITY : 1,
+          opacity: catchingUp && !variation ? CATCHING_UP_OPACITY : 1,
           transition: `opacity ${CATCHING_UP_FADE_MS}ms`,
         }}
         aria-hidden

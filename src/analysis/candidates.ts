@@ -41,6 +41,11 @@ export function sameMove(a: Move | null, b: Move | null): boolean {
   return a.type === 'pass' || (b.type === 'play' && a.x === b.x && a.y === b.y);
 }
 
+/** A stable key for a move, for React lists: a candidate keeps it however its rank moves. */
+export function moveKey(move: Move): string {
+  return move.type === 'pass' ? 'pass' : `${move.x},${move.y}`;
+}
+
 /**
  * KataGo's candidates by its order: at most ten, each with at least 2% of the top candidate's
  * visits, plus the move played next if KataGo reported it. In the side to move's view.

@@ -1,5 +1,6 @@
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ShownCandidate } from '../analysis/candidates';
 import type { Color } from '../transport/generated/Color';
 import { BoardCanvas } from './BoardCanvas';
 import { boardGeometry } from './geometry';
@@ -88,7 +89,7 @@ describe('BoardCanvas', () => {
 describe('BoardCanvas candidates', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  const best = {
+  const best: ShownCandidate = {
     move: { type: 'play' as const, x: 3, y: 3 },
     rank: 1,
     tier: 'best' as const,
@@ -133,6 +134,31 @@ describe('BoardCanvas candidates', () => {
     fireEvent.mouseMove(area, { clientX: g.lines[5], clientY: g.lines[3] });
     fireEvent.mouseMove(area, { clientX: g.lines[3], clientY: g.lines[3] });
     fireEvent.mouseLeave(area);
-    expect(onHover.mock.calls).toEqual([[1], [null], [1], [null]]);
+    expect(onHover.mock.calls).toEqual([[best.move], [null], [best.move], [null]]);
+  });
+
+  it('a reorder under a still pointer is not a new hover', () => {
+    stubRatio(1);
+    const onHover = vi.fn();
+    const other: ShownCandidate = { ...best, move: { type: 'play', x: 5, y: 3 }, rank: 2 };
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const { container, rerender } = render(
+      <BoardCanvas {...props} candidates={[best, other]} onHoverCandidate={onHover} />,
+    );
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19);
+    fireEvent.mouseMove(area, { clientX: g.lines[5], clientY: g.lines[3] });
+    rerender(
+      <BoardCanvas
+        {...props}
+        candidates={[
+          { ...other, rank: 1 },
+          { ...best, rank: 2 },
+        ]}
+        onHoverCandidate={onHover}
+      />,
+    );
+    fireEvent.mouseMove(area, { clientX: g.lines[5] + 1, clientY: g.lines[3] });
+    expect(onHover.mock.calls).toEqual([[other.move]]);
   });
 });
