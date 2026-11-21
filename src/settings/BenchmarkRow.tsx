@@ -61,7 +61,7 @@ export function BenchmarkRow({
         });
 
   return (
-    <div className="text-[13px]">
+    <div className="text-[0.8125rem]">
       <div className="flex items-center gap-3">
         <span className="flex-1 text-text-muted">{line}</span>
         {running ? (

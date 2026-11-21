@@ -80,7 +80,7 @@ export function LayoutMenuItems() {
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[12px] font-normal text-text-muted">
+        <DropdownMenuLabel className="text-[0.75rem] font-normal text-text-muted">
           {t('layout.menu.panels')}
         </DropdownMenuLabel>
         {choices.panels.map(({ ref, label, shown }) => (
@@ -134,7 +134,7 @@ export function LayoutSettings() {
           </SelectContent>
         </Select>
       </div>
-      <div className={cn(SETTINGS_ROW, '@sm:items-start')}>
+      <div className={cn(SETTINGS_ROW, '@md:items-start')}>
         <span className={SETTINGS_LABEL}>{t('layout.menu.panels')}</span>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           {choices.panels.map(({ ref, label, shown }) => (
@@ -149,10 +149,10 @@ export function LayoutSettings() {
         </div>
       </div>
       <div className={SETTINGS_ROW}>
-        <span className={cn(SETTINGS_LABEL, 'hidden @sm:block')} />
+        <span className={cn(SETTINGS_LABEL, 'hidden @md:block')} />
         <button
           type="button"
-          className="text-[13px] text-text-muted underline-offset-2 hover:text-text hover:underline"
+          className="text-[0.8125rem] text-text-muted underline-offset-2 hover:text-text hover:underline"
           onClick={choices.reset}
         >
           {t('layout.menu.reset')}

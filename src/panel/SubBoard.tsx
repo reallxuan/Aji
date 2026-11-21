@@ -123,7 +123,7 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
         {hidden ? null : candidate ? (
           <button
             type="button"
-            className="flex items-center gap-2 rounded-sm px-1 py-0.5 text-[12.5px] tabular-nums hover:bg-divider-soft"
+            className="flex items-center gap-2 rounded-sm px-1 py-0.5 text-[0.78125rem] tabular-nums hover:bg-divider-soft"
             onClick={() =>
               useViewStore.getState().setHover({ move: candidate.move, source: 'board' })
             }
@@ -136,7 +136,7 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
             <span className="text-score">{formatLead(candidate.scoreLead, lang)}</span>
           </button>
         ) : (
-          <span className="px-1 text-[12.5px] text-text-muted">{t('layout.noCandidate')}</span>
+          <span className="px-1 text-[0.78125rem] text-text-muted">{t('layout.noCandidate')}</span>
         )}
       </div>
       <div

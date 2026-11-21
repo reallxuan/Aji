@@ -245,25 +245,25 @@ it('shows how far the wheel has stepped a hovered line beside its point', () => 
   expect(within(rows()[0]).getByText('2 / 3')).toBeInTheDocument();
 });
 
-it('shows White’s numbers in White’s perspective, and the difference of what it shows', () => {
+it('shows the side to move’s numbers, whatever the graph’s perspective (P2 M1 design 5.10)', () => {
   useDeviceStore.getState().update({ perspective: 'white' });
   mount();
   // Black to move; Black's best is 54.2% and +0.8 for Black.
-  expect(within(rows()[0]).getByText('45.8%')).toBeInTheDocument();
-  expect(within(rows()[0]).getByText('−0.8')).toBeInTheDocument();
-  // Black's 52.4% is White's 47.6%: 1.8 points better for White than after Black's best.
-  expect(within(rows()[1]).getByText('47.6%')).toBeInTheDocument();
-  expect(within(rows()[1]).getByText('+1.8%')).toBeInTheDocument();
-});
-
-it('shows Black’s numbers in Black’s perspective when White is to move', () => {
-  useDeviceStore.getState().update({ perspective: 'black' });
-  mount({ toPlay: 'white' });
-  // Black's numbers, not White's 45.8% and 47.6%.
   expect(within(rows()[0]).getByText('54.2%')).toBeInTheDocument();
-  expect(within(rows()[0]).getByText('最佳')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('+0.8')).toBeInTheDocument();
   expect(within(rows()[1]).getByText('52.4%')).toBeInTheDocument();
   expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
+});
+
+it('shows White’s numbers when White is to move, and the difference of what it shows', () => {
+  useDeviceStore.getState().update({ perspective: 'black' });
+  mount({ toPlay: 'white' });
+  // Black's 54.2% and +0.8 are White's 45.8% and −0.8.
+  expect(within(rows()[0]).getByText('45.8%')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('−0.8')).toBeInTheDocument();
+  // Black's 52.4% is White's 47.6%: 1.8 points better for White than after White's first.
+  expect(within(rows()[1]).getByText('47.6%')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('+1.8%')).toBeInTheDocument();
 });
 
 it('a narrow panel keeps the point, win rate and lead (P2 M1 layouts mockup)', () => {

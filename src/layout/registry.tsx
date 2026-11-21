@@ -7,9 +7,6 @@ import { MIN_SIZES } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
 
-/** The legend line under the trend graph, which the graph's height leaves room for. */
-const TREND_LEGEND = 36;
-
 export interface PanelSpec {
   kind: PanelKind;
   labelKey: string;
@@ -38,7 +35,7 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     labelKey: 'layout.panels.trend',
     hideable: true,
     minSize: MIN_SIZES.trend,
-    Component: ({ height }) => <TrendGraph height={Math.max(60, height - TREND_LEGEND)} />,
+    Component: ({ height }) => <TrendGraph height={height} />,
   },
   candidates: {
     kind: 'candidates',

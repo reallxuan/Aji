@@ -29,7 +29,7 @@ export function SetupPanel() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="px-7 pt-6">
         <div className="flex items-center justify-between">
-          <span className="text-[13px] text-text-muted">{t('setup.title')}</span>
+          <span className="text-[0.8125rem] text-text-muted">{t('setup.title')}</span>
           <LanguageSwitch />
         </div>
         <ProgressLine segment={SEGMENT[step]} />
@@ -95,7 +95,7 @@ function LanguageSwitch() {
   const english = option('en', t('languageName.enShort'));
 
   return (
-    <div className="flex items-center gap-2 text-[12px]">
+    <div className="flex items-center gap-2 text-[0.75rem]">
       {chinese}
       <span aria-hidden className="size-0.5 rounded-full bg-text-muted" />
       {english}

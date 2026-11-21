@@ -139,6 +139,26 @@ describe('SettingsPanel', () => {
     expect(sets(transport.requests)).toEqual([]);
   });
 
+  it('chooses the lead with komi or the board count', async () => {
+    mount();
+    const row = await screen.findByRole('radiogroup', { name: '目差' });
+    expect(within(row).getByRole('radio', { name: '含贴目' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '盘面' })));
+    expect(useDeviceStore.getState().settings.scoreWithKomi).toBe(false);
+  });
+
+  it('scales the interface', async () => {
+    mount();
+    const select = await screen.findByRole('combobox', { name: '界面缩放' });
+    expect(select).toHaveTextContent('100%');
+    fireEvent.keyDown(select, { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('option', { name: '125%' }), { key: 'Enter' });
+    expect(useDeviceStore.getState().settings.interfaceScale).toBe(125);
+  });
+
   it("swaps the disc lines when one takes the other line's field, and previews them", async () => {
     const transport = mount();
     await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());

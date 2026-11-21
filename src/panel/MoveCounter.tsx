@@ -26,7 +26,7 @@ export function MoveCounter() {
   };
 
   return (
-    <span className="flex items-center gap-1 px-1.5 text-[13px] whitespace-nowrap tabular-nums">
+    <span className="flex items-center gap-1 px-1.5 text-[0.8125rem] whitespace-nowrap tabular-nums">
       {draft === null ? (
         <button
           type="button"

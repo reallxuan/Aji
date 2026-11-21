@@ -20,7 +20,7 @@ export function RulesChip() {
   return (
     <Popover>
       <PopoverTrigger
-        className="flex flex-none items-center gap-1.5 rounded-full border border-hairline px-2.5 py-0.5 text-[12px] whitespace-nowrap text-text-muted hover:bg-divider-soft hover:text-text data-[state=open]:bg-divider-soft data-[state=open]:text-text data-[changed=true]:border-line data-[changed=true]:text-text"
+        className="flex flex-none items-center gap-1.5 rounded-full border border-hairline px-2.5 py-0.5 text-[0.75rem] whitespace-nowrap text-text-muted hover:bg-divider-soft hover:text-text data-[state=open]:bg-divider-soft data-[state=open]:text-text data-[changed=true]:border-line data-[changed=true]:text-text"
         data-changed={rules.changed}
         aria-label={rules.changed ? t('rules.chipChanged', parts) : label}
       >

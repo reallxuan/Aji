@@ -72,16 +72,23 @@ describe('the narrow arrangement', () => {
     expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('367px');
   });
 
+  it('the phone shows the capture counts under the bar', () => {
+    renderWithGame(<LayoutFrame />);
+    fireEvent.click(screen.getByRole('tab', { name: '候选' }));
+    expect(document.querySelectorAll('[data-captures]')).toHaveLength(1);
+    expect(document.querySelector('[data-captures]')).toHaveTextContent('提子 黑 0 · 白 0');
+  });
+
   it('a small landscape window keeps the board above the panels (Review Focus 4)', () => {
     setWindow(560, 420);
     renderWithGame(<LayoutFrame />);
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
-    // 420 − 52 (header) − 48 (bar) − 72 (navigation): the board takes it all.
-    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('248px');
+    // 420 − 52 (header) − 68 (bar and captures) − 72 (navigation): the board takes it all.
+    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('228px');
     // A phone tall enough keeps 160 px for the panels while the board stays at 320 px or more.
     setWindow(375, 667);
     act(() => void window.dispatchEvent(new Event('resize')));
-    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('335px');
+    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('320px');
   });
 
   it('Thinking draws a line on the board unless sub-board 1 is on screen', async () => {

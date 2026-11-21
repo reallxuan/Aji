@@ -25,6 +25,16 @@ function signed(n: number, lang: string): string {
   return `${n > 0 ? '+' : MINUS}${magnitude}`;
 }
 
+/** A magnitude with one decimal in the locale's format: `3.5`, or `3,5` in German. */
+export function formatPoints(n: number, lang: string): string {
+  return fixed1(n, lang);
+}
+
+/** A lead that rounds to 0.0 reads 均势 / Even where it is said in words (M7 minor 12). */
+export function isEvenLead(n: number): boolean {
+  return Math.round(Math.abs(n) * 10) === 0;
+}
+
 /** A score lead: `+3.5`, `−1.0`, `0.0`. */
 export function formatLead(n: number, lang: string): string {
   return signed(n, lang);

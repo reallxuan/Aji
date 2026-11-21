@@ -63,7 +63,7 @@ export function StepVersion() {
     >
       {versions && (
         <>
-          <div className="flex px-3 pb-2 text-[12px] text-text-muted">
+          <div className="flex px-3 pb-2 text-[0.75rem] text-text-muted">
             <span className="flex-1">{t('setup.version.columnVersion')}</span>
             <span>{t('setup.version.columnReleased')}</span>
           </div>
@@ -76,12 +76,14 @@ export function StepVersion() {
               <ChoiceRow key={version.engine} value={version.engine} showRadio={false}>
                 <span className="font-medium">{version.version}</span>
                 {version.latest && (
-                  <span className="text-[13px] text-text-muted">{t('setup.version.latest')}</span>
+                  <span className="text-[0.8125rem] text-text-muted">
+                    {t('setup.version.latest')}
+                  </span>
                 )}
                 {version.installed && (
-                  <span className="text-[13px] text-text-muted">{t('setup.downloaded')}</span>
+                  <span className="text-[0.8125rem] text-text-muted">{t('setup.downloaded')}</span>
                 )}
-                <span className="ml-auto text-[13px] text-text-muted tabular-nums">
+                <span className="ml-auto text-[0.8125rem] text-text-muted tabular-nums">
                   {formatDate(version.released, i18n.language)}
                 </span>
               </ChoiceRow>

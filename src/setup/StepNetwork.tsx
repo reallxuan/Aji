@@ -75,7 +75,7 @@ export function StepNetwork() {
     >
       {networks && (
         <>
-          <div className="flex gap-3 px-3 pb-2 text-[12px] text-text-muted">
+          <div className="flex gap-3 px-3 pb-2 text-[0.75rem] text-text-muted">
             <span className="w-5">{t('setup.network.columnIndex')}</span>
             <span className="flex-1">{t('setup.network.columnName')}</span>
             <span className="w-12 text-right">{t('setup.network.columnElo')}</span>
@@ -93,26 +93,28 @@ export function StepNetwork() {
                 <span className="w-5" />
                 <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
                 <span className="w-12" />
-                <span className="w-24 text-right whitespace-nowrap text-[13px] text-text-muted">
+                <span className="w-24 text-right whitespace-nowrap text-[0.8125rem] text-text-muted">
                   {t('setup.network.imported')}
                 </span>
               </ChoiceRow>
             ))}
             {networks.map((item, index) => (
               <ChoiceRow key={item.network} value={item.network} showRadio={false}>
-                <span className="w-5 text-[13px] text-text-muted tabular-nums">{index + 1}</span>
+                <span className="w-5 text-[0.8125rem] text-text-muted tabular-nums">
+                  {index + 1}
+                </span>
                 <span className="min-w-0 flex-1 truncate font-medium" title={item.network}>
                   {item.network}
                 </span>
                 {item.installed && (
-                  <span className="shrink-0 text-[13px] whitespace-nowrap text-text-muted">
+                  <span className="shrink-0 text-[0.8125rem] whitespace-nowrap text-text-muted">
                     {t('setup.downloaded')}
                   </span>
                 )}
                 <span className="w-12 text-right font-medium tabular-nums">
                   {item.elo === null ? '' : Math.round(item.elo)}
                 </span>
-                <span className="w-24 text-right whitespace-nowrap text-[13px] text-text-muted tabular-nums">
+                <span className="w-24 text-right whitespace-nowrap text-[0.8125rem] text-text-muted tabular-nums">
                   {formatDate(item.uploaded, i18n.language)}
                 </span>
               </ChoiceRow>
@@ -121,7 +123,7 @@ export function StepNetwork() {
         </>
       )}
       {importError && (
-        <p role="alert" className="mt-3 text-[13px] text-engine-error">
+        <p role="alert" className="mt-3 text-[0.8125rem] text-engine-error">
           {importError}
         </p>
       )}

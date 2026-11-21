@@ -26,7 +26,7 @@ function Stone({ color, label }: { color: 'black' | 'white'; label: string }) {
 }
 
 const Code = ({ children }: { children: string }) => (
-  <code className="rounded-xs bg-divider-soft px-1 font-mono text-[11.5px] text-text">
+  <code className="rounded-xs bg-divider-soft px-1 font-mono text-[0.71875rem] text-text">
     {children}
   </code>
 );
@@ -69,7 +69,7 @@ function RulesSource() {
     );
   }
   return (
-    <p data-testid="rules-source" className="mt-1 text-[12px] leading-relaxed text-text-muted">
+    <p data-testid="rules-source" className="mt-1 text-[0.75rem] leading-relaxed text-text-muted">
       {text}
       {rules.changed && restore}
     </p>
@@ -94,18 +94,18 @@ function Info() {
     ['white', info.white, info.whiteRank],
   ];
   if (!info.black && !info.white && shown.length === 0)
-    return <p className="text-[13px] text-text-muted">{t('gameInfo.empty')}</p>;
+    return <p className="text-[0.8125rem] text-text-muted">{t('gameInfo.empty')}</p>;
   return (
     <>
       {players.map(([color, name, rank]) => (
-        <div key={color} className="flex items-center gap-2.5 py-0.5 text-[14px]">
+        <div key={color} className="flex items-center gap-2.5 py-0.5 text-[0.875rem]">
           <Stone color={color} label={t(`gameInfo.${color}`)} />
           <span className="truncate">{name ?? '?'}</span>
-          {rank && <span className="text-[12.5px] text-text-muted">{rank}</span>}
+          {rank && <span className="text-[0.78125rem] text-text-muted">{rank}</span>}
         </div>
       ))}
       {shown.length > 0 && (
-        <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1 text-[13px]">
+        <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1 text-[0.8125rem]">
           {shown.map(([label, value]) => (
             <div key={label} className="contents">
               <dt className="text-text-muted">{label}</dt>
@@ -119,7 +119,7 @@ function Info() {
 }
 
 const Heading = ({ children }: { children: string }) => (
-  <h4 className="mb-2.5 text-[12px] font-medium tracking-wide text-text-muted">{children}</h4>
+  <h4 className="mb-2.5 text-[0.75rem] font-medium tracking-wide text-text-muted">{children}</h4>
 );
 
 /** The game information popover's body (mockup frame C): the record, then the analysis rules. */

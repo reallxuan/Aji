@@ -24,7 +24,7 @@ export function TabRow({
 }) {
   const { t } = useTranslation();
   return (
-    <div role="tablist" className="flex flex-none gap-[18px] px-6 pt-3 text-[12.5px]">
+    <div role="tablist" className="flex flex-none gap-[18px] px-6 pt-3 text-[0.78125rem]">
       {panels.map((ref, i) => (
         <button
           key={refId(ref)}

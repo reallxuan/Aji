@@ -12,8 +12,8 @@ type Layout = 'popover' | 'settings';
 
 /** Short muted labels in the popover; the settings page's wide label column elsewhere. */
 const FIELD = {
-  popover: { row: 'gap-3 text-[13.5px]', label: 'w-9 text-text-muted' },
-  settings: { row: 'gap-x-4 gap-y-2 text-[14px] flex-wrap', label: 'w-36' },
+  popover: { row: 'gap-3 text-[0.84375rem]', label: 'w-9 text-text-muted' },
+  settings: { row: 'gap-x-4 gap-y-2 text-[0.875rem] flex-wrap', label: 'w-36' },
 } as const;
 
 function Field({
@@ -161,12 +161,12 @@ export function RulesControl({
         {value.kind === 'custom' ? (
           <>
             <KomiStepper komi={komi} onChange={(next) => onChange({ ...value, komi: next })} />
-            <span className="text-[12px] text-text-muted">{t('rules.stepHint')}</span>
+            <span className="text-[0.75rem] text-text-muted">{t('rules.stepHint')}</span>
           </>
         ) : (
           <>
             <span className="font-medium">{t('rules.fixedKomi', { komi: formatKomi(komi) })}</span>
-            <span className="text-[12px] text-text-muted">
+            <span className="text-[0.75rem] text-text-muted">
               {t('rules.fixedHint', { scoring: t(`rules.${scoring}`) })}
             </span>
           </>

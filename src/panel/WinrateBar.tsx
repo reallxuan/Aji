@@ -1,39 +1,46 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
-import { formatPercent } from '../analysis/format';
+import { formatPercent, formatPoints } from '../analysis/format';
+import { boardLead, useBoardKomi } from '../analysis/lead';
 import { barTexts } from '../analysis/trend';
 import { useShownCandidates } from '../analysis/useShownCandidates';
+import { useDeviceStore } from '../device/deviceStore';
 import { usePanelWidth } from '../layout/usePanelWidth';
 
 /** The bar's side padding inside the panel. */
 const PANEL_PADDING = 24;
-/** The bar's text: 13 px semibold, as in the mockup. */
-const BAR_FONT = '600 13px Inter, "LXGW WenKai", sans-serif';
+/** The bar's text: 13 px semibold at 100%, as in the mockup; it follows the interface scale. */
+const barFont = (scale: number) => `600 ${(13 * scale) / 100}px Inter, "LXGW WenKai", sans-serif`;
 
-function canvasMeasure(): (text: string) => number {
+function canvasMeasure(scale: number): (text: string) => number {
   const ctx = document.createElement('canvas').getContext('2d');
-  if (!ctx) return (text) => text.length * 8;
-  ctx.font = BAR_FONT;
+  if (!ctx) return (text) => (text.length * 8 * scale) / 100;
+  ctx.font = barFont(scale);
   return (text) => ctx.measureText(text).width;
 }
 
-/** Measures text in the bar's font with a canvas, measuring again once the fonts have loaded. */
+/**
+ * Measures text in the bar's font with a canvas, measuring again once the fonts have loaded and
+ * when the interface scale changes.
+ */
 function useMeasure(): (text: string) => number {
-  const [measure, setMeasure] = useState(canvasMeasure);
+  const scale = useDeviceStore((s) => s.settings.interfaceScale);
+  const [measured, setMeasured] = useState(() => ({ scale, measure: canvasMeasure(scale) }));
+  if (measured.scale !== scale) setMeasured({ scale, measure: canvasMeasure(scale) });
   useEffect(() => {
     let active = true;
     document.fonts?.ready.then(
       () => {
-        if (active) setMeasure(canvasMeasure);
+        if (active) setMeasured({ scale, measure: canvasMeasure(scale) });
       },
       () => {},
     );
     return () => {
       active = false;
     };
-  }, []);
-  return measure;
+  }, [scale]);
+  return measured.measure;
 }
 
 /**
@@ -53,6 +60,7 @@ export function WinrateBar({
   const panelWidth = usePanelWidth();
   const fontMeasure = useMeasure();
   const { current, fading } = useShownCandidates();
+  const boardKomi = useBoardKomi();
   const barWidth = width ?? panelWidth - 2 * PANEL_PADDING;
 
   const fade: CSSProperties = {
@@ -64,12 +72,13 @@ export function WinrateBar({
     const black = current.winrate;
     const texts = barTexts(
       black,
-      current.scoreLead,
+      boardKomi === null ? current.scoreLead : boardLead(current.scoreLead, boardKomi, 'black'),
       { black: barWidth * black, white: barWidth * (1 - black) },
       measure ?? fontMeasure,
       {
         percent: (x) => formatPercent(x, lang),
-        lead: (points) => t('analysis.bar.lead', { points: points.toFixed(1) }),
+        lead: (points) => t('analysis.bar.lead', { points: formatPoints(points, lang) }),
+        even: () => t('analysis.even'),
       },
     );
     // The lead, when shown, is the inner text: second on the black side, first on the white.
@@ -108,7 +117,7 @@ export function WinrateBar({
     <div className="px-6 pt-4 pb-1.5">
       <div
         data-testid="winrate-bar"
-        className="flex h-[26px] overflow-hidden rounded-[4px] text-[13px] font-semibold tabular-nums shadow-[inset_0_0_0_1px_var(--bar-edge)]"
+        className="flex h-[26px] overflow-hidden rounded-[4px] text-[0.8125rem] font-semibold tabular-nums shadow-[inset_0_0_0_1px_var(--bar-edge)]"
       >
         {segments}
       </div>

@@ -30,10 +30,10 @@ export function NoticeLine() {
       key={notice.id}
       data-notice={notice.kind}
       role={notice.kind === 'error' ? 'alert' : 'status'}
-      className={`flex flex-none items-start gap-2.5 border-b border-hairline py-2.5 pr-[18px] pl-6 text-[13px] leading-normal ${style.band}`}
+      className={`flex flex-none items-start gap-2.5 border-b border-hairline py-2.5 pr-[18px] pl-6 text-[0.8125rem] leading-normal ${style.band}`}
     >
       <span
-        className={`mt-px flex size-4 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white ${style.mark}`}
+        className={`mt-px flex size-4 flex-none items-center justify-center rounded-full text-[0.6875rem] font-bold text-white ${style.mark}`}
         aria-hidden
       >
         {MARK}
@@ -41,7 +41,7 @@ export function NoticeLine() {
       <span className="min-w-0 flex-1 break-words">
         <b className="font-semibold">{notice.title}</b>
         {notice.detail && (
-          <span className="block text-[12.5px] whitespace-pre-line text-text-muted">
+          <span className="block text-[0.78125rem] whitespace-pre-line text-text-muted">
             {notice.detail}
           </span>
         )}

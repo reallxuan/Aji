@@ -90,8 +90,8 @@ export function EngineCard() {
           : null;
 
   return (
-    <div className="text-[12.5px] leading-[1.7] whitespace-nowrap tabular-nums">
-      <div className="mb-1 text-[13px] font-semibold">{title}</div>
+    <div className="text-[0.78125rem] leading-[1.7] whitespace-nowrap tabular-nums">
+      <div className="mb-1 text-[0.8125rem] font-semibold">{title}</div>
       {rows.map(([label, value]) => (
         <div key={label}>
           <span className="inline-block w-14 text-text-muted">{label}</span>

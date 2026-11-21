@@ -130,7 +130,7 @@
         "scoreLead": "Lead"
       },
       "perspective": {
-        "label": "Perspective",
+        "label": "Graph perspective",
         "black": "Black",
         "white": "White"
       },
@@ -146,7 +146,9 @@
     "eye": {
       "label": "Hide candidates",
       "hint": "Tap to toggle, hold to hide for a moment"
-    }
+    },
+    "even": "Even",
+    "captures": "Captures B {{black}} · W {{white}}"
   },
   "setup": {
     "failure": {
@@ -360,6 +362,12 @@
         "yunzi": "Yunzi",
         "flat": "Flat"
       }
+    },
+    "scale": "Interface scale",
+    "lead": {
+      "title": "Score",
+      "withKomi": "With komi",
+      "board": "Board count"
     }
   },
   "game": {

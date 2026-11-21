@@ -45,10 +45,10 @@ export function HardwareRows({ hardware }: { hardware: HardwareReport | null }) 
 
   return (
     <section aria-label={t('setup.detect.heading')}>
-      <h3 className="text-[12px] text-text-muted">{t('setup.detect.heading')}</h3>
+      <h3 className="text-[0.75rem] text-text-muted">{t('setup.detect.heading')}</h3>
       <ul className="mt-1.5">
         {rows.map(({ key, label, value }) => (
-          <li key={key} className="flex items-center gap-4 py-1.5 text-[13px]">
+          <li key={key} className="flex items-center gap-4 py-1.5 text-[0.8125rem]">
             <span className="w-24 shrink-0 whitespace-nowrap text-text-muted">{label}</span>
             <span
               className={

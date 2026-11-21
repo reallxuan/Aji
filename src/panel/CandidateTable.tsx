@@ -81,7 +81,7 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col px-6 pt-3 pb-2 text-sm">
-      <div className="mb-1.5 flex items-center justify-between gap-3 text-[12.5px] text-text-muted">
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-[0.78125rem] text-text-muted">
         <span>{t('analysis.table.title')}</span>
         <span className="flex items-center gap-3">
           {total}

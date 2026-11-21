@@ -13,6 +13,7 @@ import { SettingsPanel } from './settings/SettingsPanel';
 import { useSettingsSync } from './settings/useSettingsSync';
 import { useDeviceSync } from './device/useDeviceSync';
 import { useDeviceStore } from './device/deviceStore';
+import { useInterfaceScale } from './settings/useInterfaceScale';
 import { SetupPanel } from './setup/SetupPanel';
 import { useSetupProgress } from './setup/useSetupProgress';
 import { useWizardStore } from './setup/wizardStore';
@@ -21,6 +22,7 @@ export default function App() {
   useSettingsSync();
   useDeviceSync();
   const deviceLoaded = useDeviceStore((s) => s.loaded);
+  useInterfaceScale();
   useEngineSync();
   useSetupProgress();
   const { ready } = useGameSync();

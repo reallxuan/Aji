@@ -214,7 +214,7 @@ export function LayoutFrame({
       )}
       {drag && (
         <div
-          className="pointer-events-none fixed z-50 bg-pop px-2 py-1 text-[12px] text-text shadow-md"
+          className="pointer-events-none fixed z-50 bg-pop px-2 py-1 text-[0.75rem] text-text shadow-md"
           style={{ left: drag.point.x + 12, top: drag.point.y + 12 }}
         >
           {t(panelLabelKey(drag.ref))}

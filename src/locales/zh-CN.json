@@ -130,7 +130,7 @@
         "scoreLead": "目差"
       },
       "perspective": {
-        "label": "视角",
+        "label": "走势图视角",
         "black": "黑",
         "white": "白"
       },
@@ -146,7 +146,9 @@
     "eye": {
       "label": "隐藏候选",
       "hint": "点按切换，按住暂时隐藏"
-    }
+    },
+    "even": "均势",
+    "captures": "提子 黑 {{black}} · 白 {{white}}"
   },
   "setup": {
     "failure": {
@@ -360,6 +362,12 @@
         "yunzi": "云子",
         "flat": "平面"
       }
+    },
+    "scale": "界面缩放",
+    "lead": {
+      "title": "目差",
+      "withKomi": "含贴目",
+      "board": "盘面"
     }
   },
   "game": {

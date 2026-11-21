@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDeviceStore } from '../device/deviceStore';
 import { useEngineStore } from '../engine/engineStore';
 import { BottomNav } from '../panel/BottomNav';
+import { CapturesLine } from '../panel/CapturesLine';
 import { EngineStatus } from '../panel/EngineStatus';
 import { NoEngine } from '../panel/NoEngine';
 import { NoticeLine } from '../panel/NoticeLine';
@@ -25,6 +26,8 @@ const PANELS_MIN = 160;
 const BOARD_FLOOR = 320;
 const HEADER = { phone: 52, tablet: 56 };
 const BAR = 48;
+/** The phone's capture counts under the bar (design 5.9). */
+const CAPTURES = 20;
 const NAV = 72;
 
 /**
@@ -69,7 +72,7 @@ export function NarrowFrame({
   );
   const select = (ref: PanelRef) => update({ narrowTab: refId(ref) });
 
-  const barHeight = bar ? BAR : 0;
+  const barHeight = bar ? BAR + (phone ? CAPTURES : 0) : 0;
   // The height left for the board and the panels; the panels keep 160 px of it only while the
   // board keeps its floor, so a small landscape window shows the board first.
   const room = height - (phone ? HEADER.phone + NAV : HEADER.tablet) - barHeight;
@@ -113,10 +116,13 @@ export function NarrowFrame({
         <>
           {bar && (
             // The bar is the board's, not a tab: drawn as it is, with no grip.
-            <div className="h-12 flex-none border-t border-hairline">
+            <div className="flex-none border-t border-hairline">
               <PanelSizeContext.Provider value={{ width, height: BAR }}>
                 <WinrateBar />
               </PanelSizeContext.Provider>
+              {phone && (
+                <CapturesLine className="block px-6 text-xs text-text-muted tabular-nums" />
+              )}
             </div>
           )}
           <div className="flex min-h-0 flex-1 border-t border-hairline">

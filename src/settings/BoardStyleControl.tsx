@@ -54,7 +54,7 @@ export function BoardStyleControl() {
       stones: t(`settings.board.stones.${style.stones}`),
     });
   const choose = (style: StyleChoice) => update({ boardStyle: style });
-  const tile = 'flex flex-col items-center gap-1.5 rounded-md p-1 text-[12px] text-text-muted';
+  const tile = 'flex flex-col items-center gap-1.5 rounded-md p-1 text-[0.75rem] text-text-muted';
   const on = 'text-text ring-2 ring-text';
 
   return (

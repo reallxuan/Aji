@@ -36,15 +36,15 @@ const BAR_PADDING = 9;
 /**
  * The texts in each segment of the win-rate bar, left to right (design 5.4): each side's
  * percentage in its own segment, and the lead in the leader's beside it, when the segment holds
- * both with padding. A lead that rounds to 0.0 is not shown; neither is a percentage its segment
- * cannot hold.
+ * both with padding. A lead that rounds to 0.0 reads even, beside the side ahead on win rate
+ * (M7 minor 12). A percentage its segment cannot hold is not shown.
  */
 export function barTexts(
   blackWinrate: number,
   lead: number,
   segmentPx: { black: number; white: number },
   measure: (text: string) => number,
-  labels: { percent(x: number): string; lead(points: number): string },
+  labels: { percent(x: number): string; lead(points: number): string; even(): string },
 ): { black: string[]; white: string[] } {
   const percent = { black: labels.percent(blackWinrate), white: labels.percent(1 - blackWinrate) };
   const fits = (texts: string[], width: number) =>
@@ -54,9 +54,9 @@ export function barTexts(
   const texts = { black: side('black'), white: side('white') };
 
   const points = Math.round(Math.abs(lead) * 10) / 10;
-  if (points === 0) return texts;
-  const leader = lead > 0 ? 'black' : 'white';
-  const leadText = labels.lead(points);
+  const even = points === 0;
+  const leader = (even ? blackWinrate >= 0.5 : lead > 0) ? 'black' : 'white';
+  const leadText = even ? labels.even() : labels.lead(points);
   if (!fits([percent[leader], leadText], segmentPx[leader])) return texts;
   texts[leader] = leader === 'black' ? [percent.black, leadText] : [leadText, percent.white];
   return texts;
