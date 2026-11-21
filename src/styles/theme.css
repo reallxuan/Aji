@@ -40,10 +40,18 @@
   --pop: #ffffff;
 }
 
-/* The bar's texts keep their colour in both themes: light on the black segment, dark on white. */
+/*
+ * Colours that keep their value in both themes. The bar's texts: light on the black segment,
+ * dark on white. The drop overlay lies over the wood, so it is dark in both themes.
+ */
 :root {
   --bar-black-text: #f4f2ec;
   --bar-white-text: #1d1d1b;
+  --overlay-scrim: rgba(20, 16, 10, 0.38);
+  --overlay-edge: rgba(255, 255, 255, 0.55);
+  --overlay-card: rgba(22, 22, 24, 0.82);
+  --overlay-text: #eceae4;
+  --overlay-muted: #a3a19a;
 }
 
 @theme inline {
@@ -64,6 +72,11 @@
   --color-bar-black-text: var(--bar-black-text);
   --color-bar-white-text: var(--bar-white-text);
   --color-pop: var(--pop);
+  --color-overlay-scrim: var(--overlay-scrim);
+  --color-overlay-edge: var(--overlay-edge);
+  --color-overlay-card: var(--overlay-card);
+  --color-overlay-text: var(--overlay-text);
+  --color-overlay-muted: var(--overlay-muted);
 }
 
 /*

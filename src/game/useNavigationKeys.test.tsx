@@ -1,6 +1,7 @@
 import { act, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { resetGameStore } from './gameStore';
+import { resetGameStore, useGameStore } from './gameStore';
+import { makeSnapshot } from './testing';
 import { renderWithGame } from './renderWithGame';
 import { useNavigationKeys } from './useNavigationKeys';
 
@@ -64,4 +65,30 @@ it('opens with Ctrl+O off macOS, and leaves ⌘O to the macOS menu', async () =>
   fireEvent.keyDown(window, { key: 'o', metaKey: true });
   await act(async () => {});
   expect(macPicked).not.toHaveBeenCalled();
+});
+
+it('moves ten with PageDown, clamped to the end of the line', async () => {
+  const { requests } = renderWithGame(<Keys />, {
+    snapshot: makeSnapshot({ moveNumber: 30, mainLineLength: 45 }),
+  });
+  fireEvent.keyDown(window, { key: 'PageDown' });
+  await frame();
+  expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 40 } });
+  act(() =>
+    useGameStore
+      .getState()
+      .apply(makeSnapshot({ revision: 500, moveNumber: 40, mainLineLength: 45 })),
+  );
+  fireEvent.keyDown(window, { key: 'PageDown' });
+  await frame();
+  expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 45 } });
+});
+
+it('moves ten back with PageUp, stopping at the start', async () => {
+  const { requests } = renderWithGame(<Keys />, {
+    snapshot: makeSnapshot({ moveNumber: 4, mainLineLength: 45 }),
+  });
+  fireEvent.keyDown(window, { key: 'PageUp' });
+  await frame();
+  expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 0 } });
 });

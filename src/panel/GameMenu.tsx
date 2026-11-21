@@ -1,5 +1,5 @@
 import { ChevronDownIcon, FolderOpenIcon, HistoryIcon, PlusIcon, SaveIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DropdownMenu,
@@ -75,13 +75,18 @@ export function GameMenu() {
   const os = useOs();
   const snapshot = useGameStore((s) => s.snapshot);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
+  // Escape gives focus back to the trigger, as a menu should; after a choice it stays off it,
+  // so ↓ steps the game instead of reopening the menu (M6 minor #8).
+  const escaped = useRef(false);
   const title = gameTitle(snapshot, t);
   const icon = 'size-4 text-text-muted';
 
   return (
     <DropdownMenu
       onOpenChange={(open) => {
-        if (open) ctx.files.recent().then(setRecent, () => setRecent([]));
+        if (!open) return;
+        escaped.current = false;
+        ctx.files.recent().then(setRecent, () => setRecent([]));
       }}
     >
       <DropdownMenuTrigger className="group -ml-1.5 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-1 text-[14px] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft">
@@ -91,7 +96,17 @@ export function GameMenu() {
           aria-hidden
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6} className="w-56">
+      <DropdownMenuContent
+        align="start"
+        sideOffset={6}
+        className="w-56"
+        onEscapeKeyDown={() => (escaped.current = true)}
+        onCloseAutoFocus={(event) => {
+          if (escaped.current) return;
+          event.preventDefault();
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        }}
+      >
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="gap-2.5">
             <PlusIcon className={icon} aria-hidden />

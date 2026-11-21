@@ -1,3 +1,4 @@
+import { AnalysisPanel } from './analysis/AnalysisPanel';
 import { useTrendSync } from './analysis/useTrendSync';
 import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
@@ -6,7 +7,6 @@ import { useEngineSync } from './engine/useEngineSync';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { MainFrame } from './layout/MainFrame';
-import { CandidateTable } from './panel/CandidateTable';
 import { EngineStatus } from './panel/EngineStatus';
 import { NoEngine } from './panel/NoEngine';
 import { NoticeLine } from './panel/NoticeLine';
@@ -56,7 +56,7 @@ export default function App() {
             ) : (
               <>
                 <EngineStatus />
-                <CandidateTable />
+                <AnalysisPanel />
               </>
             )}
             <footer className="mt-auto">

@@ -82,4 +82,13 @@ describe('App panel switch', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '取消' })));
     expect(screen.queryByText('准备 AI 引擎')).not.toBeInTheDocument();
   });
+
+  it('shows the bar, the graph and the candidate table under the header', async () => {
+    renderApp({ state: 'analysing', version: '1.18.2' });
+    await act(async () => {});
+    expect(screen.getByTestId('winrate-bar')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '胜率走势' })).toBeInTheDocument();
+    expect(screen.getByTestId('trend-legend')).toBeInTheDocument();
+    expect(screen.getByText('候选点')).toBeInTheDocument();
+  });
 });
