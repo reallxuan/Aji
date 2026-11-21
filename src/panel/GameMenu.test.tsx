@@ -82,3 +82,20 @@ it('shows an empty recent list', async () => {
   const recent = await openSub(await openMenu('未命名棋局'), '打开最近');
   expect(recent).toHaveTextContent('暂无最近打开的棋谱');
 });
+
+it('does not reopen on ↓ right after choosing an item', async () => {
+  renderWithGame(<GameMenu />, { snapshot: makeSnapshot({ hasMoves: true }), os: 'windows' });
+  await act(async () => {});
+  const menu = await openMenu('未命名棋局');
+  const open = within(menu).getByRole('menuitem', { name: /打开棋谱…/ });
+  await act(async () => {
+    fireEvent.click(open);
+  });
+  expect(screen.queryByRole('menu')).toBeNull();
+  const trigger = screen.getByRole('button', { name: '未命名棋局' });
+  expect(document.activeElement).not.toBe(trigger);
+  await act(async () => {
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'ArrowDown' });
+  });
+  expect(screen.queryByRole('menu')).toBeNull();
+});

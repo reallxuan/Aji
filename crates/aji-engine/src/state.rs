@@ -17,7 +17,11 @@ pub enum EngineState {
     /// KataGo is starting and has not answered its version query yet.
     Starting,
     /// KataGo is idle: the visit cap is reached or nothing is queued.
-    Ready { version: String },
+    Ready {
+        version: String,
+        /// The current position stopped at its visit limit; `analysisContinue` searches on.
+        limit_reached: bool,
+    },
     /// KataGo is searching the current position.
     Analysing { version: String },
     /// The user paused the analysis.
@@ -69,8 +73,11 @@ mod tests {
         );
         assert_eq!(json_of(EngineState::Starting), json!({"state":"starting"}));
         assert_eq!(
-            json_of(EngineState::Ready { version: v() }),
-            json!({"state":"ready","version":"1.18.2"})
+            json_of(EngineState::Ready {
+                version: v(),
+                limit_reached: true
+            }),
+            json!({"state":"ready","version":"1.18.2","limitReached":true})
         );
         assert_eq!(
             json_of(EngineState::Analysing { version: v() }),

@@ -27,4 +27,4 @@ pub use smoke::*;
 pub use source::*;
 pub use space::*;
 pub use unpack::*;
-pub use unused::{ActiveSummary, RemoveError};
+pub use unused::{ActiveSummary, RemoveError, active_summary};

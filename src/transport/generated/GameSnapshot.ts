@@ -23,6 +23,15 @@ name: string | null, info: GameInfo, rules: RulesState, size: number,
  */
 stones: Array<Color | null>, lastMove: Move | null, nextColor: Color, moveNumber: number, 
 /**
+ * The current node's index in the main line: its slot in the trend graph.
+ */
+lineIndex: number, 
+/**
+ * The move actually played next in the record; `null` at the end, or when a node in
+ * between changes the board without a move.
+ */
+nextMove: Move | null, 
+/**
  * The move number at the end of the main line.
  */
 mainLineLength: number, atStart: boolean, atEnd: boolean, 

@@ -42,6 +42,8 @@ const DEFAULTS: UiSettings = {
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
+  showCoordinates: true,
+  perspective: 'black',
 };
 const FIELDS: DiscField[] = ['winrate', 'scoreLead', 'visits'];
 /** The rules control with the settings page's label column. */
@@ -82,6 +84,11 @@ export function SettingsPanel() {
     ['dark', t('settings.dark')],
     ['light', t('settings.light')],
   ];
+  const coordinates = settings.showCoordinates ? 'show' : 'hide';
+  const coordinateOptions: Array<['show' | 'hide', string]> = [
+    ['show', t('settings.coordinatesShow')],
+    ['hide', t('settings.coordinatesHide')],
+  ];
 
   /** Taking the other line's field swaps the two, so the lines stay different. */
   const setDiscLine = (index: 0 | 1, field: DiscField) => {
@@ -113,6 +120,15 @@ export function SettingsPanel() {
               disabled={!loaded}
               onChange={(theme) => save({ theme })}
               options={themeOptions}
+            />
+          </Row>
+          <Row label={t('settings.coordinates')}>
+            <Choice
+              label={t('settings.coordinates')}
+              value={coordinates}
+              disabled={!loaded}
+              onChange={(choice) => save({ showCoordinates: choice === 'show' })}
+              options={coordinateOptions}
             />
           </Row>
         </Section>

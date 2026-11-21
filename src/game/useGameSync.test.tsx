@@ -63,6 +63,8 @@ it('waits for the first snapshot and the first engine status, then follows event
       engine: { state: 'notConfigured' },
       position: null,
       analysis: null,
+      rejected: null,
+      running: null,
     }),
   );
   expect(ready).toBe(true);
@@ -82,9 +84,11 @@ it('is ready even when the snapshot request fails', async () => {
     if (request.type === 'gameSnapshot') throw new Error('no backend');
     return {
       type: 'engineStatus',
-      engine: { state: 'ready', version: '1.18.2' },
+      engine: { state: 'ready', version: '1.18.2', limitReached: false },
       position: null,
       analysis: null,
+      rejected: null,
+      running: null,
     };
   });
   let ready = false;

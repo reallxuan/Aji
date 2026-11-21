@@ -17,8 +17,11 @@ import type { GameWarning } from './generated/GameWarning';
 import type { Move } from './generated/Move';
 import type { NavTarget } from './generated/NavTarget';
 import type { Preview } from './generated/Preview';
+import type { Rejection } from './generated/Rejection';
 import type { Request } from './generated/Request';
 import type { Response } from './generated/Response';
+import type { RunningEngine } from './generated/RunningEngine';
+import type { TrendNode } from './generated/TrendNode';
 import type { UiSettings } from './generated/UiSettings';
 import { TransportError, type Transport } from './transport';
 
@@ -39,12 +42,17 @@ export interface EngineStatus {
   engine: EngineState;
   position: PositionKey | null;
   analysis: AnalysisUpdate | null;
+  /** KataGo refused `position`. */
+  rejected: Rejection | null;
+  /** What the engine runs, for the engine card. */
+  running: RunningEngine | null;
 }
 
 export async function getEngineStatus(transport: Transport): Promise<EngineStatus> {
   const response = await transport.request({ type: 'engineStatus' });
   if (response.type !== 'engineStatus') throw unexpected(response);
-  return { engine: response.engine, position: response.position, analysis: response.analysis };
+  const { engine, position, analysis, rejected, running } = response;
+  return { engine, position, analysis, rejected, running };
 }
 
 async function expectOk(transport: Transport, request: Request): Promise<void> {
@@ -56,6 +64,9 @@ export const pauseAnalysis = (transport: Transport) =>
   expectOk(transport, { type: 'analysisPause' });
 export const resumeAnalysis = (transport: Transport) =>
   expectOk(transport, { type: 'analysisResume' });
+/** Searches the current position past its visit limit, by one more limit. */
+export const continueAnalysis = (transport: Transport) =>
+  expectOk(transport, { type: 'analysisContinue' });
 export const restartEngine = (transport: Transport) =>
   expectOk(transport, { type: 'engineRestart' });
 export const stopEngine = (transport: Transport) => expectOk(transport, { type: 'engineStop' });
@@ -186,4 +197,9 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
 export async function exportGame(transport: Transport): Promise<{ name: string; text: string }> {
   const { name, text } = await expectType(transport, { type: 'gameExport' }, 'gameExport');
   return { name, text };
+}
+
+/** One entry per main-line node, with the engine's cached result where it has one. */
+export async function getTrend(transport: Transport): Promise<TrendNode[]> {
+  return (await expectType(transport, { type: 'gameTrend' }, 'trend')).nodes;
 }

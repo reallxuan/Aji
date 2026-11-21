@@ -183,6 +183,7 @@ emits install progress on timers. Nothing is downloaded and no KataGo runs.
 | `no-engine` | Choose "set up later" to see the no-engine panel |
 | `mac` | The Metal path on Apple silicon |
 | `game` | A ready engine and a game to step through: open the samples from the title menu |
+| `analysing` | The `game` scenario with KataGo analysing: fake candidates every 100 ms with rising visits, for the discs, the table, the bar, the trend graph and hovering. It honours the visit limit (set one in settings to see the limit ring and Continue), Pause and Resume, and a revisited position searches again, catching up |
 
 Every scenario plays games through a stand-in for the backend's game session
 (`src/dev/fakeGame.ts`): it knows one record, the 2025 Samsung Cup final's second game, and

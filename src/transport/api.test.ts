@@ -1,5 +1,6 @@
 import {
   cancelInstall,
+  continueAnalysis,
   detectHardware,
   getAppInfo,
   getBackends,
@@ -9,6 +10,7 @@ import {
   getLicences,
   getNetworks,
   getSettings,
+  getTrend,
   getVersions,
   importNetwork,
   pauseAnalysis,
@@ -38,6 +40,8 @@ it('sends each engine request and checks the response type', async () => {
           engine: { state: 'starting' },
           position: '4d325c64abd378a1',
           analysis: null,
+          rejected: { position: '4d325c64abd378a1', message: 'illegal' },
+          running: { backend: 'metal', networkName: 'kata1' },
         }
       : { type: 'ok' };
   });
@@ -45,14 +49,18 @@ it('sends each engine request and checks the response type', async () => {
     engine: { state: 'starting' },
     position: '4d325c64abd378a1',
     analysis: null,
+    rejected: { position: '4d325c64abd378a1', message: 'illegal' },
+    running: { backend: 'metal', networkName: 'kata1' },
   });
   await pauseAnalysis(t);
   await resumeAnalysis(t);
+  await continueAnalysis(t);
   await restartEngine(t);
   expect(sent).toEqual([
     { type: 'engineStatus' },
     { type: 'analysisPause' },
     { type: 'analysisResume' },
+    { type: 'analysisContinue' },
     { type: 'engineRestart' },
   ]);
 });
@@ -70,6 +78,8 @@ describe('M5 helpers', () => {
     discLines: ['winrate', 'visits'],
     visitLimit: null,
     defaultRules: { kind: 'chinese' },
+    showCoordinates: true,
+    perspective: 'black',
   };
   const hardware = {
     os: { kind: 'macos', version: '27', arch: 'aarch64' },
@@ -195,4 +205,22 @@ describe('M5 helpers', () => {
       await expect(call()).rejects.toMatchObject({ code: 'internal' });
     }
   });
+});
+
+it('asks for the trend and unwraps its nodes', async () => {
+  const nodes = [
+    { moveNumber: 0, mover: null, move: null, stats: null },
+    {
+      moveNumber: 1,
+      mover: 'black' as const,
+      move: { type: 'pass' as const },
+      stats: { winrate: 0.5, scoreLead: 0, visits: 60 },
+    },
+  ];
+  const t = createFakeTransport((request) =>
+    request.type === 'gameTrend' ? { type: 'trend', nodes } : { type: 'ok' },
+  );
+  await expect(getTrend(t)).resolves.toEqual(nodes);
+  const wrong = createFakeTransport(() => ({ type: 'ok' }));
+  await expect(getTrend(wrong)).rejects.toMatchObject({ code: 'internal' });
 });

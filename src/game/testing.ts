@@ -33,6 +33,8 @@ export function makeSnapshot(over: Partial<GameSnapshot> = {}): GameSnapshot {
     lastMove: null,
     nextColor: 'black',
     moveNumber: 0,
+    lineIndex: 0,
+    nextMove: null,
     mainLineLength: 0,
     atStart: true,
     atEnd: true,

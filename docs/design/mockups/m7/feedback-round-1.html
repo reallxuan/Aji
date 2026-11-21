@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 feedback, round 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --pop:#ffffff; --barblack:#1d1d1b; --barwhite:#ffffff; --baredge:#c9c9c4; }
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --pop:#2a2a2e; --barblack:#050506; --barwhite:#f4f2ec; --baredge:#3a3a40; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1240px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro table { border-collapse:collapse; margin-top:10px; font-size:13px; }
+  .intro td { border-top:1px solid #2a2a2e; padding:6px 14px 6px 0; vertical-align:top; }
+  .intro td:first-child { color:#ECEAE4; white-space:nowrap; }
+  .section { max-width:1240px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1000px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label.after { color:#7fd1a8; }
+
+  .boardonly { width:868px; zoom:.5; border-radius:4px; overflow:hidden; }
+  .boardonly canvas { width:868px; height:868px; display:block; }
+  .zoomed { width:260px; height:260px; border-radius:6px; overflow:hidden; position:relative; }
+  .zoomed canvas { position:absolute; width:868px; height:868px; zoom:2.4; }
+  .crop { width:540px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; overflow:hidden; position:relative; zoom:.85; }
+
+  .wr { display:flex; align-items:center; padding:16px 24px 6px; }
+  .bar { flex:1; height:26px; display:flex; border-radius:4px; overflow:hidden; box-shadow:inset 0 0 0 1px var(--baredge); font-size:13px; font-weight:600; }
+  .bar .b { background:var(--barblack); color:#f4f2ec; display:flex; align-items:center; gap:10px; padding-left:9px; }
+  .bar .w { background:var(--barwhite); color:#1d1d1b; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-right:9px; flex:1; box-shadow:inset 0 0 0 1px var(--baredge); }
+  .bar .ld { font-weight:400; opacity:.72; }
+  .graph svg { display:block; }
+  .legend { display:flex; align-items:center; gap:14px; padding:2px 24px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); }
+  .legend .k { display:inline-flex; align-items:center; gap:6px; }
+  .legend .sw { width:14px; height:2px; }
+  .legend .bar1 { width:2px; height:9px; background:var(--muted); opacity:.7; }
+  .seg { margin-left:auto; display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; font-size:12px; }
+  .seg span { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; color:var(--muted); }
+  .seg span + span { border-left:1px solid var(--hairline); }
+  .seg span.on { background:var(--soft); color:var(--text); font-weight:500; }
+  .seg i { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .seg i.bk { background:#1d1d1b; box-shadow:inset 0 0 0 1px #55554f; }
+  .seg i.wt { background:#f4f2ec; box-shadow:inset 0 0 0 1px #a3a39e; }
+
+  .tbl { padding:12px 24px 8px; font-size:14px; }
+  .tbl .th { display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-bottom:6px; }
+  .tr { display:grid; grid-template-columns:30px 62px 1fr 1fr 1fr 1.3fr; align-items:center; padding:9px 6px; margin:0 -6px; border-bottom:1px solid var(--soft); }
+  .tr span:nth-child(n+3) { text-align:right; }
+  .tr.head { font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); padding-top:4px; padding-bottom:6px; }
+  .tr .pt { font-weight:500; }
+  .tr .sc { color:var(--score); }
+  .tr .vis { color:var(--muted); }
+  .tr .act { font-weight:600; }
+  .rk { width:21px; height:21px; border-radius:50%; font-size:11px; display:inline-flex; align-items:center; justify-content:center; color:#2B1D0E; font-style:normal; }
+  .rk.best { background:#FDF6E3; box-shadow:inset 0 0 0 2.5px #B8321F; font-weight:700; }
+  .rk.close { background:#FBF1D9; box-shadow:inset 0 0 0 1.5px #B8321F; }
+  .rk.doubt { background:#F8EAC9; box-shadow:inset 0 0 0 1.5px #8A6A32; color:#4A3410; }
+  .rk.poor { background:#ECD0A0; box-shadow:inset 0 0 0 1px rgba(138,106,50,.6); color:#4A3410; }
+  .rk.played { box-shadow:inset 0 0 0 1.5px #B8321F, 0 0 0 2px #2B1D0E; }
+  .dark .rk.played { box-shadow:inset 0 0 0 1.5px #B8321F, 0 0 0 2px #eceae4; }
+
+  .settings { width:540px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; padding:16px 24px; font-size:14px; }
+  .settings h3 { font-size:12.5px; color:var(--muted); font-weight:500; margin:0 0 10px; }
+  .settings .r { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--soft); }
+  .settings .r.new { background:color-mix(in srgb, #7fd1a8 12%, transparent); margin:0 -10px; padding:9px 10px; border-radius:4px; }
+  .settings .seg { margin-left:0; font-size:13px; }
+  .settings .seg span { padding:4px 12px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M7 · 第一轮反馈 feedback, round 1</h1>
+  Same position as <a href="board-analysis.html" style="color:#c9c7c0">board-analysis.html</a>: move 58, Black to move, the record's next move is M13. Candidate numbers are made up.
+  <table>
+    <tr><td>黑白视角</td><td>One choice, 黑 or 白, drives the discs, the table, the bar's emphasis and the graph (decided: A, all follow). The control sits at the right end of the graph's legend row and is remembered. Section 1–2.</td></tr>
+    <tr><td>图例文字</td><td>黑胜率 → 胜率, 黑领先目数 → 目差 (en: Win rate, Lead). The toggle says whose they are. 失误 and the mistake bars are removed (owner, after review). Section 2.</td></tr>
+    <tr><td>实战圈</td><td>The dark ring now sits flush against the disc's own ring, with no wood showing between. Section 3.</td></tr>
+    <tr><td>变化图</td><td>No ring on any variation stone while stepping with the wheel; the newest move keeps only its bold number. Section 4.</td></tr>
+    <tr><td>木纹 · 底边</td><td>The dark strip along the bottom edge goes, and so does the lit strip along the top. The new grain in section 5 was <b>declined</b>: the grain stays until board themes. Section 5.</td></tr>
+    <tr><td>隐藏坐标</td><td>New setting 界面 → 棋盘坐标 显示 / 隐藏, default 显示. Hidden, the label band shrinks to a thin margin, so the grid grows. Section 6.</td></tr>
+    <tr><td>不可选中</td><td>Nothing in the window can be selected or dragged as text: panel, table, header, board, cards. Text fields in settings stay editable and selectable.</td></tr>
+    <tr><td>丁浩</td><td>No change: 丁浩𪚥 is the test record <code>gb18030-rare.sgf</code>, which adds the rare character on purpose; <code>gbk-no-ca.sgf</code> reads 丁浩.</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>1 · 黑方视角 vs 白方视角</h2>
+  <p class="cap">Black to move. <b>Discs and table</b> show the chosen side's win rate and lead: 54.2 / +1.8 for Black becomes 45.8 / −1.8 for White.
+  <b>与最佳相比</b> is the difference in the win rate shown, so in White's view a weaker Black move reads <b>+</b> (better for White). <span class="call">My call:</span> the tiers (disc colour and ring) do not change with the view: they rate the move for the side that plays it, so L14 stays the best disc either way.
+  <b>Graph</b>: both lines are the chosen side's, so White's view is Black's mirrored. Mistake bars are removed. <b>Bar</b>: <span class="call">my call:</span> it already shows both sides' numbers, so it does not move; the lead sits in the leader's segment as now.</p>
+  <div class="row">
+    <div><div class="label">黑方视角 · BLACK'S VIEW</div><div class="crop dark" data-panel='{"view":"black"}'></div></div>
+    <div><div class="label after">白方视角 · WHITE'S VIEW</div><div class="crop dark" data-panel='{"view":"white"}'></div></div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div><div class="label">BOARD · BLACK'S VIEW</div><div class="boardonly"><canvas data-board='{"mode":"discs","view":"black"}'></canvas></div></div>
+    <div><div class="label after">BOARD · WHITE'S VIEW</div><div class="boardonly"><canvas data-board='{"mode":"discs","view":"white"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 · 图例行与视角开关</h2>
+  <p class="cap">Two small stones label the halves. Clicking a half switches every number at once; the active half is filled. Hovering a graph point shows that side's numbers, e.g. <b>第 41 手 白 · 胜率 47.3% · 目差 −0.9</b>.</p>
+  <div class="row">
+    <div><div class="label">LIGHT · 黑</div><div class="crop light" data-legend='{"view":"black"}'></div></div>
+    <div><div class="label">LIGHT · 白</div><div class="crop light" data-legend='{"view":"white"}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>3 · 实战圈紧贴分析圈</h2>
+  <p class="cap">M13, the move played next. Before: a band of wood shows between the red ring and the dark ring. After: the dark ring starts where the disc ends.</p>
+  <div class="row">
+    <div><div class="label">BEFORE</div><div class="zoomed"><canvas data-board='{"mode":"discs","view":"black","gap":true,"focus":"M13"}'></canvas></div></div>
+    <div><div class="label after">AFTER</div><div class="zoomed"><canvas data-board='{"mode":"discs","view":"black","focus":"M13"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>4 · 变化图不加圈</h2>
+  <p class="cap">Hovering L14 and stepping to move 3 of 8 with the wheel. Before: the newest stone had a thin ring. After: no ring on any stone; the newest move's number is bold, and the table row still reads 3 / 8.</p>
+  <div class="row">
+    <div><div class="label">BEFORE</div><div class="boardonly"><canvas data-board='{"mode":"pv","upto":3,"ring":true}'></canvas></div></div>
+    <div><div class="label after">AFTER</div><div class="boardonly"><canvas data-board='{"mode":"pv","upto":3}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>5 · 木纹与底边 <span style="color:#e8c27a;font-weight:400">— grain declined; only the edge strips go</span></h2>
+  <p class="cap">Before: the app's near-flat texture with the dark strip along the bottom. After: straight grain (柾目, the cut prized on kaya boards) — a few fine darker growth lines that drift gently, a few percent darker than the wood, so they read up close and disappear behind stones and discs. No bottom strip and no top highlight; the board is a flat surface.</p>
+  <div class="row">
+    <div><div class="label">BEFORE</div><div class="boardonly"><canvas data-board='{"mode":"empty","wood":"old"}'></canvas></div></div>
+    <div><div class="label after">AFTER</div><div class="boardonly"><canvas data-board='{"mode":"empty"}'></canvas></div></div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div><div class="label after">AFTER · WITH THE GAME AND DISCS</div><div class="boardonly"><canvas data-board='{"mode":"discs","view":"black"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>6 · 隐藏棋盘坐标</h2>
+  <p class="cap">A new row in 设置 → 界面, under 主题. Hidden, the coordinate band shrinks to a thin wood margin, so the grid and stones grow a little (about 2.5% in the app; this mockup exaggerates it).</p>
+  <div class="row">
+    <div><div class="label">显示</div><div class="boardonly"><canvas data-board='{"mode":"discs","view":"black"}'></canvas></div></div>
+    <div><div class="label after">隐藏</div><div class="boardonly"><canvas data-board='{"mode":"discs","view":"black","nocoords":true}'></canvas></div></div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div class="settings dark">
+      <h3>界面</h3>
+      <div class="r"><span>语言</span><span class="seg"><span class="on">跟随系统</span><span>中文</span><span>English</span></span></div>
+      <div class="r"><span>主题</span><span class="seg"><span class="on">跟随系统</span><span>深色</span><span>浅色</span></span></div>
+      <div class="r new"><span>棋盘坐标</span><span class="seg"><span class="on">显示</span><span>隐藏</span></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+
+function play(upto, extra) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, upto).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 }));
+  for (const m of (extra || [])) seq.push(m);
+  let last = null;
+  for (const {x, y, c} of seq) {
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+
+// Black to move; w and s are Black's.
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8, v:1240, pv:['L14','M13','M14','N13','L12','M12','K12','N12'] },
+  { p:'M13', w:53.1, s:1.3, v:842,  pv:['M13','L14'], played:true },
+  { p:'K12', w:52.4, s:0.9, v:512,  pv:['K12'] },
+  { p:'Q10', w:50.9, s:0.2, v:203,  pv:['Q10'] },
+  { p:'C10', w:49.6, s:-0.4, v:96,  pv:['C10'] },
+  { p:'N11', w:48.8, s:-0.9, v:41,  pv:['N11'] },
+];
+const tier = (c) => { const loss = CANDS[0].w - c.w; return c === CANDS[0] ? 'best' : loss < 2 ? 'close' : loss <= 4 ? 'doubt' : 'poor'; };
+const shown = (c, view) => view === 'white' ? { w:100 - c.w, s:-c.s } : { w:c.w, s:c.s };
+const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function noise1(r, knots) { const v = Array.from({length:knots + 2}, () => r() * 2 - 1); return (t) => { const i = Math.floor(t), f = t - i, s = f * f * (3 - 2 * f); const a = v[((i % knots) + knots) % knots], b = v[(((i + 1) % knots) + knots) % knots]; return a + (b - a) * s; }; }
+
+// Before: as the app draws it now (wood.ts): faint vertical fibres, lit top, dark lower strip.
+function woodOld(ctx, W, dpr) {
+  const r = rand(3), oct = [[.5,.014],[.07,.016],[.014,.018],[.004,.012]].map(([p, w]) => ({ p, w, n:noise1(r, 256) }));
+  const prof = new Float32Array(W);
+  for (let x = 0; x < W; x++) { const u = x / W; let s = 0; for (const o of oct) s += o.n(u / o.p) * o.w; prof[x] = s + .02 - .045 * u; }
+  const img = ctx.createImageData(W, W), d = img.data, top = 3 * dpr, low = W - 6 * dpr;
+  for (let y = 0; y < W; y++) {
+    let e = 0; if (y < top) e = .06 * (1 - y / top); else if (y >= low) e = -.16 - .06 * ((y - low) / (W - low));
+    for (let x = 0; x < W; x++) { const k = 1 + prof[x] + e, i = (y * W + x) * 4; d[i] = 0xdd * k; d[i+1] = 0xb0 * k; d[i+2] = 0x67 * k; d[i+3] = 255; }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// After: straight grain. The same fibres, plus fine growth lines that drift slowly down the board.
+function woodNew(ctx, W) {
+  const r = rand(5), oct = [[.5,.012],[.07,.012],[.014,.014],[.004,.010]].map(([p, w]) => ({ p, w, n:noise1(r, 256) }));
+  const prof = new Float32Array(W * 3);
+  for (let x = 0; x < W * 3; x++) { const u = x / W; let s = 0; for (const o of oct) s += o.n(u / o.p) * o.w; prof[x] = s; }
+  // Growth lines: irregular spacing, each a narrow dip with a soft edge.
+  const lines = new Float32Array(W * 3); let x = 0;
+  while (x < W * 3) {
+    x += W * (.012 + r() * .05);
+    const width = W * (.0015 + r() * .003), depth = .025 + r() * .035;
+    for (let k = -width * 3; k < width * 3; k++) { const i = Math.round(x + k); if (i >= 0 && i < lines.length) lines[i] -= depth * Math.exp(-(k * k) / (2 * width * width)); }
+  }
+  const drift = noise1(r, 64), sway = noise1(r, 64);
+  const img = ctx.createImageData(W, W), d = img.data;
+  for (let y = 0; y < W; y++) {
+    const v = y / W;
+    for (let x2 = 0; x2 < W; x2++) {
+      const u = x2 / W;
+      // The grain leans and wanders a little, more in some places than others.
+      const off = W + (drift(v * 2.2 + u * .8) * .018 + sway(u * 6 + v * .5) * .004 + v * .01) * W;
+      const j = Math.max(0, Math.min(W * 3 - 1, Math.round(x2 + off)));
+      const k = 1 + prof[j] + lines[j] + .015 - .04 * u, i = (y * W + x2) * 4;
+      d[i] = 0xdd * k; d[i+1] = 0xb0 * k; d[i+2] = 0x67 * k; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function stone(ctx, cx, cy, r, color, seed) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .55; ctx.shadowOffsetX = r * .14; ctx.shadowOffsetY = r * .2;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.55)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  if (color === 1) { const gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r); gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a'); ctx.fillStyle = gr; }
+  else { const gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa'); ctx.fillStyle = gr; }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1) { const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5); hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); }
+}
+
+function disc(ctx, cx, cy, r, c, dpr, opt) {
+  const t = tier(c), px = (v) => v * dpr, n = shown(c, opt.view);
+  ctx.save();
+  if (t === 'best') { ctx.shadowColor = 'rgba(40,20,4,.35)'; ctx.shadowBlur = px(6); ctx.shadowOffsetY = px(2); }
+  ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1;
+  ctx.fillStyle = t === 'best' ? '#FDF6E3' : '#FBF1D9';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  const ring = { best:[3.5,'#B8321F',1], close:[1.5,'#B8321F',1], doubt:[1.5,'#8A6A32',1], poor:[1,'#8A6A32',.6] }[t];
+  ctx.save(); ctx.globalAlpha = ring[2]; ctx.lineWidth = px(ring[0]); ctx.strokeStyle = ring[1];
+  ctx.beginPath(); ctx.arc(cx, cy, r - px(ring[0]) / 2, 0, 7); ctx.stroke(); ctx.restore();
+  // Before: centred a full ring width out, leaving a gap. After: half a width out, so it touches.
+  if (c.played) { ctx.lineWidth = px(2.5); ctx.strokeStyle = '#2B1D0E'; ctx.beginPath(); ctx.arc(cx, cy, r + px(opt.gap ? 2.5 : 1.25), 0, 7); ctx.stroke(); }
+  ctx.fillStyle = t === 'best' || t === 'close' ? '#2B1D0E' : '#4A3410'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`; ctx.fillText(n.w.toFixed(1), cx, cy - r * .2);
+  ctx.font = `500 ${r * .48}px Inter`; ctx.fillText(signed(n.s), cx, cy + r * .36);
+}
+
+function draw(canvas, opt) {
+  const css = 868, dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  if (opt.wood === 'old') woodOld(ctx, W, dpr); else woodNew(ctx, W);
+  const margin = (opt.nocoords ? 24 : 42) * dpr, sp = (W - 2 * margin) / (N - 1), at = i => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N-1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N-1), at(i)); }
+  ctx.stroke();
+  ctx.lineWidth = Math.round(1.6 * dpr); ctx.strokeRect(at(0), at(0), at(N-1) - at(0), at(N-1) - at(0));
+  ctx.fillStyle = '#3A2A14';
+  for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .11, 0, 7); ctx.fill(); }
+  if (!opt.nocoords) { ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${12 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i)); } }
+  if (opt.focus) { const [fx, fy] = pt(opt.focus); canvas.style.left = (-(at(fx) / dpr) + 54) + 'px'; canvas.style.top = (-(at(fy) / dpr) + 54) + 'px'; }
+  if (opt.mode === 'empty') return;
+
+  const base = play(UPTO);
+  let g = base.g, pvStones = [];
+  if (opt.mode === 'pv') {
+    const line = CANDS[0].pv.slice(0, opt.upto).map((p, i) => { const [x, y] = pt(p); return { x, y, c: i % 2 === 0 ? 1 : 2, n: i + 1 }; });
+    g = play(UPTO, line).g;
+    pvStones = line.filter((m) => g[m.y][m.x] === m.c);
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3);
+  if (opt.mode !== 'pv' && base.last) { const c = g[base.last[1]][base.last[0]]; ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a'; ctx.beginPath(); ctx.arc(at(base.last[0]), at(base.last[1]), sp * .11, 0, 7); ctx.fill(); }
+  for (const m of pvStones) {
+    const newest = m.n === pvStones[pvStones.length - 1].n && opt.upto < CANDS[0].pv.length;
+    ctx.fillStyle = m.c === 1 ? '#f4f1ea' : '#1d1b17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${newest ? 700 : 600} ${sp * .42}px Inter`; ctx.fillText(String(m.n), at(m.x), at(m.y) + dpr);
+    if (newest && opt.ring) { ctx.strokeStyle = m.c === 1 ? 'rgba(244,241,234,.75)' : 'rgba(29,27,23,.6)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(at(m.x), at(m.y), sp * .37, 0, 7); ctx.stroke(); }
+  }
+  if (opt.mode === 'discs') for (const c of CANDS) { const [x, y] = pt(c.p); disc(ctx, at(x), at(y), sp * .47, c, dpr, opt); }
+}
+
+// ---- Panel ---------------------------------------------------------------------------
+function bar() {
+  const w = 54.2;
+  return `<div class="wr"><div class="bar"><div class="b" style="width:${w}%">${w}%<span class="ld">领先 1.8 目</span></div><div class="w">${(100 - w).toFixed(1)}%</div></div></div>`;
+}
+function legend(view) {
+  return `<div class="legend"><span class="k"><span class="sw" style="background:var(--text)"></span>胜率</span><span class="k"><span class="sw" style="background:var(--score)"></span>目差</span>
+    <span class="seg"><span class="${view === 'black' ? 'on' : ''}"><i class="bk"></i>黑</span><span class="${view === 'white' ? 'on' : ''}"><i class="wt"></i>白</span></span></div>`;
+}
+function graph(view) {
+  const W = 540, H = 150, L = 52, R = 44, T = 12, B = 22, gw = W - L - R, gh = H - T - B, TOTAL = 214, CUR = 58;
+  const r = rand(11); let l = 0.2; const lead = [];
+  for (let i = 0; i <= CUR; i++) { l += (r() - .5) * .7 + (i === 23 ? -1.8 : i === 41 ? 2.2 : 0); lead.push(l); }
+  lead[CUR] = 1.8;
+  const flip = view === 'white' ? -1 : 1;
+  const sl = lead.map((v) => v * flip), wr = sl.map((v) => 1 / (1 + Math.exp(-v / 6.5)));
+  const x = (i) => L + i / TOTAL * gw, yw = (w) => T + (1 - w) * gh, ys = (s) => T + (.5 - s / 20) * gh;
+  const has = (i) => i <= 30 || (i >= 44 && i <= CUR);
+  const runs = []; let cur = null;
+  for (let i = 0; i <= CUR; i++) { if (has(i)) { if (!cur) runs.push(cur = []); cur.push(i); } else cur = null; }
+  const path = (ids, f) => ids.map((i, k) => (k ? 'L' : 'M') + x(i).toFixed(1) + ' ' + f(i).toFixed(1)).join(' ');
+  let s = `<svg width="${W}" height="${H}">`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${yw(.5)}" y2="${yw(.5)}" stroke="var(--hairline)"/><line x1="${L}" x2="${W-R}" y1="${yw(1)}" y2="${yw(1)}" stroke="var(--soft)"/><line x1="${L}" x2="${W-R}" y1="${yw(0)}" y2="${yw(0)}" stroke="var(--soft)"/>`;
+  const lab = (t, xx, yy, a, c) => `<text x="${xx}" y="${yy + 4}" font-size="10.5" fill="${c}" text-anchor="${a}">${t}</text>`;
+  s += lab('100%', L - 8, yw(1), 'end', 'var(--muted)') + lab('50%', L - 8, yw(.5), 'end', 'var(--muted)') + lab('0%', L - 8, yw(0), 'end', 'var(--muted)');
+  s += lab('+10', W - R + 8, yw(1), 'start', 'var(--score)') + lab('0', W - R + 8, yw(.5), 'start', 'var(--score)') + lab('−10', W - R + 8, yw(0), 'start', 'var(--score)');
+  for (let m = 50; m < TOTAL; m += 50) s += `<text x="${x(m)}" y="${H - 4}" font-size="9.5" fill="var(--line)" text-anchor="middle">${m}</text>`;
+  for (const run of runs) s += `<path d="${path(run, (i) => ys(sl[i]))}" fill="none" stroke="var(--score)" stroke-width="1.4"/><path d="${path(run, (i) => yw(wr[i]))}" fill="none" stroke="var(--text)" stroke-width="1.6"/>`;
+  s += `<line x1="${x(CUR)}" x2="${x(CUR)}" y1="${T - 4}" y2="${yw(0)}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  s += `<circle cx="${x(CUR)}" cy="${ys(sl[CUR])}" r="3" fill="var(--score)" stroke="var(--panel)" stroke-width="1.5"/><circle cx="${x(CUR)}" cy="${yw(wr[CUR])}" r="3.2" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5"/>`;
+  return `<div class="graph">${s}</svg></div>` + legend(view);
+}
+function table(view) {
+  const fmtV = (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
+  const best = shown(CANDS[0], view).w;
+  let s = `<div class="tbl"><div class="th"><span>候选点</span><span>总计算量 3.1k</span></div>
+    <div class="tr head"><span></span><span>落点</span><span>胜率</span><span>目差</span><span>计算量</span><span>与最佳相比</span></div>`;
+  CANDS.forEach((c, i) => {
+    const n = shown(c, view);
+    const diff = i === 0 ? '最佳' : signed(n.w - best) + '%';
+    const last = c.played ? `<span class="act">实战 ${diff}</span>` : `<span class="${i === 0 ? 'act' : ''}">${diff}</span>`;
+    s += `<div class="tr"><span><i class="rk ${tier(c)} ${c.played ? 'played' : ''}">${i + 1}</i></span><span class="pt">${c.p}</span><span>${n.w.toFixed(1)}%</span><span class="sc">${signed(n.s)}</span><span class="vis">${fmtV(c.v)}</span>${last}</div>`;
+  });
+  return s + '</div>';
+}
+
+document.fonts.ready.then(() => {
+  document.querySelectorAll('canvas[data-board]').forEach((c) => draw(c, JSON.parse(c.dataset.board)));
+  document.querySelectorAll('[data-panel]').forEach((el) => { const o = JSON.parse(el.dataset.panel); el.innerHTML = bar() + graph(o.view) + table(o.view); });
+  document.querySelectorAll('[data-legend]').forEach((el) => { const o = JSON.parse(el.dataset.legend); el.innerHTML = graph(o.view); });
+});
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
 
 use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview};
 use aji_core::{Color, Move, PositionKey};
-use aji_engine::{AnalysisUpdate, EngineState};
+use aji_engine::{AnalysisUpdate, EngineState, Rejection, TrendStats};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
 use aji_manager::install::{
@@ -36,6 +36,8 @@ pub enum Request {
     EngineStop,
     AnalysisPause,
     AnalysisResume,
+    /// Searches the current position past its visit limit, by one more limit.
+    AnalysisContinue,
     /// The hardware report. `refresh` detects again, for example after a driver update.
     SetupDetect {
         #[serde(default)]
@@ -104,6 +106,8 @@ pub enum Request {
     GameSnapshot,
     /// The game as UTF-8 SGF text, with a file name to suggest.
     GameExport,
+    /// The cached result of every main-line node, for the trend graph.
+    GameTrend,
 }
 
 /// The answer to a [`Request`], tagged the same way.
@@ -122,6 +126,10 @@ pub enum Response {
         position: Option<PositionKey>,
         /// The latest analysis of that position, if any has arrived.
         analysis: Option<AnalysisUpdate>,
+        /// KataGo refused that position.
+        rejected: Option<Rejection>,
+        /// What the engine runs, for the engine card; `null` with no engine.
+        running: Option<RunningEngine>,
     },
     SetupDetect {
         hardware: HardwareReport,
@@ -173,7 +181,36 @@ pub enum Response {
         name: String,
         text: String,
     },
+    Trend {
+        nodes: Vec<TrendNode>,
+    },
     Ok,
+}
+
+/// One main-line node in the trend graph (design 5.3). Several nodes can share a move number:
+/// setup and comment-only nodes carry no move.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendNode {
+    pub move_number: u32,
+    /// Who played the node's move; `null` on a node without one.
+    pub mover: Option<Color>,
+    #[serde(rename = "move")]
+    #[ts(rename = "move")]
+    pub mv: Option<Move>,
+    /// The engine's cached result for the node's position; `null` when it has none.
+    pub stats: Option<TrendStats>,
+}
+
+/// The engine files' names, as the engine card shows them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RunningEngine {
+    /// `null` for a development engine.
+    pub backend: Option<Backend>,
+    pub network_name: String,
 }
 
 /// A message the engine side pushes to the UI without being asked, tagged the same way.
@@ -187,6 +224,10 @@ pub enum AppEvent {
     AnalysisUpdate {
         analysis: AnalysisUpdate,
     },
+    /// KataGo refused the current position.
+    AnalysisRejected {
+        rejection: Rejection,
+    },
     /// The install job changed.
     SetupProgress {
         job: JobSnapshot,
@@ -198,6 +239,11 @@ pub enum AppEvent {
     /// The game changed, here or in another client.
     GameSnapshot {
         snapshot: GameSnapshot,
+    },
+    /// The main line's positions, or the engine's results, changed wholesale: a game was opened
+    /// or created, its rules changed, or the engine's files changed.
+    GameTrend {
+        nodes: Vec<TrendNode>,
     },
 }
 
@@ -219,6 +265,11 @@ pub struct GameSnapshot {
     pub last_move: Option<Move>,
     pub next_color: Color,
     pub move_number: u32,
+    /// The current node's index in the main line: its slot in the trend graph.
+    pub line_index: u32,
+    /// The move actually played next in the record; `null` at the end, or when a node in
+    /// between changes the board without a move.
+    pub next_move: Option<Move>,
     /// The move number at the end of the main line.
     pub main_line_length: u32,
     pub at_start: bool,
@@ -324,6 +375,8 @@ mod tests {
             ("engineStop", Request::EngineStop),
             ("analysisPause", Request::AnalysisPause),
             ("analysisResume", Request::AnalysisResume),
+            ("analysisContinue", Request::AnalysisContinue),
+            ("gameTrend", Request::GameTrend),
         ] {
             assert_eq!(
                 serde_json::from_value::<Request>(json!({"type": name})).unwrap(),
@@ -339,10 +392,77 @@ mod tests {
                 engine: EngineState::NotConfigured,
                 position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
+                rejected: None,
+                running: None,
             })
             .unwrap(),
             json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
-                   "position": "4d325c64abd378a1", "analysis": null})
+                   "position": "4d325c64abd378a1", "analysis": null,
+                   "rejected": null, "running": null})
+        );
+    }
+
+    #[test]
+    fn trend_json_shapes() {
+        let node = TrendNode {
+            move_number: 3,
+            mover: Some(Color::White),
+            mv: Some(Move::Pass),
+            stats: Some(aji_engine::TrendStats {
+                winrate: 0.25,
+                score_lead: -1.5,
+                visits: 80,
+            }),
+        };
+        let want = json!({"moveNumber": 3, "mover": "white", "move": {"type": "pass"},
+                          "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80}});
+        assert_eq!(
+            serde_json::to_value(Response::Trend {
+                nodes: vec![node.clone()]
+            })
+            .unwrap(),
+            json!({"type": "trend", "nodes": [want.clone()]})
+        );
+        assert_eq!(
+            serde_json::to_value(AppEvent::GameTrend { nodes: vec![node] }).unwrap(),
+            json!({"type": "gameTrend", "nodes": [want]})
+        );
+    }
+
+    #[test]
+    fn rejection_and_running_json_shapes() {
+        let rejection = Rejection {
+            position: aji_core::PositionKey(1),
+            message: "illegal".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(AppEvent::AnalysisRejected {
+                rejection: rejection.clone()
+            })
+            .unwrap(),
+            json!({"type": "analysisRejected",
+                   "rejection": {"position": "0000000000000001", "message": "illegal"}})
+        );
+        assert_eq!(
+            serde_json::to_value(Response::EngineStatus {
+                engine: EngineState::Ready {
+                    version: "1.18.2".into(),
+                    limit_reached: true
+                },
+                position: None,
+                analysis: None,
+                rejected: Some(rejection),
+                running: Some(RunningEngine {
+                    backend: None,
+                    network_name: "m.bin.gz".into()
+                }),
+            })
+            .unwrap(),
+            json!({"type": "engineStatus",
+                   "engine": {"state": "ready", "version": "1.18.2", "limitReached": true},
+                   "position": null, "analysis": null,
+                   "rejected": {"position": "0000000000000001", "message": "illegal"},
+                   "running": {"backend": null, "networkName": "m.bin.gz"}})
         );
     }
 
@@ -353,10 +473,13 @@ mod tests {
                 engine: EngineState::NotConfigured,
                 position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
                 analysis: None,
+                rejected: None,
+                running: None,
             })
             .unwrap(),
             json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
-                   "position": "4d325c64abd378a1", "analysis": null})
+                   "position": "4d325c64abd378a1", "analysis": null,
+                   "rejected": null, "running": null})
         );
         assert_eq!(
             serde_json::to_value(Response::Ok).unwrap(),
@@ -381,6 +504,7 @@ mod tests {
             score_lead: 0.0,
             is_final: false,
             candidates: vec![],
+            previous_visits: 0,
         };
         let value = serde_json::to_value(AppEvent::AnalysisUpdate { analysis: update }).unwrap();
         assert_eq!(value["type"], "analysisUpdate");
@@ -419,7 +543,8 @@ mod tests {
             (
                 json!({"type": "settingsSet", "settings": {"language": "en", "theme": "light",
                        "discLines": ["visits", "scoreLead"], "visitLimit": null,
-                       "defaultRules": {"kind": "japaneseKorean"}}}),
+                       "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false,
+                       "perspective": "white"}}),
                 Request::SettingsSet {
                     settings: UiSettings {
                         language: crate::settings::LanguagePreference::En,
@@ -430,6 +555,8 @@ mod tests {
                         ],
                         visit_limit: None,
                         default_rules: AnalysisRules::JapaneseKorean,
+                        show_coordinates: false,
+                        perspective: crate::settings::Perspective::White,
                     },
                 },
             ),
@@ -625,7 +752,8 @@ mod tests {
             .unwrap(),
             json!({"type": "settings", "settings": {"language": "system", "theme": "system",
                    "discLines": ["winrate", "scoreLead"], "visitLimit": null,
-                   "defaultRules": {"kind": "chinese"}}})
+                   "defaultRules": {"kind": "chinese"}, "showCoordinates": true,
+                   "perspective": "black"}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::SettingsChanged { settings }).unwrap()["type"],

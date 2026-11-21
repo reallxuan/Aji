@@ -264,8 +264,9 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Candidate moves with winrate, score lead and visits; order and fields configurable | 1 |
 | Hover a candidate to show its variation, with replay | 1 |
 | Start and pause analysis | 1 |
+| Hide the candidates while analysis keeps running (F; hold Z) | 1 |
 | Candidate list panel (sortable table) | 2 |
-| Winrate graph and score curve; click to jump; blunder bars | 2 |
+| Winrate graph and score curve; click to jump; blunder bars | 1 (moved from Phase 2 in M7: drawn from the results already cached) |
 | Move quality marks (each move coloured by loss) | 2 |
 | Next-move hint (where the move actually played ranks among candidates) | 2 |
 | Ownership and territory display in several styles (square size, opacity and so on) | 2 |

@@ -26,7 +26,8 @@ pub struct Settings {
     pub download_source: DownloadSource,
     /// The SHA-256 of each accepted licence text, to the RFC 3339 time it was accepted.
     pub accepted_licences: BTreeMap<String, String>,
-    /// Stored flat: `language`, `theme`, `discLines`, `visitLimit` and `defaultRules`.
+    /// Stored flat: `language`, `theme`, `discLines`, `visitLimit`, `defaultRules`,
+    /// `showCoordinates` and `perspective`.
     pub ui: UiSettings,
 }
 
@@ -62,6 +63,16 @@ pub enum DiscField {
     Visits,
 }
 
+/// Whose win rate and score lead the discs, the table and the trend graph show.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Perspective {
+    #[default]
+    Black,
+    White,
+}
+
 /// The preferences the settings page edits.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +86,10 @@ pub struct UiSettings {
     pub visit_limit: Option<u32>,
     /// The rules new games, and files that name neither rules nor komi, start with.
     pub default_rules: AnalysisRules,
+    /// Coordinates in the board's margin; hidden, the margin shrinks to a thin edge.
+    pub show_coordinates: bool,
+    /// Whose numbers the analysis shows; switched from the graph's legend.
+    pub perspective: Perspective,
 }
 
 impl Default for UiSettings {
@@ -85,6 +100,8 @@ impl Default for UiSettings {
             disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
             visit_limit: None,
             default_rules: AnalysisRules::Chinese,
+            show_coordinates: true,
+            perspective: Perspective::Black,
         }
     }
 }
@@ -175,6 +192,8 @@ pub fn load_settings(path: &Path) -> Result<Settings, SettingsError> {
             default_rules: field::<AnalysisRules>(&map, "defaultRules")
                 .filter(AnalysisRules::is_valid)
                 .unwrap_or_default(),
+            show_coordinates: field(&map, "showCoordinates").unwrap_or(defaults.show_coordinates),
+            perspective: field(&map, "perspective").unwrap_or_default(),
         },
     };
     if let Some(dev) = &settings.dev_engine {
@@ -554,6 +573,8 @@ mod tests {
                 disc_lines: [DiscField::Winrate, DiscField::ScoreLead],
                 visit_limit: None,
                 default_rules: AnalysisRules::Chinese,
+                show_coordinates: true,
+                perspective: Perspective::Black,
             }
         );
     }
@@ -571,6 +592,8 @@ mod tests {
             disc_lines: [DiscField::Winrate, DiscField::Visits],
             visit_limit: Some(5000),
             default_rules: AnalysisRules::JapaneseKorean,
+            show_coordinates: false,
+            perspective: Perspective::White,
         };
         save_ui_settings(&path, &ui).unwrap();
         let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -596,17 +619,48 @@ mod tests {
                 komi: aji_core::Komi::new(7.0).unwrap(),
                 scoring: aji_core::game::Scoring::Territory,
             },
+            show_coordinates: false,
+            perspective: Perspective::White,
         };
         assert_eq!(
             serde_json::to_value(&ui).unwrap(),
             serde_json::json!({"language":"zh-CN","theme":"dark",
                 "discLines":["winrate","visits"],"visitLimit":5000,
-                "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory"}})
+                "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory"},
+                "showCoordinates":false,"perspective":"white"})
         );
         assert_eq!(
             serde_json::from_value::<UiSettings>(serde_json::to_value(&ui).unwrap()).unwrap(),
             ui
         );
+    }
+
+    // ------------------------------------------------------------ M7: perspective
+
+    #[test]
+    fn perspective_is_read_leniently() {
+        let dir = tempfile::tempdir().unwrap();
+        let read = |json: &str| load_settings(&write(&dir, json)).unwrap().ui.perspective;
+        assert_eq!(read("{}"), Perspective::Black);
+        assert_eq!(read(r#"{"perspective":"white"}"#), Perspective::White);
+        assert_eq!(read(r#"{"perspective":"sideToMove"}"#), Perspective::Black);
+    }
+
+    // ------------------------------------------------------------ M7: coordinates
+
+    #[test]
+    fn show_coordinates_is_read_leniently() {
+        let dir = tempfile::tempdir().unwrap();
+        let read = |json: &str| {
+            load_settings(&write(&dir, json))
+                .unwrap()
+                .ui
+                .show_coordinates
+        };
+        assert!(read("{}"));
+        assert!(!read(r#"{"showCoordinates":false}"#));
+        assert!(read(r#"{"showCoordinates":true}"#));
+        assert!(read(r#"{"showCoordinates":"no"}"#));
     }
 
     // ------------------------------------------------------------ M6: default rules

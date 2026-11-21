@@ -20,6 +20,8 @@ function renderApp(engine: EngineState) {
       engine,
       position: '0000000000000000',
       analysis: null,
+      rejected: null,
+      running: null,
     }),
     appInfo: () => ({ type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' }),
     // Detection never answers, so the wizard stays on its first step.
@@ -58,7 +60,7 @@ describe('App panel switch', () => {
   });
 
   it('the gear opens settings and the arrow returns', async () => {
-    renderApp({ state: 'ready', version: '1.18.2' });
+    renderApp({ state: 'ready', version: '1.18.2', limitReached: false });
     await act(async () => {});
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '设置' })));
     expect(screen.getByRole('heading', { name: '设置' })).toBeInTheDocument();
@@ -71,7 +73,7 @@ describe('App panel switch', () => {
   });
 
   it('on a re-run over a working engine, offers cancel instead and returns to analysis', async () => {
-    renderApp({ state: 'ready', version: '1.18.2' });
+    renderApp({ state: 'ready', version: '1.18.2', limitReached: false });
     await act(async () => {});
     expect(screen.queryByText('准备 AI 引擎')).not.toBeInTheDocument();
     act(() => useWizardStore.getState().openWizard(true));
@@ -79,5 +81,14 @@ describe('App panel switch', () => {
     expect(screen.queryByRole('button', { name: '暂不设置' })).not.toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '取消' })));
     expect(screen.queryByText('准备 AI 引擎')).not.toBeInTheDocument();
+  });
+
+  it('shows the bar, the graph and the candidate table under the header', async () => {
+    renderApp({ state: 'analysing', version: '1.18.2' });
+    await act(async () => {});
+    expect(screen.getByTestId('winrate-bar')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '胜率走势' })).toBeInTheDocument();
+    expect(screen.getByTestId('trend-legend')).toBeInTheDocument();
+    expect(screen.getByText('候选点')).toBeInTheDocument();
   });
 });

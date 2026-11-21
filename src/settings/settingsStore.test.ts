@@ -9,6 +9,8 @@ const initial: UiSettings = {
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
+  showCoordinates: true,
+  perspective: 'black',
 };
 
 describe('useSettingsStore.save', () => {

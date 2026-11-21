@@ -224,6 +224,8 @@ export const storedSettings: UiSettings = {
   discLines: ['winrate', 'scoreLead'],
   visitLimit: null,
   defaultRules: { kind: 'chinese' },
+  showCoordinates: true,
+  perspective: 'black',
 };
 
 /** Answers every setup request from the fixtures; `overrides` replace single request types. */
@@ -266,6 +268,8 @@ export function setupTransport(
           engine: { state: 'notConfigured' },
           position: '0000000000000000',
           analysis: null,
+          rejected: null,
+          running: null,
         };
       case 'appInfo':
         return { type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' };

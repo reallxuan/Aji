@@ -24,7 +24,7 @@ This is the phase-level plan. It splits Phase 1 into milestones, orders them, an
 - Light and dark themes (moved into Phase 1 by interface design section 9), high-DPI, Simplified Chinese and English.
 - The UI–engine boundary of charter section 6.1, from the first line of code.
 
-**Out of scope for Phase 1 [Proposed, see decision O1]:** the trend graph, the variations section and the letter badges that go with it (interface design 4.4 and 5.4), clicking the board to play a move, and the sortable candidate list. The interface design draws the full main screen, but the charter puts the winrate graph, variation tree, try-out and candidate list panel in Phase 2. Phase 1 builds the header row, win-rate bar, candidate table and board. The trend graph and variations sections are left out, not stubbed.
+**Out of scope for Phase 1 [Decided 2026-11-21, decision O1]:** the variations section and the letter badges that go with it (interface design 4.4 and 5.4), clicking the board to play a move, and the sortable candidate list. The charter puts the variation tree, try-out and candidate list panel in Phase 2. Phase 1 builds the header row, win-rate bar, trend graph, candidate table and board. The trend graph moved into Phase 1 in M7: it draws the results the engine has already cached for the moves the user has visited, so it needs no whole-game analysis. The variations section is left out, not stubbed.
 
 ## 2. Decisions for the owner
 
@@ -32,7 +32,7 @@ Only O3 is needed before M1 starts, because Task 1 writes the identifier into th
 
 | ID | Decision | Proposed default | Needed by |
 |---|---|---|---|
-| O1 | Main-screen scope in Phase 1: follow the charter's phasing (section 1 above) or build everything the interface design draws | Follow the charter | M7 |
+| O1 | Main-screen scope in Phase 1: follow the charter's phasing (section 1 above) or build everything the interface design draws | **Decided 2026-11-21:** follow the charter, except the trend graph, which M7 builds from cached results; the variations tree stays in Phase 2 | M7 |
 | O2 | Where the game record lives: in the Rust backend as a game session, with the UI receiving snapshots; or in the UI, with `aji-core` compiled to WebAssembly | Rust backend (section 3.1) | M6 |
 | O3 | Bundle identifier. It becomes part of the data-directory path on every OS and is costly to change after release | `io.github.reallxuan.aji` | M1 |
 | O4 | Which network the wizard preselects (interface design 7, open item) | **Decided 2026-11-19:** keep Elo order and preselect the top row, the highest-rated network on katagotraining.org that the chosen engine can load, on every machine; no GPU tiers and no local measurement | M3 |
@@ -93,7 +93,7 @@ The alternative (O2) is `aji-core` compiled to WebAssembly, with the tree held i
 | M4 | Install pipeline | Download, verify, unpack, benchmark, config and smoke test work unattended; a failure offers the next backend | M3 |
 | M5 | First-run wizard and settings | Phase 1 acceptance for setup, from a clean user account | M4 |
 | M6 | Game records and board | SGF files open, render and navigate correctly | M1 (core work can start after M2) |
-| M7 | Analysis on the board | Candidate discs, table, win-rate bar and hover variations | M5, M6 |
+| M7 | Analysis on the board | Candidate discs, table, win-rate bar, trend graph and hover variations | M5, M6 |
 | M8 | Acceptance and v0.1.0 | The acceptance run passes on both machines; Linux works on CPU | M7 |
 
 ```
@@ -242,10 +242,12 @@ Design: [2026-11-20-m4-install-pipeline-design.md](../specs/2026-11-20-m4-instal
 
 - Analysis follows the current node. Rapid navigation debounces requests and terminates stale queries, and updates for any other position are never drawn.
 - Candidate discs per interface design 5.3: tiers at 2 and 4 points of win-rate loss, and the outer ring on the move actually played. How many candidates to show, and the visit threshold, are proposed in the M7 plan.
-- Candidate table (4.3), the win-rate bar with score lead and uncertainty (4.2), and engine-indicator hover details (version, visits per second).
+- Candidate table (4.3), the win-rate bar with the score lead inside the leader's segment and no uncertainty (4.2), the trend graph (decision O1), and engine-indicator hover details (version, visits per second).
 - Hovering a candidate shows its principal variation as numbered stones, with captures applied through `game.preview`. The wheel steps through it while hovering ("with replay").
 
 **Exit:** the whole acceptance path works on both machines.
+
+**Status:** built on 2026-11-21. Detailed plan and design: [2026-11-21-phase-1-m7-analysis-on-board.md](2026-11-21-phase-1-m7-analysis-on-board.md), [the M7 design](../specs/2026-11-21-m7-analysis-on-board-design.md). The exit check results are in the plan's Status.
 
 ### M8. Acceptance and v0.1.0
 

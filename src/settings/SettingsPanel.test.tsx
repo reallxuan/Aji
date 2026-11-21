@@ -13,7 +13,7 @@ import type { Response } from '../transport/generated/Response';
 import { SettingsPanel } from './SettingsPanel';
 import { useSettingsStore } from './settingsStore';
 
-const ready: EngineState = { state: 'ready', version: '1.18.2' };
+const ready: EngineState = { state: 'ready', version: '1.18.2', limitReached: false };
 const active = {
   engine: 'katago-v1.18.2-metal-macos-arm64',
   version: '1.18.2',
@@ -123,6 +123,18 @@ describe('SettingsPanel', () => {
     await act(async () => fireEvent.click(within(theme).getByRole('radio', { name: 'Light' })));
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(sets(transport.requests).at(-1)).toMatchObject({ language: 'en', theme: 'light' });
+  });
+
+  it('shows or hides the board coordinates', async () => {
+    const transport = mount();
+    const row = await screen.findByRole('radiogroup', { name: '棋盘坐标' });
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    expect(within(row).getByRole('radio', { name: '显示' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ showCoordinates: false });
   });
 
   it("swaps the disc lines when one takes the other line's field, and previews them", async () => {

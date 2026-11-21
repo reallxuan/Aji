@@ -15,6 +15,8 @@ export interface BoardView {
   dpr: number;
   /** Lines per side: 9, 13 or 19. */
   boardSize: number;
+  /** Coordinates in the margin; `false` hides them and shrinks the margin. Default `true`. */
+  coordinates?: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ export function drawBoard(
   const { cssSize, dpr, boardSize } = view;
   const wood = woodTexture(cssSize, dpr, create);
   if (!wood) return;
-  const geometry = boardGeometry(cssSize, boardSize);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(asImage(wood), 0, 0);
@@ -74,6 +76,7 @@ export function drawBoard(
   }
 
   // Coordinates sit in the band outside the stones, so an edge stone never covers one.
+  if (view.coordinates === false) return;
   const labelSize = Math.min(LABEL_SIZE, geometry.labelBand * 0.65);
   if (labelSize < 6) return;
   ctx.fillStyle = LABEL_INK;

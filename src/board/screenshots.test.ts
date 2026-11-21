@@ -11,10 +11,14 @@ import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { tierFor, type ShownCandidate } from '../analysis/candidates';
+import { variationBoard } from '../analysis/variation';
 import type { Color } from '../transport/generated/Color';
+import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
 import { type BoardView, drawBoard } from './drawBoard';
+import { drawCandidates, drawVariationNumbers } from './candidates';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 
@@ -58,7 +62,13 @@ function parse(rows: string[]): (Color | null)[] {
   );
 }
 
-function render(view: BoardView, stones: (Color | null)[], lastMove: Move | null): PNG {
+function render(
+  view: BoardView,
+  stones: (Color | null)[],
+  lastMove: Move | null,
+  discs: { candidates: ShownCandidate[]; lines: [DiscField, DiscField] } | null = null,
+  overlay: ((ctx: CanvasRenderingContext2D) => void) | null = null,
+): PNG {
   const size = Math.round(view.cssSize * view.dpr);
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
@@ -77,6 +87,22 @@ function render(view: BoardView, stones: (Color | null)[], lastMove: Move | null
     sprites,
   );
   ctx.drawImage(upper as unknown as CanvasImageSource, 0, 0);
+  if (discs) {
+    const layer = createCanvas(size, size);
+    drawCandidates(
+      layer.getContext('2d') as unknown as CanvasRenderingContext2D,
+      view,
+      discs.candidates,
+      discs.lines,
+      'zh-CN',
+    );
+    ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
+  }
+  if (overlay) {
+    const layer = createCanvas(size, size);
+    overlay(layer.getContext('2d') as unknown as CanvasRenderingContext2D);
+    ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
+  }
   return PNG.sync.read(canvas.toBuffer('image/png'));
 }
 
@@ -99,11 +125,45 @@ function compare(name: string, actual: PNG) {
   ).toBeLessThanOrEqual(TOLERANCE);
 }
 
+/**
+ * The mockup's candidates for Black at move 59 (board-analysis.html, section 1): win rate and
+ * lead are Black's, Black being to move. M13 was played.
+ */
+const MOCKUP = [
+  { at: [10, 5], w: 54.2, s: 1.8, v: 1240 },
+  { at: [11, 6], w: 53.1, s: 1.3, v: 842, played: true },
+  { at: [9, 7], w: 52.4, s: 0.9, v: 512 },
+  { at: [15, 9], w: 50.9, s: 0.2, v: 203 },
+  { at: [2, 9], w: 49.6, s: -0.4, v: 96 },
+  { at: [12, 8], w: 48.8, s: -0.9, v: 41 },
+];
+
+function mockupDiscs(
+  at: (i: number) => [number, number] = (i) => MOCKUP[i].at as [number, number],
+) {
+  return MOCKUP.map((c, i): ShownCandidate => {
+    const [x, y] = at(i);
+    const loss = MOCKUP[0].w - c.w;
+    return {
+      move: { type: 'play', x, y },
+      rank: i + 1,
+      tier: tierFor(loss, i === 0),
+      winrate: c.w / 100,
+      scoreLead: c.s,
+      visits: c.v,
+      loss,
+      played: c.played ?? false,
+      pv: [],
+    };
+  });
+}
+
 const empty = (n: number): (Color | null)[] => Array.from({ length: n * n }, () => null);
 
 describe('board screenshots', () => {
   beforeAll(() => {
     GlobalFonts.registerFromPath(join(HERE, '../assets/fonts/Inter-Regular.woff2'), 'Inter');
+    GlobalFonts.registerFromPath(join(HERE, '../assets/fonts/Inter-Medium.woff2'), 'Inter');
   });
 
   for (const boardSize of [9, 13, 19]) {
@@ -122,6 +182,87 @@ describe('board screenshots', () => {
         `samsung-58@${dpr}x`,
         render({ cssSize: CSS_SIZE, dpr, boardSize: 19 }, parse(SAMSUNG_58), lastMove),
       );
+    });
+  }
+
+  const SAMSUNG_LAST: Move = { type: 'play', x: 7, y: 1 };
+
+  it('draws candidate discs in four tiers, with the played ring', () => {
+    compare(
+      'discs-tiers@2x',
+      render({ cssSize: CSS_SIZE, dpr: 2, boardSize: 19 }, parse(SAMSUNG_58), SAMSUNG_LAST, {
+        candidates: mockupDiscs(),
+        lines: ['winrate', 'scoreLead'],
+      }),
+    );
+  });
+
+  it('draws visits over win rate when the settings ask for it', () => {
+    compare(
+      'discs-visits',
+      render({ cssSize: CSS_SIZE, dpr: 1, boardSize: 19 }, parse(SAMSUNG_58), SAMSUNG_LAST, {
+        candidates: mockupDiscs(),
+        lines: ['visits', 'winrate'],
+      }),
+    );
+  });
+
+  const SMALL: Record<number, Array<[number, number]>> = {
+    9: [
+      [2, 2],
+      [6, 6],
+      [4, 4],
+      [2, 6],
+      [6, 2],
+      [4, 2],
+    ],
+    5: [
+      [1, 1],
+      [3, 3],
+      [2, 2],
+      [1, 3],
+      [3, 1],
+      [2, 0],
+    ],
+  };
+  for (const boardSize of [9, 5]) {
+    it(`draws discs on a ${boardSize}×${boardSize} board`, () => {
+      compare(
+        `discs-${boardSize}`,
+        render({ cssSize: CSS_SIZE, dpr: 1, boardSize }, empty(boardSize), null, {
+          candidates: mockupDiscs((i) => SMALL[boardSize][i]),
+          lines: ['winrate', 'scoreLead'],
+        }),
+      );
+    });
+  }
+
+  // The mockup's line for the best candidate, L14 (board-analysis.html, section 2).
+  const COLUMNS = 'ABCDEFGHJKLMNOPQRST';
+  const point = (label: string) => ({
+    x: COLUMNS.indexOf(label[0]),
+    y: 19 - Number(label.slice(1)),
+  });
+  const L14_LINE = ['L14', 'M13', 'M14', 'N13', 'L12', 'M12', 'K12', 'N12'].map(point);
+
+  for (const step of [8, 3]) {
+    it(`draws a hovered line as numbered stones, ${step === 8 ? 'in full' : 'three moves in'}`, () => {
+      const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19 };
+      const board = variationBoard(
+        parse(SAMSUNG_58),
+        19,
+        {
+          moves: L14_LINE.map((p) => ({ type: 'play' as const, ...p })),
+          colors: L14_LINE.map((_, i) => (i % 2 ? 'white' : 'black')),
+          captured: L14_LINE.map(() => []),
+          illegalAt: null,
+        },
+        step,
+      );
+      const image = render(view, board.stones, null, null, (ctx) =>
+        drawVariationNumbers(ctx, view, board.numbers, board.newest, board.stones),
+      );
+      compare(`variation-${step === 8 ? 'full' : 'step-3'}@2x`, image);
     });
   }
 });

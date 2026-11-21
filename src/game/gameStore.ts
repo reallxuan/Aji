@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useViewStore } from '../analysis/viewStore';
 import type { EngineStore } from '../engine/engineStore';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 
@@ -28,6 +29,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const current = get().snapshot;
     if (current && snapshot.revision <= current.revision) return;
     set({ snapshot, loaded: true });
+    // A hover and its line belong to the old position.
+    useViewStore.getState().reset();
     const engine = get().engine?.getState();
     if (!engine) return;
     if (snapshot.positionKey === null) engine.clearPosition();

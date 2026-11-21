@@ -12,6 +12,8 @@ it('applies the status reply, then keeps following events', async () => {
     engine: { state: 'starting' },
     position: 'aaaaaaaaaaaaaaaa',
     analysis: null,
+    rejected: null,
+    running: null,
   }));
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TransportProvider transport={transport}>
@@ -21,6 +23,11 @@ it('applies the status reply, then keeps following events', async () => {
   renderHook(() => useEngineSync(), { wrapper });
   await act(async () => {});
   expect(store.getState().engine).toEqual({ state: 'starting' });
-  act(() => transport.emit({ type: 'engineState', engine: { state: 'ready', version: '1' } }));
-  expect(store.getState().engine).toEqual({ state: 'ready', version: '1' });
+  act(() =>
+    transport.emit({
+      type: 'engineState',
+      engine: { state: 'ready', version: '1', limitReached: false },
+    }),
+  );
+  expect(store.getState().engine).toEqual({ state: 'ready', version: '1', limitReached: false });
 });

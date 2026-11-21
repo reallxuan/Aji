@@ -66,7 +66,8 @@
       "resume": "Resume analysis",
       "restart": "Restart engine",
       "stop": "Stop engine",
-      "setupAgain": "Set up the engine again"
+      "setupAgain": "Set up the engine again",
+      "continue": "Search further"
     },
     "limitReached": "Visit limit reached",
     "illegal": "This move breaks the rules ({{reason}}); the position cannot be analysed.",
@@ -75,16 +76,73 @@
       "suicide": "it takes its own last liberty",
       "ko": "it retakes a ko at once",
       "offBoard": "it is off the board"
+    },
+    "card": {
+      "title": {
+        "notConfigured": "No engine",
+        "starting": "Starting",
+        "ready": "Ready",
+        "analysing": "Analysing",
+        "paused": "Paused",
+        "stopped": "Stopped",
+        "crashed": "Stopped working"
+      },
+      "speed": "Speed",
+      "visits": "Visits",
+      "engine": "Engine",
+      "network": "Network",
+      "speedValue": "{{speed}} visits/s",
+      "visitsOfLimit": "{{visits}} / {{limit}}",
+      "engineValue": "KataGo {{version}}",
+      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "hint": {
+        "pause": "Click to pause",
+        "resume": "Click to resume",
+        "continue": "Click to search {{visits}} more visits"
+      }
     }
   },
   "analysis": {
     "columns": {
       "move": "Move",
-      "winrate": "Black win rate",
-      "scoreLead": "Black lead",
-      "visits": "Visits"
+      "winrate": "Win rate",
+      "scoreLead": "Lead",
+      "visits": "Visits",
+      "vsBest": "vs best"
     },
-    "pass": "Pass"
+    "pass": "Pass",
+    "table": {
+      "title": "Candidates",
+      "total": "Total visits {{visits}}",
+      "catchingUp": "Total visits {{visits}} / {{previous}}",
+      "hidden": "Hidden (F)",
+      "rejected": "KataGo cannot analyse this position"
+    },
+    "best": "Best",
+    "played": "Played {{diff}}",
+    "playedBest": "Played · best",
+    "bar": {
+      "lead": "leads by {{points}}"
+    },
+    "graph": {
+      "legend": {
+        "winrate": "Win rate",
+        "scoreLead": "Lead"
+      },
+      "perspective": {
+        "label": "Perspective",
+        "black": "Black",
+        "white": "White"
+      },
+      "move": "Move {{n}} {{color}} {{point}}",
+      "moveOnly": "Move {{n}}",
+      "black": "B",
+      "white": "W",
+      "winrate": "Win rate {{winrate}}",
+      "lead": "Lead {{lead}}",
+      "notAnalysed": "Not analysed yet",
+      "label": "Win-rate trend"
+    }
   },
   "setup": {
     "failure": {
@@ -250,6 +308,9 @@
     "theme": "Theme",
     "dark": "Dark",
     "light": "Light",
+    "coordinates": "Coordinates",
+    "coordinatesShow": "Show",
+    "coordinatesHide": "Hide",
     "analysis": "Analysis",
     "discLine1": "Disc, first line",
     "discLine2": "Disc, second line",

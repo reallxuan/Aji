@@ -5,7 +5,9 @@ import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { AppEvent } from '../transport/generated/AppEvent';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { PositionKey } from '../transport/generated/PositionKey';
+import type { Rejection } from '../transport/generated/Rejection';
 import type { EngineStatus } from '../transport/api';
+import { SPEED_WINDOW_MS } from '../analysis/constants';
 
 export interface EngineStoreState {
   engine: EngineState | null;
@@ -15,6 +17,13 @@ export interface EngineStoreState {
    * and after `clearPosition`. No update is accepted while it is null.
    */
   position: PositionKey | null;
+  /** KataGo refused the current position; cleared when the position changes. */
+  rejected: Rejection | null;
+  /**
+   * Visits per second over the last `SPEED_WINDOW_MS` of updates for the current position, while
+   * the engine is analysing; `null` until two samples span some time.
+   */
+  speed: number | null;
   /** True once the game has set or cleared the position; from then on a status reply is stale. */
   positionOwned: boolean;
   /** True once an analysis update has arrived; from then on a status analysis is stale. */
@@ -32,21 +41,53 @@ export interface EngineStoreState {
 
 export type EngineStore = StoreApi<EngineStoreState>;
 
-export function createEngineStore(): EngineStore {
+/** `now` is the clock speed samples are taken with, in milliseconds; tests inject one. */
+export function createEngineStore(now: () => number = () => performance.now()): EngineStore {
+  // Speed samples for the current position and search, oldest first.
+  let samples: Array<{ at: number; visits: number }> = [];
+
+  /** Adds a sample and measures the speed over the window it ends. */
+  const sample = (visits: number): number | null => {
+    const at = now();
+    // Fewer visits than the last sample: a new search began.
+    if (samples.length > 0 && visits < samples[samples.length - 1].visits) samples = [];
+    samples.push({ at, visits });
+    samples = samples.filter((s) => s.at >= at - SPEED_WINDOW_MS);
+    const first = samples[0];
+    const span = at - first.at;
+    if (samples.length < 2 || span <= 0) return null;
+    return ((visits - first.visits) * 1000) / span;
+  };
+
   return createStore<EngineStoreState>((set) => ({
     engine: null,
     analysis: null,
+    rejected: null,
+    speed: null,
     position: null,
     positionOwned: false,
     sawAnalysis: false,
     sawEvent: false,
     applyEvent: (event) =>
       set((state) => {
-        if (event.type === 'engineState') return { engine: event.engine, sawEvent: true };
+        if (event.type === 'engineState') {
+          if (event.engine.state !== 'analysing') samples = [];
+          return {
+            engine: event.engine,
+            sawEvent: true,
+            ...(event.engine.state === 'analysing' ? {} : { speed: null }),
+          };
+        }
+        if (event.type === 'analysisRejected') {
+          if (state.position === null || event.rejection.position !== state.position) return state;
+          return { rejected: event.rejection };
+        }
         // Install progress is for the setup screens, not the engine store.
         if (event.type !== 'analysisUpdate') return state;
         if (state.position === null || event.analysis.position !== state.position) return state;
-        return { analysis: event.analysis, sawAnalysis: true };
+        const speed =
+          state.engine?.state === 'analysing' ? sample(event.analysis.rootVisits) : null;
+        return { analysis: event.analysis, sawAnalysis: true, speed };
       }),
     applyStatus: (status) =>
       set((state) => {
@@ -57,16 +98,39 @@ export function createEngineStore(): EngineStore {
         if (!state.sawAnalysis && position !== null && position === status.position) {
           next.analysis = status.analysis;
         }
+        if (
+          state.rejected === null &&
+          position !== null &&
+          status.rejected?.position === position
+        ) {
+          next.rejected = status.rejected;
+        }
         return next;
       }),
     setPosition: (position) =>
-      set((state) =>
-        state.position === position
-          ? { positionOwned: true }
-          : { position, positionOwned: true, analysis: null, sawAnalysis: false },
-      ),
-    clearPosition: () =>
-      set({ position: null, positionOwned: true, analysis: null, sawAnalysis: false }),
+      set((state) => {
+        if (state.position === position) return { positionOwned: true };
+        samples = [];
+        return {
+          position,
+          positionOwned: true,
+          analysis: null,
+          sawAnalysis: false,
+          rejected: null,
+          speed: null,
+        };
+      }),
+    clearPosition: () => {
+      samples = [];
+      set({
+        position: null,
+        positionOwned: true,
+        analysis: null,
+        sawAnalysis: false,
+        rejected: null,
+        speed: null,
+      });
+    },
   }));
 }
 

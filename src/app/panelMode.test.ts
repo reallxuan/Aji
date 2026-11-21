@@ -4,7 +4,7 @@ import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import { panelMode } from './panelMode';
 
 const notConfigured: EngineState = { state: 'notConfigured' };
-const ready: EngineState = { state: 'ready', version: '1.18.2' };
+const ready: EngineState = { state: 'ready', version: '1.18.2', limitReached: false };
 const closed = { open: false, dismissed: false };
 const job = (outcome: JobSnapshot['outcome']): JobSnapshot => ({
   id: 1,

@@ -66,7 +66,8 @@
       "resume": "继续分析",
       "restart": "重启引擎",
       "stop": "停止引擎",
-      "setupAgain": "重新设置引擎"
+      "setupAgain": "重新设置引擎",
+      "continue": "继续计算"
     },
     "limitReached": "已达到每步上限",
     "illegal": "这一步在棋谱中不合法（{{reason}}），无法分析这个局面。",
@@ -75,16 +76,73 @@
       "suicide": "自填最后一口气",
       "ko": "立即提回劫",
       "offBoard": "落在棋盘之外"
+    },
+    "card": {
+      "title": {
+        "notConfigured": "尚未设置引擎",
+        "starting": "正在启动",
+        "ready": "就绪",
+        "analysing": "分析中",
+        "paused": "已暂停",
+        "stopped": "已停止",
+        "crashed": "已停止运行"
+      },
+      "speed": "速度",
+      "visits": "计算量",
+      "engine": "引擎",
+      "network": "网络",
+      "speedValue": "{{speed}} 次/秒",
+      "visitsOfLimit": "{{visits}} / {{limit}}",
+      "engineValue": "KataGo {{version}}",
+      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "hint": {
+        "pause": "点击暂停",
+        "resume": "点击继续",
+        "continue": "点击继续计算 {{visits}} 次"
+      }
     }
   },
   "analysis": {
     "columns": {
       "move": "落点",
-      "winrate": "黑方胜率",
-      "scoreLead": "黑方领先",
-      "visits": "计算量"
+      "winrate": "胜率",
+      "scoreLead": "目差",
+      "visits": "计算量",
+      "vsBest": "与最佳相比"
     },
-    "pass": "停一手"
+    "pass": "停一手",
+    "table": {
+      "title": "候选点",
+      "total": "总计算量 {{visits}}",
+      "catchingUp": "总计算量 {{visits}} / {{previous}}",
+      "hidden": "已隐藏（F）",
+      "rejected": "KataGo 无法分析这个局面"
+    },
+    "best": "最佳",
+    "played": "实战 {{diff}}",
+    "playedBest": "实战 · 最佳",
+    "bar": {
+      "lead": "领先 {{points}} 目"
+    },
+    "graph": {
+      "legend": {
+        "winrate": "胜率",
+        "scoreLead": "目差"
+      },
+      "perspective": {
+        "label": "视角",
+        "black": "黑",
+        "white": "白"
+      },
+      "move": "第 {{n}} 手 {{color}} {{point}}",
+      "moveOnly": "第 {{n}} 手",
+      "black": "黑",
+      "white": "白",
+      "winrate": "胜率 {{winrate}}",
+      "lead": "目差 {{lead}}",
+      "notAnalysed": "尚未分析",
+      "label": "胜率走势"
+    }
   },
   "setup": {
     "failure": {
@@ -250,6 +308,9 @@
     "theme": "主题",
     "dark": "深色",
     "light": "浅色",
+    "coordinates": "棋盘坐标",
+    "coordinatesShow": "显示",
+    "coordinatesHide": "隐藏",
     "analysis": "分析",
     "discLine1": "选点第一行",
     "discLine2": "选点第二行",

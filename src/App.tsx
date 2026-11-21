@@ -1,3 +1,5 @@
+import { AnalysisPanel } from './analysis/AnalysisPanel';
+import { useTrendSync } from './analysis/useTrendSync';
 import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
 import { useEngineStore } from './engine/engineStore';
@@ -5,7 +7,6 @@ import { useEngineSync } from './engine/useEngineSync';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { MainFrame } from './layout/MainFrame';
-import { CandidateList } from './panel/CandidateList';
 import { EngineStatus } from './panel/EngineStatus';
 import { NoEngine } from './panel/NoEngine';
 import { NoticeLine } from './panel/NoticeLine';
@@ -24,6 +25,7 @@ export default function App() {
   useEngineSync();
   useSetupProgress();
   const { ready } = useGameSync();
+  useTrendSync();
   usePlatformSync();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);
@@ -54,7 +56,7 @@ export default function App() {
             ) : (
               <>
                 <EngineStatus />
-                <CandidateList />
+                <AnalysisPanel />
               </>
             )}
             <footer className="mt-auto">

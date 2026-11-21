@@ -28,7 +28,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['src/test/setup.ts'],
-    // Vitest empties CSS imports by default; the token test reads theme.css as raw text.
-    css: { include: [/theme\.css/] },
+    // Vitest empties CSS imports by default; the style tests read theme.css and index.css as
+    // raw text.
+    css: { include: [/theme\.css/, /styles\/index\.css/] },
   },
 });

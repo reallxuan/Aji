@@ -14,6 +14,9 @@ import type { LicenceInfo } from "./LicenceInfo";
 import type { NetworkList } from "./NetworkList";
 import type { PositionKey } from "./PositionKey";
 import type { Preview } from "./Preview";
+import type { Rejection } from "./Rejection";
+import type { RunningEngine } from "./RunningEngine";
+import type { TrendNode } from "./TrendNode";
 import type { UiSettings } from "./UiSettings";
 
 /**
@@ -27,7 +30,15 @@ position: PositionKey | null,
 /**
  * The latest analysis of that position, if any has arrived.
  */
-analysis: AnalysisUpdate | null, } | { "type": "setupDetect", hardware: HardwareReport, } | { "type": "setupBackends", recommendation: BackendRecommendation, } | { "type": "setupVersions", versions: Array<EngineVersionChoice>, } | { "type": "setupNetworks", networks: NetworkList, } | { "type": "setupLicences", licences: Array<LicenceInfo>, 
+analysis: AnalysisUpdate | null, 
+/**
+ * KataGo refused that position.
+ */
+rejected: Rejection | null, 
+/**
+ * What the engine runs, for the engine card; `null` with no engine.
+ */
+running: RunningEngine | null, } | { "type": "setupDetect", hardware: HardwareReport, } | { "type": "setupBackends", recommendation: BackendRecommendation, } | { "type": "setupVersions", versions: Array<EngineVersionChoice>, } | { "type": "setupNetworks", networks: NetworkList, } | { "type": "setupLicences", licences: Array<LicenceInfo>, 
 /**
  * The hashes among `licences` that were accepted before.
  */
@@ -39,4 +50,4 @@ network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveS
 /**
  * Boxed: a snapshot is far larger than any other reply.
  */
-snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "ok" };
+snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "trend", nodes: Array<TrendNode>, } | { "type": "ok" };

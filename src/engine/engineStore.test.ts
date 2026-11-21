@@ -10,7 +10,7 @@ function status(
   position: string | null = A,
   analysis: AnalysisUpdate | null = null,
 ) {
-  return { engine, position, analysis };
+  return { engine, position, analysis, rejected: null, running: null };
 }
 
 function update(position: string, rootVisits: number): AnalysisUpdate {
@@ -22,6 +22,7 @@ function update(position: string, rootVisits: number): AnalysisUpdate {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
 }
 
@@ -51,6 +52,7 @@ it('keeps the latest analysis update', () => {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   expect(store.getState().analysis).toEqual(analysis);
@@ -67,6 +69,7 @@ it('an analysis update does not block the status reply', () => {
     scoreLead: 0,
     isFinal: false,
     candidates: [],
+    previousVisits: 0,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   store.getState().applyStatus(status({ state: 'analysing', version: '1' }));
@@ -153,7 +156,9 @@ it('clearPosition drops the analysis and ignores late updates', () => {
   store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(A, 9) });
   expect(store.getState().analysis).toBeNull();
   // A status reply that still names the old position does not bring it back.
-  store.getState().applyStatus(status({ state: 'ready', version: '1' }, A, update(A, 9)));
+  store
+    .getState()
+    .applyStatus(status({ state: 'ready', version: '1', limitReached: false }, A, update(A, 9)));
   expect(store.getState().position).toBeNull();
   expect(store.getState().analysis).toBeNull();
   store.getState().setPosition(A);
@@ -163,6 +168,97 @@ it('clearPosition drops the analysis and ignores late updates', () => {
 
 it('a status reply with no position sets none', () => {
   const store = createEngineStore();
-  store.getState().applyStatus(status({ state: 'ready', version: '1' }, null));
+  store.getState().applyStatus(status({ state: 'ready', version: '1', limitReached: false }, null));
   expect(store.getState().position).toBeNull();
+});
+
+describe('speed', () => {
+  function analysing() {
+    let now = 0;
+    const store = createEngineStore(() => now);
+    store.getState().setPosition(A);
+    store
+      .getState()
+      .applyEvent({ type: 'engineState', engine: { state: 'analysing', version: '1' } });
+    const at = (ms: number, visits: number, position = A) => {
+      now = ms;
+      store.getState().applyEvent({ type: 'analysisUpdate', analysis: update(position, visits) });
+    };
+    return { store, at };
+  }
+
+  it('is measured over the last second', () => {
+    const { store, at } = analysing();
+    at(0, 100);
+    at(500, 600);
+    expect(store.getState().speed).toBe(1000);
+    // Samples older than a second fall out of the window.
+    at(1400, 1000);
+    at(1600, 1100);
+    expect(store.getState().speed).toBe(500);
+  });
+
+  it('is null on one sample, after a restart, and for a new search', () => {
+    const { store, at } = analysing();
+    at(0, 100);
+    expect(store.getState().speed).toBeNull();
+    at(500, 600);
+    store.getState().applyEvent({ type: 'engineState', engine: { state: 'starting' } });
+    expect(store.getState().speed).toBeNull();
+    store
+      .getState()
+      .applyEvent({ type: 'engineState', engine: { state: 'analysing', version: '1' } });
+    at(600, 50);
+    expect(store.getState().speed).toBeNull();
+    at(700, 150);
+    expect(store.getState().speed).toBe(1000);
+    // Fewer visits than the last sample: a new search began, so its samples start over.
+    at(800, 20);
+    expect(store.getState().speed).toBeNull();
+  });
+
+  it('starts over on a new position and ignores a zero time span', () => {
+    const { store, at } = analysing();
+    at(0, 100);
+    at(0, 200);
+    expect(store.getState().speed).toBeNull();
+    at(500, 600);
+    store.getState().setPosition(B);
+    expect(store.getState().speed).toBeNull();
+    at(600, 900, B);
+    expect(store.getState().speed).toBeNull();
+  });
+});
+
+it('rejection follows the position', () => {
+  const store = createEngineStore();
+  const rejected = (position: string) =>
+    store.getState().applyEvent({
+      type: 'analysisRejected',
+      rejection: { position, message: 'Illegal move' },
+    });
+  store.getState().setPosition(A);
+  rejected(B);
+  expect(store.getState().rejected).toBeNull();
+  rejected(A);
+  expect(store.getState().rejected).toEqual({ position: A, message: 'Illegal move' });
+  store.getState().setPosition(B);
+  expect(store.getState().rejected).toBeNull();
+  store.getState().applyStatus({
+    ...status({ state: 'ready', version: '1', limitReached: false }, B),
+    rejected: { position: B, message: 'superko' },
+  });
+  expect(store.getState().rejected?.message).toBe('superko');
+  store.getState().clearPosition();
+  expect(store.getState().rejected).toBeNull();
+});
+
+it('a status rejection for another position is ignored', () => {
+  const store = createEngineStore();
+  store.getState().setPosition(A);
+  store.getState().applyStatus({
+    ...status({ state: 'ready', version: '1', limitReached: false }, A),
+    rejected: { position: B, message: 'superko' },
+  });
+  expect(store.getState().rejected).toBeNull();
 });

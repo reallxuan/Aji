@@ -35,6 +35,39 @@ pub struct AnalysisUpdate {
     pub score_lead: f64,
     pub is_final: bool,
     pub candidates: Vec<Candidate>,
+    /// The root visits the position had in the cache when this search started: a new search
+    /// starts from zero, and is catching up while it has fewer (design 5.2).
+    pub previous_visits: u32,
+}
+
+/// KataGo refused to analyse a position, for example a superko repeat (design 5.1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Rejection {
+    pub position: PositionKey,
+    /// KataGo's own words: diagnostic text, shown as a tooltip.
+    pub message: String,
+}
+
+/// The root of a cached analysis, for the trend graph. Black's view.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendStats {
+    pub winrate: f64,
+    pub score_lead: f64,
+    pub visits: u32,
+}
+
+impl TrendStats {
+    pub fn of(update: &AnalysisUpdate) -> TrendStats {
+        TrendStats {
+            winrate: update.winrate,
+            score_lead: update.score_lead,
+            visits: update.root_visits,
+        }
+    }
 }
 
 /// Converts a raw response for `position`. Candidates are sorted by `order` and truncated
@@ -72,12 +105,34 @@ pub fn to_update(raw: &RawAnalysis, position: &Position, max_candidates: usize) 
         score_lead: raw.root_info.score_lead,
         is_final: !raw.is_during_search,
         candidates,
+        previous_visits: 0,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_converted_update_has_no_previous_visits() {
+        let raw = RawAnalysis {
+            id: "q".into(),
+            is_during_search: true,
+            turn_number: 0,
+            root_info: crate::response::RawRootInfo {
+                visits: 7,
+                winrate: 0.5,
+                score_lead: 0.0,
+            },
+            move_infos: Vec::new(),
+        };
+        let position = Position::empty(
+            aji_core::BoardSize::NINETEEN,
+            aji_core::Rules::Chinese,
+            aji_core::Komi::new(7.5).unwrap(),
+        );
+        assert_eq!(to_update(&raw, &position, 10).previous_visits, 0);
+    }
     use crate::response::{RawMoveInfo, RawRootInfo};
     use aji_core::{BoardSize, Komi, Point, Rules};
 
