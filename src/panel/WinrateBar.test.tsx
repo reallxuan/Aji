@@ -6,6 +6,7 @@ import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
+import type { EngineState } from '../transport/generated/EngineState';
 import { WinrateBar } from './WinrateBar';
 
 afterEach(() => resetGameStore());
@@ -26,8 +27,14 @@ function analysis(overrides: Partial<AnalysisUpdate> = {}): AnalysisUpdate {
   };
 }
 
-function mount(update: AnalysisUpdate | null, width = 492, measure = (t: string) => t.length * 7) {
+function mount(
+  update: AnalysisUpdate | null,
+  width = 492,
+  measure = (t: string) => t.length * 7,
+  state: EngineState = { state: 'analysing', version: '1.18.2' },
+) {
   const engine = createEngineStore();
+  engine.getState().applyEvent({ type: 'engineState', engine: state });
   useGameStore.getState().bindEngine(engine);
   useGameStore.getState().apply(makeSnapshot({ revision: 1, positionKey: KEY }));
   if (update) engine.getState().applyEvent({ type: 'analysisUpdate', analysis: update });
@@ -81,6 +88,15 @@ it('fades the numbers while a new search catches up', () => {
       analysis: analysis({ rootVisits: 1100, previousVisits: 1000 }),
     }),
   );
+  for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
+    expect(text).toHaveStyle({ opacity: '1' });
+});
+
+it('the bar is not faded while paused', () => {
+  mount(analysis({ rootVisits: 640, previousVisits: 1000 }), 492, undefined, {
+    state: 'paused',
+    version: '1.18.2',
+  });
   for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
     expect(text).toHaveStyle({ opacity: '1' });
 });
