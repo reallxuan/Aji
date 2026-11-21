@@ -54,7 +54,8 @@ It is the last milestone before acceptance (M8): when M7 is done, the whole acce
 4. **No verdict line** under the graph ("上一手 白 H8 缓手…" is removed). The legend stays.
 5. **Hovered variation**: solid stones with numbers (not translucent).
 6. **A restarted search is shown live** (after continue, resume or restart), and the UI should make that feel reasonable (5.2).
-7. Everything else in both mockups as proposed: line only (no fill), score axis from the data, hover card and click/drag on the graph, the disc and table rules, wheel stepping, the engine card and the hollow-ring limit state; discs and table in the side to move's view while the bar and graph stay Black's; G7 and G9 in, G8 out.
+7. Everything else in both mockups as proposed: line only (no fill), score axis from the data, hover card and click/drag on the graph, the disc and table rules, wheel stepping, the engine card and the hollow-ring limit state; G7 and G9 in, G8 out.
+8. **After the first build (feedback round 1, section 13)**: one black/white perspective for every number; no mistake bars; the legend reads 胜率 and 目差; the played ring flush with the disc; no ring on a variation stone; no lit or dark strip along the board's edges; coordinates can be hidden; nothing in the window can be selected. The wood grain stays as it is until board themes are supported. This supersedes "discs and table in the side to move's view while the bar and graph stay Black's".
 
 ## 4. Approaches considered
 
@@ -104,7 +105,7 @@ It is the last milestone before acceptance (M8): when M7 is done, the whole acce
 - New request `gameTrend` → response `trend { nodes: Array<{ moveNumber, mover, move, stats: TrendStats | null }> }`, in main-line order.
 - New event `gameTrend` with the same body, pushed by the service whenever the main line's keys or the engine's results can have changed wholesale: a game is opened or created, its rules change (rules are part of the position key), or the engine's files change (the cache is cleared, so the graph empties). A navigation does not push it.
 - `GameSnapshot` gains `lineIndex` (the current node's index in the main line) and `nextMove` (the move of the next main-line node that has one, before the next node with a different position; `null` at the end). The UI updates `nodes[lineIndex].stats` from each `analysisUpdate` whose key matches the snapshot's, keeping the update with the most visits (5.2's continue starts a new search from zero; the graph never drops a point because of it).
-- x axis: node index. Mistake bars and the hover card use each node's `mover`, `move` and `moveNumber`; colours are never assumed to alternate (handicap, `PL`, setup stones).
+- x axis: node index. The hover card uses each node's `mover`, `move` and `moveNumber`; colours are never assumed to alternate (handicap, `PL`, setup stones).
 - The analysis cache keeps 1,024 positions (enough for two or three long games). An evicted position shows as a gap, which is honest.
 
 ### 5.4 The win-rate bar
@@ -120,12 +121,11 @@ Follows the approved mockup, section 2.
 
 - Size: full panel width, 150 px high (100 px when the window is under 720 px tall) **[Proposed]**. Plot margins as in the mockup: axis labels left and right, move-number ticks along the bottom.
 - x axis: the main line's nodes, first to last, always the full length (5.3).
-- Win rate: Black's, in `text`, 1.6 px, against the left axis (0%, 50%, 100%). Score lead: Black's, in `score`, 1.4 px, against the right axis, symmetric about 0 so that 0 sits on 50%. The score range is the smallest of ±10, ±20, ±40, ±80, ±160 that holds every plotted lead.
+- Win rate: the chosen perspective's (13.1), in `text`, 1.6 px, against the left axis (0%, 50%, 100%). Score lead: the same side's, in `score`, 1.4 px, against the right axis, symmetric about 0 so that 0 sits on 50%. The score range is the smallest of ±10, ±20, ±40, ±80, ±160 that holds every plotted lead.
 - A node is plotted when its stats have at least 50 visits **[Proposed]**, so a position passed while holding an arrow key does not plot noise. Consecutive plotted moves are joined; any gap breaks the line **[Decided]**. A single isolated point is a small dot.
-- Mistake bars: for each node with a move whose own stats and the previous node's are plotted, the mover's loss is the drop in the mover's win rate (percentage points) or twice the drop in the mover's score lead (points), whichever is larger. Loss ≥ 2 draws a 2 px bar up from the bottom axis, `3 + 1.2 × loss` px high, at most 18 px, in `text-muted` at 70%.
 - The current move: a dashed vertical line in `text-muted`, with a dot on each line where it has a value.
-- Legend under the graph: 黑胜率, 黑领先目数, 失误. Nothing else on that line **[Decided]**.
-- Hover: a hairline at the pointer's move and a small card: "第 72 手 白 R14", then "黑胜率 49.5% · 白领先 0.1 目", or "尚未分析" when the move has no plotted point. Click goes to that move; dragging scrubs, sending at most one navigation per animation frame (as held keys do).
+- Legend under the graph: 胜率, 目差, and at the right end the perspective control (13.1). Nothing else on that line **[Decided]**.
+- Hover: a hairline at the pointer's move and a small card: "第 72 手 白 R14", then "胜率 49.5% · 目差 −0.1" in the chosen perspective, or "尚未分析" when the move has no plotted point. Click goes to that move; dragging scrubs, sending at most one navigation per animation frame (as held keys do).
 - Drawn as SVG in React (a few hundred path points; no chart library).
 
 ### 5.6 Candidate discs
@@ -134,8 +134,8 @@ Interface design 5.3, as in the mockup section 1.
 
 - Which candidates: KataGo's candidates for the current position, by its order, at most 10, each with at least 2% of the top candidate's visits **[Decided]**. The move actually played next in the record is also shown if KataGo reported it, even below that threshold. The board and the table show the same set.
 - Tiers by the side to move's win-rate loss against the best: best; under 2 points (close); 2 to 4 (doubtful); over 4 (poor) **[Decided]**. Fills, rings and text colours as in the design table. The disc's radius matches a stone's.
-- The two lines are the settings' `discLines` (default win rate over score lead), in the **side to move's** view **[Decided]**: win rate to one decimal without "%", lead signed to one decimal, visits as `1.2k`.
-- The move actually played next (the snapshot's `nextMove`) gets the 2.5 px dark outer ring.
+- The two lines are the settings' `discLines` (default win rate over score lead), in the **chosen perspective** (13.1) **[Decided]**: win rate to one decimal without "%", lead signed to one decimal, visits as `1.2k`.
+- The move actually played next (the snapshot's `nextMove`) gets the 2.5 px dark outer ring, flush against the disc's edge (13.3).
 - Discs are drawn only while the analysis's position key matches the snapshot's, and not on an illegal node.
 - F toggles the discs and the table's rows for the session; holding Z hides them while held. While hidden, the table header shows a muted "已隐藏（F）" **[Proposed]**. Analysis keeps running.
 
@@ -144,9 +144,9 @@ Interface design 5.3, as in the mockup section 1.
 Interface design 4.3, as in the mockup.
 
 - Header line: "候选点" left, "总计算量 3.1k" (root visits) right.
-- Columns: rank chip, 落点, 胜率, 目差, 计算量, 与最佳相比. Win rate and lead in the side to move's view; the lead in `score`; visits muted.
+- Columns: rank chip, 落点, 胜率, 目差, 计算量, 与最佳相比. Win rate and lead in the chosen perspective (13.1); the lead in `score`; visits muted.
 - The rank chip copies its disc's tier styling. Translucent tiers are drawn in the colour they have over the wood, so they do not turn grey on the panel.
-- Last column: "最佳" on the best row, else the win-rate difference ("−1.8%"). The move actually played reads "实战 −1.1%" in bold ("实战 · 最佳" when it is the best), and its chip carries the outer ring.
+- Last column: "最佳" on the best row, else the difference between the row's shown win rate and the best row's ("−1.8%"; in the other side's perspective a weaker move reads "+1.8%"). The move actually played reads "实战 −1.1%" in bold ("实战 · 最佳" when it is the best), and its chip carries the outer ring.
 - Hovering a row previews its line on the board, exactly as hovering its disc (5.8), and highlights the row. Hovering a disc highlights its row.
 - Too many rows for the height: the table scrolls; the header line stays.
 
@@ -155,7 +155,7 @@ Interface design 4.3, as in the mockup.
 - Hover starts when the pointer is over a candidate disc (within the disc's radius) or a table row. The candidate's principal variation is **frozen** at that moment (audit K5); updates do not change it until the pointer leaves and comes back.
 - The UI asks `gamePreview` for the first 20 moves of the line (stopping before a pass). From the reply's `captured` lists it can build the board after any prefix itself, so wheel stepping needs no more requests.
 - Drawing: the other discs disappear. The line's stones are drawn as ordinary stones on the stone layer, from the preview board **[Decided: solid]**, and each stone still on the board after the shown prefix carries its move number in its centre (Inter semibold, white on black, black on white). A point played twice shows its later number. The game's last-move dot is hidden while previewing. Moves from `illegalAt` on are not shown.
-- Wheel while hovering: down adds the next move, up removes the last one, from 1 to the line's length; the first step after hover shows the whole line, and the first wheel-up shows all but the last move **[Proposed]**. The newest stone of a partial line gets a bold number and a thin ring. The hovered row shows "3 / 8" beside the point. Leaving the candidate resets it. While hovering a candidate the wheel never navigates the game.
+- Wheel while hovering: down adds the next move, up removes the last one, from 1 to the line's length; the first step after hover shows the whole line, and the first wheel-up shows all but the last move **[Proposed]**. The newest stone of a partial line gets a bold number, and no stone gets a ring (13.4). The hovered row shows "3 / 8" beside the point. Leaving the candidate resets it. While hovering a candidate the wheel never navigates the game.
 - Leaving the disc and its row ends the preview; the discs return.
 
 ### 5.9 The engine indicator
@@ -245,3 +245,42 @@ On the Mac, with a local build (`pnpm tauri build`) and KataGo installed by the 
 ## 12. Risks
 
 - **Text measuring in the bar** depends on fonts being loaded; measure after `document.fonts.ready`.
+
+## 13. Feedback after the first build, round 1 (2026-11-21)
+
+The owner tried the built app on a pro game and asked for the changes below. Mockup: [`feedback-round-1.html`](../../design/mockups/m7/feedback-round-1.html) (its wood-grain section was declined; its legend still shows 失误, which was removed after it).
+
+### 13.1 One black/white perspective **[Decided: A, everything follows]**
+
+- A UI setting `perspective`, `black` or `white`, default `black`, stored in `settings.json` with the other interface preferences.
+- The control sits at the right end of the graph's legend row: a two-part toggle, a small black stone with 黑 and a small white stone with 白; the active half is filled. Clicking a half switches every number at once.
+- The discs, the table and both graph lines show the chosen side's win rate and score lead. With Black to move at 54.2% and +1.8, White's perspective shows 45.8 and −1.8.
+- Unchanged by the perspective: the candidates and their order; the tiers (disc fill and ring, chip styling), which rate a move for the side that plays it; the win-rate bar, which already shows both sides' numbers with the lead in the leader's segment.
+- 与最佳相比 is the difference of the shown win rates (5.7), so it can read "+" in the other side's perspective.
+
+### 13.2 The graph
+
+- No mistake bars, and no 失误 in the legend.
+- The legend reads 胜率 and 目差 (en: Win rate, Lead); the toggle names the side.
+
+### 13.3 The played ring
+
+Centred half its width outside the disc's radius, so it touches the disc's ring with no wood between.
+
+### 13.4 The variation
+
+No ring on any variation stone while stepping with the wheel; the newest move keeps its bold number, and the row its "3 / 8".
+
+### 13.5 The board
+
+- No lit strip along the top edge and no dark strip along the bottom: the board is a flat surface. Interface design 5.1 changes with it.
+- The grain stays as it is. A different grain comes with board themes, later **[Decided]**.
+- A UI setting `showCoordinates`, default on, in 设置 → 界面 under 主题: "棋盘坐标" with 显示 / 隐藏. Hidden, the coordinate band shrinks to a thin margin of wood, so the grid and stones grow.
+
+### 13.6 Selection
+
+Nothing in the window can be selected as text or dragged: panel, table, header, cards, board. Text fields keep normal selection.
+
+### 13.7 Not changed
+
+The player name 丁浩𪚥 the owner saw comes from the test record `gb18030-rare.sgf`, which appends that rare character on purpose to test four-byte GB18030; `gbk-no-ca.sgf` reads 丁浩.

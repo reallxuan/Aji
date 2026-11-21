@@ -96,9 +96,9 @@ There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no
 
 - **Win-rate bar**: a black segment and a white segment whose widths are the two win rates, across the full panel width. Each side's percentage is written inside its own segment, white on black and black on white. **[Decided]** The score lead (`领先 1.8 目`) sits in the leading side's segment beside its percentage, and hides when the segment cannot hold both. There is no uncertainty figure; the candidate table carries each move's lead. **[Decided in M7]**
 - **Trend graph**: win rate and score lead are always drawn together, win rate against a left axis of 0–100% and score lead against a right axis in points. There is no switch between them. **[Decided]**
-- Mistakes are short bars along the bottom of the graph, in the muted text colour so they do not compete with the accent.
+- There are no mistake bars. **[Decided in M7, after the first build]**
 - A dashed vertical line marks the current move.
-- The line under the graph carries the legend only: 黑胜率, 黑领先目数, 失误. There is no verdict line. **[Decided in M7]**
+- The line under the graph carries the legend, 胜率 and 目差, and at its right end the black/white perspective toggle, which sets whose numbers the discs, the table and the graph show. There is no verdict line. **[Decided in M7]**
 - Moves without a result leave a gap in the lines; nothing bridges it. **[Decided in M7]**
 
 ### 4.3 Candidate table
@@ -119,8 +119,8 @@ Columns: rank chip, point, win rate, score lead, visits, difference from the bes
 
 ### 5.1 Surface
 
-- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain, a lit top edge, and a darker lower edge that gives it thickness. **[Decided]** as a direction.
-- Grid lines and star points in dark brown; coordinates (A–T without I, 1–19) in the margin on the top and left.
+- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain. **[Decided]** as a direction. It is a flat surface: the lit top edge and darker lower edge were removed after the M7 build. Other grains come with board themes, later.
+- Grid lines and star points in dark brown; coordinates (A–T without I, 1–19) in the margin on the top and left, unless hidden in settings, when the margin shrinks to a thin edge.
 - The mockups build the grain from CSS gradients. Reviewed on screen it reads as a fairly even yellow panel with mechanical stripes. M5 replaced it with a procedural straight grain from summed value noise, generated once per size and pixel ratio from a fixed seed. **[Proposed]**
 
 ### 5.2 Stones
