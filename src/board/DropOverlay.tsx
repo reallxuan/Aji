@@ -38,12 +38,12 @@ export function DropOverlay() {
       data-drop-overlay
       className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border-2 border-dashed border-overlay-edge bg-overlay-scrim"
     >
-      <div className="flex items-center gap-3 rounded-[10px] bg-overlay-card px-[26px] py-4 text-[20px] text-overlay-text">
+      <div className="flex items-center gap-3 rounded-[10px] bg-overlay-card px-[26px] py-4 text-[1.25rem] text-overlay-text">
         <ArrowDownToLineIcon className="size-6" aria-hidden />
         <span>
           {t('notice.dropHere')}
           {over.name && (
-            <small className="mt-1 block text-[13px] text-overlay-muted">{over.name}</small>
+            <small className="mt-1 block text-[0.8125rem] text-overlay-muted">{over.name}</small>
           )}
         </span>
       </div>

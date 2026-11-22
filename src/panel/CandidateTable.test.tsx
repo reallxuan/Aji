@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+import { useDeviceStore } from '../device/deviceStore';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { createEngineStore, EngineStoreProvider, type EngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { useSettingsStore } from '../settings/settingsStore';
-import { storedSettings } from '../setup/testing';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
@@ -13,6 +13,7 @@ import type { Candidate } from '../transport/generated/Candidate';
 import type { Color } from '../transport/generated/Color';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { Move } from '../transport/generated/Move';
+import { PanelSizeContext } from '../layout/usePanelWidth';
 import { CandidateTable } from './CandidateTable';
 
 afterEach(() => {
@@ -65,6 +66,8 @@ function mount(
     nextMove?: Move | null;
     toPlay?: Color;
     engine?: EngineState;
+    /** The panel's width; 0 is outside any panel. */
+    width?: number;
   } = {},
 ) {
   const store: EngineStore = createEngineStore();
@@ -83,7 +86,9 @@ function mount(
   render(
     <I18nextProvider i18n={createI18n('zh-CN')}>
       <EngineStoreProvider store={store}>
-        <CandidateTable />
+        <PanelSizeContext.Provider value={{ width: options.width ?? 0, height: 400 }}>
+          <CandidateTable />
+        </PanelSizeContext.Provider>
       </EngineStoreProvider>
     </I18nextProvider>,
   );
@@ -240,23 +245,63 @@ it('shows how far the wheel has stepped a hovered line beside its point', () => 
   expect(within(rows()[0]).getByText('2 / 3')).toBeInTheDocument();
 });
 
-it('shows White’s numbers in White’s perspective, and the difference of what it shows', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+it('shows the side to move’s numbers, whatever the graph’s perspective (P2 M1 design 5.10)', () => {
+  useDeviceStore.getState().update({ perspective: 'white' });
   mount();
   // Black to move; Black's best is 54.2% and +0.8 for Black.
+  expect(within(rows()[0]).getByText('54.2%')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('+0.8')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('52.4%')).toBeInTheDocument();
+  expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
+});
+
+it('shows White’s numbers when White is to move, and the difference of what it shows', () => {
+  useDeviceStore.getState().update({ perspective: 'black' });
+  mount({ toPlay: 'white' });
+  // Black's 54.2% and +0.8 are White's 45.8% and −0.8.
   expect(within(rows()[0]).getByText('45.8%')).toBeInTheDocument();
   expect(within(rows()[0]).getByText('−0.8')).toBeInTheDocument();
-  // Black's 52.4% is White's 47.6%: 1.8 points better for White than after Black's best.
+  // Black's 52.4% is White's 47.6%: 1.8 points better for White than after White's first.
   expect(within(rows()[1]).getByText('47.6%')).toBeInTheDocument();
   expect(within(rows()[1]).getByText('+1.8%')).toBeInTheDocument();
 });
 
-it('shows Black’s numbers in Black’s perspective when White is to move', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'black' });
-  mount({ toPlay: 'white' });
-  // Black's numbers, not White's 45.8% and 47.6%.
-  expect(within(rows()[0]).getByText('54.2%')).toBeInTheDocument();
-  expect(within(rows()[0]).getByText('最佳')).toBeInTheDocument();
-  expect(within(rows()[1]).getByText('52.4%')).toBeInTheDocument();
-  expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
+it('a narrow panel keeps the point, win rate and lead (P2 M1 layouts mockup)', () => {
+  mount({ width: 286 });
+  const names = () =>
+    within(screen.getAllByRole('row')[0])
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent);
+  expect(names()).toEqual(['', '落点', '胜率', '目差']);
+  expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(4);
+});
+
+it('a panel of 360 px or more shows every column', () => {
+  mount({ width: 360 });
+  expect(within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')).toHaveLength(6);
+});
+
+it('wheel_over_a_row_steps_the_line', () => {
+  mount();
+  const row = rows()[0];
+  fireEvent.mouseEnter(row);
+  act(() =>
+    useViewStore.getState().setVariation({
+      moves: [3, 4, 5, 6].map((x) => ({ type: 'play' as const, x, y: x })),
+      colors: ['black', 'white', 'black', 'white'],
+      captured: [[], [], [], []],
+      illegalAt: null,
+    }),
+  );
+  expect(useViewStore.getState().step).toBe(4);
+  const table = screen.getByRole('table');
+  const up = createEvent.wheel(table, { deltaY: -100, deltaMode: 0 });
+  fireEvent(table, up);
+  // The line steps back instead of the table scrolling (M7 minor 7).
+  expect(up.defaultPrevented).toBe(true);
+  expect(useViewStore.getState().step).toBe(3);
+  fireEvent.mouseLeave(row);
+  const away = createEvent.wheel(table, { deltaY: -100, deltaMode: 0 });
+  fireEvent(table, away);
+  expect(away.defaultPrevented).toBe(false);
 });

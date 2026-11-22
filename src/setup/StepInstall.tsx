@@ -62,7 +62,7 @@ export function StepInstall() {
   if (startError) {
     return (
       <StepLayout title={t('setup.install.notFinished')} actions={retryActions}>
-        <p role="alert" className="text-[14px] text-engine-error">
+        <p role="alert" className="text-[0.875rem] text-engine-error">
           {t('setup.install.startFailed', { reason: t(`errors.${startError.code}`) })}
         </p>
       </StepLayout>

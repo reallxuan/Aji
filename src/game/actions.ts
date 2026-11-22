@@ -17,6 +17,9 @@ import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
 import { errorNotice, warningNotice } from './notices';
 import { fileNameFor, gameTitle } from './title';
+import { PRESET_IDS, presetLayout } from '../layout/presets';
+import { setLayout } from '../layout/useLayout';
+import { shotFromMenu } from '../panel/screenshots';
 
 export interface ActionContext {
   transport: Transport;
@@ -139,8 +142,23 @@ export const navigate = (ctx: ActionContext, to: NavTarget) =>
 export const setRules = (ctx: ActionContext, rules: AnalysisRules | null) =>
   change(ctx, () => setGameRules(ctx.transport, rules));
 
-/** What a menu bar item does: the same actions as the title menu. */
+/** What a menu bar item does: the same actions as the title menu, and the 布局 presets. */
 export function runMenuCommand(ctx: ActionContext, command: MenuCommand): Promise<void> {
+  if (typeof command === 'object' && 'layout' in command) {
+    const id = PRESET_IDS.find((preset) => preset === command.layout);
+    if (id) setLayout(presetLayout(id));
+    return Promise.resolve();
+  }
+  if (typeof command === 'object' && ('saveImage' in command || 'copyImage' in command)) {
+    const [kind, target] =
+      'saveImage' in command
+        ? (['save', command.saveImage] as const)
+        : (['copy', command.copyImage] as const);
+    const title = gameTitle(useGameStore.getState().snapshot, ctx.t);
+    const t = (key: string, options?: { target: string }) =>
+      options ? ctx.t(key, options) : ctx.t(key);
+    return shotFromMenu(kind, target, ctx.files, title, t);
+  }
   if (typeof command === 'object') return openRecent(ctx, command.recent);
   switch (command) {
     case 'new19':

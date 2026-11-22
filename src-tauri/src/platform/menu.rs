@@ -1,4 +1,5 @@
-//! The macOS menu bar (design 5.6): the app menu, 文件 / File, Edit and Window.
+//! The macOS menu bar (design 5.6): the app menu, 文件 / File, Edit, 显示 / View (its 布局
+//! submenu, P2 M1 design 5.3) and Window.
 //!
 //! The Rust side cannot read the interface's locale files, so the menu's labels live in the
 //! small table below, in both languages, with the one question the save command asks. It is
@@ -9,8 +10,8 @@ use tauri::menu::{
 };
 use tauri::{AppHandle, Runtime};
 
-use super::MenuAction;
 use super::recent::RecentEntry;
+use super::{LAYOUT_PRESETS, MenuAction, SHOT_TARGETS};
 
 /// The language the menu is in: the one the interface resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,10 @@ pub struct Labels {
     pub no_recent: &'static str,
     pub clear_recent: &'static str,
     pub save_as: &'static str,
+    pub export_image: &'static str,
+    /// Save and copy, in the order of [`SHOT_TARGETS`].
+    pub save_image: [&'static str; 3],
+    pub copy_image: [&'static str; 3],
     pub edit: &'static str,
     pub undo: &'static str,
     pub redo: &'static str,
@@ -54,6 +59,10 @@ pub struct Labels {
     pub copy: &'static str,
     pub paste: &'static str,
     pub select_all: &'static str,
+    pub view: &'static str,
+    pub layout: &'static str,
+    /// The presets' names, in the order of [`LAYOUT_PRESETS`].
+    pub presets: [&'static str; 5],
     pub window: &'static str,
     pub minimize: &'static str,
     pub zoom: &'static str,
@@ -84,6 +93,9 @@ pub fn labels(language: MenuLanguage) -> Labels {
             no_recent: "暂无最近打开的棋谱",
             clear_recent: "清除最近记录",
             save_as: "另存为…",
+            export_image: "导出图片",
+            save_image: ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"],
+            copy_image: ["拷贝棋盘图片", "拷贝副盘图片", "拷贝走势图图片"],
             edit: "编辑",
             undo: "撤销",
             redo: "重做",
@@ -91,6 +103,9 @@ pub fn labels(language: MenuLanguage) -> Labels {
             copy: "拷贝",
             paste: "粘贴",
             select_all: "全选",
+            view: "显示",
+            layout: "布局",
+            presets: ["默认", "经典", "极简", "思考", "四盘"],
             window: "窗口",
             minimize: "最小化",
             zoom: "缩放",
@@ -117,6 +132,17 @@ pub fn labels(language: MenuLanguage) -> Labels {
             no_recent: "No recent games",
             clear_recent: "Clear Menu",
             save_as: "Save As…",
+            export_image: "Export Image",
+            save_image: [
+                "Save Board Image…",
+                "Save Sub-board Image…",
+                "Save Graph Image…",
+            ],
+            copy_image: [
+                "Copy Board Image",
+                "Copy Sub-board Image",
+                "Copy Graph Image",
+            ],
             edit: "Edit",
             undo: "Undo",
             redo: "Redo",
@@ -124,6 +150,9 @@ pub fn labels(language: MenuLanguage) -> Labels {
             copy: "Copy",
             paste: "Paste",
             select_all: "Select All",
+            view: "View",
+            layout: "Layout",
+            presets: ["Default", "Classic", "Minimal", "Thinking", "Four Boards"],
             window: "Window",
             minimize: "Minimize",
             zoom: "Zoom",
@@ -178,6 +207,20 @@ fn recent_menu<R: Runtime>(
         .build()
 }
 
+/// 文件 → 导出图片 (owner, 2026-11-22): save, then copy, each of the board, the sub-board and the
+/// graph. The interface finds the target on screen and says so when it is not there.
+fn export_menu<R: Runtime>(app: &AppHandle<R>, l: &Labels) -> tauri::Result<Submenu<R>> {
+    let mut menu = SubmenuBuilder::new(app, l.export_image);
+    for (target, label) in SHOT_TARGETS.into_iter().zip(l.save_image) {
+        menu = menu.item(&item(app, MenuAction::SaveImage(target.to_owned()), label)?);
+    }
+    menu = menu.separator();
+    for (target, label) in SHOT_TARGETS.into_iter().zip(l.copy_image) {
+        menu = menu.item(&item(app, MenuAction::CopyImage(target.to_owned()), label)?);
+    }
+    menu.build()
+}
+
 /// The whole menu bar, with the recent list in 打开最近.
 pub fn build<R: Runtime>(
     app: &AppHandle<R>,
@@ -219,6 +262,7 @@ pub fn build<R: Runtime>(
                 .accelerator("CmdOrCtrl+Shift+S")
                 .build(app)?,
         )
+        .item(&export_menu(app, &l)?)
         .build()?;
     let edit = SubmenuBuilder::new(app, l.edit)
         .item(&PredefinedMenuItem::undo(app, Some(l.undo))?)
@@ -228,6 +272,13 @@ pub fn build<R: Runtime>(
         .item(&PredefinedMenuItem::copy(app, Some(l.copy))?)
         .item(&PredefinedMenuItem::paste(app, Some(l.paste))?)
         .item(&PredefinedMenuItem::select_all(app, Some(l.select_all))?)
+        .build()?;
+    let mut layout = SubmenuBuilder::new(app, l.layout);
+    for (preset, label) in LAYOUT_PRESETS.into_iter().zip(l.presets) {
+        layout = layout.item(&item(app, MenuAction::Layout(preset.to_owned()), label)?);
+    }
+    let view = SubmenuBuilder::new(app, l.view)
+        .item(&layout.build()?)
         .build()?;
     let window = SubmenuBuilder::new(app, l.window)
         .item(&PredefinedMenuItem::minimize(app, Some(l.minimize))?)
@@ -240,7 +291,7 @@ pub fn build<R: Runtime>(
         )?)
         .build()?;
     MenuBuilder::new(app)
-        .items(&[&app_menu, &file, &edit, &window])
+        .items(&[&app_menu, &file, &edit, &view, &window])
         .build()
 }
 
@@ -261,5 +312,62 @@ mod tests {
         let en = labels(MenuLanguage::En);
         assert_eq!((zh.file, zh.save_as), ("文件", "另存为…"));
         assert_eq!((en.file, en.save_as), ("File", "Save As…"));
+    }
+
+    #[test]
+    fn layout_ids_round_trip() {
+        for preset in LAYOUT_PRESETS {
+            let action = MenuAction::Layout(preset.to_owned());
+            assert_eq!(action.id(), format!("layout:{preset}"));
+            assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+        }
+        assert_eq!(MenuAction::from_id("layout:custom"), None);
+        assert_eq!(MenuAction::from_id("layout:"), None);
+    }
+
+    #[test]
+    fn image_ids_round_trip() {
+        for target in SHOT_TARGETS {
+            for action in [
+                MenuAction::SaveImage(target.to_owned()),
+                MenuAction::CopyImage(target.to_owned()),
+            ] {
+                assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+            }
+        }
+        assert_eq!(
+            MenuAction::SaveImage("graph".into()).id(),
+            "saveImage:graph"
+        );
+        assert_eq!(MenuAction::from_id("copyImage:window"), None);
+    }
+
+    #[test]
+    fn both_languages_label_the_export_menu() {
+        // 文件 → 导出图片 (owner, 2026-11-22): the screenshots live in the menu bar on the Mac.
+        let zh = labels(MenuLanguage::ZhCn);
+        let en = labels(MenuLanguage::En);
+        assert_eq!(zh.export_image, "导出图片");
+        assert_eq!(
+            zh.save_image,
+            ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"]
+        );
+        assert_eq!(
+            zh.copy_image,
+            ["拷贝棋盘图片", "拷贝副盘图片", "拷贝走势图图片"]
+        );
+        assert_eq!(en.export_image, "Export Image");
+        assert_eq!(en.save_image[0], "Save Board Image…");
+        assert_eq!(en.copy_image[2], "Copy Graph Image");
+    }
+
+    #[test]
+    fn both_languages_label_the_layout_menu() {
+        let zh = labels(MenuLanguage::ZhCn);
+        let en = labels(MenuLanguage::En);
+        assert_eq!((zh.view, zh.layout), ("显示", "布局"));
+        assert_eq!(zh.presets, ["默认", "经典", "极简", "思考", "四盘"]);
+        assert_eq!((en.view, en.layout), ("View", "Layout"));
+        assert_eq!(en.presets[4], "Four Boards");
     }
 }

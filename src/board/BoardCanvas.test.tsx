@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShownCandidate } from '../analysis/candidates';
 import type { Color } from '../transport/generated/Color';
@@ -184,4 +184,18 @@ describe('BoardCanvas candidates', () => {
     fireEvent.mouseMove(area, { clientX: g.lines[5] + 1, clientY: g.lines[3] });
     expect(onHover.mock.calls).toEqual([[other.move]]);
   });
+});
+
+it('discs_wait_for_all_fonts', async () => {
+  // M7 minor 10: every face the coordinates, discs and line numbers use.
+  const load = vi.fn(async (face: string) => [face]);
+  vi.stubGlobal('devicePixelRatio', 1);
+  Object.defineProperty(document, 'fonts', { value: { load }, configurable: true });
+  render(<BoardCanvas cssSize={400} boardSize={19} stones={empty(19)} lastMove={null} />);
+  await act(async () => {});
+  const faces = load.mock.calls.map(([face]) => face);
+  for (const weight of ['400', '500', '600', '700'])
+    expect(faces.some((f) => f.startsWith(`${weight} `) && f.endsWith('Inter'))).toBe(true);
+  delete (document as { fonts?: unknown }).fonts;
+  vi.unstubAllGlobals();
 });

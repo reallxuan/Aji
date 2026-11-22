@@ -9,8 +9,8 @@ export function NoEngine() {
   const { t } = useTranslation();
   return (
     <div className="px-6 py-8">
-      <h2 className="text-[18px] font-medium">{t('noEngine.title')}</h2>
-      <p className="mt-2 text-[14px] text-text-muted">{t('noEngine.body')}</p>
+      <h2 className="text-[1.125rem] font-medium">{t('noEngine.title')}</h2>
+      <p className="mt-2 text-[0.875rem] text-text-muted">{t('noEngine.body')}</p>
       <Button className="mt-6" onClick={setUp}>
         {t('noEngine.setup')}
       </Button>

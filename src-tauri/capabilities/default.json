@@ -6,6 +6,7 @@
   "permissions": [
     "core:event:default",
     "core:window:allow-set-title",
+    "core:window:allow-set-always-on-top",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

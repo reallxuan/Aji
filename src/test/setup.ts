@@ -14,6 +14,18 @@ if (typeof window !== 'undefined') {
   Element.prototype.setPointerCapture ??= () => {};
   Element.prototype.releasePointerCapture ??= () => {};
   Element.prototype.scrollIntoView ??= () => {};
+
+  // Device settings are a global store over localStorage: every test starts from the defaults.
+  const { beforeEach } = await import('vitest');
+  const { resetDeviceStore } = await import('../device/deviceStore');
+  const { resetLayoutDraft } = await import('../layout/useLayout');
+  const { resetStartedNarrow } = await import('../layout/startedNarrow');
+  beforeEach(() => {
+    localStorage.clear();
+    resetDeviceStore();
+    resetLayoutDraft();
+    resetStartedNarrow();
+  });
 }
 
 export {};

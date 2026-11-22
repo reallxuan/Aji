@@ -29,8 +29,8 @@ export function StepLayout({
   return (
     <>
       <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
-        <h2 className="mt-8 text-[22px] font-medium">{title}</h2>
-        {subtitle && <p className="mt-1.5 text-[13px] text-text-muted">{subtitle}</p>}
+        <h2 className="mt-8 text-[1.375rem] font-medium">{title}</h2>
+        {subtitle && <p className="mt-1.5 text-[0.8125rem] text-text-muted">{subtitle}</p>}
         <div className="mt-5">{children}</div>
       </div>
       <footer className="flex items-center gap-2 border-t border-hairline px-7 py-4">
@@ -95,7 +95,7 @@ export function ChoiceRow({
   return (
     <label
       className={cn(
-        'flex items-center gap-3 border-b border-hairline px-3 py-3.5 text-[14px]',
+        'flex items-center gap-3 border-b border-hairline px-3 py-3.5 text-[0.875rem]',
         'has-[[data-state=checked]]:bg-divider-soft',
         disabled ? 'cursor-default text-text-muted' : 'cursor-pointer',
       )}
@@ -125,7 +125,7 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry(): void 
   const { t } = useTranslation();
   const reason = t(`errors.${toTransportError(error).code}`);
   return (
-    <div role="alert" className="flex items-center gap-3 py-3 text-[13px] text-engine-error">
+    <div role="alert" className="flex items-center gap-3 py-3 text-[0.8125rem] text-engine-error">
       <span>{t('setup.loadFailed', { reason })}</span>
       <Button variant="outline" size="sm" onClick={onRetry}>
         {t('setup.retry')}
@@ -166,7 +166,7 @@ function BenchmarkLines({ progress }: { progress: BenchmarkProgress | null }) {
         ? t('setup.install.benchmark.choosing')
         : t('setup.install.benchmark.starting');
   return (
-    <div className="mt-1.5 ml-7 text-[12px] text-text-muted tabular-nums">
+    <div className="mt-1.5 ml-7 text-[0.75rem] text-text-muted tabular-nums">
       <p>{stage}</p>
       {tested.map((speed) => (
         <p key={speed.threads}>
@@ -216,14 +216,14 @@ function TransferLine({ done, total }: { done: number; total: number }) {
   } else if (rate !== null) {
     text = t('setup.install.amountSpeed', { ...amount, speed: bytes(rate) });
   }
-  return <p className="mt-1.5 ml-7 text-[12px] text-text-muted tabular-nums">{text}</p>;
+  return <p className="mt-1.5 ml-7 text-[0.75rem] text-text-muted tabular-nums">{text}</p>;
 }
 
 function TaskRowView({ row, benchmark }: { row: TaskRow; benchmark: BenchmarkProgress | null }) {
   const { t } = useTranslation();
   const label = t(`setup.install.tasks.${row.task}`);
   const state = row.state;
-  const line = 'flex items-center gap-3 py-3.5 text-[14px]';
+  const line = 'flex items-center gap-3 py-3.5 text-[0.875rem]';
 
   if (state.state === 'running') {
     const percent =
@@ -257,7 +257,9 @@ function TaskRowView({ row, benchmark }: { row: TaskRow; benchmark: BenchmarkPro
       <li className={cn(line, 'border-b border-hairline text-engine-error')}>
         <XIcon className="size-4" aria-hidden />
         <span>{label}</span>
-        <span className="ml-auto text-[13px] text-engine-error">{t('setup.install.failed')}</span>
+        <span className="ml-auto text-[0.8125rem] text-engine-error">
+          {t('setup.install.failed')}
+        </span>
       </li>
     );
   }
@@ -266,7 +268,7 @@ function TaskRowView({ row, benchmark }: { row: TaskRow; benchmark: BenchmarkPro
       <li className={cn(line, 'border-b border-hairline')}>
         <CheckIcon className="size-4 text-text-muted" aria-hidden />
         <span>{label}</span>
-        <span className="ml-auto text-[13px] text-text-muted">
+        <span className="ml-auto text-[0.8125rem] text-text-muted">
           {t(state.state === 'done' ? 'setup.install.done' : 'setup.install.reused')}
         </span>
       </li>

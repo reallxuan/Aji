@@ -54,11 +54,11 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
         <span className="block truncate in-data-missing:text-line">
           {entry.title || entry.name}
         </span>
-        <span className="block truncate text-[12px] text-text-muted in-data-missing:text-line">
+        <span className="block truncate text-[0.75rem] text-text-muted in-data-missing:text-line">
           {entry.missing ? t('menu.missing') : entry.name}
         </span>
       </span>
-      <span className="text-[12px] whitespace-nowrap text-text-muted">
+      <span className="text-[0.75rem] whitespace-nowrap text-text-muted">
         {when(entry.openedAt, i18n.language, t('menu.today'), t('menu.yesterday'))}
       </span>
     </DropdownMenuItem>
@@ -67,7 +67,7 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
 
 /**
  * The title, which opens the game menu (design 5.7, mockup frame B): new game by size, open,
- * open recent, and save as.
+ * open recent and save as. 布局 and 截图 are in the menu bar or the 视图 button (owner, 2026-11-22).
  */
 export function GameMenu() {
   const { t } = useTranslation();
@@ -89,7 +89,7 @@ export function GameMenu() {
         ctx.files.recent().then(setRecent, () => setRecent([]));
       }}
     >
-      <DropdownMenuTrigger className="group -ml-1.5 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-1 text-[14px] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft">
+      <DropdownMenuTrigger className="group -ml-1.5 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft">
         <span className="truncate">{title}</span>
         <ChevronDownIcon
           className="size-3.5 flex-none text-text-muted group-data-[state=open]:text-text"
@@ -135,7 +135,7 @@ export function GameMenu() {
             <RecentItems entries={recent} />
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-[12.5px] text-text-muted"
+              className="text-[0.78125rem] text-text-muted"
               disabled={recent.length === 0}
               onSelect={() => {
                 setRecent([]);

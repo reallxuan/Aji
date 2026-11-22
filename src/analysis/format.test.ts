@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { formatLead, formatPercent, formatVisits } from './format';
+import { formatLead, formatPercent, formatPoints, formatVisits } from './format';
 
 it.each(['zh-CN', 'en'])('formats visits in %s', (lang) => {
   expect(formatVisits(840, lang)).toBe('840');
@@ -22,4 +22,11 @@ it('formats a percentage, signed on request', () => {
   expect(formatPercent(-0.018, 'zh-CN', true)).toBe('−1.8%');
   expect(formatPercent(0.003, 'en', true)).toBe('+0.3%');
   expect(formatPercent(0, 'en', true)).toBe('0.0%');
+});
+
+it('percentages_use_the_locale_format', () => {
+  // The bar's lead used toFixed; every number now goes through the locale (M7 minor 12).
+  expect(formatPoints(3.5, 'de')).toBe('3,5');
+  expect(formatPoints(12, 'zh-CN')).toBe('12.0');
+  expect(formatPercent(0.542, 'de')).toBe('54,2%');
 });

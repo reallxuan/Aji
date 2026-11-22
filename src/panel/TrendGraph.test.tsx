@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
+import { useDeviceStore } from '../device/deviceStore';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resetTrendStore, useTrendStore } from '../analysis/trendStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
@@ -136,11 +137,12 @@ it('draws no mistake bars, however large a loss', () => {
 });
 
 it('draws and names White’s numbers in White’s perspective', () => {
-  useSettingsStore.getState().apply({ ...storedSettings, perspective: 'white' });
+  useDeviceStore.getState().update({ perspective: 'white' });
   const nodes = line();
   nodes[42] = { ...nodes[42], stats: { winrate: 0.8, scoreLead: 6, visits: 200 } };
   useTrendStore.getState().setNodes(nodes);
-  renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+  // A 154 px panel: 4 above the chart, which is 150 (jsdom measures the legend as 0).
+  renderWithGame(<TrendGraph height={154} width={WIDTH} />, {
     snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
   });
   // The lone node at 42: Black's 80% is White's 20%, plotted from the top of a 116 px plot.
@@ -159,12 +161,63 @@ it('switches the perspective from the legend, and remembers it', async () => {
     answer: (request) =>
       request.type === 'settingsSet' ? { type: 'settings', settings: request.settings } : undefined,
   });
-  const toggle = screen.getByRole('radiogroup', { name: '视角' });
+  const toggle = screen.getByRole('radiogroup', { name: '走势图视角' });
   expect(within(toggle).getByRole('radio', { name: '黑' })).toHaveAttribute('aria-checked', 'true');
   await act(async () => fireEvent.click(within(toggle).getByRole('radio', { name: '白' })));
   expect(within(toggle).getByRole('radio', { name: '白' })).toHaveAttribute('aria-checked', 'true');
-  const saved = requests.filter((r) => r.type === 'settingsSet');
-  expect(saved).toEqual([
-    { type: 'settingsSet', settings: { ...storedSettings, perspective: 'white' } },
-  ]);
+  expect(useDeviceStore.getState().settings.perspective).toBe('white');
+  expect(requests.filter((r) => r.type === 'settingsSet')).toEqual([]);
+});
+
+it('the_graph_keeps_the_chosen_colour', () => {
+  useTrendStore.getState().setNodes(line());
+  renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({
+      revision: 1,
+      lineIndex: 30,
+      moveNumber: 30,
+      mainLineLength: 100,
+      nextColor: 'white',
+    }),
+  });
+  // White to play, and the graph still shows Black's 49.5% at move 72.
+  fireEvent.mouseMove(svg(), { clientX: xOf(72), clientY: 40 });
+  expect(screen.getByText(/^胜率 49\.5%/)).toBeInTheDocument();
+  expect(screen.getByRole('radiogroup', { name: '走势图视角' })).toBeInTheDocument();
+});
+
+it('captures_show_in_the_legend', () => {
+  useTrendStore.getState().setNodes(line());
+  renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, captures: [3, 5] }),
+  });
+  expect(screen.getByTestId('trend-legend')).toHaveTextContent('提子 黑 3 · 白 5');
+});
+
+it('the score option shows the board count, and an even lead reads 均势', () => {
+  useDeviceStore.getState().update({ scoreWithKomi: false });
+  mount();
+  fireEvent.mouseMove(svg(), { clientX: xOf(72), clientY: 40 });
+  // Black's −0.1 with komi is +7.4 on the board (Chinese rules, komi 7.5).
+  expect(screen.getByText('目差 +7.4')).toBeInTheDocument();
+  useDeviceStore.getState().update({ scoreWithKomi: true });
+  fireEvent.mouseMove(svg(), { clientX: xOf(30), clientY: 40 });
+  expect(screen.getByText('目差 均势')).toBeInTheDocument();
+});
+
+it('a legend that wraps takes its room from the chart, so the toggle stays in view', () => {
+  // Classic's narrow column wraps the captures and the black/white toggle onto a second line.
+  const rect = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.dataset.testid === 'trend-legend'
+      ? ({ width: 300, height: 58, top: 0, left: 0, right: 300, bottom: 58 } as DOMRect)
+      : rect.call(this);
+  });
+  mount();
+  // The panel is 150 px: 4 above the chart, 58 for the legend, the rest for the chart.
+  expect(svg().getAttribute('height')).toBe('88');
+  expect(screen.getByRole('radiogroup', { name: '走势图视角' })).toBeInTheDocument();
+  vi.restoreAllMocks();
 });

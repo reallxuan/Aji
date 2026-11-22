@@ -130,7 +130,7 @@
         "scoreLead": "Lead"
       },
       "perspective": {
-        "label": "Perspective",
+        "label": "Graph perspective",
         "black": "Black",
         "white": "White"
       },
@@ -142,7 +142,13 @@
       "lead": "Lead {{lead}}",
       "notAnalysed": "Not analysed yet",
       "label": "Win-rate trend"
-    }
+    },
+    "eye": {
+      "label": "Hide candidates",
+      "hint": "Tap to toggle, hold to hide for a moment"
+    },
+    "even": "Even",
+    "captures": "Captures B {{black}} · W {{white}}"
   },
   "setup": {
     "failure": {
@@ -338,7 +344,37 @@
     "cancel": "Cancel",
     "about": "About Aji",
     "defaultRules": "Default rules for new games",
-    "defaultRulesNote": "Used for new games, and for records that name neither rules nor komi. Games already open are not changed."
+    "defaultRulesNote": "Used for new games, and for records that name neither rules nor komi. Games already open are not changed.",
+    "board": {
+      "title": "Board style",
+      "board": "Board",
+      "set": "{{board}} · {{stones}}",
+      "custom": "Custom",
+      "boards": {
+        "honey": "Honey",
+        "kaya": "Kaya",
+        "walnut": "Walnut",
+        "printed": "Printed"
+      },
+      "stones": {
+        "title": "Stones",
+        "slate": "Slate and shell",
+        "yunzi": "Yunzi",
+        "flat": "Flat"
+      }
+    },
+    "scale": "Interface scale",
+    "lead": {
+      "title": "Score",
+      "withKomi": "With komi",
+      "board": "Board count"
+    },
+    "saveFailed": "Not saved",
+    "alwaysOnTop": {
+      "title": "Always on top",
+      "on": "On",
+      "off": "Off"
+    }
   },
   "game": {
     "players": "{{black}} vs {{white}}"
@@ -436,6 +472,72 @@
     "clearRecent": "Clear Recent",
     "saveAs": "Save As…",
     "today": "Today",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "view": "View"
+  },
+  "layout": {
+    "panels": {
+      "header": "Header",
+      "winrate": "Win rate",
+      "trend": "Trend",
+      "candidates": "Candidates",
+      "subboard": "Sub-board"
+    },
+    "noCandidate": "No candidate",
+    "move": "Move {{panel}}",
+    "resize": "Resize",
+    "menu": {
+      "title": "Layout",
+      "presets": {
+        "default": "Default",
+        "classic": "Classic",
+        "minimal": "Minimal",
+        "thinking": "Thinking",
+        "four": "Four boards"
+      },
+      "custom": "Custom",
+      "panels": "Panels",
+      "reset": "Reset to default"
+    },
+    "subboardRank": "Sub-board {{rank}}",
+    "narrow": {
+      "nav": "Game navigation",
+      "close": "Close"
+    }
+  },
+  "commands": {
+    "nav": {
+      "previous": "Previous move",
+      "next": "Next move",
+      "first": "First move",
+      "last": "Last move",
+      "pageBack": "Back ten moves",
+      "pageForward": "Forward ten moves"
+    },
+    "file": {
+      "open": "Open…",
+      "saveAs": "Save As…",
+      "new19": "New 19×19 game"
+    },
+    "analysis": {
+      "toggle": "Pause or resume analysis"
+    },
+    "candidates": {
+      "toggleHidden": "Show or hide candidates",
+      "peek": "Hide candidates while held"
+    }
+  },
+  "screenshot": {
+    "title": "Screenshot",
+    "save": "Save {{target}}…",
+    "copy": "Copy {{target}}",
+    "targets": {
+      "board": "board",
+      "subboard": "sub-board",
+      "graph": "graph"
+    },
+    "copyFailed": "Could not copy",
+    "saveFailed": "The screenshot was not saved",
+    "notShown": "The {{target}} is not on screen"
   }
 }

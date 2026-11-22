@@ -25,6 +25,15 @@ export interface PlatformFiles {
   clearRecent(): Promise<void>;
   /** The save dialog, then the write; the saved file's token, or `null` when cancelled. */
   saveAs(suggestedName: string, text: string): Promise<string | null>;
+  /** The save dialog for a PNG screenshot, then the write; `false` when cancelled. */
+  saveImage(suggestedName: string, bytes: Uint8Array): Promise<boolean>;
+  /**
+   * Copies a PNG screenshot to the clipboard; `false` when it could not. Called at once from the
+   * click, with the bytes still being drawn: the webview's clipboard accepts a write only then.
+   */
+  copyImage(bytes: Promise<Uint8Array>): Promise<boolean>;
+  /** Keeps the window above others (P2 M1 design 5.9). */
+  setAlwaysOnTop(on: boolean): Promise<void>;
   setWindowTitle(title: string): Promise<void>;
   /** The language the menu bar should use. */
   setMenuLanguage(language: 'zh-CN' | 'en'): Promise<void>;

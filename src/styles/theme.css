@@ -106,3 +106,17 @@
   --radius-md: 6px;
   --radius-lg: 6px;
 }
+
+/* The drop outline while rearranging panels (P2 M1 design 5.3): not the evaluation colour. */
+:root,
+:root[data-theme='dark'] {
+  --accent: #7fb2ff;
+}
+
+:root[data-theme='light'] {
+  --accent: #2f6fd6;
+}
+
+@theme inline {
+  --color-drop: var(--accent);
+}

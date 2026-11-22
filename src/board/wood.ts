@@ -1,7 +1,11 @@
 import { type CanvasFactory, domCanvas, type OffscreenCanvasLike } from './canvasFactory';
+import { BOARD_STYLES, type BoardStyle } from './styles';
 
-/** The honey base tone of the board (interface design 5.1). */
-export const WOOD_BASE = { r: 0xdd, g: 0xb0, b: 0x67 };
+/** `#RRGGBB` as numbers. */
+function rgb(hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: n >> 16, g: (n >> 8) & 0xff, b: n & 0xff };
+}
 /** Fixed, so every launch draws the same grain. */
 const SEED = 0x41_6a_69;
 
@@ -35,13 +39,21 @@ function valueNoise(random: () => number, knots: number): (t: number) => number 
  * across x, from broad bands to fine fibres. Independent of the pixel size, so a board looks the
  * same at any size and ratio.
  */
-function grainProfile(width: number, random: () => number): Float32Array {
+function grainProfile(
+  width: number,
+  random: () => number,
+  { density, amplitude }: { density: number; amplitude: number },
+): Float32Array {
   const octaves = [
     { period: 0.5, weight: 0.014 },
     { period: 0.07, weight: 0.016 },
     { period: 0.014, weight: 0.018 },
     { period: 0.004, weight: 0.012 },
-  ].map(({ period, weight }) => ({ period, weight, noise: valueNoise(random, 256) }));
+  ].map(({ period, weight }) => ({
+    period: period / density,
+    weight: weight * amplitude,
+    noise: valueNoise(random, 256),
+  }));
   const profile = new Float32Array(width);
   for (let x = 0; x < width; x++) {
     const u = x / Math.max(1, width);
@@ -55,29 +67,49 @@ function grainProfile(width: number, random: () => number): Float32Array {
 
 type Texture = HTMLCanvasElement | OffscreenCanvasLike;
 
-let cached: { key: string; create: CanvasFactory; canvas: Texture } | null = null;
+/** A few textures: the main board, the sub-boards and the settings' thumbnails at once. */
+const CACHE_SIZE = 8;
+const cache = new Map<string, { create: CanvasFactory; canvas: Texture }>();
 
 /**
- * The wood texture for a board of `cssSize` CSS pixels at `dpr`, in device pixels. Generated once
- * per (size, ratio) and cached, since the per-pixel pass is the slow part of a redraw. `create`
- * makes the canvas: a DOM one in the app, a Skia one in the screenshot tests.
+ * The texture of `style` for a board of `cssSize` CSS pixels at `dpr`, in device pixels.
+ * Generated once per (style, size, ratio) and cached, since the per-pixel pass is the slow part
+ * of a redraw. `create` makes the canvas: a DOM one in the app, a Skia one in the screenshot tests.
  */
 export function woodTexture(
   cssSize: number,
   dpr: number,
   create: CanvasFactory = domCanvas,
+  style: BoardStyle = BOARD_STYLES.honey,
 ): Texture | null {
   const size = Math.round(cssSize * dpr);
   if (size <= 0) return null;
-  const key = `${cssSize}@${dpr}`;
-  if (cached?.key === key && cached.create === create) return cached.canvas;
+  const key = `${style.id}:${cssSize}@${dpr}`;
+  const hit = cache.get(key);
+  if (hit && hit.create === create) {
+    // Most recently used last, so the oldest is the one dropped.
+    cache.delete(key);
+    cache.set(key, hit);
+    return hit.canvas;
+  }
 
   const canvas = create(size, size);
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  const base = rgb(style.base);
+  const remember = () => {
+    cache.set(key, { create, canvas });
+    if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+  };
+  if (!style.grain) {
+    ctx.fillStyle = style.base;
+    ctx.fillRect(0, 0, size, size);
+    remember();
+    return canvas;
+  }
 
   const random = prng(SEED);
-  const profile = grainProfile(size, random);
+  const profile = grainProfile(size, random, style.grain);
   // A slow drift along each fibre, so the grain is straight but not ruled.
   const drift = valueNoise(random, 64);
   const image = ctx.createImageData(size, size);
@@ -86,15 +118,15 @@ export function woodTexture(
   for (let y = 0; y < size; y++) {
     const v = y / size;
     for (let x = 0; x < size; x++) {
-      const shade = 1 + profile[x] + drift(x * 0.02 + v * 3) * 0.008;
+      const shade = 1 + profile[x] + drift(x * 0.02 + v * 3) * 0.008 * style.grain.amplitude;
       const i = (y * size + x) * 4;
-      data[i] = WOOD_BASE.r * shade;
-      data[i + 1] = WOOD_BASE.g * shade;
-      data[i + 2] = WOOD_BASE.b * shade;
+      data[i] = base.r * shade;
+      data[i + 1] = base.g * shade;
+      data[i + 2] = base.b * shade;
       data[i + 3] = 255;
     }
   }
   ctx.putImageData(image, 0, 0);
-  cached = { key, create, canvas };
+  remember();
   return canvas;
 }

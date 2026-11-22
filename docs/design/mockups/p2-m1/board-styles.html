@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2 M1 board and stone styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0e0e10; --text:#ECEAE4; --muted:#a3a19a; --cap:#c9c7c0; --line:#2a2a2e; --rec:#7fd1a8; }
+  body.light { --bg:#E3E3E0; --text:#1d1d1b; --muted:#5e5e5a; --cap:#3d3d3a; --line:#c9c9c4; --rec:#1e7a4c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro, .section { max-width:1240px; margin:0 auto 40px; }
+  .intro { color:var(--cap); font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:var(--text); font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; }
+  .cap { font-size:13px; color:var(--cap); margin:0 0 14px; line-height:1.6; max-width:1040px; }
+  .cap b { color:var(--text); }
+  .rec { color:var(--rec); font-weight:600; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .tile { width:290px; }
+  .tile.big { width:400px; }
+  .tile canvas { width:100%; aspect-ratio:1; display:block; border-radius:3px; outline:1px solid var(--line); }
+  .tile .name { font-size:13px; font-weight:600; margin:8px 0 2px; }
+  .tile .note { font-size:12px; color:var(--muted); line-height:1.55; }
+  .toggle { position:fixed; top:16px; right:20px; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; background:var(--bg); }
+  .tag { display:inline-block; font-size:11px; border:1px solid var(--line); border-radius:999px; padding:1px 7px; margin-left:6px; color:var(--muted); font-weight:500; }
+</style>
+</head>
+<body>
+<div class="toggle" onclick="document.body.classList.toggle('light')">切换浅色 / 深色背景</div>
+
+<div class="intro">
+  <h1>P2 · M1 · 棋盘与棋子样式 board and stone styles (decision P1)</h1>
+  Position: move 58 of the M6 sample game (2025 Samsung Cup final, game 2), Black to move, with the M7 candidates. Candidate data is made up.
+  The page background switches between the dark and light themes (top right), because a board that looks right on one may not on the other.
+  <ul>
+    <li><b>What to decide:</b> which boards and which stone sets ship in Phase 2. The plan asks for at least two sets in each theme. A "set" is one board plus one kind of stones, chosen together in settings, with an option to mix them.</li>
+    <li>The candidate discs (interface design 5.3) stay the same on every board: paper discs with cinnabar and brown rings. Section 4 checks they still read on each.</li>
+    <li>Not proposed: importing your own board or stone images (decision P12, left for Phase 8).</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 · Boards</h2>
+  <p class="cap">Each with today's stones, so only the board changes. <b>A</b> is what Aji draws today. <b>B</b> is lighter and finer, like a kaya board. <b>C</b> is a dark walnut for night use with the dark theme; its lines and coordinates turn light. <b>D</b> is a flat printed surface, like a diagram in a Go book: no grain, thin lines, meant for the flat stones, screenshots and small phone screens.</p>
+  <div class="row" id="boards"></div>
+</div>
+
+<div class="section">
+  <h2>2 · Stones</h2>
+  <p class="cap">Close-up of the upper right, on board A. <b>1 · Slate and shell</b> is today's realistic pair (interface design 5.2). <b>2 · Yunzi</b> (云子): matte black with a faint green edge and no shine; white is warm, creamy and a little translucent, with no grain. <b>3 · Flat</b>: solid fills with a thin outline and no shadow, as in printed diagrams.</p>
+  <div class="row" id="stones"></div>
+</div>
+
+<div class="section">
+  <h2>3 · Proposed sets</h2>
+  <p class="cap">The pairings settings would offer. <span class="rec">Recommended to ship: all four.</span> The default stays <b>Honey · slate and shell</b> in both themes, so nothing changes for anyone who does not look. <b>Walnut</b> is offered in both themes but suggested for dark; <b>Printed</b> is the default of the phone layout (M1's small-screen layout) because flat stones stay legible at 18 px per point.</p>
+  <div class="row" id="sets"></div>
+</div>
+
+<div class="section">
+  <h2>4 · Candidates and the hovered line on each board</h2>
+  <p class="cap">Left: candidate discs. Right: the best move's line, stepped to move 5. The numbers on the line's stones keep their colours on every board. On walnut, the discs' paper fill gives them more contrast than on honey; on the printed board the shadow under the best disc is dropped.</p>
+  <div class="row" id="checks"></div>
+</div>
+
+<script>
+// Moves of the 2025 Samsung Cup final, game 2 (public domain, CWI archive), as in the M6 and M7 mockups.
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+
+function play(upto, extra) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, upto).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 }));
+  for (const m of (extra || [])) seq.push(m);
+  let last = null;
+  for (const {x, y, c} of seq) {
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8, pv:['L14','M13','M14','N13','L12','M12','K12','N12'] },
+  { p:'M13', w:53.1, s:1.3, played:true },
+  { p:'K12', w:52.4, s:0.9 },
+  { p:'Q10', w:50.9, s:0.2 },
+  { p:'C10', w:49.6, s:-0.4 },
+  { p:'N11', w:48.8, s:-0.9 },
+];
+const tier = (c) => { const loss = CANDS[0].w - c.w; return c === CANDS[0] ? 'best' : loss < 2 ? 'close' : loss <= 4 ? 'doubt' : 'poor'; };
+
+const BOARDS = {
+  honey:  { name:'A · 蜜色直纹 Honey', note:'Today’s board (M5, flat since M7).', base:'#DDB067', grain:[[120,72,20],[255,236,190]], count:260, amp:.06, line:'#3A2A14', coord:'rgba(58,42,20,.8)' },
+  kaya:   { name:'B · 榧木 Kaya', note:'Paler and golden, with a finer, denser grain.', base:'#E9C98A', grain:[[150,98,32],[255,244,210]], count:520, amp:.045, line:'#4A3518', coord:'rgba(74,53,24,.8)' },
+  walnut: { name:'C · 胡桃 Walnut', note:'Dark, for night use. Light lines and coordinates.', base:'#6E4A2C', grain:[[40,22,8],[160,112,70]], count:300, amp:.09, line:'rgba(236,220,190,.78)', coord:'rgba(236,220,190,.7)' },
+  paper:  { name:'D · 印刷 Printed', note:'Flat, no grain, thin lines. For flat stones and phones.', base:'#F1E7CF', grain:null, line:'#4F4232', coord:'rgba(79,66,50,.75)', thin:true },
+};
+const STONES = {
+  slate: { name:'1 · 写实 Slate and shell', note:'Today’s stones: soft highlight, shell grain, two shadows.' },
+  yunzi: { name:'2 · 云子 Yunzi', note:'Matte, no shine; creamy white, faint green edge on black.' },
+  flat:  { name:'3 · 平面 Flat', note:'Solid fills and a thin outline. No shadow.' },
+};
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function wood(ctx, W, b) {
+  ctx.fillStyle = b.base; ctx.fillRect(0, 0, W, W);
+  if (!b.grain) return;
+  const r = rand(7);
+  for (let i = 0; i < b.count; i++) {
+    const x = r() * W, w = (0.6 + r() * 3.2) * W / 1736, a = 0.02 + r() * b.amp;
+    const [dk, lt] = b.grain; const c = r() > .5 ? dk : lt;
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+    ctx.beginPath(); ctx.moveTo(x, 0);
+    for (let y = 0; y <= W; y += W / 40) ctx.lineTo(x + Math.sin(y / (W / 9) + i) * W / 780, y);
+    ctx.lineTo(x + w * 2, W); ctx.lineTo(x + w * 2, 0); ctx.fill();
+  }
+}
+function stone(ctx, cx, cy, r, color, seed, kind) {
+  if (kind === 'flat') {
+    ctx.fillStyle = color === 1 ? '#1b1b1a' : '#fbfaf6';
+    ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.fill();
+    ctx.lineWidth = Math.max(1, r * .07); ctx.strokeStyle = '#2a2620';
+    ctx.stroke();
+    return;
+  }
+  const yz = kind === 'yunzi';
+  ctx.save();
+  ctx.shadowColor = yz ? 'rgba(40,24,6,.24)' : 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * (yz ? .45 : .55); ctx.shadowOffsetX = r * .12; ctx.shadowOffsetY = r * .18;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.5)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  let gr;
+  if (color === 1 && !yz) {
+    gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r);
+    gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a');
+  } else if (color === 1) {
+    gr = ctx.createRadialGradient(cx - r*.3, cy - r*.35, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#3a3e3b'); gr.addColorStop(.5, '#222624'); gr.addColorStop(.88, '#181b19'); gr.addColorStop(1, '#2c3a32');
+  } else if (!yz) {
+    gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa');
+  } else {
+    gr = ctx.createRadialGradient(cx - r*.3, cy - r*.35, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#fbf5e4'); gr.addColorStop(.6, '#efe4c8'); gr.addColorStop(.92, '#dccca5'); gr.addColorStop(1, '#cdbb92');
+  }
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1 && !yz) {
+    const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5);
+    hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  } else if (color === 2 && !yz) {
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.clip();
+    ctx.translate(cx, cy); ctx.rotate(-0.7 + (seed % 4) * 0.12);
+    ctx.strokeStyle = 'rgba(150,135,110,.10)'; ctx.lineWidth = Math.max(.6, r * .035);
+    for (let k = -r; k < r; k += r * .16) { ctx.beginPath(); ctx.moveTo(-r, k); ctx.quadraticCurveTo(0, k + r*.08, r, k); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function disc(ctx, cx, cy, r, c, flat) {
+  const t = tier(c), u = r / 19;
+  ctx.save();
+  if (t === 'best' && !flat) { ctx.shadowColor = 'rgba(40,20,4,.35)'; ctx.shadowBlur = u * 6; ctx.shadowOffsetY = u * 2; }
+  ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1;
+  ctx.fillStyle = t === 'best' ? '#FDF6E3' : '#FBF1D9';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  const ring = { best:[3.5,'#B8321F',1], close:[1.5,'#B8321F',1], doubt:[1.5,'#8A6A32',1], poor:[1,'#8A6A32',.6] }[t];
+  ctx.save(); ctx.globalAlpha = ring[2]; ctx.lineWidth = u * ring[0]; ctx.strokeStyle = ring[1];
+  ctx.beginPath(); ctx.arc(cx, cy, r - u * ring[0] / 2, 0, 7); ctx.stroke(); ctx.restore();
+  if (c.played) { ctx.lineWidth = u * 2.5; ctx.strokeStyle = '#2B1D0E'; ctx.beginPath(); ctx.arc(cx, cy, r + u * 2.5, 0, 7); ctx.stroke(); }
+  ctx.fillStyle = t === 'best' || t === 'close' ? '#2B1D0E' : '#4A3410'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`; ctx.fillText(c.w.toFixed(1), cx, cy - r * .2);
+  ctx.font = `500 ${r * .48}px Inter`; ctx.fillText((c.s > 0 ? '+' : c.s < 0 ? '−' : '') + Math.abs(c.s).toFixed(1), cx, cy + r * .36);
+}
+
+// view: [x0, y0, cells] crops the board to a square window of points.
+function draw(canvas, opt) {
+  const css = canvas.parentElement.getBoundingClientRect().width || 290, dpr = Math.max(2, window.devicePixelRatio || 1), W = Math.round(css * dpr);
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  const b = BOARDS[opt.board], kind = opt.stones;
+  wood(ctx, W, b);
+  const [x0, y0, cells] = opt.view || [0, 0, N];
+  const margin = W * (opt.view ? .06 : .048), sp = (W - 2 * margin) / (cells - 1);
+  const at = (i, o) => margin + (i - o) * sp;
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, W); ctx.clip();
+  ctx.strokeStyle = b.line; ctx.lineWidth = Math.max(1, (b.thin ? .7 : 1) * dpr * (W / dpr / 434));
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    ctx.moveTo(at(i, x0), at(0, y0)); ctx.lineTo(at(i, x0), at(N - 1, y0));
+    ctx.moveTo(at(0, x0), at(i, y0)); ctx.lineTo(at(N - 1, x0), at(i, y0));
+  }
+  ctx.stroke();
+  ctx.lineWidth *= 1.6; ctx.strokeRect(at(0, x0), at(0, y0), (N - 1) * sp, (N - 1) * sp);
+  ctx.fillStyle = b.line;
+  for (const a of [3, 9, 15]) for (const c of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a, x0), at(c, y0), sp * .11, 0, 7); ctx.fill(); }
+  if (!opt.view) {
+    ctx.fillStyle = b.coord; ctx.font = `${margin * .42}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i, 0), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i, 0)); }
+  }
+  const base = play(UPTO);
+  let g = base.g, line = [];
+  if (opt.pv) {
+    line = CANDS[0].pv.slice(0, opt.pv).map((p, i) => { const [x, y] = pt(p); return { x, y, c: i % 2 === 0 ? 1 : 2, n: i + 1 }; });
+    g = play(UPTO, line).g;
+    line = line.filter((m) => g[m.y][m.x] === m.c);
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) stone(ctx, at(x, x0), at(y, y0), sp * .48, g[y][x], x * 7 + y * 3, kind);
+  if (!opt.pv && !opt.discs && base.last) {
+    const c = g[base.last[1]][base.last[0]];
+    ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a';
+    ctx.beginPath(); ctx.arc(at(base.last[0], x0), at(base.last[1], y0), sp * .11, 0, 7); ctx.fill();
+  }
+  for (const m of line) {
+    const newest = m === line[line.length - 1];
+    ctx.fillStyle = m.c === 1 ? '#f4f1ea' : '#1d1b17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${newest ? 700 : 600} ${sp * .42}px Inter`; ctx.fillText(String(m.n), at(m.x, x0), at(m.y, y0) + sp * .02);
+  }
+  if (opt.discs) for (const c of CANDS) { const [x, y] = pt(c.p); disc(ctx, at(x, x0), at(y, y0), sp * .47, c, kind === 'flat'); }
+  ctx.restore();
+}
+
+function tile(host, cls, name, note, opt) {
+  const d = document.createElement('div'); d.className = 'tile ' + cls;
+  d.innerHTML = `<canvas></canvas><div class="name">${name}</div><div class="note">${note}</div>`;
+  document.getElementById(host).appendChild(d);
+  TILES.push([d.querySelector('canvas'), opt]);
+}
+const TILES = [];
+const redraw = () => TILES.forEach(([c, o]) => draw(c, o));
+window.addEventListener('load', () => document.fonts.ready.then(redraw));
+window.addEventListener('resize', redraw);
+for (const k of Object.keys(BOARDS)) tile('boards', '', BOARDS[k].name, BOARDS[k].note, { board:k, stones: k === 'paper' ? 'flat' : 'slate' });
+for (const k of Object.keys(STONES)) tile('stones', 'big', STONES[k].name, STONES[k].note, { board:'honey', stones:k, view:[9, 0, 10] });
+const SETS = [
+  ['honey', 'slate', '蜜色 · 写实 Honey · slate and shell', 'Default in both themes. Today’s look.'],
+  ['kaya', 'yunzi', '榧木 · 云子 Kaya · Yunzi', 'Light and calm; the Chinese-board feel.'],
+  ['walnut', 'slate', '胡桃 · 写实 Walnut · slate and shell', 'Offered in both themes, suggested for dark.'],
+  ['paper', 'flat', '印刷 · 平面 Printed · flat', 'Default of the phone layout; best for screenshots.'],
+];
+for (const [b, s, n, note] of SETS) tile('sets', '', n, note, { board:b, stones:s });
+for (const [b, s, n] of SETS) {
+  tile('checks', '', n + ' <span class="tag">候选</span>', '', { board:b, stones:s, discs:true, view:[4, 1, 13] });
+  tile('checks', '', n + ' <span class="tag">变化 5 / 8</span>', '', { board:b, stones:s, pv:5, view:[4, 1, 13] });
+}
+</script>
+</body>
+</html>

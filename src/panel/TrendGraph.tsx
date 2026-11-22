@@ -1,21 +1,27 @@
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
 import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
-import { formatLead, formatPercent } from '../analysis/format';
+import { formatLead, formatPercent, isEvenLead } from '../analysis/format';
+import { boardLead, useBoardKomi } from '../analysis/lead';
+import { CapturesLine } from './CapturesLine';
 import { plotRuns, plotted, scoreRange } from '../analysis/trend';
 import { useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useGameStore } from '../game/gameStore';
-import { useSettingsStore } from '../settings/settingsStore';
+import { useDeviceStore } from '../device/deviceStore';
 import type { Perspective } from '../transport/generated/Perspective';
-import { useTransport } from '../transport/TransportProvider';
 import { useFrameNavigate } from '../game/useFrameNavigate';
+import { useElementSize } from '../layout/useElementSize';
 import { usePanelWidth } from '../layout/usePanelWidth';
 import type { TrendNode } from '../transport/generated/TrendNode';
 
 // Plot margins as in the approved mockup (trend-graph.html, section 2).
 const PAD = { left: 52, right: 44, top: 12, bottom: 22 };
 const MINUS = '−';
+
+/** The gap above the chart (`pt-1`), and the least height the chart keeps. */
+const CHART_TOP = 4;
+const MIN_CHART = 60;
 
 /** Where move-number ticks go: every 50 moves, or every 10 in a short game, by move number. */
 function ticks(nodes: readonly TrendNode[]): Array<{ index: number; label: number }> {
@@ -29,14 +35,29 @@ function ticks(nodes: readonly TrendNode[]): Array<{ index: number; label: numbe
   return out;
 }
 
-/** The trend as `perspective`'s side sees it: the stored stats are Black's (design 13.1). */
-function viewed(nodes: readonly TrendNode[], perspective: Perspective): readonly TrendNode[] {
-  if (perspective === 'black') return nodes;
-  return nodes.map((n) =>
-    n.stats
-      ? { ...n, stats: { ...n.stats, winrate: 1 - n.stats.winrate, scoreLead: -n.stats.scoreLead } }
-      : n,
-  );
+/**
+ * The trend as `perspective`'s side sees it: the stored stats are Black's (design 13.1). With
+ * `boardKomi`, the leads are board counts (P2 M1 design 5.10).
+ */
+function viewed(
+  nodes: readonly TrendNode[],
+  perspective: Perspective,
+  boardKomi: number | null,
+): readonly TrendNode[] {
+  if (perspective === 'black' && boardKomi === null) return nodes;
+  const black = perspective === 'black';
+  return nodes.map((n) => {
+    if (!n.stats) return n;
+    const lead = black ? n.stats.scoreLead : -n.stats.scoreLead;
+    return {
+      ...n,
+      stats: {
+        ...n.stats,
+        winrate: black ? n.stats.winrate : 1 - n.stats.winrate,
+        scoreLead: boardKomi === null ? lead : boardLead(lead, boardKomi, perspective),
+      },
+    };
+  });
 }
 
 /**
@@ -44,14 +65,23 @@ function viewed(nodes: readonly TrendNode[], perspective: Perspective): readonly
  * left empty, the current node dashed. Hover shows a node's
  * numbers; click or drag goes there. `width` is for tests; the panel's width otherwise.
  */
-export function TrendGraph({ height, width }: { height: number; width?: number }) {
+export function TrendGraph({ height: panelHeight, width }: { height: number; width?: number }) {
   const { t, i18n } = useTranslation();
+  // The chart takes the height the legend leaves: a legend that wraps in a narrow panel shrinks
+  // the chart instead of being cut off (owner, 2026-11-22).
+  const legend = useRef<HTMLDivElement>(null);
+  const legendHeight = useElementSize(legend).height;
+  const height = Math.max(MIN_CHART, panelHeight - CHART_TOP - legendHeight);
   const lang = i18n.language;
   const panelWidth = usePanelWidth();
   const W = width ?? panelWidth;
   const stored = useTrendStore((s) => s.nodes);
-  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
-  const nodes = useMemo(() => viewed(stored, perspective), [stored, perspective]);
+  const perspective = useDeviceStore((s) => s.settings.perspective);
+  const boardKomi = useBoardKomi();
+  const nodes = useMemo(
+    () => viewed(stored, perspective, boardKomi),
+    [stored, perspective, boardKomi],
+  );
   const lineIndex = useGameStore((s) => s.snapshot?.lineIndex ?? 0);
   const boardSize = useGameStore((s) => s.snapshot?.size ?? 19);
   const go = useFrameNavigate();
@@ -131,6 +161,7 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
     <div>
       <div className="relative pt-1">
         <svg
+          data-trend-graph
           width={W}
           height={height}
           viewBox={`0 0 ${W} ${height}`}
@@ -261,7 +292,11 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
                 })}
                 {' · '}
                 <span className="text-score">
-                  {t('analysis.graph.lead', { lead: formatLead(hovered.stats!.scoreLead, lang) })}
+                  {t('analysis.graph.lead', {
+                    lead: isEvenLead(hovered.stats!.scoreLead)
+                      ? t('analysis.even')
+                      : formatLead(hovered.stats!.scoreLead, lang),
+                  })}
                 </span>
               </div>
             ) : (
@@ -271,8 +306,9 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
         )}
       </div>
       <div
+        ref={legend}
         data-testid="trend-legend"
-        className="flex items-center gap-3.5 border-b border-hairline px-6 pt-0.5 pb-3 text-xs text-text-muted"
+        className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-b border-hairline px-6 pt-0.5 pb-3 text-xs text-text-muted"
       >
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
           <span className="h-0.5 w-3.5 rounded-[1px] bg-text" />
@@ -282,6 +318,7 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
           <span className="h-0.5 w-3.5 rounded-[1px] bg-score" />
           {t('analysis.graph.legend.scoreLead')}
         </span>
+        <CapturesLine className="ml-auto tabular-nums" />
         <PerspectiveToggle />
       </div>
     </div>
@@ -289,21 +326,16 @@ export function TrendGraph({ height, width }: { height: number; width?: number }
 }
 
 /**
- * Whose numbers the discs, the table and the graph show (design 13.1): a black and a white half
- * at the legend's right end, saved with the other settings.
+ * Whose numbers the graph shows (design 13.1, P2 M1 design 5.10): a black and a white half at the
+ * legend's right end, saved per device. The discs and the table show the side to move instead.
  */
 function PerspectiveToggle() {
   const { t } = useTranslation();
-  const transport = useTransport();
-  const perspective = useSettingsStore((s) => s.settings?.perspective ?? 'black');
+  const perspective = useDeviceStore((s) => s.settings.perspective);
   const choose = (next: Perspective) => {
-    const current = useSettingsStore.getState().settings;
-    if (!current || current.perspective === next) return;
-    // A failure puts the previous choice back.
-    useSettingsStore
-      .getState()
-      .save(transport, { ...current, perspective: next })
-      .catch(() => undefined);
+    if (useDeviceStore.getState().settings.perspective !== next) {
+      useDeviceStore.getState().update({ perspective: next });
+    }
   };
   const sides: Array<[Perspective, string, string]> = [
     ['black', t('analysis.graph.perspective.black'), 'bg-bar-black'],
@@ -313,7 +345,8 @@ function PerspectiveToggle() {
     <div
       role="radiogroup"
       aria-label={t('analysis.graph.perspective.label')}
-      className="ml-auto inline-flex overflow-hidden rounded-md border border-hairline"
+      title={t('analysis.graph.perspective.label')}
+      className="inline-flex overflow-hidden rounded-md border border-hairline"
     >
       {sides.map(([side, label, stone]) => (
         <button

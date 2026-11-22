@@ -130,13 +130,13 @@ export function StepLicence() {
         </>
       }
     >
-      <p className="text-[14px] text-text-muted">{t('setup.licence.intro')}</p>
+      <p className="text-[0.875rem] text-text-muted">{t('setup.licence.intro')}</p>
       <ul className="mt-4 border-t border-hairline">
         {pending.map((licence) => (
-          <li key={licence.textSha256} className="border-b border-hairline py-3.5 text-[14px]">
+          <li key={licence.textSha256} className="border-b border-hairline py-3.5 text-[0.875rem]">
             <div className="flex items-center gap-3">
               <span className="flex-1">{licence.name}</span>
-              <span className="text-[13px] text-text-muted tabular-nums">
+              <span className="text-[0.8125rem] text-text-muted tabular-nums">
                 {formatBytes(
                   licence.components.reduce((sum, component) => sum + component.bytes, 0),
                   i18n.language,
@@ -152,7 +152,7 @@ export function StepLicence() {
               </Button>
             </div>
             {/* What the licence covers, so the user sees each component and its size (5.2). */}
-            <ul className="mt-1.5 text-[13px] text-text-muted">
+            <ul className="mt-1.5 text-[0.8125rem] text-text-muted">
               {licence.components.map((component) => (
                 <li key={component.name} className="flex gap-3 py-0.5 pl-3">
                   <span className="flex-1">{componentLabel(component)}</span>
@@ -165,7 +165,7 @@ export function StepLicence() {
           </li>
         ))}
       </ul>
-      <label className="mt-5 flex cursor-pointer items-start gap-3 text-[14px]">
+      <label className="mt-5 flex cursor-pointer items-start gap-3 text-[0.875rem]">
         <Checkbox
           className="mt-0.5"
           checked={ticked}

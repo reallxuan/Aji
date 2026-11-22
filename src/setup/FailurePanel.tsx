@@ -96,10 +96,10 @@ export function FailurePanel({
       }
     >
       {tasks.length > 0 && <TaskRows tasks={tasks} />}
-      <div className="mt-5 space-y-3 text-[14px]">
+      <div className="mt-5 space-y-3 text-[0.875rem]">
         <p>{t(`setup.failure.${outcome.failure}`)}</p>
         {driver && (
-          <div className="space-y-2 text-[13px] text-text-muted">
+          <div className="space-y-2 text-[0.8125rem] text-text-muted">
             <p>
               {driver.current
                 ? t('setup.install.driver', { current: driver.current, required: driver.required })
@@ -117,7 +117,7 @@ export function FailurePanel({
           </div>
         )}
         {offer && primary === 'fallback' && (
-          <p className="text-[13px] text-text-muted">
+          <p className="text-[0.8125rem] text-text-muted">
             {t('setup.install.offer', { backend: offerName, size: offerSize })}
           </p>
         )}
@@ -127,7 +127,7 @@ export function FailurePanel({
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="group px-0 text-[13px] text-text-muted hover:bg-transparent hover:text-text"
+              className="group px-0 text-[0.8125rem] text-text-muted hover:bg-transparent hover:text-text"
             >
               <ChevronRightIcon
                 className="transition-transform group-data-[state=open]:rotate-90"
@@ -137,7 +137,7 @@ export function FailurePanel({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <pre className="mt-2 overflow-x-auto rounded-sm bg-ground p-3 font-mono text-[12px] whitespace-pre-wrap text-text-muted">
+            <pre className="mt-2 overflow-x-auto rounded-sm bg-ground p-3 font-mono text-[0.75rem] whitespace-pre-wrap text-text-muted">
               {outcome.stderrTail.join('\n')}
             </pre>
           </CollapsibleContent>

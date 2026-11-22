@@ -98,7 +98,7 @@ export function StepBackend() {
     >
       <HardwareRows hardware={hardware} />
       {unsupported && (
-        <p className="mt-6 text-[14px] text-text-muted">{t('setup.backend.unsupported')}</p>
+        <p className="mt-6 text-[0.875rem] text-text-muted">{t('setup.backend.unsupported')}</p>
       )}
       {rows.length > 0 && (
         <div className="mt-6">
@@ -110,14 +110,14 @@ export function StepBackend() {
             {rows.map((row) => (
               <ChoiceRow key={row.backend} value={row.backend} disabled={row.disabled}>
                 <span className="flex-1 font-medium">{backendName(t, row.backend)}</span>
-                <span className="text-[13px] text-text-muted">{row.tags}</span>
+                <span className="text-[0.8125rem] text-text-muted">{row.tags}</span>
               </ChoiceRow>
             ))}
           </ChoiceList>
         </div>
       )}
       {driver && (
-        <div className="mt-4 text-[13px] text-text-muted">
+        <div className="mt-4 text-[0.8125rem] text-text-muted">
           <p>
             {driver.current
               ? t('setup.backend.driverAdvice', {

@@ -253,6 +253,38 @@ rules nor komi, are analysed with: `{ "kind": "chinese" }`, `{ "kind": "japanese
 `{ "kind": "custom", "komi": 7, "scoring": "area" }` (`scoring` is `area` or `territory`; `komi` is a
 multiple of 0.5 from -150 to 150).
 
+## Device settings
+
+What belongs to one machine rather than to the user lives in the webview's `localStorage` under
+`aji.device`, not in `settings.json` (P2 M1 design 5.8): the layout, the phone layout's active
+tab, the keymap overrides (empty until M4), the board and stone style, the interface scale,
+coordinates, the disc lines, the graph's perspective, the score option (`scoreWithKomi`),
+always on top, and whether the device first launched in the phone arrangement (`startedNarrow`,
+which picks the default board style until one is chosen). The value is a JSON object with `version: 1`; a field Aji cannot read takes its
+default, and anything that is not a version-1 object reads as the defaults without being
+overwritten until something changes.
+
+On the first launch of a build with device settings, `showCoordinates`, `discLines` and
+`perspective` are copied once from `settings.json` (`migrated` records it). The backend keeps
+those three fields until M4.
+
+To start over in a development page, run `localStorage.removeItem('aji.device')` in the console
+and reload. In the browser pane, setting only the layout back to the default is
+`localStorage.setItem('aji.device', JSON.stringify({ ...JSON.parse(localStorage.getItem('aji.device')), layout: null }))`.
+
+## The narrow arrangement in the browser
+
+A window narrower than the wide frame's minimum shows the phone arrangement (P2 M1 design 5.5):
+the board at full width, the win-rate bar, the other panels as tabs, and under 700 px a bottom
+navigation bar. To see it, open a scenario (for example `?scenario=analysing`) in a browser with
+a device toolbar or the desktop app's browser pane, pick a phone size such as 375 × 812 and
+reload: a mobile emulation changes the layout viewport only after a reload. From 700 px wide the
+first two panels sit side by side.
+
+Touch gestures (tap a candidate to pin its line, swipe sideways to step) answer only to touch
+pointers, so they need touch emulation; a mouse keeps its hover. Settings, the wizard and About
+open as a full sheet there, with a close button.
+
 ## Recent files and the macOS menu
 
 `recent.json`, beside `settings.json`, lists the last 10 game files opened or saved, newest first,

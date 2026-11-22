@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,14 +25,19 @@ import { useBenchmarkStore } from '../setup/benchmarkStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { getInstalled, removeUnused, restartEngine, stopEngine } from '../transport/api';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
+import { useDeviceStore } from '../device/deviceStore';
+import { INTERFACE_SCALES, type InterfaceScale } from '../device/deviceSettings';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { UiSettings } from '../transport/generated/UiSettings';
 import { toTransportError, type Transport } from '../transport/transport';
 import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
+import { LayoutSettings } from '../layout/LayoutMenu';
+import { BoardStyleControl } from './BoardStyleControl';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
+import { SETTINGS_LABEL, SETTINGS_ROW } from './rowClasses';
 import { useSettingsStore } from './settingsStore';
 
 /** What the controls show before the stored settings arrive; they stay disabled until then. */
@@ -58,21 +63,37 @@ const setUpAgain = () => {
 
 /** Settings (mockup S): every change applies at once, with no Save button and no restart. */
 export function SettingsPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const transport = useTransport();
   const stored = useSettingsStore((s) => s.settings);
   const settings = stored ?? DEFAULTS;
   const loaded = stored !== null;
+  const device = useDeviceStore((s) => s.settings);
+  const updateDevice = useDeviceStore((s) => s.update);
 
+  // The fields whose last save failed, said beside their controls for a moment (M5 minor 1).
+  const [failed, setFailed] = useState<string[]>([]);
+  const failedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (failedTimer.current) clearTimeout(failedTimer.current);
+    },
+    [],
+  );
   const save = (patch: Partial<UiSettings>) => {
     const current = useSettingsStore.getState().settings;
     if (!current) return;
-    // A failure puts the previous settings back; the control shows them again.
+    // A failure puts the previous settings back; the control shows them again, with a word why.
     useSettingsStore
       .getState()
       .save(transport, { ...current, ...patch })
-      .catch(() => undefined);
+      .catch(() => {
+        setFailed(Object.keys(patch));
+        if (failedTimer.current) clearTimeout(failedTimer.current);
+        failedTimer.current = setTimeout(() => setFailed([]), SAVE_FAILED_MS);
+      });
   };
+  const failedNote = (field: keyof UiSettings) => (failed.includes(field) ? <SaveFailed /> : null);
 
   const languageOptions: Array<[UiSettings['language'], string]> = [
     ['system', t('settings.followSystem')],
@@ -84,27 +105,38 @@ export function SettingsPanel() {
     ['dark', t('settings.dark')],
     ['light', t('settings.light')],
   ];
-  const coordinates = settings.showCoordinates ? 'show' : 'hide';
+  const coordinates = device.showCoordinates ? 'show' : 'hide';
+  const lead = device.scoreWithKomi ? 'komi' : 'board';
+  const leadOptions: Array<['komi' | 'board', string]> = [
+    ['komi', t('settings.lead.withKomi')],
+    ['board', t('settings.lead.board')],
+  ];
+  const percent = new Intl.NumberFormat(i18n.language, { style: 'percent' });
   const coordinateOptions: Array<['show' | 'hide', string]> = [
     ['show', t('settings.coordinatesShow')],
     ['hide', t('settings.coordinatesHide')],
   ];
+  const onTopOptions: Array<['on' | 'off', string]> = [
+    ['on', t('settings.alwaysOnTop.on')],
+    ['off', t('settings.alwaysOnTop.off')],
+  ];
+  const onTop = device.alwaysOnTop ? 'on' : 'off';
 
   /** Taking the other line's field swaps the two, so the lines stay different. */
   const setDiscLine = (index: 0 | 1, field: DiscField) => {
-    const lines = [...settings.discLines] as [DiscField, DiscField];
+    const lines = [...device.discLines] as [DiscField, DiscField];
     const other = index === 0 ? 1 : 0;
     if (lines[other] === field) lines[other] = lines[index];
     lines[index] = field;
-    save({ discLines: lines });
+    updateDevice({ discLines: lines });
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="@container flex h-full min-h-0 flex-col">
       <PanelTitle title={t('settings.title')} onBack={toMain} backLabel={t('settings.back')} />
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         <Section title={t('settings.interface')}>
-          <Row label={t('settings.language')}>
+          <Row label={t('settings.language')} note={failedNote(FIELD.language)}>
             <Choice
               label={t('settings.language')}
               value={settings.language}
@@ -113,7 +145,7 @@ export function SettingsPanel() {
               options={languageOptions}
             />
           </Row>
-          <Row label={t('settings.theme')}>
+          <Row label={t('settings.theme')} note={failedNote(FIELD.theme)}>
             <Choice
               label={t('settings.theme')}
               value={settings.theme}
@@ -126,9 +158,42 @@ export function SettingsPanel() {
             <Choice
               label={t('settings.coordinates')}
               value={coordinates}
-              disabled={!loaded}
-              onChange={(choice) => save({ showCoordinates: choice === 'show' })}
+              disabled={false}
+              onChange={(choice) => updateDevice({ showCoordinates: choice === 'show' })}
               options={coordinateOptions}
+            />
+          </Row>
+          <Row label={t('settings.scale')}>
+            <Select
+              value={String(device.interfaceScale)}
+              onValueChange={(scale) =>
+                updateDevice({ interfaceScale: Number(scale) as InterfaceScale })
+              }
+            >
+              <SelectTrigger size="sm" className="w-28" aria-label={t('settings.scale')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERFACE_SCALES.map((scale) => (
+                  <SelectItem key={scale} value={String(scale)}>
+                    {percent.format(scale / 100)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Row>
+          <Row label={t('settings.board.title')}>
+            <BoardStyleControl />
+          </Row>
+          <LayoutSettings />
+          {/* Its only place (owner, 2026-11-22): a window preference, not a game action. */}
+          <Row label={t('settings.alwaysOnTop.title')}>
+            <Choice
+              label={t('settings.alwaysOnTop.title')}
+              value={onTop}
+              disabled={false}
+              onChange={(choice) => updateDevice({ alwaysOnTop: choice === 'on' })}
+              options={onTopOptions}
             />
           </Row>
         </Section>
@@ -142,8 +207,7 @@ export function SettingsPanel() {
                   label={t(index === 0 ? 'settings.discLine1' : 'settings.discLine2')}
                 >
                   <Select
-                    value={settings.discLines[index]}
-                    disabled={!loaded}
+                    value={device.discLines[index]}
                     onValueChange={(field) => setDiscLine(index, field as DiscField)}
                   >
                     <SelectTrigger
@@ -164,30 +228,40 @@ export function SettingsPanel() {
                 </Row>
               ))}
             </div>
-            <DiscPreview lines={settings.discLines} />
+            <DiscPreview lines={device.discLines} />
           </div>
+          <Row label={t('settings.lead.title')}>
+            <Choice
+              label={t('settings.lead.title')}
+              value={lead}
+              disabled={false}
+              onChange={(choice) => updateDevice({ scoreWithKomi: choice === 'komi' })}
+              options={leadOptions}
+            />
+          </Row>
           <RulesControl
             layout={RULES_LAYOUT}
             ruleLabel={t('settings.defaultRules')}
             value={settings.defaultRules}
             onChange={(defaultRules) => save({ defaultRules })}
           />
-          <p className="text-[12px] text-text-muted">{t('settings.defaultRulesNote')}</p>
-          <Row label={t('settings.visitLimit')}>
+          {failedNote(FIELD.defaultRules)}
+          <p className="text-[0.75rem] text-text-muted">{t('settings.defaultRulesNote')}</p>
+          <Row label={t('settings.visitLimit')} note={failedNote(FIELD.visitLimit)}>
             <VisitLimit
               value={settings.visitLimit}
               disabled={!loaded}
               onCommit={(visitLimit) => save({ visitLimit })}
             />
           </Row>
-          <p className="text-[12px] text-text-muted">{t('settings.visitLimitNote')}</p>
+          <p className="text-[0.75rem] text-text-muted">{t('settings.visitLimitNote')}</p>
         </Section>
 
         <EngineSection transport={transport} />
 
         <button
           type="button"
-          className="mt-4 flex w-full items-center px-6 py-3 text-left text-[14px] hover:bg-divider-soft"
+          className="mt-4 flex w-full items-center px-6 py-3 text-left text-[0.875rem] hover:bg-divider-soft"
           onClick={toAbout}
         >
           <span className="flex-1">{t('settings.about')}</span>
@@ -201,17 +275,47 @@ export function SettingsPanel() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border-b border-hairline px-6 py-5">
-      <h3 className="mb-3 text-[12px] text-text-muted">{title}</h3>
+      <h3 className="mb-3 text-[0.75rem] text-text-muted">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** The saved settings whose controls can say a save failed. */
+const FIELD = {
+  language: 'language',
+  theme: 'theme',
+  defaultRules: 'defaultRules',
+  visitLimit: 'visitLimit',
+} as const satisfies Record<string, keyof UiSettings>;
+
+/** How long 保存失败 stays beside a control. */
+const SAVE_FAILED_MS = 3000;
+
+function SaveFailed() {
+  const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-4 text-[14px]">
-      <span className="w-36 shrink-0">{label}</span>
+    <span role="status" className="text-[0.75rem] text-engine-error">
+      {t('settings.saveFailed')}
+    </span>
+  );
+}
+
+function Row({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  /** Said after the control: a failed save. */
+  note?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={SETTINGS_ROW}>
+      <span className={SETTINGS_LABEL}>{label}</span>
       {children}
+      {note}
     </div>
   );
 }
@@ -284,7 +388,7 @@ function VisitLimit({
       inputMode="numeric"
       aria-label={t('settings.visitLimit')}
       placeholder={t('settings.visitLimitNone')}
-      className="h-8 w-32 rounded-md border border-hairline bg-transparent px-2.5 text-[14px] tabular-nums outline-none placeholder:text-text-muted focus-visible:border-text-muted"
+      className="h-8 w-32 rounded-md border border-hairline bg-transparent px-2.5 text-[0.875rem] tabular-nums outline-none placeholder:text-text-muted focus-visible:border-text-muted"
       value={draft}
       maxLength={9}
       disabled={disabled}
@@ -356,7 +460,7 @@ function EngineSection({ transport }: { transport: Transport }) {
 
   return (
     <Section title={t('settings.engine')}>
-      <div className="text-[14px]">
+      <div className="text-[0.875rem]">
         {active ? (
           <>
             <p>
@@ -365,7 +469,7 @@ function EngineSection({ transport }: { transport: Transport }) {
                 backend: backendName(t, active.backend),
               })}
             </p>
-            <p className="mt-1 text-[13px] text-text-muted">
+            <p className="mt-1 text-[0.8125rem] text-text-muted">
               {t('settings.networkLine', { network: active.networkName })}
             </p>
             <div className="mt-3">
@@ -398,14 +502,14 @@ function EngineSection({ transport }: { transport: Transport }) {
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-[13px] text-engine-error">
+        <p role="alert" className="text-[0.8125rem] text-engine-error">
           {error}
         </p>
       )}
       {unused !== null && (
-        <div className="flex items-center gap-3 text-[14px]">
+        <div className="flex items-center gap-3 text-[0.875rem]">
           <span className="flex-1">{t('settings.unused')}</span>
-          <span className="text-[13px] text-text-muted tabular-nums">{unusedSize}</span>
+          <span className="text-[0.8125rem] text-text-muted tabular-nums">{unusedSize}</span>
           <Button
             variant="outline"
             size="sm"

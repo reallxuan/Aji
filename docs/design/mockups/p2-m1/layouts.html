@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2 M1 layouts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --accent:#7fb2ff; }
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --accent:#2f6fd6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro, .section { max-width:1240px; margin:0 auto 44px; }
+  .intro { color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1040px; }
+  .cap b { color:#ECEAE4; }
+  .rec { color:#7fd1a8; font-weight:600; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+
+  /* A window: absolute boxes in real pixels, scaled down with zoom. */
+  .win { position:relative; background:var(--ground); color:var(--text); overflow:hidden; border-radius:10px; outline:1px solid #2a2a2e; }
+  .box { position:absolute; background:var(--panel); }
+  .bd { position:absolute; }
+  .bd canvas { width:100%; height:100%; display:block; border-radius:3px; }
+  .p { position:absolute; border-bottom:1px solid var(--hairline); padding:14px 22px; font-size:13px; color:var(--muted); overflow:hidden; }
+  .p .nm { color:var(--text); font-weight:500; font-size:13px; }
+  .p.last { border-bottom:none; }
+  .vl { position:absolute; top:0; bottom:0; width:1px; background:var(--hairline); }
+  .hdr { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text); }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; font-size:13px; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .hdr .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); flex:none; }
+  .bar { height:24px; display:flex; border-radius:4px; overflow:hidden; font-size:12px; font-weight:600; }
+  .bar .b { width:54%; background:#0a0a0b; color:#f4f2ec; padding-left:8px; display:flex; align-items:center; }
+  .bar .w { flex:1; background:#f4f2ec; color:#1d1d1b; padding-right:8px; display:flex; align-items:center; justify-content:flex-end; }
+  .graph { margin-top:10px; height:calc(100% - 50px); min-height:30px; border-radius:3px; background:linear-gradient(transparent 49%, var(--soft) 49%, var(--soft) 51%, transparent 51%); position:relative; }
+  .graph svg { position:absolute; inset:0; width:100%; height:100%; }
+  .rows div { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--soft); font-size:12.5px; color:var(--text); }
+  .rows div span:last-child { color:var(--muted); }
+  .tabs { display:flex; gap:18px; font-size:12.5px; margin:-4px 0 10px; }
+  .tabs span { color:var(--muted); padding-bottom:6px; }
+  .tabs span.on { color:var(--text); box-shadow:inset 0 -2px 0 var(--text); }
+  .grip { display:inline-block; width:10px; height:14px; margin-right:8px; vertical-align:-2px; background-image:radial-gradient(var(--line) 1.2px, transparent 1.3px); background-size:5px 5px; }
+  .tree { font-size:12px; color:var(--muted); line-height:2; }
+  .tree i { display:inline-block; width:16px; height:16px; border-radius:50%; vertical-align:-3px; margin-right:-3px; font-style:normal; font-size:9px; text-align:center; line-height:16px; }
+  .tree i.b { background:#111; color:#eee; } .tree i.w { background:#f2efe8; color:#222; box-shadow:inset 0 0 0 1px #bbb; }
+  .drop { position:absolute; border:2px solid var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; }
+  .ghost { position:absolute; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 12px; font-size:13px; box-shadow:0 12px 30px rgba(0,0,0,.45); color:var(--text); }
+  .note { position:absolute; font-size:12px; color:var(--accent); }
+  .big { font-size:22px; color:var(--text); display:flex; justify-content:space-around; align-items:center; height:100%; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>P2 · M1 · 布局 layouts (decision P2)</h1>
+  The same position as the board styles page, Black to move at move 58. Windows are drawn at their real pixel size and scaled down to fit.
+  <ul>
+    <li><b>Rules every layout keeps</b> (interface design section 1): the board is a square sized by the window height, nothing takes vertical space from it, and the panels are one surface divided by hairlines, never floating cards.</li>
+    <li><b>Presets</b> (sections 1 to 5) follow LizzieYzy's modes as charter 7.9 lists them. Each is a starting point the user can then change by dragging (section 6).</li>
+    <li><b>Wide windows</b> (section 7) settle the interface design's open item 4: extra width becomes a second panel column.</li>
+    <li><b>The phone layout</b> (section 8) is its own layout for touch, not the desktop shrunk. Phase 2 builds and tests it in a narrow window and in a browser; Phase 3 serves it to phones.</li>
+    <li>Presets are chosen from a 布局 entry in the game menu and in settings, with 恢复默认 to go back.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 · 默认 Default</h2>
+  <p class="cap">Today's screen, now made of panels: the header row, the win-rate bar and graph, the candidate list, and one tab group holding the variation tree and comments. With no variations and no comment, the tab group folds away, as the variations section does today. <span class="rec">The default for every window between 1200 and 1900 px wide.</span></p>
+  <div id="s1"></div>
+</div>
+
+<div class="section">
+  <h2>2 · 经典 Classic</h2>
+  <p class="cap">LizzieYzy's classic arrangement: the board in the middle, the graph and comments on the left, candidates and the tree on the right. Both columns are narrow at 1440 px (286 px each), so the header row moves to the right column's top and the rules chip folds into the title.</p>
+  <div id="s2"></div>
+</div>
+
+<div class="section">
+  <h2>3 · 极简 Minimal</h2>
+  <p class="cap">The board and a slim column: header row, win-rate bar and the top three candidates. The extra width becomes even margins around the board. For reviewing with as little on screen as possible, or a small laptop window.</p>
+  <div id="s3"></div>
+</div>
+
+<div class="section">
+  <h2>4 · 思考 Thinking</h2>
+  <p class="cap">A second large board (the sub-board) shows the best line from the current position, stepped by the wheel while the pointer is over it. The win-rate bar and a short candidate list sit under it. The main board stays clear of numbered stones, which is the point of this mode.</p>
+  <div id="s4"></div>
+</div>
+
+<div class="section">
+  <h2>5 · 四盘 Four boards</h2>
+  <p class="cap">Three sub-boards show the lines of the top three candidates, each labelled with its rank chip, win rate and lead. The fourth cell holds the bar and the graph. Clicking a sub-board's label plays that line on the main board as a hovered line.</p>
+  <div id="s5"></div>
+</div>
+
+<div class="section">
+  <h2>6 · Rearranging: dragging a panel</h2>
+  <p class="cap">Each panel shows a grip at its top left only while the pointer is over it, so the surface stays clean. Dragging the grip lifts the panel; dropping it on a panel's edge splits that place, and dropping it on a panel's middle adds a tab. Blue marks where it would land. Hairlines between panels drag to resize. On touch, a long press on the panel's grip lifts it. Panels can also be hidden from the 布局 menu; the board cannot be moved or hidden.</p>
+  <div id="s6"></div>
+</div>
+
+<div class="section">
+  <h2>7 · Wide windows</h2>
+  <p class="cap">At 1920 × 1080 the board is 1048 px and the panel 840 px. Above a panel width of about 760 px, the default layout splits into two columns: analysis on the left (bar, graph, candidates), the record on the right (tree, comments, sub-board). Below that it stays one column. <span class="rec">Proposed answer to interface design 4's open item.</span></p>
+  <div id="s7"></div>
+</div>
+
+<div class="section">
+  <h2>8 · 手机 Phone (375 × 812) and the narrow window</h2>
+  <p class="cap">Below about 700 px of width, or when the window is taller than wide, the layout changes: the board spans the full width, the win-rate bar sits under it, and the panels become tabs below. Navigation moves to large buttons along the bottom edge, in thumb reach. The header keeps the title and the engine dot. Tapping a candidate shows its line (as hovering does), and a swipe across the board steps through it. A second tap on the same candidate plays it (from M3). Each tab is a full panel, so the panels built in M2 to M4 appear here with no extra work. <b>Board style:</b> printed and flat by default here (board styles page, section 3).</p>
+  <div class="row"><div><div class="label">候选 TAB</div><div id="s8a"></div></div><div><div class="label">变化 TAB, A LINE SHOWN</div><div id="s8b"></div></div><div><div class="label">TABLET, PORTRAIT 768 × 1024</div><div id="s8c"></div></div></div>
+</div>
+
+<script>
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+const LINES = [['L14','M13','M14','N13','L12','M12'], ['M13','L14','L13','K14','K13'], ['K12','L14','M13','M14']];
+function play(extra) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, UPTO).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 })).concat(extra || []);
+  for (const {x, y, c} of seq) {
+    g[y][x] = c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== 3 - c) continue;
+      const group = [], seen = new Set([nx+','+ny]), st = [[nx,ny]]; let libs = 0;
+      while (st.length) { const [px, py] = st.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) { const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++; else if (g[qy][qx] === 3 - c && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); st.push([qx,qy]); } } }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return g;
+}
+const DISCS = [['L14',54.2,'best'],['M13',53.1,'close'],['K12',52.4,'close'],['Q10',50.9,'doubt'],['C10',49.6,'poor']];
+function drawBoard(canvas, opt) {
+  const css = canvas.parentElement.getBoundingClientRect().width, dpr = 2, W = Math.round(css * dpr);
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d'), flat = opt.flat;
+  ctx.fillStyle = flat ? '#F1E7CF' : '#DDB067'; ctx.fillRect(0, 0, W, W);
+  if (!flat) { let s = 7; const r = () => (s = s * 16807 % 2147483647) / 2147483647;
+    for (let i = 0; i < 200; i++) { const x = r() * W; ctx.fillStyle = r() > .5 ? `rgba(120,72,20,${.02 + r() * .06})` : `rgba(255,236,190,${.02 + r() * .06})`; ctx.fillRect(x, 0, (1 + r() * 4) * W / 1736, W); } }
+  const m = W * .045, sp = (W - 2 * m) / 18, at = (i) => m + i * sp;
+  ctx.strokeStyle = flat ? '#4F4232' : '#3A2A14'; ctx.lineWidth = Math.max(1, W / 900);
+  ctx.beginPath(); for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(18)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(18), at(i)); } ctx.stroke();
+  ctx.fillStyle = ctx.strokeStyle; for (const a of [3,9,15]) for (const b of [3,9,15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .1, 0, 7); ctx.fill(); }
+  const line = (opt.line || []).map((p, i) => { const [x, y] = pt(p); return { x, y, c: i % 2 === 0 ? 1 : 2, n: i + 1 }; });
+  const g = play(line);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) {
+    const cx = at(x), cy = at(y), r = sp * .48, b = g[y][x] === 1;
+    if (flat) { ctx.fillStyle = b ? '#1b1b1a' : '#fbfaf6'; ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.fill(); ctx.lineWidth = Math.max(1, r * .07); ctx.strokeStyle = '#2a2620'; ctx.stroke(); continue; }
+    ctx.save(); ctx.shadowColor = 'rgba(40,24,6,.35)'; ctx.shadowBlur = r * .4; ctx.shadowOffsetX = r * .1; ctx.shadowOffsetY = r * .15;
+    const gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r);
+    if (b) { gr.addColorStop(0, '#5a5a58'); gr.addColorStop(.3, '#2a2a29'); gr.addColorStop(1, '#0a0a0a'); } else { gr.addColorStop(0, '#fff'); gr.addColorStop(.6, '#f1eee6'); gr.addColorStop(1, '#c4bdaf'); }
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.restore();
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const s of line) if (g[s.y][s.x] === s.c) { ctx.fillStyle = s.c === 1 ? '#f4f1ea' : '#1d1b17'; ctx.font = `600 ${sp * .42}px Inter`; ctx.fillText(s.n, at(s.x), at(s.y)); }
+  if (opt.discs) for (const [p, w, t] of DISCS) {
+    const [x, y] = pt(p), cx = at(x), cy = at(y), r = sp * .47;
+    ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1; ctx.fillStyle = '#FBF1D9'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = r * (t === 'best' ? .18 : .08); ctx.strokeStyle = t === 'best' || t === 'close' ? '#B8321F' : '#8A6A32'; ctx.beginPath(); ctx.arc(cx, cy, r * .93, 0, 7); ctx.stroke();
+    ctx.fillStyle = '#2B1D0E'; ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`; ctx.fillText(w.toFixed(1), cx, cy - r * .16);
+  }
+}
+
+// ---- Building blocks, in window pixels ------------------------------------------------
+const hdr = (o = {}) => `<div class="hdr"><span class="t">${o.short ? '三星杯决赛 第2局' : '2025 三星杯决赛 第2局 ▾'}</span>${o.chip === false ? '' : '<span class="chip">中国 · 7.5</span>'}<span class="nav">${o.short ? '' : '⏮'} ◀ <b>58 / 247</b> ▶ ${o.short ? '' : '⏭'}</span><span class="dot"></span>${o.gear === false ? '' : '<span style="color:var(--muted)">⚙</span>'}</div>`;
+const bar = () => `<div class="bar"><div class="b">54.2%</div><div class="w">45.8%</div></div>`;
+const graph = () => `<div class="graph"><svg viewBox="0 0 100 40" preserveAspectRatio="none"><polyline fill="none" stroke="var(--text)" stroke-width=".6" vector-effect="non-scaling-stroke" points="0,20 8,18 16,21 24,17 32,19 40,15 48,22 56,24 64,18 72,16 80,19"/><polyline fill="none" stroke="var(--score)" stroke-width=".6" vector-effect="non-scaling-stroke" points="0,21 8,20 16,22 24,19 32,20 40,17 48,23 56,25 64,20 72,18 80,20"/><line x1="80" x2="80" y1="0" y2="40" stroke="var(--line)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/></svg></div>`;
+const cands = (n = 5) => `<div class="rows">${[['L14','54.2%','+1.8'],['M13','53.1%','+1.3'],['K12','52.4%','+0.9'],['Q10','50.9%','+0.2'],['C10','49.6%','−0.4'],['N11','48.8%','−0.9']].slice(0, n).map(([p,w,s]) => `<div><span>${p}</span><span style="color:var(--text)">${w}</span><span>${s}</span></div>`).join('')}</div>`;
+const tree = () => `<div class="tree"><i class="b">56</i><i class="w">57</i><i class="b">58</i> ─ <i class="w">59</i><i class="b">60</i><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ <i class="w">B</i> 试下 L14</div>`;
+const comment = () => `<div style="color:var(--text);line-height:1.7">黑58 扳是本局第一个疑问手，L14 长更稳。</div>`;
+const tabs = (names, on = 0) => `<div class="tabs">${names.map((n, i) => `<span class="${i === on ? 'on' : ''}">${n}</span>`).join('')}</div>`;
+
+function win(id, w, h, zoom, theme, parts) {
+  const el = document.createElement('div');
+  el.className = 'win ' + theme; el.style.width = w + 'px'; el.style.height = h + 'px';
+  el.innerHTML = parts.join('');
+  const host = document.getElementById(id);
+  host.appendChild(el);
+  // Fit the page: never larger than the given zoom, never wider than the section.
+  const room = document.querySelector('.section').clientWidth / (host.closest('.row') ? 3.3 : 1);
+  el.style.zoom = Math.min(zoom, room / w);
+}
+const board = (x, y, s, opt = {}) => `<div class="bd" style="left:${x}px;top:${y}px;width:${s}px;height:${s}px"><canvas data-o='${JSON.stringify(opt)}'></canvas></div>`;
+const box = (x, y, w, h) => `<div class="box" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"></div>`;
+const p = (x, y, w, h, html, last) => `<div class="p${last ? ' last' : ''}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">${html}</div>`;
+const vl = (x) => `<div class="vl" style="left:${x}px"></div>`;
+
+// 1 Default, 1440 x 900
+win('s1', 1440, 900, .82, 'dark', [
+  board(16, 16, 868, { discs:true }), box(900, 0, 540, 900), vl(900),
+  p(900, 0, 540, 56, hdr()),
+  p(900, 56, 540, 230, bar() + graph()),
+  p(900, 286, 540, 300, '<div class="nm" style="margin-bottom:6px">候选</div>' + cands(6)),
+  p(900, 586, 540, 314, tabs(['变化', '评论']) + tree(), true),
+]);
+// 2 Classic
+win('s2', 1440, 900, .82, 'dark', [
+  box(0, 0, 286, 900), vl(286),
+  p(0, 0, 286, 300, bar() + graph()),
+  p(0, 300, 286, 600, '<div class="nm" style="margin-bottom:8px">评论</div>' + comment(), true),
+  board(302, 16, 836, { discs:true }),
+  box(1154, 0, 286, 900), vl(1154),
+  p(1154, 0, 286, 56, hdr({ short:true, chip:false })),
+  p(1154, 56, 286, 420, '<div class="nm" style="margin-bottom:6px">候选</div>' + cands(6)),
+  p(1154, 476, 286, 424, '<div class="nm" style="margin-bottom:6px">变化</div>' + tree(), true),
+]);
+// 3 Minimal
+win('s3', 1440, 900, .82, 'dark', [
+  board(130, 16, 868, { discs:true }),
+  box(1128, 0, 312, 900), vl(1128),
+  p(1128, 0, 312, 56, hdr({ short:true, chip:false, gear:false })),
+  p(1128, 56, 312, 70, bar()),
+  p(1128, 126, 312, 200, cands(3), true),
+]);
+// 4 Thinking
+win('s4', 1440, 900, .82, 'dark', [
+  board(16, 16, 868, {}), box(900, 0, 540, 900), vl(900),
+  p(900, 0, 540, 56, hdr()),
+  p(900, 56, 540, 540, '<div class="nm" style="margin-bottom:6px">副盘 · L14 起 6 手</div>'),
+  board(922, 86, 496, { line: LINES[0] }),
+  p(900, 596, 540, 70, bar()),
+  p(900, 666, 540, 234, cands(4), true),
+]);
+// 5 Four boards
+win('s5', 1440, 900, .82, 'dark', [
+  board(16, 16, 868, { discs:true }), box(900, 0, 540, 900), vl(900),
+  p(900, 0, 540, 56, hdr()),
+  p(900, 56, 270, 422, '<div class="nm">① L14 54.2% +1.8</div>'), board(912, 82, 246, { line: LINES[0] }),
+  p(1170, 56, 270, 422, '<div class="nm">② M13 53.1% +1.3</div>'), board(1182, 82, 246, { line: LINES[1] }),
+  vl(1170),
+  p(900, 478, 270, 422, '<div class="nm">③ K12 52.4% +0.9</div>', true), board(912, 504, 246, { line: LINES[2] }),
+  p(1170, 478, 270, 422, bar() + '<div style="height:180px">' + graph() + '</div>', true),
+]);
+// 6 Docking
+win('s6', 1440, 900, .82, 'dark', [
+  board(16, 16, 868, { discs:true }), box(900, 0, 540, 900), vl(900),
+  p(900, 0, 540, 56, hdr()),
+  p(900, 56, 540, 230, bar() + graph()),
+  p(900, 286, 540, 300, '<div class="nm" style="margin-bottom:6px"><span class="grip"></span>候选</div>' + cands(6)),
+  p(900, 586, 540, 314, tabs(['变化', '评论']) + tree(), true),
+  '<div class="drop" style="left:904px;top:590px;width:532px;height:150px"></div>',
+  '<div class="note" style="left:1060px;top:756px">放在这里：上下分开</div>',
+  '<div class="ghost" style="left:1010px;top:640px"><span class="grip"></span>评论</div>',
+]);
+// 7 Wide 1920 x 1080
+win('s7', 1920, 1080, .615, 'dark', [
+  board(16, 16, 1048, { discs:true }), box(1080, 0, 840, 1080), vl(1080),
+  p(1080, 0, 840, 56, hdr()),
+  vl(1500),
+  p(1080, 56, 420, 300, bar() + graph()),
+  p(1080, 356, 420, 724, '<div class="nm" style="margin-bottom:6px">候选</div>' + cands(6), true),
+  p(1500, 56, 420, 220, '<div class="nm" style="margin-bottom:6px">变化</div>' + tree()),
+  p(1500, 276, 420, 270, '<div class="nm" style="margin-bottom:8px">评论</div>' + comment()),
+  p(1500, 546, 420, 534, '<div class="nm" style="margin-bottom:6px">副盘</div>', true), board(1522, 580, 376, { line: LINES[0] }),
+]);
+// 8 Phone 375 x 812, and tablet
+for (const [id, opt, tab, body] of [['s8a', { discs:true, flat:true }, 0, cands(5)], ['s8b', { line: LINES[0], flat:true }, 2, tree() + '<div style="font-size:12px;color:var(--muted);margin-top:8px">L14 起 · 6 / 6 · 在棋盘上左右滑动</div>']]) {
+  win(id, 375, 812, .9, 'light', [
+    box(0, 0, 375, 812),
+    p(0, 0, 375, 52, hdr({ short:true, chip:false, gear:true }).replace('◀ <b>58 / 247</b> ▶', '<b>58 / 247</b>')),
+    board(4, 56, 367, opt),
+    p(0, 427, 375, 48, bar()),
+    p(0, 475, 375, 265, tabs(['候选', '走势', '变化', '评论', '副盘'], tab) + body),
+    p(0, 740, 375, 72, '<div class="big">⏮ ◀ ▶ ⏭</div>', true),
+  ]);
+}
+win('s8c', 768, 1024, .62, 'light', [
+  box(0, 0, 768, 1024),
+  p(0, 0, 768, 56, hdr()),
+  board(12, 60, 744, { discs:true }),
+  p(0, 808, 768, 50, bar()),
+  p(0, 858, 384, 166, cands(4), true), vl(384), p(384, 858, 384, 166, graph(), true),
+]);
+
+const redraw = () => document.querySelectorAll('.bd canvas').forEach((c) => drawBoard(c, JSON.parse(c.dataset.o)));
+window.addEventListener('load', () => document.fonts.ready.then(redraw));
+</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+import type { StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
 import { asImage, type CanvasFactory, type OffscreenCanvasLike } from './canvasFactory';
@@ -22,7 +23,7 @@ export interface StoneSprites {
  * shadow and a tight contact shadow from a light at the upper left; black is matte slate with a
  * small highlight, white is shell with a faint diagonal grain (`rotation` turns the grain).
  */
-function paintStone(
+function paintSlate(
   ctx: CanvasRenderingContext2D,
   c: number,
   r: number,
@@ -99,35 +100,104 @@ function paintStone(
   ctx.restore();
 }
 
+/** Gradient stops from the centre out, as [offset, colour]. */
+type Stops = Array<[number, string]>;
+
+function fillBody(ctx: CanvasRenderingContext2D, c: number, r: number, stops: Stops): void {
+  const body = ctx.createRadialGradient(c - r * 0.3, c - r * 0.35, r * 0.1, c, c, r);
+  for (const [offset, colour] of stops) body.addColorStop(offset, colour);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const YUNZI: Record<Color, Stops> = {
+  black: [
+    [0, '#3a3e3b'],
+    [0.5, '#222624'],
+    [0.88, '#181b19'],
+    [1, '#2c3a32'],
+  ],
+  white: [
+    [0, '#fbf5e4'],
+    [0.6, '#efe4c8'],
+    [0.92, '#dccca5'],
+    [1, '#cdbb92'],
+  ],
+};
+
+/**
+ * Yunzi (board styles mockup): matte, with no highlight or grain; a creamy white and a black
+ * with a faint green edge; the same light as slate, its offset shadow lighter.
+ */
+function paintYunzi(ctx: CanvasRenderingContext2D, c: number, r: number, color: Color): void {
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.24)';
+  ctx.shadowBlur = r * 0.45;
+  ctx.shadowOffsetX = r * 0.14;
+  ctx.shadowOffsetY = r * 0.2;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(c, c, r * 0.97, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.5)';
+  ctx.shadowBlur = r * 0.1;
+  ctx.shadowOffsetX = r * 0.04;
+  ctx.shadowOffsetY = r * 0.06;
+  fillBody(ctx, c, r, YUNZI[color]);
+  ctx.restore();
+}
+
+/** Flat (board styles mockup): a solid fill and a thin outline, and no shadow at all. */
+function paintFlat(ctx: CanvasRenderingContext2D, c: number, r: number, color: Color): void {
+  ctx.fillStyle = color === 'black' ? '#1b1b1a' : '#fbfaf6';
+  ctx.beginPath();
+  ctx.arc(c, c, r * 0.96, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.07);
+  ctx.strokeStyle = '#2a2620';
+  ctx.stroke();
+}
+
 function sprite(
   create: CanvasFactory,
   half: number,
   radius: number,
   color: Color,
   rotation: number,
+  stones: StoneId,
 ): OffscreenCanvasLike {
   const canvas = create(half * 2, half * 2);
   const ctx = canvas.getContext('2d');
-  if (ctx && radius > 0) paintStone(ctx, half, radius, color, rotation);
+  if (!ctx || radius <= 0) return canvas;
+  if (stones === 'yunzi') paintYunzi(ctx, half, radius, color);
+  else if (stones === 'flat') paintFlat(ctx, half, radius, color);
+  else paintSlate(ctx, half, radius, color, rotation);
   return canvas;
 }
 
 /**
- * Stone sprites for a board whose lines are `spacing` CSS pixels apart, at `dpr`. The canvas is
- * square with an even side, the stone at its centre, and room for the shadow down and right.
+ * Stone sprites of the `stones` style for a board whose lines are `spacing` CSS pixels apart, at
+ * `dpr`. The canvas is square with an even side, the stone at its centre, and room for the
+ * shadow down and right.
  */
 export function makeStoneSprites(
   spacing: number,
   dpr: number,
   create: CanvasFactory,
+  stones: StoneId = 'slate',
 ): StoneSprites {
   const radius = Math.max(0, spacing * STONE_RADIUS_SHARE * dpr);
   // The offset shadow reaches about 0.2 + 0.55 radii past the stone.
   const half = Math.max(1, Math.ceil(radius * 1.8));
   return {
-    black: sprite(create, half, radius, 'black', 0),
+    black: sprite(create, half, radius, 'black', 0, stones),
     white: Array.from({ length: WHITE_ROTATIONS }, (_, i) =>
-      sprite(create, half, radius, 'white', i),
+      sprite(create, half, radius, 'white', i, stones),
     ),
     radius,
   };

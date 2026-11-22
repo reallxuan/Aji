@@ -24,10 +24,10 @@ export function DiscPreview({ lines }: { lines: [DiscField, DiscField] }) {
     >
       {/* The "close candidate" disc of interface design 5.2: cream fill, thin cinnabar ring. */}
       <div className="flex size-14 flex-col items-center justify-center rounded-full border-[1.5px] border-[#B8321F] bg-[#FBF1D9] text-[#2B1D0E] leading-tight tabular-nums">
-        <span className="text-[13px] font-medium">
+        <span className="text-[0.8125rem] font-medium">
           {formatDiscValue(lines[0], SAMPLE[lines[0]])}
         </span>
-        <span className="text-[11px]">{formatDiscValue(lines[1], SAMPLE[lines[1]])}</span>
+        <span className="text-[0.6875rem]">{formatDiscValue(lines[1], SAMPLE[lines[1]])}</span>
       </div>
     </div>
   );

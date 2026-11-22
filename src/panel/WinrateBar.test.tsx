@@ -1,6 +1,7 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
+import { useDeviceStore } from '../device/deviceStore';
 import { createEngineStore, EngineStoreProvider } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
@@ -32,6 +33,7 @@ function mount(
   width = 492,
   measure = (t: string) => t.length * 7,
   state: EngineState = { state: 'analysing', version: '1.18.2' },
+  lang: 'zh-CN' | 'en' = 'zh-CN',
 ) {
   const engine = createEngineStore();
   engine.getState().applyEvent({ type: 'engineState', engine: state });
@@ -39,7 +41,7 @@ function mount(
   useGameStore.getState().apply(makeSnapshot({ revision: 1, positionKey: KEY }));
   if (update) engine.getState().applyEvent({ type: 'analysisUpdate', analysis: update });
   render(
-    <I18nextProvider i18n={createI18n('zh-CN')}>
+    <I18nextProvider i18n={createI18n(lang)}>
       <EngineStoreProvider store={engine}>
         <WinrateBar width={width} measure={measure} />
       </EngineStoreProvider>
@@ -99,4 +101,22 @@ it('the bar is not faded while paused', () => {
   });
   for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
     expect(text).toHaveStyle({ opacity: '1' });
+});
+
+it('even_lead_reads_even_in_both_languages', () => {
+  mount(analysis({ winrate: 0.52, scoreLead: 0.04 }));
+  // The even lead goes to the side ahead on win rate.
+  expect(segment('black')).toHaveTextContent('52.0%均势');
+  cleanup();
+  resetGameStore();
+  mount(analysis({ winrate: 0.48, scoreLead: -0.02 }), 492, undefined, undefined, 'en');
+  expect(segment('white')).toHaveTextContent('Even52.0%');
+});
+
+it('the bar’s lead is the board count with the score option', () => {
+  useDeviceStore.getState().update({ scoreWithKomi: false });
+  // White leads by 3 with komi; on the board Black is 4.5 ahead (komi 7.5).
+  mount(analysis({ winrate: 0.4, scoreLead: -3 }));
+  expect(segment('black')).toHaveTextContent('40.0%领先 4.5 目');
+  expect(segment('white')).toHaveTextContent(/^60\.0%$/);
 });

@@ -9,7 +9,7 @@ export function RankChip({ tier, rank, played }: { tier: Tier; rank: number; pla
     <i
       data-played={played || undefined}
       className={[
-        'inline-flex size-[21px] shrink-0 items-center justify-center rounded-full text-[11px] not-italic',
+        'inline-flex size-[21px] shrink-0 items-center justify-center rounded-full text-[0.6875rem] not-italic',
         style.bold ? 'font-bold' : '',
         played ? 'outline-2 outline-offset-1 outline-text outline-solid' : '',
       ].join(' ')}

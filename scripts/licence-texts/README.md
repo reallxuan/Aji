@@ -7,5 +7,6 @@
 | `MIT.txt` | MIT | The licence file of `serde` 1.0.229 (crates.io), rewrapped, with a copyright line added |
 | `BSD-3-Clause.txt` | BSD-3-Clause | The licence file of `alloc-no-stdlib` 3.0.0 (crates.io), with its copyright line replaced |
 | `MPL-2.0.txt` | MPL-2.0 | The licence file of `cssparser` 0.38.0 (crates.io), unchanged |
+| `BSL-1.0.txt` | BSL-1.0 | The licence file of `error-code` 3.4.0 (crates.io), with a copyright line added |
 
 Each is the standard text of that licence as the SPDX licence list gives it. A component under any other licence and without a licence file makes the generator fail, so a new text is added here first.

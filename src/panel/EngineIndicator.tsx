@@ -1,59 +1,22 @@
+import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { HOVER_CARD_DELAY_MS } from '../analysis/constants';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
-import { useWizardStore } from '../setup/wizardStore';
-import { continueAnalysis, pauseAnalysis, resumeAnalysis } from '../transport/api';
-import type { EngineState } from '../transport/generated/EngineState';
 import { useTransport } from '../transport/TransportProvider';
+import { useRunCommand } from '../commands/useKeyDispatcher';
+import { engineAction, runEngineAction } from '../engine/engineAction';
 import { EngineCard } from './EngineCard';
-
-export type EngineAction = 'pause' | 'resume' | 'continue' | 'setUp';
-
-/** What a click on the indicator (or Space) does in `state`. */
-export function engineAction(state: EngineState | null): EngineAction | null {
-  switch (state?.state) {
-    case 'analysing':
-      return 'pause';
-    case 'paused':
-      return 'resume';
-    case 'ready':
-      return state.limitReached ? 'continue' : null;
-    case 'notConfigured':
-      return 'setUp';
-    default:
-      return null;
-  }
-}
-
-/** Runs `action` against the engine; a failure shows up as a state event. */
-export function runEngineAction(
-  action: EngineAction | null,
-  transport: ReturnType<typeof useTransport>,
-): void {
-  if (action === 'setUp') {
-    useWizardStore.getState().openWizard(false);
-    return;
-  }
-  const run =
-    action === 'pause'
-      ? pauseAnalysis
-      : action === 'resume'
-        ? resumeAnalysis
-        : action === 'continue'
-          ? continueAnalysis
-          : null;
-  run?.(transport).catch(() => undefined);
-}
 
 /**
  * The 10 px round engine button in the panel header: colour shows the state, a hollow ring that
  * the position stopped at its visit limit. Click pauses, resumes or searches further; hovering
  * opens the engine card.
  */
-export function EngineIndicator() {
+export function EngineIndicator({ touch = false }: { touch?: boolean } = {}) {
   const transport = useTransport();
+  const run = useRunCommand();
   const { t } = useTranslation();
   const engine = useEngineStore((s) => s.engine);
   const state = engine?.state ?? null;
@@ -77,7 +40,13 @@ export function EngineIndicator() {
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className={`size-2.5 flex-none rounded-full ${colour} disabled:cursor-default`}
+          className={cn(
+            'size-2.5 flex-none rounded-full disabled:cursor-default',
+            colour,
+            // On a touch screen the dot keeps its size and takes a 44 px target around it.
+            touch && "relative after:absolute after:-inset-[17px] after:content-['']",
+          )}
+          data-engine-dot
           data-state={atLimit ? 'limitReached' : (state ?? 'unknown')}
           aria-label={
             action === 'setUp'
@@ -87,7 +56,10 @@ export function EngineIndicator() {
                 : stateText
           }
           disabled={!action}
-          onClick={() => runEngineAction(action, transport)}
+          // Opening the wizard is the button's alone; the rest is the Space command.
+          onClick={() =>
+            action === 'setUp' ? runEngineAction(action, transport) : run('analysis.toggle')
+          }
         />
       </HoverCardTrigger>
       {engine && engine.state !== 'notConfigured' && (

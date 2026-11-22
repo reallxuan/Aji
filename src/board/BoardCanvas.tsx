@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sameMove, type ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
+import type { BoardId, StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
@@ -10,6 +11,7 @@ import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
+import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
 
 export interface BoardCanvasProps {
@@ -42,9 +44,18 @@ export interface BoardCanvasProps {
   variation?: { numbers: ReadonlyArray<{ point: Point; n: number }>; newest: Point | null } | null;
   /** Coordinates in the margin (settings `showCoordinates`); hidden, the grid grows. */
   coordinates?: boolean;
+  /** A finger tapped a disc (its move) or anywhere else (`null`) (P2 M1 design 5.6). */
+  onTapCandidate?(move: Move | null): void;
+  /** A finger swiped one step across the board: forward when moving left. */
+  onSwipeStep?(forward: boolean): void;
+  /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
+  boardStyle?: BoardId;
+  stoneStyle?: StoneId;
 }
 
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
+/** The Inter faces the layers draw with: coordinates 400, disc lines 500 to 700. */
+const FONT_FACES = ['400 12px Inter', '500 12px Inter', '600 12px Inter', '700 12px Inter'];
 const DEFAULT_LINES: [DiscField, DiscField] = ['winrate', 'scoreLead'];
 
 /**
@@ -65,18 +76,25 @@ export function BoardCanvas({
   hoveredCandidate,
   variation = null,
   coordinates = true,
+  boardStyle = 'honey',
+  stoneStyle = 'slate',
+  onTapCandidate,
+  onSwipeStep,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
   const candidateLayer = useRef<HTMLCanvasElement>(null);
   const hovered = useRef<Move | null>(null);
   const dpr = useDevicePixelRatio();
-  // Coordinates are drawn in Inter; redraw once the bundled font has loaded.
+  // Coordinates, discs and line numbers are drawn in Inter; redraw once every face they use has
+  // loaded (M7 minor 10).
   const [fontsLoaded, setFontsLoaded] = useState(0);
 
   useEffect(() => {
     let active = true;
-    document.fonts?.load('12px Inter').then(
+    const fonts = document.fonts;
+    if (!fonts) return;
+    Promise.all(FONT_FACES.map((face) => fonts.load(face))).then(
       () => {
         if (active) setFontsLoaded((n) => n + 1);
       },
@@ -89,13 +107,16 @@ export function BoardCanvas({
 
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
-    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates });
-  }, [cssSize, dpr, boardSize, coordinates, fontsLoaded]);
+    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates, style: boardStyle });
+  }, [cssSize, dpr, boardSize, coordinates, boardStyle, fontsLoaded]);
 
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
   // spacing and ratio, then stamped.
-  const sprites = useMemo(() => makeStoneSprites(spacing, dpr, domCanvas), [spacing, dpr]);
+  const sprites = useMemo(
+    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle),
+    [spacing, dpr, stoneStyle],
+  );
 
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
@@ -108,7 +129,7 @@ export function BoardCanvas({
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates };
+    const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
     if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
     else drawCandidates(ctx, view, candidates, [first, second], lang);
   }, [
@@ -116,6 +137,7 @@ export function BoardCanvas({
     dpr,
     boardSize,
     coordinates,
+    boardStyle,
     candidates,
     first,
     second,
@@ -134,7 +156,14 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
+  const gestures = useBoardGestures({
+    tap: (x, y) =>
+      onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
+    step: (forward) => onSwipeStep?.(forward),
+  });
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    // A browser follows a tap with mouse events; the hover is the mouse's alone.
+    if (gestures.afterTouch()) return;
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
@@ -146,9 +175,11 @@ export function BoardCanvas({
   return (
     <div
       className="relative"
-      style={{ width: cssSize, height: cssSize }}
+      // Sideways swipes are the board's; the page may still scroll up and down.
+      style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
       onMouseMove={onMouseMove}
-      onMouseLeave={() => hover(null)}
+      onMouseLeave={() => !gestures.afterTouch() && hover(null)}
+      {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
       <canvas

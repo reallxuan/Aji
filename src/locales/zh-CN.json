@@ -130,7 +130,7 @@
         "scoreLead": "目差"
       },
       "perspective": {
-        "label": "视角",
+        "label": "走势图视角",
         "black": "黑",
         "white": "白"
       },
@@ -142,7 +142,13 @@
       "lead": "目差 {{lead}}",
       "notAnalysed": "尚未分析",
       "label": "胜率走势"
-    }
+    },
+    "eye": {
+      "label": "隐藏候选",
+      "hint": "点按切换，按住暂时隐藏"
+    },
+    "even": "均势",
+    "captures": "提子 黑 {{black}} · 白 {{white}}"
   },
   "setup": {
     "failure": {
@@ -338,7 +344,37 @@
     "cancel": "取消",
     "about": "关于 Aji",
     "defaultRules": "新棋局默认规则",
-    "defaultRulesNote": "用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。"
+    "defaultRulesNote": "用于新建的棋局，以及没有写明规则或贴目的棋谱。已打开的棋局不受影响。",
+    "board": {
+      "title": "棋盘样式",
+      "board": "棋盘",
+      "set": "{{board}} · {{stones}}",
+      "custom": "自定义",
+      "boards": {
+        "honey": "蜜色",
+        "kaya": "榧木",
+        "walnut": "胡桃",
+        "printed": "印刷"
+      },
+      "stones": {
+        "title": "棋子",
+        "slate": "写实",
+        "yunzi": "云子",
+        "flat": "平面"
+      }
+    },
+    "scale": "界面缩放",
+    "lead": {
+      "title": "目差",
+      "withKomi": "含贴目",
+      "board": "盘面"
+    },
+    "saveFailed": "保存失败",
+    "alwaysOnTop": {
+      "title": "总在最前",
+      "on": "开",
+      "off": "关"
+    }
   },
   "game": {
     "players": "{{black}} 对 {{white}}"
@@ -436,6 +472,72 @@
     "clearRecent": "清除最近记录",
     "saveAs": "另存为…",
     "today": "今天",
-    "yesterday": "昨天"
+    "yesterday": "昨天",
+    "view": "视图"
+  },
+  "layout": {
+    "panels": {
+      "header": "标题栏",
+      "winrate": "胜率条",
+      "trend": "走势",
+      "candidates": "候选",
+      "subboard": "副盘"
+    },
+    "noCandidate": "无候选",
+    "move": "移动{{panel}}",
+    "resize": "调整大小",
+    "menu": {
+      "title": "布局",
+      "presets": {
+        "default": "默认",
+        "classic": "经典",
+        "minimal": "极简",
+        "thinking": "思考",
+        "four": "四盘"
+      },
+      "custom": "自定义",
+      "panels": "面板",
+      "reset": "恢复默认"
+    },
+    "subboardRank": "副盘 {{rank}}",
+    "narrow": {
+      "nav": "棋谱导航",
+      "close": "关闭"
+    }
+  },
+  "commands": {
+    "nav": {
+      "previous": "上一手",
+      "next": "下一手",
+      "first": "第一手",
+      "last": "最后一手",
+      "pageBack": "后退十手",
+      "pageForward": "前进十手"
+    },
+    "file": {
+      "open": "打开棋谱…",
+      "saveAs": "另存为…",
+      "new19": "新建 19 路棋局"
+    },
+    "analysis": {
+      "toggle": "暂停或继续分析"
+    },
+    "candidates": {
+      "toggleHidden": "显示或隐藏候选",
+      "peek": "按住时隐藏候选"
+    }
+  },
+  "screenshot": {
+    "title": "截图",
+    "save": "保存{{target}}…",
+    "copy": "复制{{target}}",
+    "targets": {
+      "board": "棋盘",
+      "subboard": "副盘",
+      "graph": "走势图"
+    },
+    "copyFailed": "无法复制",
+    "saveFailed": "截图未能保存",
+    "notShown": "{{target}}不在屏幕上"
   }
 }

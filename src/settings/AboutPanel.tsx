@@ -65,7 +65,7 @@ export function AboutPanel() {
       <PanelTitle title={t('about.title')} onBack={toSettings} backLabel={t('settings.back')} />
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         <VersionLine />
-        <div className="space-y-1 px-6 text-[14px]">
+        <div className="space-y-1 px-6 text-[0.875rem]">
           <p>{t('about.licence')}</p>
           <p className="flex items-center gap-1 text-text-muted">
             {t('about.source')}
@@ -78,17 +78,17 @@ export function AboutPanel() {
             </Button>
           </p>
         </div>
-        <h3 className="mt-8 px-6 text-[12px] text-text-muted">{t('about.thirdParty')}</h3>
+        <h3 className="mt-8 px-6 text-[0.75rem] text-text-muted">{t('about.thirdParty')}</h3>
         <ul className="mt-2 border-t border-hairline">
           {items.map((item) => (
             <li key={item.key} className="border-b border-hairline">
               <button
                 type="button"
-                className="flex w-full items-center gap-3 px-6 py-3 text-left text-[14px] hover:bg-divider-soft"
+                className="flex w-full items-center gap-3 px-6 py-3 text-left text-[0.875rem] hover:bg-divider-soft"
                 onClick={() => show(item)}
               >
                 <span className="flex-1">{item.name}</span>
-                <span className="text-[13px] text-text-muted">{item.licence}</span>
+                <span className="text-[0.8125rem] text-text-muted">{item.licence}</span>
                 <ChevronRightIcon className="size-4 text-text-muted" aria-hidden />
               </button>
             </li>

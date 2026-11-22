@@ -5,7 +5,7 @@ import { useSettingsStore } from '../settings/settingsStore';
 import { getEngineStatus } from '../transport/api';
 import type { RunningEngine } from '../transport/generated/RunningEngine';
 import { useTransport } from '../transport/TransportProvider';
-import { engineAction } from './EngineIndicator';
+import { engineAction } from '../engine/engineAction';
 
 /** Network names are cut in the middle to this many characters, keeping both ends. */
 const NETWORK_CHARS = 24;
@@ -90,8 +90,8 @@ export function EngineCard() {
           : null;
 
   return (
-    <div className="text-[12.5px] leading-[1.7] whitespace-nowrap tabular-nums">
-      <div className="mb-1 text-[13px] font-semibold">{title}</div>
+    <div className="text-[0.78125rem] leading-[1.7] whitespace-nowrap tabular-nums">
+      <div className="mb-1 text-[0.8125rem] font-semibold">{title}</div>
       {rows.map(([label, value]) => (
         <div key={label}>
           <span className="inline-block w-14 text-text-muted">{label}</span>

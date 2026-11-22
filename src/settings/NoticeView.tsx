@@ -18,9 +18,9 @@ export function NoticeView({
       <PanelTitle title={title} onBack={onBack} backLabel={t('settings.back')} />
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {text === null ? (
-          <p className="text-[13px] text-text-muted">{t('about.loading')}</p>
+          <p className="text-[0.8125rem] text-text-muted">{t('about.loading')}</p>
         ) : (
-          <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-text-muted">
+          <pre className="font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap text-text-muted">
             {text}
           </pre>
         )}
@@ -49,7 +49,7 @@ export function PanelTitle({
       >
         <ArrowLeftIcon className="size-4" aria-hidden />
       </button>
-      <h2 className="min-w-0 truncate text-[16px] font-medium">{title}</h2>
+      <h2 className="min-w-0 truncate text-[1rem] font-medium">{title}</h2>
     </header>
   );
 }

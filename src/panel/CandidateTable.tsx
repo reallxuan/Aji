@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useRowLineWheel } from '../board/useWheelNavigation';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { moveKey, sameMove, type ShownCandidate } from '../analysis/candidates';
@@ -9,21 +11,29 @@ import { useViewStore } from '../analysis/viewStore';
 import { moveLabel } from '../board/coordinates';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
+import { usePanelWidth } from '../layout/usePanelWidth';
+import { EyeButton } from './EyeButton';
 import { RankChip } from './RankChip';
 
 // Design 4.3: chip, point, win rate, lead, visits, against the best. The last column never
 // wraps ("实战 −2.8%"): in a 360 px panel it takes its text's width and the numbers give way.
 const COLUMNS =
   'grid grid-cols-[30px_62px_repeat(3,minmax(0,1fr))_minmax(max-content,1.3fr)] items-center gap-x-1.5 whitespace-nowrap';
+// A panel narrower than this keeps the chip, point, win rate and lead, as the P2 M1 layouts
+// mockup draws Classic's and Minimal's columns; six columns would run into each other there.
+const FULL_WIDTH = 360;
+const NARROW_COLUMNS =
+  'grid grid-cols-[30px_62px_repeat(2,minmax(0,1fr))] items-center gap-x-1.5 whitespace-nowrap';
 
 /**
  * The candidate table (design 5.7): the same candidates as the discs, in the side to move's view.
  * Hovering a row previews its line, exactly as hovering its disc.
  */
-export function CandidateTable() {
+export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const { current, shown, fading } = useShownCandidates();
+  const { current, shown: all, fading } = useShownCandidates();
+  const shown = maxRows === undefined ? all : all.slice(0, maxRows);
   const rejected = useEngineStore((s) => s.rejected);
   const snapshot = useGameStore((s) => s.snapshot);
   const hidden = useViewStore((s) => s.hidden || s.held);
@@ -31,6 +41,11 @@ export function CandidateTable() {
   const setHover = useViewStore((s) => s.setHover);
   const variation = useViewStore((s) => s.variation);
   const step = useViewStore((s) => s.step);
+  const width = usePanelWidth();
+  const table = useRef<HTMLDivElement>(null);
+  useRowLineWheel(table);
+  const narrow = width > 0 && width < FULL_WIDTH;
+  const columns = narrow ? NARROW_COLUMNS : COLUMNS;
   const length = variation ? shownLength(variation) : 0;
   // The wheel has stepped the hovered line short of its end: "3 / 8" beside the point.
   const stepped = variation && step !== null && step < length ? `${step} / ${length}` : null;
@@ -70,9 +85,12 @@ export function CandidateTable() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col px-6 pt-3 pb-2 text-sm">
-      <div className="mb-1.5 flex justify-between text-[12.5px] text-text-muted">
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-[0.78125rem] text-text-muted">
         <span>{t('analysis.table.title')}</span>
-        {total}
+        <span className="flex items-center gap-3">
+          {total}
+          <EyeButton />
+        </span>
       </div>
       {rejected ? (
         <p className="text-text-muted" title={rejected.message}>
@@ -81,10 +99,10 @@ export function CandidateTable() {
       ) : (
         !hidden &&
         shown.length > 0 && (
-          <div role="table" className="min-h-0 overflow-y-auto tabular-nums">
+          <div ref={table} role="table" className="min-h-0 overflow-y-auto tabular-nums">
             <div
               role="row"
-              className={`${COLUMNS} sticky top-0 border-b border-hairline bg-panel px-1.5 pt-1 pb-1.5 text-xs text-text-muted`}
+              className={`${columns} sticky top-0 border-b border-hairline bg-panel px-1.5 pt-1 pb-1.5 text-xs text-text-muted`}
             >
               <span role="columnheader" />
               <span role="columnheader">{t('analysis.columns.move')}</span>
@@ -94,12 +112,16 @@ export function CandidateTable() {
               <span role="columnheader" className="text-right">
                 {t('analysis.columns.scoreLead')}
               </span>
-              <span role="columnheader" className="text-right">
-                {t('analysis.columns.visits')}
-              </span>
-              <span role="columnheader" className="text-right">
-                {t('analysis.columns.vsBest')}
-              </span>
+              {!narrow && (
+                <>
+                  <span role="columnheader" className="text-right">
+                    {t('analysis.columns.visits')}
+                  </span>
+                  <span role="columnheader" className="text-right">
+                    {t('analysis.columns.vsBest')}
+                  </span>
+                </>
+              )}
             </div>
             {shown.map((c) => {
               const highlighted = !!hover && sameMove(hover.move, c.move);
@@ -111,7 +133,7 @@ export function CandidateTable() {
                   data-highlighted={highlighted || undefined}
                   data-catching-up={fading || undefined}
                   style={rowStyle}
-                  className={`${COLUMNS} rounded border-b border-divider-soft px-1.5 py-2 ${highlighted ? 'bg-divider-soft' : ''}`}
+                  className={`${columns} rounded border-b border-divider-soft px-1.5 py-2 ${highlighted ? 'bg-divider-soft' : ''}`}
                   onMouseEnter={() => setHover({ move: c.move, source: 'table' })}
                   onMouseLeave={() => {
                     const now = useViewStore.getState().hover;
@@ -133,12 +155,16 @@ export function CandidateTable() {
                   <span role="cell" className="text-right text-score">
                     {formatLead(c.scoreLead, lang)}
                   </span>
-                  <span role="cell" className="text-right text-text-muted">
-                    {formatVisits(c.visits, lang)}
-                  </span>
-                  <span role="cell" className="text-right">
-                    {against(c)}
-                  </span>
+                  {!narrow && (
+                    <>
+                      <span role="cell" className="text-right text-text-muted">
+                        {formatVisits(c.visits, lang)}
+                      </span>
+                      <span role="cell" className="text-right">
+                        {against(c)}
+                      </span>
+                    </>
+                  )}
                 </div>
               );
             })}

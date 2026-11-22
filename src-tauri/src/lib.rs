@@ -53,6 +53,8 @@ pub fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builde
         platform::files_recent,
         platform::files_clear_recent,
         platform::files_save_as,
+        platform::files_save_image,
+        platform::files_copy_image,
         platform::menu_set_language,
     ])
 }
@@ -273,6 +275,7 @@ pub fn run() {
     let context = tauri::generate_context!();
     let version = context.package_info().version.to_string();
     let app = configure(tauri::Builder::default())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .on_menu_event(|app, event| platform::forward_menu_events(app, event.id().as_ref()))

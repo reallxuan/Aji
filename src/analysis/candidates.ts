@@ -1,3 +1,4 @@
+import { boardLead } from './lead';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
@@ -56,6 +57,8 @@ export function shownCandidates(
   toPlay: Color,
   nextMove: Move | null,
   perspective: Color,
+  /** The komi to take out of the leads (the board count), or `null` for KataGo's lead. */
+  boardKomi: number | null = null,
 ): ShownCandidate[] {
   const ordered = [...update.candidates].sort((a, b) => a.order - b.order);
   if (ordered.length === 0) return [];
@@ -67,6 +70,8 @@ export function shownCandidates(
   const forMover = (blackWinrate: number) => (toPlay === 'black' ? blackWinrate : 1 - blackWinrate);
   const best = forMover(picked[0].winrate);
   const black = perspective === 'black';
+  const viewedLead = (lead: number) =>
+    boardKomi === null ? lead : boardLead(lead, boardKomi, perspective);
   return picked.map((c, i) => {
     const loss = (best - forMover(c.winrate)) * 100;
     return {
@@ -74,7 +79,7 @@ export function shownCandidates(
       rank: i + 1,
       tier: tierFor(loss, i === 0),
       winrate: black ? c.winrate : 1 - c.winrate,
-      scoreLead: black ? c.scoreLead : -c.scoreLead,
+      scoreLead: viewedLead(black ? c.scoreLead : -c.scoreLead),
       visits: c.visits,
       loss,
       played: c === played,

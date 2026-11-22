@@ -37,6 +37,10 @@ it('repeats while held: once, then after 400 ms every 60 ms', async () => {
     vi.advanceTimersByTime(1000);
   });
   fireEvent.pointerUp(next);
+  // A step goes out on the next frame, as the keys' do (P2 M1 Task 5): the last held one too.
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
   const sent = requests.filter((r) => r.type === 'gameNavigate');
   expect(sent.length).toBeGreaterThanOrEqual(9);
   expect(sent.length).toBeLessThanOrEqual(12);
@@ -51,6 +55,9 @@ it('runs once from the keyboard', async () => {
   const { requests } = renderWithGame(<NavButtons />, { snapshot: at(false, false) });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: '第一手' }), { detail: 0 });
+    vi.advanceTimersToNextFrame();
   });
-  expect(requests).toEqual([{ type: 'gameNavigate', to: 'first' }]);
+  expect(requests.filter((r) => r.type === 'gameNavigate')).toEqual([
+    { type: 'gameNavigate', to: 'first' },
+  ]);
 });

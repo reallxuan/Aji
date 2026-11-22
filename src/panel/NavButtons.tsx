@@ -1,3 +1,4 @@
+import { cn } from 'cn';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -7,10 +8,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { navigate } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
-import { useActionContext } from '../game/useActionContext';
-import type { NavTarget } from '../transport/generated/NavTarget';
+import { useRunCommand } from '../commands/useKeyDispatcher';
+import type { CommandId } from '../commands/registry';
 import { MoveCounter } from './MoveCounter';
 
 /** Holding a button repeats it after this long, then at this interval (design 5.7). */
@@ -25,12 +25,12 @@ function NavButton({
   className = '',
 }: {
   className?: string;
-  to: NavTarget;
+  to: Step;
   label: string;
   icon: LucideIcon;
   disabled: boolean;
 }) {
-  const ctx = useActionContext();
+  const run = useRunCommand();
   const timers = useRef<{
     delay?: ReturnType<typeof setTimeout>;
     repeat?: ReturnType<typeof setInterval>;
@@ -40,7 +40,8 @@ function NavButton({
     clearInterval(timers.current.repeat);
     timers.current = {};
   };
-  const step = () => void navigate(ctx, to);
+  // The same commands as ← → Home End.
+  const step = () => run(COMMAND[to]);
   // Reaching the end disables the button under the pointer; stop repeating then.
   useEffect(() => {
     if (disabled) stop();
@@ -78,6 +79,13 @@ function NavButton({
 
 const WIDE_ONLY = '@max-[500px]:hidden';
 
+const COMMAND: Record<Step, CommandId> = {
+  first: 'nav.first',
+  previous: 'nav.previous',
+  next: 'nav.next',
+  last: 'nav.last',
+};
+
 type Step = 'first' | 'previous' | 'next' | 'last';
 const BACK: Array<[Step, LucideIcon]> = [
   ['first', SkipBackIcon],
@@ -89,7 +97,7 @@ const FORWARD: Array<[Step, LucideIcon]> = [
 ];
 
 /** First, previous, the move counter, next and last; the ends disable their buttons. */
-export function NavButtons() {
+export function NavButtons({ touch = false }: { touch?: boolean } = {}) {
   const { t } = useTranslation();
   const atStart = useGameStore((s) => s.snapshot?.atStart ?? true);
   const atEnd = useGameStore((s) => s.snapshot?.atEnd ?? true);
@@ -102,7 +110,10 @@ export function NavButtons() {
         icon={icon}
         disabled={disabled}
         // The ends step aside in a narrow panel; Home, End and the counter still reach them.
-        className={to === 'first' || to === 'last' ? WIDE_ONLY : ''}
+        className={cn(
+          to === 'first' || to === 'last' ? WIDE_ONLY : '',
+          touch && 'min-h-11 min-w-11',
+        )}
       />
     ));
   return (
