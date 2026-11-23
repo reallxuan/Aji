@@ -25,6 +25,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   fileWriteFailed: true,
   fileNotSgf: true,
   fileMissing: true,
+  scoreUnavailable: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {

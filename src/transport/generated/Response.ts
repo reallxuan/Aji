@@ -3,6 +3,7 @@ import type { ActiveSummary } from "./ActiveSummary";
 import type { AnalysisUpdate } from "./AnalysisUpdate";
 import type { AppInfo } from "./AppInfo";
 import type { BackendRecommendation } from "./BackendRecommendation";
+import type { CacheStats } from "./CacheStats";
 import type { EngineState } from "./EngineState";
 import type { EngineVersionChoice } from "./EngineVersionChoice";
 import type { GameSnapshot } from "./GameSnapshot";
@@ -16,6 +17,7 @@ import type { PositionKey } from "./PositionKey";
 import type { Preview } from "./Preview";
 import type { Rejection } from "./Rejection";
 import type { RunningEngine } from "./RunningEngine";
+import type { ScoreView } from "./ScoreView";
 import type { TrendNode } from "./TrendNode";
 import type { UiSettings } from "./UiSettings";
 
@@ -50,4 +52,8 @@ network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveS
 /**
  * Boxed: a snapshot is far larger than any other reply.
  */
-snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "trend", nodes: Array<TrendNode>, } | { "type": "ok" };
+snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "trend", 
+/**
+ * The session revision the line was read at; `trendNodes` with another are stale.
+ */
+revision: number, nodes: Array<TrendNode>, } | { "type": "cacheStats" } & CacheStats | { "type": "score" } & ScoreView | { "type": "ok" };

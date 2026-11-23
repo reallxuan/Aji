@@ -19,6 +19,9 @@ pub struct JobItem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JobPlan {
+    /// Echoed in every [`JobStatus`], so a caller can tell its job's statuses from a replaced
+    /// one's.
+    pub id: u64,
     pub items: Vec<JobItem>,
     /// The job's visits per position: while it runs, the board's query stops at this, even
     /// with no board limit, so the job is not starved.
@@ -37,9 +40,13 @@ pub enum JobRun {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobStatus {
+    /// The plan's id.
+    pub id: u64,
     pub run: JobRun,
     pub done: u32,
     pub total: u32,
+    /// Of `done`, those found already in the cache and not searched: the rate leaves them out.
+    pub skipped: u32,
     /// The line index being searched.
     pub working: Option<u32>,
     /// The line indexes still to search, in order.
@@ -55,19 +62,23 @@ pub(crate) struct Flight {
 
 #[derive(Debug, Default)]
 pub(crate) struct JobQueue {
+    id: u64,
     pending: VecDeque<JobItem>,
     /// In submission order: the first is the one KataGo is searching.
     in_flight: Vec<Flight>,
     done: u32,
+    skipped: u32,
     total: u32,
 }
 
 impl JobQueue {
     pub fn new(plan: &JobPlan) -> JobQueue {
         JobQueue {
+            id: plan.id,
             pending: plan.items.iter().cloned().collect(),
             in_flight: Vec::new(),
             done: 0,
+            skipped: 0,
             total: plan.items.len() as u32,
         }
     }
@@ -85,6 +96,7 @@ impl JobQueue {
             let key = item.position.key();
             if cached(key) >= item.visits {
                 self.done += 1;
+                self.skipped += 1;
                 continue;
             }
             if defer == Some(key) && deferred < self.pending.len() {
@@ -134,9 +146,11 @@ impl JobQueue {
 
     pub fn status(&self, run: JobRun) -> JobStatus {
         JobStatus {
+            id: self.id,
             run,
             done: self.done,
             total: self.total,
+            skipped: self.skipped,
             working: self.in_flight.first().map(|f| f.item.line_index),
             queued: self
                 .in_flight
@@ -179,6 +193,7 @@ mod tests {
 
     fn queue(n: u8) -> JobQueue {
         JobQueue::new(&JobPlan {
+            id: 1,
             items: (0..n).map(|i| item(i, 500)).collect(),
             budget: 500,
         })
@@ -203,6 +218,11 @@ mod tests {
         assert_eq!(q.next(cached, None).map(|i| i.line_index), Some(2));
         assert_eq!(q.status(JobRun::Running).done, 1);
         assert_eq!(q.status(JobRun::Running).total, 4);
+        // The skip is reported, so the estimate leaves it out of the rate.
+        assert_eq!(q.status(JobRun::Running).skipped, 1);
+        q.started("q0".into(), item(0, 500));
+        q.finished("q0");
+        assert_eq!(q.status(JobRun::Running).skipped, 1);
     }
 
     #[test]

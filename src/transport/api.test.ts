@@ -209,16 +209,17 @@ describe('M5 helpers', () => {
 
 it('asks for the trend and unwraps its nodes', async () => {
   const nodes = [
-    { moveNumber: 0, mover: null, move: null, stats: null },
+    { moveNumber: 0, mover: null, move: null, stats: null, loss: null },
     {
       moveNumber: 1,
       mover: 'black' as const,
       move: { type: 'pass' as const },
       stats: { winrate: 0.5, scoreLead: 0, visits: 60 },
+      loss: null,
     },
   ];
   const t = createFakeTransport((request) =>
-    request.type === 'gameTrend' ? { type: 'trend', nodes } : { type: 'ok' },
+    request.type === 'gameTrend' ? { type: 'trend', revision: 0, nodes } : { type: 'ok' },
   );
   await expect(getTrend(t)).resolves.toEqual(nodes);
   const wrong = createFakeTransport(() => ({ type: 'ok' }));

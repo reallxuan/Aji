@@ -1905,6 +1905,7 @@ fn game_line(n: u8) -> Vec<Position> {
 
 fn job_plan(positions: &[Position], visits: u32) -> JobPlan {
     JobPlan {
+        id: 1,
         items: positions
             .iter()
             .enumerate()
@@ -2110,6 +2111,7 @@ async fn a_slow_boost_query_is_not_killed_by_the_watchdog() {
     p.until_state(|s| *s == at_limit()).await;
     // 600 visits at 200 a second: three seconds, twice the stall timeout.
     let plan = JobPlan {
+        id: 1,
         items: vec![JobItem {
             position: anywhere(30),
             line_index: 0,
@@ -2222,6 +2224,7 @@ async fn a_job_result_for_the_next_position_refreshes_next() {
         Ok(())
     );
     let plan = JobPlan {
+        id: 1,
         items: vec![JobItem {
             position: b.clone(),
             line_index: 1,
@@ -2232,5 +2235,40 @@ async fn a_job_result_for_the_next_position_refreshes_next() {
     assert_eq!(bounded(p.engine.run_job(plan)).await, Ok(()));
     p.until(|e| matches!(e, EngineEvent::Analysis(u) if u.position == a.key() && u.next.is_some()))
         .await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn an_identity_given_later_shows_the_stored_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("analysis.sqlite");
+    {
+        let store = Store::open(path.clone(), 1 << 30);
+        let mut p = start_stored("synthetic", anywhere(12), capped(50), store, identity(1));
+        p.until_state(|s| *s == at_limit()).await;
+        bounded(p.engine.shutdown()).await;
+    }
+    let (tx, events) = unbounded_channel();
+    let engine = Engine::spawn_with_store(
+        None,
+        None,
+        anywhere(12),
+        capped(50),
+        Some(Store::open(path, 1 << 30)),
+        move |event| {
+            let _ = tx.send(event);
+        },
+    );
+    let mut p = Probe { engine, events };
+    bounded(p.engine.set_identity(Some(identity(1)))).await;
+    let shown = p.next_analysis().await;
+    assert_eq!((shown.root_visits, shown.is_final), (50, true));
+    let found = bounded(
+        p.engine
+            .updates(vec![anywhere(12).key(), anywhere(13).key()]),
+    )
+    .await;
+    assert_eq!(found[0].as_ref().map(|u| u.root_visits), Some(50));
+    assert!(found[1].is_none());
     bounded(p.engine.shutdown()).await;
 }

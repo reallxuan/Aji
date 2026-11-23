@@ -109,6 +109,16 @@ impl KataRules {
     }
 }
 
+/// How a game's rules score, as KataGo's scoring field.
+impl From<crate::game::Scoring> for ScoringRule {
+    fn from(scoring: crate::game::Scoring) -> Self {
+        match scoring {
+            crate::game::Scoring::Area => ScoringRule::Area,
+            crate::game::Scoring::Territory => ScoringRule::Territory,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +189,16 @@ mod tests {
             )
         );
         assert_eq!(KataRules::from(Rules::Korean), j);
+    }
+
+    #[test]
+    fn game_scoring_converts() {
+        use crate::game::Scoring;
+        assert_eq!(ScoringRule::from(Scoring::Area), ScoringRule::Area);
+        assert_eq!(
+            ScoringRule::from(Scoring::Territory),
+            ScoringRule::Territory
+        );
     }
 
     #[test]

@@ -122,6 +122,8 @@ pub struct LineNode {
     pub mv: Option<Move>,
     /// `None` on an illegal node.
     pub key: Option<PositionKey>,
+    /// What KataGo analyses at the node; `None` on an illegal node.
+    pub position: Option<Position>,
 }
 
 impl GameSession {
@@ -236,6 +238,34 @@ impl GameSession {
         self.game.position_at(self.node(), &self.rules)
     }
 
+    /// Increases on every change; a client ignores an event older than what it has.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The current node's index on the main line.
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// The board at the current node, with its capture counts.
+    pub fn board(&self) -> &aji_core::game::Board {
+        self.game.board_at(self.node())
+    }
+
+    pub fn rules(&self) -> AnalysisRules {
+        self.rules
+    }
+
+    /// The position after the next main-line move, with that move, for the next-move hint;
+    /// `None` at the end, before a node without a move, or when it is illegal.
+    pub fn next(&self) -> Option<(Position, Move)> {
+        let line = self.game.main_line();
+        let &node = line.get(self.index + 1)?;
+        let mv = self.game.last_move(node)?;
+        Some((self.game.position_at(node, &self.rules)?, mv))
+    }
+
     pub fn warnings(&self) -> &[GameWarning] {
         &self.warnings
     }
@@ -311,11 +341,15 @@ impl GameSession {
         self.game
             .main_line()
             .iter()
-            .map(|&node| LineNode {
-                move_number: self.game.move_number(node),
-                mover: self.game.last_color(node),
-                mv: self.game.last_move(node),
-                key: self.game.position_at(node, &self.rules).map(|p| p.key()),
+            .map(|&node| {
+                let position = self.game.position_at(node, &self.rules);
+                LineNode {
+                    move_number: self.game.move_number(node),
+                    mover: self.game.last_color(node),
+                    mv: self.game.last_move(node),
+                    key: position.as_ref().map(Position::key),
+                    position,
+                }
             })
             .collect()
     }

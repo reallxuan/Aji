@@ -188,6 +188,8 @@ enum Command {
     Import(Vec<Row>, Reply<()>),
     Clear(ClearScope, Reply<()>),
     RunJob(JobPlan, Reply<Outcome>),
+    Updates(Vec<PositionKey>, Reply<Vec<Option<AnalysisUpdate>>>),
+    SetIdentity(Option<EngineIdentity>, Reply<()>),
     StopJob(Reply<()>),
     Shutdown(Reply<()>),
 }
@@ -432,6 +434,22 @@ impl Engine {
     /// ahead, until each has its visits (P2 M2 design 5.3). Replaces a running job.
     pub async fn run_job(&self, plan: JobPlan) -> Result<(), EngineError> {
         self.outcome(|reply| Command::RunJob(plan, reply)).await
+    }
+
+    /// The full kept result of each position, in order: the in-memory layer, then the store.
+    /// For a move's loss from the candidate list (P2 M2 design 5.3).
+    pub async fn updates(&self, keys: Vec<PositionKey>) -> Vec<Option<AnalysisUpdate>> {
+        let wanted = keys.len();
+        self.ask(|reply| Command::Updates(keys, reply))
+            .await
+            .unwrap_or_else(|| vec![None; wanted])
+    }
+
+    /// The identity the store's rows are read and written under, once it is known: hashing a
+    /// network takes a moment, so the app starts the engine first and tells it afterwards.
+    pub async fn set_identity(&self, identity: Option<EngineIdentity>) {
+        self.ask(|reply| Command::SetIdentity(identity, reply))
+            .await;
     }
 
     /// Stops the job; its running queries are terminated. Results kept so far stay.
@@ -712,6 +730,17 @@ impl Actor {
                 self.stop_job();
                 let _ = reply.send(());
             }
+            Command::Updates(keys, reply) => self.updates(keys, reply),
+            Command::SetIdentity(identity, reply) => {
+                if self.identity != identity {
+                    self.identity = identity;
+                    // The current position may already have a stored result to show.
+                    if !self.cleared && lock(&self.snapshot).analysis.is_none() {
+                        self.load(self.position.key(), true);
+                    }
+                }
+                let _ = reply.send(());
+            }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
                 self.shutdown();
@@ -856,6 +885,37 @@ impl Actor {
                 }
             }
             let _ = reply.send(stats);
+        });
+    }
+
+    fn updates(&mut self, keys: Vec<PositionKey>, reply: Reply<Vec<Option<AnalysisUpdate>>>) {
+        let mut found: Vec<Option<AnalysisUpdate>> = keys
+            .iter()
+            .map(|&key| self.cache.peek(key).cloned())
+            .collect();
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            let _ = reply.send(found);
+            return;
+        };
+        let waits: Vec<(usize, oneshot::Receiver<Option<Row>>)> = (0..keys.len())
+            .filter(|&i| found[i].is_none())
+            .map(|i| {
+                let (tx, rx) = oneshot::channel();
+                store.get(identity, keys[i], move |row| {
+                    let _ = tx.send(row);
+                });
+                (i, rx)
+            })
+            .collect();
+        if waits.is_empty() {
+            let _ = reply.send(found);
+            return;
+        }
+        self.runtime.spawn(async move {
+            for (i, rx) in waits {
+                found[i] = rx.await.ok().flatten().map(|row| row.update);
+            }
+            let _ = reply.send(found);
         });
     }
 

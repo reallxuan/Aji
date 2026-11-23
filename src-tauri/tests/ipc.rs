@@ -103,6 +103,7 @@ fn context() -> AppContext {
         game: Arc::new(tokio::sync::Mutex::new(
             aji_lib::game::GameSession::new(19, Default::default()).unwrap(),
         )),
+        follow: Arc::default(),
     }
 }
 

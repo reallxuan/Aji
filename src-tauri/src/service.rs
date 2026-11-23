@@ -5,21 +5,22 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use aji_core::Move;
-use aji_core::game::AnalysisRules;
-use aji_engine::{Engine, EngineError, EngineEvent, EngineFiles, TrendStats};
+use aji_core::game::{AnalysisRules, estimate, final_score, suggested_dead};
+use aji_core::{Move, ScoringRule};
+use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles};
 use aji_manager::Setup;
 use aji_manager::install::{
     DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
     StartError, active_summary, engine_files,
 };
 use base64::Engine as _;
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 
-use crate::game::{GameSession, LineNode, NavTarget, OpenError};
+use crate::follow;
+use crate::game::{GameSession, NavTarget, OpenError};
 use crate::protocol::{
-    AppEvent, AppInfo, ErrorCode, OsKind, ProtocolError, Request, Response, RunningEngine,
-    TrendNode,
+    AppEvent, AppInfo, CacheScope, ErrorCode, OsKind, ProtocolError, Request, Response,
+    RunningEngine, ScoreMode, ScoreView,
 };
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
@@ -44,6 +45,8 @@ pub struct AppContext {
     /// The open game. Held across the engine call that follows a change, so positions reach
     /// the engine in the order the requests came.
     pub game: Arc<Mutex<GameSession>>,
+    /// The trend's line and the job's passes, as the engine's events update them.
+    pub follow: Arc<std::sync::Mutex<crate::follow::Follow>>,
 }
 
 /// Asks the user for a file. Blocking: call it through `spawn_blocking`.
@@ -81,40 +84,9 @@ pub fn running_engine(settings: &Settings, installed: &Installed) -> Option<Runn
     })
 }
 
-/// Pairs each main-line node with its cached stats, in order.
-fn trend_nodes(line: Vec<LineNode>, stats: Vec<Option<TrendStats>>) -> Vec<TrendNode> {
-    line.into_iter()
-        .zip(stats)
-        .map(|(node, stats)| TrendNode {
-            move_number: node.move_number,
-            mover: node.mover,
-            mv: node.mv,
-            stats,
-        })
-        .collect()
-}
-
-/// The trend of the session's main line. Called with the session locked.
-async fn trend_of(ctx: &AppContext, session: &GameSession) -> Vec<TrendNode> {
-    let line = session.line();
-    // An illegal node has no position; a key no position can have keeps the order.
-    let keys = line
-        .iter()
-        .map(|n| n.key.unwrap_or(aji_core::PositionKey(0)))
-        .collect();
-    let mut stats = ctx.engine.summaries(keys).await;
-    for (slot, node) in stats.iter_mut().zip(&line) {
-        if node.key.is_none() {
-            *slot = None;
-        }
-    }
-    trend_nodes(line, stats)
-}
-
-/// Pushes the session's trend to every client.
+/// Pushes the session's trend to every client. Called with the session locked.
 async fn push_trend(ctx: &AppContext, session: &GameSession) {
-    let nodes = trend_of(ctx, session).await;
-    ctx.events.emit(AppEvent::GameTrend { nodes });
+    follow::trend_of(ctx, session, true).await;
 }
 
 /// Where pushed events go: the Tauri webview now, a WebSocket in Phase 3.
@@ -122,17 +94,22 @@ pub trait EventSink: Send + Sync + 'static {
     fn emit(&self, event: AppEvent);
 }
 
-/// The callback to give `Engine::spawn`: it turns engine events into [`AppEvent`]s for `sink`.
+/// The callback to give `Engine::spawn`: it turns engine events into [`AppEvent`]s for `sink`,
+/// and hands kept results and job statuses to [`follow::follow_engine`] through `follow`.
 pub fn forward_engine_events(
     sink: Arc<dyn EventSink>,
+    follow: mpsc::UnboundedSender<EngineEvent>,
 ) -> impl Fn(EngineEvent) + Send + Sync + 'static {
     move |event| {
         sink.emit(match event {
             EngineEvent::State(engine) => AppEvent::EngineState { engine },
             EngineEvent::Analysis(analysis) => AppEvent::AnalysisUpdate { analysis },
             EngineEvent::Rejected(rejection) => AppEvent::AnalysisRejected { rejection },
-            // The trend's incremental event comes in P2 M2 Task 9.
-            EngineEvent::Stored { .. } | EngineEvent::Job(_) => return,
+            followed @ (EngineEvent::Stored { .. } | EngineEvent::Job(_)) => {
+                // A closed follower means the app is shutting down.
+                let _ = follow.send(followed);
+                return;
+            }
         });
     }
 }
@@ -242,9 +219,8 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::GameNavigate { to } => return game_navigate(ctx, to).await,
         Request::GameTrend => {
             let session = ctx.game.lock().await;
-            return Ok(Response::Trend {
-                nodes: trend_of(ctx, &session).await,
-            });
+            let (revision, nodes) = follow::trend_of(ctx, &session, false).await;
+            return Ok(Response::Trend { revision, nodes });
         }
         Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
         Request::GameSetRules { rules } => return game_set_rules(ctx, rules).await,
@@ -256,6 +232,14 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
             })
         }
         Request::GameExport => return game_export(ctx).await,
+        Request::JobStart { options } => return follow::job_start(ctx, options).await,
+        Request::JobStop => {
+            follow::stop_job(ctx).await;
+            Ok(Response::Ok)
+        }
+        Request::CacheClear { scope } => return cache_clear(ctx, scope).await,
+        Request::CacheStats => Ok(Response::CacheStats(ctx.engine.cache_stats().await)),
+        Request::GameScore { mode } => return game_score(ctx, mode).await,
     }
     .map_err(Into::into)
 }
@@ -349,7 +333,7 @@ async fn publish(ctx: &AppContext, session: &GameSession, warnings: bool) -> Res
         snapshot: snapshot.clone(),
     });
     let sent = match session.position() {
-        Some(position) => ctx.engine.set_position(position).await,
+        Some(position) => ctx.engine.set_position_next(position, session.next()).await,
         None => ctx.engine.clear_position().await,
     };
     if let Err(e) = sent {
@@ -374,6 +358,7 @@ fn unchanged(session: &GameSession) -> Response {
 async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError> {
     let next = GameSession::new(size, default_rules(ctx))?;
     let mut session = ctx.game.lock().await;
+    follow::stop_job(ctx).await;
     session.replace(next);
     let reply = publish(ctx, &session, false).await;
     push_trend(ctx, &session).await;
@@ -401,6 +386,7 @@ async fn game_open(
     .await
     .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
     let mut session = ctx.game.lock().await;
+    follow::stop_job(ctx).await;
     session.replace(next);
     let reply = publish(ctx, &session, true).await;
     push_trend(ctx, &session).await;
@@ -422,6 +408,7 @@ async fn game_set_rules(
     let mut session = ctx.game.lock().await;
     match session.set_rules(rules) {
         Ok(true) => {
+            follow::stop_job(ctx).await;
             let reply = publish(ctx, &session, false).await;
             push_trend(ctx, &session).await;
             Ok(reply)
@@ -432,6 +419,78 @@ async fn game_set_rules(
             format!("komi out of range: {rules:?}"),
         )),
     }
+}
+
+/// Forgets results. `game` and `all` stop the job: its passes would only search them again.
+async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, ProtocolError> {
+    let session = ctx.game.lock().await;
+    let cleared = match scope {
+        CacheScope::Position => match session.position() {
+            Some(position) => ClearScope::Keys(vec![position.key()]),
+            None => return Ok(Response::Ok),
+        },
+        CacheScope::Game => {
+            follow::stop_job(ctx).await;
+            ClearScope::Keys(session.line().iter().filter_map(|n| n.key).collect())
+        }
+        CacheScope::All => {
+            follow::stop_job(ctx).await;
+            ClearScope::All
+        }
+    };
+    ctx.engine.clear(cleared).await;
+    push_trend(ctx, &session).await;
+    ctx.events.emit(AppEvent::CacheStatus {
+        status: ctx.engine.cache_stats().await,
+    });
+    Ok(Response::Ok)
+}
+
+/// The current position's ownership: the board's latest analysis, else its kept result.
+async fn ownership_of(ctx: &AppContext, key: aji_core::PositionKey) -> Option<Vec<i8>> {
+    let status = ctx.engine.status();
+    if status.position == Some(key)
+        && let Some(ownership) = status.analysis.and_then(|a| a.ownership)
+    {
+        return Some(ownership);
+    }
+    ctx.engine
+        .updates(vec![key])
+        .await
+        .pop()
+        .flatten()
+        .and_then(|u| u.ownership)
+}
+
+async fn game_score(ctx: &AppContext, mode: ScoreMode) -> Result<Response, ProtocolError> {
+    let session = ctx.game.lock().await;
+    let rules = session.rules();
+    let (scoring, komi) = (ScoringRule::from(rules.scoring()), rules.komi());
+    let board = session.board();
+    let ownership = match session.position() {
+        Some(position) => ownership_of(ctx, position.key()).await,
+        None => None,
+    };
+    let suggested_dead = ownership
+        .as_deref()
+        .map(|o| suggested_dead(board, o))
+        .unwrap_or_default();
+    let score = match mode {
+        ScoreMode::Estimate => {
+            let ownership = ownership.ok_or_else(|| {
+                error(
+                    ErrorCode::ScoreUnavailable,
+                    "no ownership for this position yet",
+                )
+            })?;
+            estimate(board, &ownership, scoring, komi, board.captures())
+        }
+        ScoreMode::Final { dead } => final_score(board, &dead, scoring, komi, board.captures()),
+    };
+    Ok(Response::Score(ScoreView {
+        score,
+        suggested_dead,
+    }))
 }
 
 async fn game_preview(ctx: &AppContext, moves: &[Move]) -> Response {
@@ -626,6 +685,7 @@ mod tests {
             game: Arc::new(Mutex::new(
                 GameSession::new(19, AnalysisRules::Chinese).unwrap(),
             )),
+            follow: Arc::default(),
         }
     }
 
@@ -1003,7 +1063,8 @@ mod tests {
     #[test]
     fn a_rejection_is_forwarded_as_analysis_rejected() {
         let recorder = Arc::new(Recorder::default());
-        let forward = forward_engine_events(recorder.clone());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let forward = forward_engine_events(recorder.clone(), tx);
         let rejection = aji_engine::Rejection {
             position: aji_core::PositionKey(9),
             message: "no".into(),
@@ -1013,6 +1074,17 @@ mod tests {
             *recorder.0.lock().unwrap(),
             vec![AppEvent::AnalysisRejected { rejection }]
         );
+        // Kept results go to the follower, not to clients.
+        forward(EngineEvent::Stored {
+            key: aji_core::PositionKey(9),
+            stats: aji_engine::TrendStats {
+                winrate: 0.5,
+                score_lead: 0.0,
+                visits: 1,
+            },
+        });
+        assert_eq!(recorder.0.lock().unwrap().len(), 1);
+        assert!(matches!(rx.try_recv(), Ok(EngineEvent::Stored { .. })));
     }
 
     #[tokio::test]
@@ -1194,7 +1266,7 @@ mod tests {
     #[test]
     fn engine_state_events_are_forwarded() {
         let recorder = Arc::new(Recorder::default());
-        let forward = forward_engine_events(recorder.clone());
+        let forward = forward_engine_events(recorder.clone(), mpsc::unbounded_channel().0);
         forward(EngineEvent::State(EngineState::Starting));
         assert_eq!(
             *recorder.0.lock().unwrap(),
@@ -1444,40 +1516,26 @@ mod tests {
         assert!(text.contains("KM[7]"), "{text}");
     }
 
-    #[test]
-    fn trend_nodes_pair_the_line_with_stats() {
-        let stats = aji_engine::TrendStats {
-            winrate: 0.5,
-            score_lead: 1.0,
-            visits: 60,
+    #[tokio::test]
+    async fn an_illegal_node_keeps_its_move_and_has_no_stats() {
+        let ctx = ctx();
+        open(&ctx, "illegal.sgf", b"(;GM[1]FF[4]SZ[9];B[cc];W[cc])")
+            .await
+            .unwrap();
+        let Ok(Response::Trend { nodes, .. }) = handle(&ctx, Request::GameTrend).await else {
+            panic!("expected a trend");
         };
-        let line = vec![
-            LineNode {
-                move_number: 0,
-                mover: None,
-                mv: None,
-                key: Some(aji_core::PositionKey(1)),
-            },
-            LineNode {
-                move_number: 1,
-                mover: Some(aji_core::Color::Black),
-                mv: Some(Move::Pass),
-                key: None,
-            },
-        ];
-        let nodes = trend_nodes(line, vec![Some(stats), None]);
-        assert_eq!(nodes.len(), 2);
-        assert_eq!(nodes[0].stats, Some(stats));
-        assert_eq!(nodes[1].mover, Some(aji_core::Color::Black));
-        assert_eq!(nodes[1].mv, Some(Move::Pass));
-        assert_eq!(nodes[1].stats, None);
+        assert_eq!(nodes.len(), 3);
+        assert_eq!(nodes[2].mover, Some(aji_core::Color::White));
+        assert_eq!(nodes[2].mv, Some(Move::Play(Point { x: 2, y: 2 })));
+        assert_eq!((nodes[2].stats, nodes[2].loss), (None, None));
     }
 
     #[tokio::test]
     async fn game_trend_has_a_node_per_main_line_node() {
         let ctx = ctx();
         open(&ctx, "samsung.sgf", SAMSUNG).await.unwrap();
-        let Ok(Response::Trend { nodes }) = handle(&ctx, Request::GameTrend).await else {
+        let Ok(Response::Trend { nodes, .. }) = handle(&ctx, Request::GameTrend).await else {
             panic!("expected a trend");
         };
         let game = reference(SAMSUNG);
@@ -1875,5 +1933,360 @@ mod tests {
             error,
             json!({"code": "sgfUnsupportedSize", "message": "19x13", "detail": "19x13"})
         );
+    }
+
+    // ------------------------------------------------------------ P2 M2: jobs and the trend
+
+    use aji_core::PositionKey;
+    use aji_engine::{JobRun, JobStatus, Row};
+
+    use crate::follow;
+    use crate::job::{JobOptions, JobProgress, JobState};
+    use crate::protocol::{CacheScope, ScoreMode, TrendNodeUpdate};
+
+    const NINE: &str = "(;GM[1]FF[4]SZ[9]KM[7.5]RU[Chinese];B[cc];W[gg];B[cg];W[gc])";
+
+    fn kept(key: PositionKey, winrate: f64, ownership: Option<Vec<i8>>) -> Row {
+        Row {
+            update: aji_engine::AnalysisUpdate {
+                position: key,
+                board_size: 9,
+                root_visits: 600,
+                winrate,
+                score_lead: 0.0,
+                is_final: true,
+                candidates: Vec::new(),
+                previous_visits: 0,
+                ownership,
+                next: None,
+            },
+            imported: true,
+            katago_version: "test".into(),
+        }
+    }
+
+    fn trend_stats(winrate: f64) -> aji_engine::TrendStats {
+        aji_engine::TrendStats {
+            winrate,
+            score_lead: 0.0,
+            visits: 600,
+        }
+    }
+
+    /// A context on `NINE`, recording events.
+    async fn nine(dir: &Path) -> (AppContext, Arc<Recorded>) {
+        let mut ctx = ctx_in(dir, None);
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "nine.sgf", NINE.as_bytes()).await.unwrap();
+        (ctx, recorded)
+    }
+
+    async fn line_keys(ctx: &AppContext) -> Vec<PositionKey> {
+        let session = ctx.game.lock().await;
+        session.line().iter().map(|n| n.key.unwrap()).collect()
+    }
+
+    fn progress_events(recorded: &Recorded) -> Vec<JobProgress> {
+        recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::JobProgress { progress } => Some(progress.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn trend_node_events(recorded: &Recorded) -> Vec<(u64, Vec<TrendNodeUpdate>)> {
+        recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::TrendNodes { revision, nodes } => Some((*revision, nodes.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Starts a job in the service's flow alone: the test engine has no KataGo to run it.
+    async fn started(ctx: &AppContext) -> u64 {
+        let session = ctx.game.lock().await;
+        let plan = ctx.follow.lock().unwrap().flow.start(
+            session.line(),
+            session.index(),
+            JobOptions::default(),
+        );
+        plan.id
+    }
+
+    fn status(id: u64, run: JobRun, done: u32, total: u32) -> JobStatus {
+        JobStatus {
+            id,
+            run,
+            done,
+            total,
+            skipped: 0,
+            working: None,
+            queued: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn job_start_without_an_engine_is_refused_and_leaves_no_job() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        let error = handle(
+            &ctx,
+            Request::JobStart {
+                options: JobOptions::default(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::EngineNotConfigured);
+        assert!(!ctx.follow.lock().unwrap().flow.is_running());
+    }
+
+    #[tokio::test]
+    async fn job_start_runs_first_then_boost_then_done() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let keys = line_keys(&ctx).await;
+        ctx.engine
+            .import(keys.iter().map(|&k| kept(k, 0.5, None)).collect())
+            .await;
+        let id = started(&ctx).await;
+        // Another job's status changes nothing.
+        follow::on_job(&ctx, status(id + 9, JobRun::Done, 5, 5)).await;
+        assert!(ctx.follow.lock().unwrap().flow.is_running());
+        follow::on_job(&ctx, status(id, JobRun::Done, 5, 5)).await;
+        // No swing: no boost pass.
+        let last = progress_events(&recorded).pop().unwrap();
+        assert_eq!((last.state, last.done, last.total), (JobState::Done, 5, 5));
+        assert!(!ctx.follow.lock().unwrap().flow.is_running());
+    }
+
+    #[tokio::test]
+    async fn a_big_swing_plans_a_boost_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let keys = line_keys(&ctx).await;
+        let winrates = [0.5, 0.5, 0.7, 0.7, 0.7];
+        ctx.engine
+            .import(
+                keys.iter()
+                    .zip(winrates)
+                    .map(|(&k, w)| kept(k, w, None))
+                    .collect(),
+            )
+            .await;
+        let id = started(&ctx).await;
+        follow::on_job(&ctx, status(id, JobRun::Done, 5, 5)).await;
+        // The boost pass has nodes 1 and 2; the test engine cannot run it, so the job stops.
+        let last = progress_events(&recorded).pop().unwrap();
+        assert_eq!(
+            (last.state, last.done, last.boost_total),
+            (JobState::Stopped, 5, 2)
+        );
+        assert!(!ctx.follow.lock().unwrap().flow.is_running());
+    }
+
+    #[tokio::test]
+    async fn each_stop_event_stops_the_job() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let stoppers = [
+            Request::JobStop,
+            Request::GameNew { size: 9 },
+            Request::GameOpen {
+                name: "nine.sgf".into(),
+                bytes: b64(NINE.as_bytes()),
+            },
+            Request::GameSetRules {
+                rules: Some(AnalysisRules::JapaneseKorean),
+            },
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+            Request::CacheClear {
+                scope: CacheScope::All,
+            },
+        ];
+        for request in stoppers {
+            started(&ctx).await;
+            let before = progress_events(&recorded).len();
+            handle(&ctx, request.clone()).await.unwrap();
+            assert!(!ctx.follow.lock().unwrap().flow.is_running(), "{request:?}");
+            let events = progress_events(&recorded);
+            assert_eq!(events.len(), before + 1, "{request:?}");
+            assert_eq!(events.last().unwrap().state, JobState::Stopped);
+        }
+        // Clearing the current position keeps the job.
+        started(&ctx).await;
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Position,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(ctx.follow.lock().unwrap().flow.is_running());
+        // The engine stopping it (its files changed).
+        let id = started(&ctx).await;
+        follow::on_job(&ctx, status(id, JobRun::Stopped, 2, 5)).await;
+        assert!(!ctx.follow.lock().unwrap().flow.is_running());
+        assert_eq!(
+            progress_events(&recorded).last().unwrap().state,
+            JobState::Stopped
+        );
+    }
+
+    #[tokio::test]
+    async fn trend_nodes_carry_losses_and_the_revision() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let Ok(Response::Trend { revision, nodes }) = handle(&ctx, Request::GameTrend).await else {
+            panic!()
+        };
+        assert!(nodes.iter().all(|n| n.loss.is_none()));
+        let keys = line_keys(&ctx).await;
+        assert!(follow::stored(&ctx, keys[1], trend_stats(0.5)));
+        assert!(follow::stored(&ctx, keys[2], trend_stats(0.62)));
+        assert!(!follow::stored(&ctx, PositionKey(7), trend_stats(0.5)));
+        follow::flush(&ctx).await;
+        let pushed = trend_node_events(&recorded);
+        assert_eq!(pushed.len(), 1);
+        let (at, nodes) = &pushed[0];
+        assert_eq!(*at, revision);
+        assert_eq!(
+            nodes.iter().map(|n| n.line_index).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(nodes[1].stats, Some(trend_stats(0.62)));
+        // White's G3 let Black's win rate rise 12 points.
+        assert!((nodes[1].loss.unwrap().winrate - 12.0).abs() < 1e-9);
+        assert_eq!(nodes[0].loss, None, "the position before has no result");
+        assert_eq!(nodes[2].loss, None, "the position after has no result");
+        // Nothing new, nothing pushed.
+        follow::flush(&ctx).await;
+        assert_eq!(trend_node_events(&recorded).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn stored_results_reach_the_trend_without_a_refetch() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut ctx, recorded) = nine(dir.path()).await;
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let position = ctx.game.lock().await.position().unwrap();
+        ctx.engine = Engine::spawn(
+            None,
+            position,
+            aji_engine::EngineOptions::default(),
+            forward_engine_events(ctx.events.clone(), tx),
+        );
+        tokio::spawn(follow::follow_engine(ctx.clone(), rx));
+        let Ok(Response::Trend { revision, .. }) = handle(&ctx, Request::GameTrend).await else {
+            panic!()
+        };
+        let keys = line_keys(&ctx).await;
+        ctx.engine.import(vec![kept(keys[3], 0.4, None)]).await;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while trend_node_events(&recorded).is_empty() {
+            assert!(std::time::Instant::now() < deadline, "no trendNodes");
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let (at, nodes) = trend_node_events(&recorded).remove(0);
+        assert_eq!(at, revision);
+        assert_eq!(nodes[0].line_index, 3);
+        assert_eq!(nodes[0].stats.map(|s| s.winrate), Some(0.4));
+    }
+
+    #[tokio::test]
+    async fn game_score_estimate_and_final() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        handle(
+            &ctx,
+            Request::GameNavigate {
+                to: NavTarget::Last,
+            },
+        )
+        .await
+        .unwrap();
+        let estimate = Request::GameScore {
+            mode: ScoreMode::Estimate,
+        };
+        let error = handle(&ctx, estimate.clone()).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::ScoreUnavailable);
+        // Black owns the whole board: White's two stones are dead.
+        let key = *line_keys(&ctx).await.last().unwrap();
+        ctx.engine
+            .import(vec![kept(key, 0.9, Some(vec![100; 81]))])
+            .await;
+        let Ok(Response::Score(view)) = handle(&ctx, estimate).await else {
+            panic!()
+        };
+        assert_eq!(view.suggested_dead.len(), 2);
+        assert_eq!(view.score.black.total, 81.0);
+        // Final with both White stones marked dead: the board is Black's.
+        let Ok(Response::Score(view)) = handle(
+            &ctx,
+            Request::GameScore {
+                mode: ScoreMode::Final {
+                    dead: vec![Point { x: 6, y: 2 }, Point { x: 6, y: 6 }],
+                },
+            },
+        )
+        .await
+        else {
+            panic!()
+        };
+        assert_eq!(view.score.white.stones, 0);
+        assert_eq!(view.score.black.dead, 2);
+        assert_eq!(view.score.black.total, 81.0);
+        assert_eq!(view.suggested_dead.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn cache_clear_game_clears_the_main_line_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let keys = line_keys(&ctx).await;
+        let elsewhere = PositionKey(0x1234);
+        let mut rows: Vec<Row> = keys.iter().map(|&k| kept(k, 0.5, None)).collect();
+        rows.push(kept(elsewhere, 0.5, None));
+        ctx.engine.import(rows).await;
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+        )
+        .await
+        .unwrap();
+        let mut asked = keys.clone();
+        asked.push(elsewhere);
+        let left = ctx.engine.summaries(asked).await;
+        assert!(left[..keys.len()].iter().all(Option::is_none));
+        assert!(left[keys.len()].is_some());
+        let events = recorded.0.lock().unwrap();
+        assert!(matches!(events.last(), Some(AppEvent::CacheStatus { .. })));
+        assert!(events.iter().any(
+            |e| matches!(e, AppEvent::GameTrend { nodes, .. } if nodes.iter().all(|n| n.stats.is_none()))
+        ));
+    }
+
+    #[tokio::test]
+    async fn cache_stats_without_a_store_is_an_empty_memory_cache() {
+        let Ok(Response::CacheStats(stats)) = handle(&ctx(), Request::CacheStats).await else {
+            panic!()
+        };
+        assert!(!stats.persistent);
     }
 }

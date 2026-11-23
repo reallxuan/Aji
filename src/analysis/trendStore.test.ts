@@ -9,6 +9,7 @@ const node = (moveNumber: number): TrendNode => ({
   mover: moveNumber === 0 ? null : moveNumber % 2 ? 'black' : 'white',
   move: null,
   stats: null,
+  loss: null,
 });
 
 it('record keeps the deeper stats', () => {

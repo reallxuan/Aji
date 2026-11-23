@@ -58,9 +58,13 @@ pub enum ClearScope {
     All,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct CacheStats {
+    #[ts(type = "number")]
     pub used_bytes: u64,
+    #[ts(type = "number")]
     pub cap_bytes: u64,
     pub persistent: bool,
     /// Why the file is not used, when it is not.

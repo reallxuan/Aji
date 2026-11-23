@@ -41,7 +41,8 @@
     "fileReadFailed": "The file could not be read.",
     "fileWriteFailed": "The file could not be saved.",
     "fileNotSgf": "Only .sgf files can be opened.",
-    "fileMissing": "The file has been moved or deleted."
+    "fileMissing": "The file has been moved or deleted.",
+    "scoreUnavailable": "There is no analysis of this position to estimate the score from yet."
   },
   "engine": {
     "state": {

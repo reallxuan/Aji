@@ -48,6 +48,7 @@ const KNOWN_CODES: Record<ErrorCode, true> = {
   fileWriteFailed: true,
   fileNotSgf: true,
   fileMissing: true,
+  scoreUnavailable: true,
 };
 
 function isKnownCode(value: unknown): value is ErrorCode {

@@ -38,6 +38,7 @@ function line(): TrendNode[] {
       stats: plotted
         ? { winrate: i === 72 ? 0.495 : 0.5, scoreLead: i === 72 ? -0.1 : 0, visits: 200 }
         : null,
+      loss: null,
     };
   });
 }

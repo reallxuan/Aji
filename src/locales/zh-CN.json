@@ -41,7 +41,8 @@
     "fileReadFailed": "无法读取文件。",
     "fileWriteFailed": "无法保存文件。",
     "fileNotSgf": "只能打开 .sgf 文件。",
-    "fileMissing": "文件已移动或删除。"
+    "fileMissing": "文件已移动或删除。",
+    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。"
   },
   "engine": {
     "state": {

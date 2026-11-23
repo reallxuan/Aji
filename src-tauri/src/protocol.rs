@@ -4,9 +4,9 @@
 //! `src/transport/generated/` from them. They cross a process or network boundary, so they never
 //! carry file paths, and errors carry a code rather than user-facing text.
 
-use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview};
-use aji_core::{Color, Move, PositionKey};
-use aji_engine::{AnalysisUpdate, EngineState, Rejection, TrendStats};
+use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview, Score};
+use aji_core::{Color, Move, Point, PositionKey};
+use aji_engine::{AnalysisUpdate, CacheStats, EngineState, Loss, Rejection, TrendStats};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
 use aji_manager::install::{
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::game::{GameWarning, NavTarget, RulesState};
+use crate::job::{JobOptions, JobProgress};
 use crate::settings::UiSettings;
 
 /// A request from the UI. Serialised as `{"type": "<camelCase variant>", ...fields}`, with
@@ -108,6 +109,54 @@ pub enum Request {
     GameExport,
     /// The cached result of every main-line node, for the trend graph.
     GameTrend,
+    /// Analyses the main line (P2 M2 design 5.3), replacing a running job.
+    JobStart {
+        options: JobOptions,
+    },
+    JobStop,
+    /// Forgets results; `game` and `all` stop a running job.
+    CacheClear {
+        scope: CacheScope,
+    },
+    CacheStats,
+    /// The current position's score: KataGo's estimate, or the final count with `dead` removed.
+    GameScore {
+        mode: ScoreMode,
+    },
+}
+
+/// Which results `cacheClear` forgets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum CacheScope {
+    /// The current position's.
+    Position,
+    /// The main line's positions.
+    Game,
+    /// Every result, for every engine.
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum ScoreMode {
+    /// From the current position's ownership.
+    Estimate,
+    /// The stones the user marked dead removed, regions flood-filled.
+    Final { dead: Vec<Point> },
+}
+
+/// A score, with the stones the ownership suggests are dead (empty without ownership).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ScoreView {
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub score: Score,
+    pub suggested_dead: Vec<Point>,
 }
 
 /// The answer to a [`Request`], tagged the same way.
@@ -182,8 +231,13 @@ pub enum Response {
         text: String,
     },
     Trend {
+        /// The session revision the line was read at; `trendNodes` with another are stale.
+        #[ts(type = "number")]
+        revision: u64,
         nodes: Vec<TrendNode>,
     },
+    CacheStats(CacheStats),
+    Score(ScoreView),
     Ok,
 }
 
@@ -201,6 +255,18 @@ pub struct TrendNode {
     pub mv: Option<Move>,
     /// The engine's cached result for the node's position; `null` when it has none.
     pub stats: Option<TrendStats>,
+    /// The node's move's loss (design 5.1); `null` without a move or results.
+    pub loss: Option<Loss>,
+}
+
+/// A trend node whose result changed, by its index on the main line.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrendNodeUpdate {
+    pub line_index: u32,
+    pub stats: Option<TrendStats>,
+    pub loss: Option<Loss>,
 }
 
 /// The engine files' names, as the engine card shows them.
@@ -243,7 +309,22 @@ pub enum AppEvent {
     /// The main line's positions, or the engine's results, changed wholesale: a game was opened
     /// or created, its rules changed, or the engine's files changed.
     GameTrend {
+        #[ts(type = "number")]
+        revision: u64,
         nodes: Vec<TrendNode>,
+    },
+    /// Some nodes of the trend's line got results: the line read at `revision`.
+    TrendNodes {
+        #[ts(type = "number")]
+        revision: u64,
+        nodes: Vec<TrendNodeUpdate>,
+    },
+    JobProgress {
+        progress: JobProgress,
+    },
+    /// The results cache changed size or fell back to memory.
+    CacheStatus {
+        status: CacheStats,
     },
 }
 
@@ -338,6 +419,8 @@ pub enum ErrorCode {
     FileNotSgf,
     /// A recent file that no longer exists.
     FileMissing,
+    /// The position has no ownership yet to estimate a score from.
+    ScoreUnavailable,
 }
 
 #[cfg(test)]
@@ -403,6 +486,141 @@ mod tests {
     }
 
     #[test]
+    fn job_request_json_shapes() {
+        use crate::job::{BoostOptions, JobOptions, JobRange, JobSide};
+        let options = JobOptions {
+            range: JobRange::Moves { from: 3, to: 40 },
+            side: JobSide::Black,
+            visits: 500,
+            boost: BoostOptions {
+                on: true,
+                threshold: 10.0,
+                visits: 3000,
+            },
+        };
+        for (value, request) in [
+            (
+                json!({"type": "jobStart", "options": {
+                    "range": {"kind": "moves", "from": 3, "to": 40}, "side": "black",
+                    "visits": 500, "boost": {"on": true, "threshold": 10.0, "visits": 3000}}}),
+                Request::JobStart { options },
+            ),
+            (json!({"type": "jobStop"}), Request::JobStop),
+            (
+                json!({"type": "cacheClear", "scope": "game"}),
+                Request::CacheClear {
+                    scope: CacheScope::Game,
+                },
+            ),
+            (json!({"type": "cacheStats"}), Request::CacheStats),
+            (
+                json!({"type": "gameScore", "mode": {"kind": "estimate"}}),
+                Request::GameScore {
+                    mode: ScoreMode::Estimate,
+                },
+            ),
+            (
+                json!({"type": "gameScore", "mode": {"kind": "final", "dead": [{"x": 3, "y": 4}]}}),
+                Request::GameScore {
+                    mode: ScoreMode::Final {
+                        dead: vec![aji_core::Point { x: 3, y: 4 }],
+                    },
+                },
+            ),
+        ] {
+            assert_eq!(serde_json::from_value::<Request>(value).unwrap(), request);
+        }
+        assert_eq!(
+            serde_json::from_value::<Request>(json!({"type": "jobStart", "options": {
+                "range": {"kind": "whole"}, "side": "both", "visits": 500,
+                "boost": {"on": false, "threshold": 10.0, "visits": 3000}}}))
+            .unwrap(),
+            Request::JobStart {
+                options: JobOptions {
+                    boost: BoostOptions {
+                        on: false,
+                        ..JobOptions::default().boost
+                    },
+                    ..JobOptions::default()
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn job_and_cache_event_json_shapes() {
+        use crate::job::{JobProgress, JobState};
+        let stats = aji_engine::CacheStats {
+            used_bytes: 10,
+            cap_bytes: 20,
+            persistent: true,
+            reason: None,
+        };
+        assert_eq!(
+            serde_json::to_value(Response::CacheStats(stats.clone())).unwrap(),
+            json!({"type": "cacheStats", "usedBytes": 10, "capBytes": 20,
+                   "persistent": true, "reason": null})
+        );
+        assert_eq!(
+            serde_json::to_value(AppEvent::CacheStatus { status: stats }).unwrap()["type"],
+            json!("cacheStatus")
+        );
+        let progress = JobProgress {
+            state: JobState::Boosting,
+            done: 9,
+            total: 9,
+            boost_done: 1,
+            boost_total: 2,
+            working: Some(4),
+            queued: vec![5],
+            eta_seconds: Some(12),
+        };
+        assert_eq!(
+            serde_json::to_value(AppEvent::JobProgress { progress }).unwrap(),
+            json!({"type": "jobProgress", "progress": {"state": "boosting", "done": 9,
+                   "total": 9, "boostDone": 1, "boostTotal": 2, "working": 4,
+                   "queued": [5], "etaSeconds": 12}})
+        );
+        assert_eq!(
+            serde_json::to_value(AppEvent::TrendNodes {
+                revision: 7,
+                nodes: vec![TrendNodeUpdate {
+                    line_index: 3,
+                    stats: None,
+                    loss: Some(aji_engine::Loss {
+                        winrate: 12.5,
+                        score: 3.0
+                    }),
+                }],
+            })
+            .unwrap(),
+            json!({"type": "trendNodes", "revision": 7, "nodes": [{"lineIndex": 3,
+                   "stats": null, "loss": {"winrate": 12.5, "score": 3.0}}]})
+        );
+    }
+
+    #[test]
+    fn score_response_json_shape() {
+        let board = aji_core::game::Board::new(aji_core::BoardSize::new(5).unwrap());
+        let score = aji_core::game::final_score(
+            &board,
+            &[],
+            aji_core::ScoringRule::Area,
+            aji_core::Komi::new(7.5).unwrap(),
+            (0, 0),
+        );
+        let value = serde_json::to_value(Response::Score(ScoreView {
+            score,
+            suggested_dead: vec![aji_core::Point { x: 1, y: 2 }],
+        }))
+        .unwrap();
+        assert_eq!(value["type"], json!("score"));
+        assert_eq!(value["margin"], json!(-7.5));
+        assert_eq!(value["suggestedDead"], json!([{"x": 1, "y": 2}]));
+        assert_eq!(value["black"]["stones"], json!(0));
+    }
+
+    #[test]
     fn trend_json_shapes() {
         let node = TrendNode {
             move_number: 3,
@@ -413,19 +631,26 @@ mod tests {
                 score_lead: -1.5,
                 visits: 80,
             }),
+            loss: None,
         };
         let want = json!({"moveNumber": 3, "mover": "white", "move": {"type": "pass"},
-                          "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80}});
+                          "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80},
+                          "loss": null});
         assert_eq!(
             serde_json::to_value(Response::Trend {
+                revision: 4,
                 nodes: vec![node.clone()]
             })
             .unwrap(),
-            json!({"type": "trend", "nodes": [want.clone()]})
+            json!({"type": "trend", "revision": 4, "nodes": [want.clone()]})
         );
         assert_eq!(
-            serde_json::to_value(AppEvent::GameTrend { nodes: vec![node] }).unwrap(),
-            json!({"type": "gameTrend", "nodes": [want]})
+            serde_json::to_value(AppEvent::GameTrend {
+                revision: 4,
+                nodes: vec![node]
+            })
+            .unwrap(),
+            json!({"type": "gameTrend", "revision": 4, "nodes": [want]})
         );
     }
 
