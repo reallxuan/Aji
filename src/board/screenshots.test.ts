@@ -19,7 +19,8 @@ import type { Move } from '../transport/generated/Move';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
 import { type BoardView, drawBoard } from './drawBoard';
 import { drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
-import { drawOwnership, settledOwnership } from './ownership';
+import { drawOwnership, scoredOwnership, type Settled, settledOwnership } from './ownership';
+import { C5, finishedStones, H4 } from '../scoring/testing';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
@@ -117,14 +118,14 @@ function render(
 function renderOwnership(
   view: BoardView,
   stones: (Color | null)[],
-  ownership: number[],
+  ownership: number[] | Settled,
   stoneStyle: StoneId,
 ): PNG {
   const size = Math.round(view.cssSize * view.dpr);
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
   drawBoard(ctx, view, skia);
-  const settled = settledOwnership(ownership, stones);
+  const settled = Array.isArray(ownership) ? settledOwnership(ownership, stones) : ownership;
   const upper = createCanvas(size, size);
   const sprites = makeStoneSprites(
     boardGeometry(view.cssSize, view.boardSize).spacing,
@@ -311,6 +312,31 @@ describe('board screenshots', () => {
         parse(SAMSUNG_58),
         OWNERSHIP_58,
         'yunzi',
+      ),
+    );
+  });
+
+  it('final-scoring-9x9: the mockup game counted, C5 and H4 dead, dame bare', () => {
+    // The backend's owners for it (area, after removing the two dead stones).
+    const owners = [
+      'XXXXOOOOO',
+      'XXXXOOOOO',
+      'XXXXOOOOO',
+      'XXXXOOOOO',
+      'XXXXXOOOO',
+      'XXXXXOOOO',
+      'XXXXXXOOO',
+      'XXXXOOOOO',
+      'XXXXOOOOO',
+    ];
+    const stones = finishedStones();
+    compare(
+      'final-scoring-9x9@2x',
+      renderOwnership(
+        { cssSize: 520, dpr: 2, boardSize: 9, style: 'honey' },
+        stones,
+        scoredOwnership(parse(owners), stones, [C5, H4]),
+        'slate',
       ),
     );
   });

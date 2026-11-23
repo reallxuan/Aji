@@ -667,5 +667,42 @@
     "waiting": "Waiting for this position's result",
     "score": "Score",
     "close": "Close the position estimate"
+  },
+  "scoring": {
+    "title": "Final Scoring",
+    "subtitle": "{{rules}}, {{counting}}",
+    "rules": {
+      "chinese": "Chinese rules",
+      "japaneseKorean": "Japanese/Korean rules",
+      "custom": "Custom rules"
+    },
+    "counting": {
+      "area": "area scoring",
+      "territory": "territory scoring"
+    },
+    "columns": {
+      "area": "Area",
+      "territory": "Territory",
+      "stones": "Stones",
+      "land": "Points",
+      "dead": "Dead",
+      "prisoners": "Captures",
+      "komi": "Komi",
+      "total": "Total"
+    },
+    "black": "Black",
+    "white": "White",
+    "blackWins": "Black wins by {{n}}",
+    "whiteWins": "White wins by {{n}}",
+    "draw": "Draw",
+    "changed": "Changed",
+    "hint": "Click a stone to switch its whole group between dead and alive.",
+    "fromKataGo": "KataGo marked the dead stones.",
+    "reset": "Restore KataGo's marking",
+    "exit": "Leave scoring",
+    "rest": "Candidates are hidden, and nothing is analysed while scoring.",
+    "waiting": "Counting…",
+    "failed": "Could not count this position.",
+    "openByOwnership": "The game was not played out, so open areas follow KataGo's judgement."
   }
 }

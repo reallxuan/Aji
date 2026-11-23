@@ -50,6 +50,23 @@ export function settledOwnership(
 }
 
 /**
+ * The squares while scoring (P2 M2 design 5.8): from the final count's `owners`, every owned
+ * point but a living stone; the stones marked `dead` fade under their square.
+ */
+export function scoredOwnership(
+  owners: readonly (Color | null)[],
+  stones: readonly (Color | null)[],
+  dead: readonly Point[],
+): Settled {
+  const size = Math.round(Math.sqrt(stones.length));
+  const isDead = new Set(dead.map((p) => p.y * size + p.x));
+  return {
+    owners: stones.map((stone, i) => (stone && !isDead.has(i) ? null : (owners[i] ?? null))),
+    dead: [...dead],
+  };
+}
+
+/**
  * Clears the ownership layer and draws a same-size square, in its owner's colour, on each point
  * of `owners`. A dead stone, drawn faded below, gets its owner's square on top.
  */

@@ -36,6 +36,9 @@ pub struct Score {
     pub margin: f64,
     /// Each point's owner, row by row, after dead stones are removed.
     pub owners: Vec<Option<Color>>,
+    /// Final scoring gave some point of an open region (one touching both colours) to a side by
+    /// KataGo's ownership: the game was not played out.
+    pub open_by_ownership: bool,
 }
 
 /// Quantised ownership at or past which a point counts as settled (the 0.6 rule: 0.6 × 127).
@@ -80,10 +83,13 @@ pub fn suggested_dead(board: &Board, ownership: &[i8]) -> Vec<Point> {
 }
 
 /// Final scoring: regions are flood-filled after removing `dead`; a region bordered only by one
-/// colour's live stones is that colour's, any other is neutral.
+/// colour's live stones is that colour's. Any other region is open (dame, or a game not played
+/// out): with `ownership` (Black's view) each of its points settled for a side (the 0.6 rule) is
+/// that side's, the rest neutral; without it the whole region is neutral.
 pub fn final_score(
     board: &Board,
     dead: &[Point],
+    ownership: Option<&[i8]>,
     scoring: ScoringRule,
     komi: Komi,
     captures: (u32, u32),
@@ -92,6 +98,7 @@ pub fn final_score(
     let live = live_stones(board, dead);
     let mut owners = live.clone();
     let mut seen = vec![false; live.len()];
+    let mut open_by_ownership = false;
     for start in points(n) {
         let i = index(n, start);
         if live[i].is_some() || seen[i] {
@@ -121,10 +128,21 @@ pub fn final_score(
             _ => None,
         };
         for j in region {
-            owners[j] = owner;
+            owners[j] = owner.or_else(|| {
+                let settled = match ownership?.get(j).copied().unwrap_or(0) {
+                    v if v >= SETTLED => Color::Black,
+                    v if v <= -SETTLED => Color::White,
+                    _ => return None,
+                };
+                open_by_ownership = true;
+                Some(settled)
+            });
         }
     }
-    tally(board, &live, owners, scoring, komi, captures)
+    Score {
+        open_by_ownership,
+        ..tally(board, &live, owners, scoring, komi, captures)
+    }
 }
 
 /// The estimate: dead stones from `suggested_dead`, and every empty or dead point goes to the
@@ -227,6 +245,7 @@ fn tally(
         white,
         komi: komi.points(),
         owners,
+        open_by_ownership: false,
     }
 }
 
@@ -281,6 +300,7 @@ mod tests {
         let s = final_score(
             &board(&ROWS),
             &[C5, H4],
+            None,
             ScoringRule::Area,
             komi(7.5),
             CAPTURES,
@@ -313,6 +333,7 @@ mod tests {
         let s = final_score(
             &board(&ROWS),
             &[C5, H4],
+            None,
             ScoringRule::Territory,
             komi(6.5),
             CAPTURES,
@@ -346,6 +367,7 @@ mod tests {
         let s = final_score(
             &board(&ROWS),
             &[C5],
+            None,
             ScoringRule::Territory,
             komi(6.5),
             CAPTURES,
@@ -361,7 +383,14 @@ mod tests {
     #[test]
     fn a_region_touching_both_colours_is_neutral() {
         // H4 alive: White's right side now touches a live Black stone, so it is no one's.
-        let s = final_score(&board(&ROWS), &[C5], ScoringRule::Area, komi(7.5), CAPTURES);
+        let s = final_score(
+            &board(&ROWS),
+            &[C5],
+            None,
+            ScoringRule::Area,
+            komi(7.5),
+            CAPTURES,
+        );
         assert_eq!(
             (
                 s.black.stones,
@@ -418,8 +447,85 @@ mod tests {
     #[test]
     fn empty_board_scores_komi_only() {
         let b = Board::new(BoardSize::new(9).unwrap());
-        let s = final_score(&b, &[], ScoringRule::Area, komi(7.5), (0, 0));
+        let s = final_score(&b, &[], None, ScoringRule::Area, komi(7.5), (0, 0));
         assert_eq!((s.black.total, s.white.total, s.margin), (0.0, 7.5, -7.5));
         assert!(s.owners.iter().all(Option::is_none));
+    }
+
+    /// A game left open below row 4: Black's wall on D, White's on E, nothing closed.
+    const OPEN: [&str; 9] = [
+        "...XO....",
+        "...XO....",
+        "...XO....",
+        "...XO....",
+        ".........",
+        ".........",
+        ".O.......",
+        ".........",
+        ".........",
+    ];
+
+    /// Black owns the columns left of E, White those right of it; E's empty points are even.
+    fn open_ownership() -> Vec<i8> {
+        (0..81)
+            .map(|i| match i % 9 {
+                0..=3 => 100,
+                4 => 0,
+                _ => -100,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn open_regions_follow_the_ownership() {
+        // Without ownership the one open region touches both walls, so nothing is counted.
+        let b = board(&OPEN);
+        let s = final_score(&b, &[], None, ScoringRule::Territory, komi(6.5), (0, 0));
+        assert_eq!((s.black.territory, s.white.territory), (0, 0));
+        assert!(!s.open_by_ownership);
+        // With it, each open point settled for a side (0.6 or more) is that side's; E stays even.
+        // White's lone stone on B3 is marked dead, and Black's area holds it.
+        let own = open_ownership();
+        let dead = [Point { x: 1, y: 6 }];
+        let s = final_score(
+            &b,
+            &dead,
+            Some(&own),
+            ScoringRule::Territory,
+            komi(6.5),
+            (0, 0),
+        );
+        assert_eq!((s.black.territory, s.black.dead), (31, 1));
+        assert_eq!((s.white.territory, s.white.dead), (36, 0));
+        assert_eq!((s.black.total, s.white.total), (33.0, 42.5));
+        assert!(s.open_by_ownership);
+        assert_eq!(s.owners[4 * 9 + 4], None);
+    }
+
+    #[test]
+    fn a_finished_game_counts_the_same_with_ownership() {
+        // A played-out game's open regions are its dame, which KataGo calls even: the count is
+        // the one without ownership, and nothing is said about an unfinished game.
+        let b = board(&ROWS);
+        let without = final_score(&b, &[C5], None, ScoringRule::Territory, komi(6.5), CAPTURES);
+        let own: Vec<i8> = without
+            .owners
+            .iter()
+            .map(|o| match o {
+                Some(Color::Black) => 100,
+                Some(Color::White) => -100,
+                None => 0,
+            })
+            .collect();
+        let with = final_score(
+            &b,
+            &[C5],
+            Some(&own),
+            ScoringRule::Territory,
+            komi(6.5),
+            CAPTURES,
+        );
+        assert_eq!(with, without);
+        assert!(!with.open_by_ownership);
     }
 }

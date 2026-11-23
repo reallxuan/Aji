@@ -15,6 +15,8 @@ import { type PanelRef, panelsOf, refId } from './model';
 import { PanelView } from './PanelView';
 import { PanelSizeContext } from './usePanelWidth';
 import { WinrateBar } from '../panel/WinrateBar';
+import { ScoringCard } from '../scoring/ScoringCard';
+import { useScoringStore } from '../scoring/scoringStore';
 import { panelLabelKey } from './registry';
 import { Sheet } from './Sheet';
 import { useLayout } from './useLayout';
@@ -22,6 +24,8 @@ import { useWindowSize } from './useWindowSize';
 
 /** The board keeps at least this much height for the panels under it. */
 const PANELS_MIN = 160;
+/** The height the count keeps under the board while scoring: all of it, the way out included. */
+const SCORING_ROOM = 300;
 /** ...but never at the cost of the board falling below its floor (design 5.5, Review Focus 4). */
 const BOARD_FLOOR = 320;
 const HEADER = { phone: 52, tablet: 56 };
@@ -51,6 +55,8 @@ export function NarrowFrame({
   const { t } = useTranslation();
   const { width, height } = useWindowSize();
   const { layout } = useLayout();
+  // Final scoring (P2 M2 design 5.8): the count takes the panels' place under the board.
+  const scoring = useScoringStore((s) => s.active);
   const notConfigured = useEngineStore((s) => s.engine?.state === 'notConfigured');
   const narrowTab = useDeviceStore((s) => s.settings.narrowTab);
   const update = useDeviceStore((s) => s.update);
@@ -72,11 +78,14 @@ export function NarrowFrame({
   );
   const select = (ref: PanelRef) => update({ narrowTab: refId(ref) });
 
-  const barHeight = bar ? BAR + (phone ? CAPTURES : 0) : 0;
+  const barHeight = bar && !scoring ? BAR + (phone ? CAPTURES : 0) : 0;
   // The height left for the board and the panels; the panels keep 160 px of it only while the
   // board keeps its floor, so a small landscape window shows the board first.
   const room = height - (phone ? HEADER.phone + NAV : HEADER.tablet) - barHeight;
-  const boardRoom = Math.max(Math.min(BOARD_FLOOR, room), room - PANELS_MIN);
+  const boardRoom = Math.max(
+    Math.min(BOARD_FLOOR, room),
+    room - (scoring ? SCORING_ROOM : PANELS_MIN),
+  );
   const size = Math.max(0, Math.floor(Math.min(width - 8, boardRoom)));
   // Thinking draws the hovered line on sub-board 1 only while that sub-board is on screen.
   const isFirstSub = (ref: PanelRef | undefined) => ref?.kind === 'subboard' && ref.rank === 1;
@@ -114,7 +123,7 @@ export function NarrowFrame({
       </div>
       {!placeholder && (
         <>
-          {bar && (
+          {bar && !scoring && (
             // The bar is the board's, not a tab: drawn as it is, with no grip.
             <div className="flex-none border-t border-hairline">
               <PanelSizeContext.Provider value={{ width, height: BAR }}>
@@ -126,7 +135,11 @@ export function NarrowFrame({
             </div>
           )}
           <div className="flex min-h-0 flex-1 border-t border-hairline">
-            {phone || tabs.length < 2 ? (
+            {scoring ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <ScoringCard />
+              </div>
+            ) : phone || tabs.length < 2 ? (
               strip(tabs)
             ) : (
               <>

@@ -245,7 +245,15 @@ it('api shapes match the protocol', async () => {
   const sent: unknown[] = [];
   const stats = { usedBytes: 10, capBytes: 20, persistent: true, reason: null };
   const side = { stones: 0, territory: 0, dead: 0, prisoners: 0, total: 0 };
-  const view = { black: side, white: side, komi: 7.5, margin: -7.5, owners: [], suggestedDead: [] };
+  const view = {
+    black: side,
+    white: side,
+    komi: 7.5,
+    margin: -7.5,
+    owners: [],
+    openByOwnership: true,
+    suggestedDead: [],
+  };
   const t = createFakeTransport((request) => {
     sent.push(request);
     if (request.type === 'cacheStats') return { type: 'cacheStats', ...stats };

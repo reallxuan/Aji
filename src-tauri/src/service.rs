@@ -526,7 +526,14 @@ async fn game_score(ctx: &AppContext, mode: ScoreMode) -> Result<Response, Proto
             })?;
             estimate(board, &ownership, scoring, komi, board.captures())
         }
-        ScoreMode::Final { dead } => final_score(board, &dead, scoring, komi, board.captures()),
+        ScoreMode::Final { dead } => final_score(
+            board,
+            &dead,
+            ownership.as_deref(),
+            scoring,
+            komi,
+            board.captures(),
+        ),
     };
     Ok(Response::Score(ScoreView {
         score,
@@ -2312,6 +2319,22 @@ mod tests {
         assert_eq!(view.score.black.dead, 2);
         assert_eq!(view.score.black.total, 81.0);
         assert_eq!(view.suggested_dead.len(), 2);
+        assert!(!view.score.open_by_ownership);
+        // With White's stones left alive the board's one region touches both colours: the
+        // position's ownership gives it to Black, and the score says the game was open.
+        let Ok(Response::Score(view)) = handle(
+            &ctx,
+            Request::GameScore {
+                mode: ScoreMode::Final { dead: Vec::new() },
+            },
+        )
+        .await
+        else {
+            panic!()
+        };
+        assert_eq!(view.score.white.stones, 2);
+        assert_eq!(view.score.black.stones + view.score.black.territory, 79);
+        assert!(view.score.open_by_ownership);
     }
 
     #[tokio::test]

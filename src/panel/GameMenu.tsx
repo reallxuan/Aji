@@ -26,6 +26,7 @@ import { shortcut, useOs } from '../app/useOs';
 import { openFromPicker, openRecent, saveAs, startNewGame } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
 import { gameTitle } from '../game/title';
+import { useEngineStoreApi } from '../engine/engineStore';
 import { useActionContext } from '../game/useActionContext';
 import { clearAnalysis, openJobPanel } from '../job/actions';
 import { JobPanelContent } from '../job/JobPanel';
@@ -96,6 +97,7 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
 export function GameMenu() {
   const { t } = useTranslation();
   const ctx = useActionContext();
+  const engine = useEngineStoreApi();
   const os = useOs();
   const snapshot = useGameStore((s) => s.snapshot);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
@@ -208,7 +210,9 @@ export function GameMenu() {
           <DropdownMenuItem
             className="gap-2.5"
             disabled={!snapshot?.hasMoves}
-            onSelect={() => useScoringStore.getState().start()}
+            onSelect={() =>
+              void useScoringStore.getState().start({ transport: ctx.transport, engine })
+            }
           >
             <CalculatorIcon className={icon} aria-hidden />
             {t('menu.finalScoring')}

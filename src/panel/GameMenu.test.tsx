@@ -143,3 +143,32 @@ it('analyse game opens its panel under the title, with 开始 focused', async ()
   expect(screen.queryByRole('button', { name: '开始' })).toBeNull();
   expect(useJobPanelStore.getState().open).toBe(false);
 });
+
+it('终局点目 starts scoring on the position', async () => {
+  const { resetScoringStore, useScoringStore } = await import('../scoring/scoringStore');
+  const side = { stones: 0, territory: 0, dead: 0, prisoners: 0, total: 0 };
+  const { requests } = renderWithGame(<GameMenu />, {
+    snapshot: makeSnapshot({ hasMoves: true }),
+    answer: (request) =>
+      request.type === 'gameScore'
+        ? {
+            type: 'score',
+            suggestedDead: [],
+            black: side,
+            white: side,
+            komi: 7.5,
+            margin: -7.5,
+            owners: [],
+            openByOwnership: false,
+          }
+        : undefined,
+  });
+  await act(async () => {});
+  const menu = await openMenu('未命名棋局');
+  await act(async () => {
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /终局点目/ }));
+  });
+  expect(useScoringStore.getState().active).toBe(true);
+  expect(requests).toContainEqual({ type: 'gameScore', mode: { kind: 'final', dead: [] } });
+  resetScoringStore();
+});

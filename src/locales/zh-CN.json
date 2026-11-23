@@ -667,5 +667,42 @@
     "waiting": "等待这个局面的分析结果",
     "score": "点目",
     "close": "关闭形势判断"
+  },
+  "scoring": {
+    "title": "终局点目",
+    "subtitle": "{{rules}}，{{counting}}",
+    "rules": {
+      "chinese": "中国规则",
+      "japaneseKorean": "日韩规则",
+      "custom": "自定义规则"
+    },
+    "counting": {
+      "area": "数子",
+      "territory": "数目"
+    },
+    "columns": {
+      "area": "数子",
+      "territory": "数目",
+      "stones": "棋子",
+      "land": "地",
+      "dead": "死子",
+      "prisoners": "提子",
+      "komi": "贴目",
+      "total": "合计"
+    },
+    "black": "黑",
+    "white": "白",
+    "blackWins": "黑胜 {{n}} 目",
+    "whiteWins": "白胜 {{n}} 目",
+    "draw": "和棋",
+    "changed": "已改动",
+    "hint": "点棋子切换整块的死活。",
+    "fromKataGo": "死子是 KataGo 判断的。",
+    "reset": "恢复 KataGo 的判断",
+    "exit": "退出点目",
+    "rest": "候选点已隐藏，点目时不分析。",
+    "waiting": "正在点目…",
+    "failed": "无法点目。",
+    "openByOwnership": "棋局未下完，未封闭的区域按 KataGo 判断。"
   }
 }

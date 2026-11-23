@@ -6,6 +6,7 @@
 // (crates/aji-manager/manifest/manifest.json).
 
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
+import { finalCount } from './finalCount';
 import { createFakeGame, fakeAnalysis } from './fakeGame';
 import { fakeResult, playFakeJob, type FakeJob, type FakeResult } from './fakeJob';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
@@ -805,8 +806,12 @@ export function scenarioTransport(
           persistent: true,
           reason: null,
         };
-      case 'gameScore':
-        throw new TransportError('scoreUnavailable', 'the scenarios have no ownership');
+      case 'gameScore': {
+        const reply = game({ type: 'gameSnapshot' });
+        if (request.mode.kind === 'estimate' || reply?.type !== 'game')
+          throw new TransportError('scoreUnavailable', 'the scenarios have no ownership');
+        return { type: 'score', ...finalCount(reply.snapshot, request.mode.dead) };
+      }
       case 'gameTrend': {
         const trend = trendOf();
         return {

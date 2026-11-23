@@ -4,8 +4,10 @@ import { useEstimateStore } from '../analysis/estimateStore';
 import { formatPoints, isEvenLead } from '../analysis/format';
 import { useTrendStore } from '../analysis/trendStore';
 import { useEstimateSync } from '../analysis/useEstimateSync';
+import { useEngineStoreApi } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
 import { useScoringStore } from '../scoring/scoringStore';
+import { useTransport } from '../transport/TransportProvider';
 
 /**
  * The position estimate's line under the win-rate bar (P2 M2 design 5.7, mockup section 5):
@@ -20,6 +22,8 @@ export function EstimateLine() {
 
 function ShownLine() {
   const { t, i18n } = useTranslation();
+  const transport = useTransport();
+  const engine = useEngineStoreApi();
   const lang = i18n.language;
   const score = useEstimateStore((s) => s.score);
   const finished = useFinishedHere();
@@ -55,7 +59,7 @@ function ShownLine() {
         <button
           type="button"
           className="rounded-[5px] border border-hairline px-2 py-px text-xs text-text hover:bg-divider-soft"
-          onClick={() => useScoringStore.getState().start()}
+          onClick={() => void useScoringStore.getState().start({ transport, engine })}
         >
           {t('estimate.score')}
         </button>

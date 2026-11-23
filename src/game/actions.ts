@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import type { EngineStore } from '../engine/engineStore';
 import type { MenuCommand, OpenedFile, PlatformFiles } from '../platform/files';
 import {
   exportGame,
@@ -145,8 +146,15 @@ export const navigate = (ctx: ActionContext, to: NavTarget) =>
 export const setRules = (ctx: ActionContext, rules: AnalysisRules | null) =>
   change(ctx, () => setGameRules(ctx.transport, rules));
 
-/** What a menu bar item does: the same actions as the title menu, and the 布局 presets. */
-export function runMenuCommand(ctx: ActionContext, command: MenuCommand): Promise<void> {
+/**
+ * What a menu bar item does: the same actions as the title menu, and the 布局 presets. `engine`
+ * tells final scoring whether analysis runs, to pause it.
+ */
+export function runMenuCommand(
+  ctx: ActionContext,
+  command: MenuCommand,
+  engine: EngineStore,
+): Promise<void> {
   if (typeof command === 'object' && 'layout' in command) {
     const id = PRESET_IDS.find((preset) => preset === command.layout);
     if (id) setLayout(presetLayout(id));
@@ -186,8 +194,7 @@ export function runMenuCommand(ctx: ActionContext, command: MenuCommand): Promis
     case 'clearGame':
       return clearAnalysis(ctx, 'game');
     case 'finalScoring':
-      useScoringStore.getState().start();
-      return Promise.resolve();
+      return useScoringStore.getState().start({ transport: ctx.transport, engine });
     case 'estimate':
       useEstimateStore.getState().toggle();
       return Promise.resolve();

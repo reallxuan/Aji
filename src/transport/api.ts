@@ -233,6 +233,6 @@ export async function getCacheStats(transport: Transport): Promise<CacheStats> {
 /** KataGo's estimate, or the final count with `dead` removed, for the position on the board. */
 export async function scoreGame(transport: Transport, mode: ScoreMode): Promise<ScoreView> {
   const r = await expectType(transport, { type: 'gameScore', mode }, 'score');
-  const { black, white, komi, margin, owners, suggestedDead } = r;
-  return { black, white, komi, margin, owners, suggestedDead };
+  const { black, white, komi, margin, owners, openByOwnership, suggestedDead } = r;
+  return { black, white, komi, margin, owners, openByOwnership, suggestedDead };
 }

@@ -14,4 +14,9 @@ margin: number,
 /**
  * Each point's owner, row by row, after dead stones are removed.
  */
-owners: Array<Color | null>, };
+owners: Array<Color | null>, 
+/**
+ * Final scoring gave some point of an open region (one touching both colours) to a side by
+ * KataGo's ownership: the game was not played out.
+ */
+openByOwnership: boolean, };

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useDeviceStore } from '../device/deviceStore';
 import { useTranslation } from 'react-i18next';
 import { runMenuCommand } from '../game/actions';
+import { useEngineStoreApi } from '../engine/engineStore';
 import { useTransport } from '../transport/TransportProvider';
 import { usePlatformFiles } from './PlatformProvider';
 
@@ -12,6 +13,7 @@ import { usePlatformFiles } from './PlatformProvider';
 export function usePlatformSync(): void {
   const files = usePlatformFiles();
   const transport = useTransport();
+  const engine = useEngineStoreApi();
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'zh-CN' ? 'zh-CN' : 'en';
 
@@ -27,7 +29,7 @@ export function usePlatformSync(): void {
   }, [files, loaded, alwaysOnTop]);
 
   useEffect(
-    () => files.onMenu((command) => void runMenuCommand({ transport, files, t }, command)),
-    [files, transport, t],
+    () => files.onMenu((command) => void runMenuCommand({ transport, files, t }, command, engine)),
+    [files, transport, t, engine],
   );
 }

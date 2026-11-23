@@ -6,7 +6,7 @@ import { useVariation } from '../analysis/useVariation';
 import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
-import { settledOwnership } from '../board/ownership';
+import { scoredOwnership, settledOwnership } from '../board/ownership';
 import { useBoardStyle } from '../board/useBoardStyle';
 import { useEstimateStore } from '../analysis/estimateStore';
 import { stepLineOrGame, useWheelNavigation } from '../board/useWheelNavigation';
@@ -14,7 +14,11 @@ import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useFrameNavigate } from '../game/useFrameNavigate';
+import { useScoringStore } from '../scoring/scoringStore';
+import { useScoringSync } from '../scoring/useScoringSync';
 import type { Move } from '../transport/generated/Move';
+import type { Point } from '../transport/generated/Point';
+import { useTransport } from '../transport/TransportProvider';
 import type { Rect } from './frameGeometry';
 import type { Layout } from './model';
 
@@ -43,15 +47,21 @@ export function MainBoard({
   const coordinates = useDeviceStore((s) => s.settings.showCoordinates);
   const style = useBoardStyle();
   useVariation();
+  useScoringSync();
+  const transport = useTransport();
+  // Final scoring (design 5.8): no discs and no lines, the count's squares, taps flip groups.
+  const scoring = useScoringStore((s) => s.active);
+  const score = useScoringStore((s) => s.score);
+  const dead = useScoringStore((s) => s.dead);
   const variation = useViewStore((s) => s.variation);
   const step = useViewStore((s) => s.step);
   const hoveredCandidate = useViewStore((s) => (s.hover?.source === 'board' ? s.hover.move : null));
   const line = useMemo(
     () =>
-      lines === 'board' && variation && snapshot && step !== null
+      lines === 'board' && !scoring && variation && snapshot && step !== null
         ? variationBoard(snapshot.stones, snapshot.size, variation, step)
         : null,
-    [lines, variation, snapshot, step],
+    [lines, scoring, variation, snapshot, step],
   );
   const onHoverCandidate = useCallback((move: Move | null) => {
     const { hover, setHover } = useViewStore.getState();
@@ -69,20 +79,24 @@ export function MainBoard({
     }
   }, []);
   const showNext = useSettingsStore((s) => s.settings?.showNextMove ?? true);
-  const discs = hidden ? NO_DISCS : shown;
+  const discs = hidden || scoring ? NO_DISCS : shown;
   const nextMove = snapshot?.nextMove ?? null;
   const nextRing = useMemo(
-    () => nextRingPoint(nextMove, showNext, discs, line !== null),
-    [nextMove, showNext, discs, line],
+    () => (scoring ? null : nextRingPoint(nextMove, showNext, discs, line !== null)),
+    [scoring, nextMove, showNext, discs, line],
   );
   // 形势判断: the settled points of the position on the board, not of a hovered line (5.7).
   const estimate = useEstimateStore((s) => s.on);
-  const ownership = useMemo(
-    () =>
-      estimate && current?.ownership && snapshot && !line
-        ? settledOwnership(current.ownership, snapshot.stones)
-        : null,
-    [estimate, current, snapshot, line],
+  const ownership = useMemo(() => {
+    if (scoring)
+      return score && snapshot ? scoredOwnership(score.owners, snapshot.stones, dead) : null;
+    return estimate && current?.ownership && snapshot && !line
+      ? settledOwnership(current.ownership, snapshot.stones)
+      : null;
+  }, [scoring, score, dead, estimate, current, snapshot, line]);
+  const onTapPoint = useCallback(
+    (point: Point) => void useScoringStore.getState().toggle(transport, point),
+    [transport],
   );
   const go = useFrameNavigate();
   const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
@@ -112,6 +126,7 @@ export function MainBoard({
         catchingUp={fading}
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}
+        onTapPoint={scoring ? onTapPoint : undefined}
         onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
         variation={line}

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Color } from '../transport/generated/Color';
 import { domCanvas } from './canvasFactory';
 import { boardGeometry } from './geometry';
-import { drawOwnership, OWNER_FILL, OWNER_SQUARE, settledOwnership } from './ownership';
+import {
+  drawOwnership,
+  OWNER_FILL,
+  OWNER_SQUARE,
+  scoredOwnership,
+  settledOwnership,
+} from './ownership';
 import { drawStones, makeStoneSprites } from './stones';
 
 type Event = { type: string; props: Record<string, unknown> };
@@ -28,6 +34,19 @@ describe('settledOwnership', () => {
     expect(owners.slice(5).every((o) => o === null)).toBe(true);
     // The black stone on White's settled point is dead.
     expect(dead).toEqual([{ x: 3, y: 0 }]);
+  });
+});
+
+describe('scoredOwnership', () => {
+  it('squares every owned point but the living stones, and fades the dead', () => {
+    // A 2×2 corner: a living black stone, a dead white one, an empty point each way.
+    const stones: (Color | null)[] = ['black', 'white', null, null];
+    const owners: (Color | null)[] = ['black', 'black', 'black', null];
+    const dead = [{ x: 1, y: 0 }];
+    expect(scoredOwnership(owners, stones, dead)).toEqual({
+      owners: [null, 'black', 'black', null],
+      dead,
+    });
   });
 });
 

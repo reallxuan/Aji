@@ -7,7 +7,7 @@ import { createEngineStore, EngineStoreProvider, type EngineStore } from '../eng
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
 import { createI18n } from '../i18n/createI18n';
-import { useScoringStore } from '../scoring/scoringStore';
+import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { createFakeTransport } from '../transport/fake';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
@@ -23,7 +23,7 @@ afterEach(() => {
   resetGameStore();
   resetEstimateStore();
   resetTrendStore();
-  useScoringStore.getState().exit();
+  resetScoringStore();
 });
 
 const KEY = 'efefefefefefefef';
@@ -34,6 +34,7 @@ const SCORE: ScoreView = {
   komi: 7.5,
   margin: 1.5,
   owners: [],
+  openByOwnership: false,
   suggestedDead: [],
 };
 

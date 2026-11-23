@@ -605,6 +605,7 @@ mod tests {
         let score = aji_core::game::final_score(
             &board,
             &[],
+            None,
             aji_core::ScoringRule::Area,
             aji_core::Komi::new(7.5).unwrap(),
             (0, 0),
@@ -618,6 +619,7 @@ mod tests {
         assert_eq!(value["margin"], json!(-7.5));
         assert_eq!(value["suggestedDead"], json!([{"x": 1, "y": 2}]));
         assert_eq!(value["black"]["stones"], json!(0));
+        assert_eq!(value["openByOwnership"], json!(false));
     }
 
     #[test]

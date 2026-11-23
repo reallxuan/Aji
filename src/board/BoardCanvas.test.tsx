@@ -205,6 +205,36 @@ describe('BoardCanvas candidates', () => {
     expect(onHover.mock.calls).toEqual([[corner.move]]);
   });
 
+  it('reports the point clicked or tapped while points are asked for, and no candidate', () => {
+    stubRatio(1);
+    const onTapPoint = vi.fn();
+    const onTapCandidate = vi.fn();
+    const { container } = render(
+      <BoardCanvas
+        cssSize={400}
+        boardSize={19}
+        stones={empty(19)}
+        lastMove={null}
+        candidates={[best]}
+        onTapCandidate={onTapCandidate}
+        onTapPoint={onTapPoint}
+      />,
+    );
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19);
+    // Within half a spacing of D16's lines (x 3, y 3), where a disc also sits.
+    fireEvent.click(area, { clientX: g.lines[3] + g.spacing * 0.4, clientY: g.lines[3] });
+    // Off the grid, in the coordinates' margin: nothing.
+    fireEvent.click(area, { clientX: 1, clientY: 1 });
+    const touch = { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0 };
+    fireEvent.pointerDown(area, { ...touch, clientX: g.lines[18], clientY: g.lines[0] });
+    fireEvent.pointerUp(area, { ...touch, clientX: g.lines[18], clientY: g.lines[0] });
+    // The click a browser sends after the tap is not a second one.
+    fireEvent.click(area, { clientX: g.lines[18], clientY: g.lines[0] });
+    expect(onTapPoint.mock.calls).toEqual([[{ x: 3, y: 3 }], [{ x: 18, y: 0 }]]);
+    expect(onTapCandidate).not.toHaveBeenCalled();
+  });
+
   it('a reorder under a still pointer is not a new hover', () => {
     stubRatio(1);
     const onHover = vi.fn();

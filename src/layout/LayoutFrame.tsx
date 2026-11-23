@@ -1,7 +1,9 @@
 import { cn } from 'cn';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabRow } from '../panel/TabRow';
+import { scoringLayout } from '../scoring/scoringLayout';
+import { useScoringStore } from '../scoring/scoringStore';
 import { FIXED_HEIGHT, HAIRLINE_HIT, HAIRLINE_HIT_COARSE } from './constants';
 import { layoutFrame, minWidth } from './frameGeometry';
 import { Hairline } from './Hairline';
@@ -9,7 +11,7 @@ import { MainBoard } from './MainBoard';
 import { type Node, panelsOf, refId } from './model';
 import { evenSplit, movePanel, resize, selectTab } from './ops';
 import { NarrowFrame } from './NarrowFrame';
-import { type Actions, PanelView } from './PanelView';
+import { type Actions, PanelView, STILL } from './PanelView';
 import { panelLabelKey, panelMinSize } from './registry';
 import { useCoarsePointer } from './useCoarsePointer';
 import { useDragPanel } from './useDragPanel';
@@ -112,7 +114,10 @@ export function LayoutFrame({
 }) {
   const { t } = useTranslation();
   const { width, height } = useWindowSize();
-  const { layout, setLayout } = useLayout();
+  const { layout: stored, setLayout } = useLayout();
+  // While scoring the count takes the bar's place and the graph's (design 5.8), drawn only.
+  const scoring = useScoringStore((s) => s.active);
+  const layout = useMemo(() => (scoring ? scoringLayout(stored) : stored), [scoring, stored]);
   const headerColumn = layout.root.children.findIndex((c) =>
     panelsOf(c).some((p) => p.kind === 'header'),
   );
@@ -173,12 +178,13 @@ export function LayoutFrame({
             {side && column.index === headerColumn ? (
               side
             ) : (
-              <NodeView node={node} path={[column.index]} actions={actions} />
+              <NodeView node={node} path={[column.index]} actions={scoring ? STILL : actions} />
             )}
           </aside>
         );
       })}
       {!side &&
+        !scoring &&
         frame.hairlines.map((line) => {
           const [a, b] = [line.index, line.index + 1].map((index) =>
             frame.columns.find((c) => c.index === index)!,

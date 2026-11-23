@@ -10,7 +10,7 @@ import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from 
 import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
-import { boardGeometry } from './geometry';
+import { boardGeometry, pointAt } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
@@ -53,6 +53,11 @@ export interface BoardCanvasProps {
   nextRing?: Point | null;
   /** The position estimate's settled points and dead stones (P2 M2 design 5.7); none when off. */
   ownership?: Settled | null;
+  /**
+   * A click or tap on an intersection, while the board asks for points (final scoring, P2 M2
+   * design 5.8); a tap then goes here and never to a candidate.
+   */
+  onTapPoint?(point: Point): void;
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
@@ -87,6 +92,7 @@ export function BoardCanvas({
   onSwipeStep,
   nextRing = null,
   ownership = null,
+  onTapPoint,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -182,11 +188,23 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
+  const tapPoint = (x: number, y: number) => {
+    const point = pointAt(x, y, { cssSize, boardSize, coordinates });
+    if (point) onTapPoint?.(point);
+  };
   const gestures = useBoardGestures({
     tap: (x, y) =>
-      onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
+      onTapPoint
+        ? tapPoint(x, y)
+        : onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
     step: (forward) => onSwipeStep?.(forward),
   });
+  const onClick = (event: MouseEvent<HTMLDivElement>) => {
+    // A tap has already been handled; the click a browser sends after it is its echo.
+    if (!onTapPoint || gestures.afterTouch()) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    tapPoint(event.clientX - box.left, event.clientY - box.top);
+  };
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     // A browser follows a tap with mouse events; the hover is the mouse's alone.
     if (gestures.afterTouch()) return;
@@ -205,6 +223,7 @@ export function BoardCanvas({
       style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => !gestures.afterTouch() && hover(null)}
+      onClick={onClick}
       {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />

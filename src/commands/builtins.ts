@@ -66,7 +66,13 @@ export const BUILTINS: Command[] = [
   press('analysis.stopGame', (ctx) => void stopGameJob(ctx.actions)),
   press('analysis.clearPosition', (ctx) => void clearAnalysis(ctx.actions, 'position')),
   press('analysis.clearGame', (ctx) => void clearAnalysis(ctx.actions, 'game')),
-  press('scoring.start', () => useScoringStore.getState().start()),
+  press(
+    'scoring.start',
+    (ctx) =>
+      void useScoringStore
+        .getState()
+        .start({ transport: ctx.actions.transport, engine: ctx.engine }),
+  ),
   press('estimate.toggle', () => useEstimateStore.getState().toggle()),
   press('candidates.toggleHidden', () => useViewStore.getState().toggleHidden(), {
     scope: 'always',
