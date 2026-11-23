@@ -35,6 +35,7 @@ import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
 import { LayoutSettings } from '../layout/LayoutMenu';
 import { BoardStyleControl } from './BoardStyleControl';
+import { CacheRow } from './CacheRow';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
 import { SETTINGS_LABEL, SETTINGS_ROW } from './rowClasses';
@@ -131,6 +132,12 @@ export function SettingsPanel() {
     ['off', t('settings.alwaysOnTop.off')],
   ];
   const onTop = device.alwaysOnTop ? 'on' : 'off';
+  const onOff: Array<['on' | 'off', string]> = [
+    ['on', t('settings.analyseOnOpen.on')],
+    ['off', t('settings.analyseOnOpen.off')],
+  ];
+  const onOpen = settings.analyseOnOpen ? 'on' : 'off';
+  const writeAnalysis = settings.saveAnalysis ? 'on' : 'off';
   const nextMove = settings.showNextMove ? 'show' : 'hide';
   const nextMoveOptions: Array<['show' | 'hide', string]> = [
     ['show', t('settings.nextMove.show')],
@@ -255,6 +262,39 @@ export function SettingsPanel() {
               options={nextMoveOptions}
             />
           </Row>
+          <Row
+            label={t('settings.analyseOnOpen.title')}
+            sub={t('settings.analyseOnOpen.sub')}
+            note={failedNote(FIELD.analyseOnOpen)}
+          >
+            <Choice
+              label={t('settings.analyseOnOpen.title')}
+              value={onOpen}
+              disabled={!loaded}
+              onChange={(choice) => save({ analyseOnOpen: choice === 'on' })}
+              options={onOff}
+            />
+          </Row>
+          <CacheRow
+            transport={transport}
+            capMb={settings.cacheCapMb}
+            disabled={!loaded}
+            onCap={(cacheCapMb) => save({ cacheCapMb })}
+          />
+          {failedNote(FIELD.cacheCapMb)}
+          <Row
+            label={t('settings.saveAnalysis.title')}
+            sub={t('settings.saveAnalysis.sub')}
+            note={failedNote(FIELD.saveAnalysis)}
+          >
+            <Choice
+              label={t('settings.saveAnalysis.title')}
+              value={writeAnalysis}
+              disabled={!loaded}
+              onChange={(choice) => save({ saveAnalysis: choice === 'on' })}
+              options={onOff}
+            />
+          </Row>
           <Row label={t('settings.lead.title')}>
             <Choice
               label={t('settings.lead.title')}
@@ -313,6 +353,9 @@ const FIELD = {
   defaultRules: 'defaultRules',
   visitLimit: 'visitLimit',
   showNextMove: 'showNextMove',
+  analyseOnOpen: 'analyseOnOpen',
+  cacheCapMb: 'cacheCapMb',
+  saveAnalysis: 'saveAnalysis',
 } as const satisfies Record<string, keyof UiSettings>;
 
 /** How long 保存失败 stays beside a control. */
@@ -329,17 +372,27 @@ function SaveFailed() {
 
 function Row({
   label,
+  sub,
   note,
   children,
 }: {
   label: string;
+  /** A line under the label saying what the setting does. */
+  sub?: string;
   /** Said after the control: a failed save. */
   note?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className={SETTINGS_ROW}>
-      <span className={SETTINGS_LABEL}>{label}</span>
+      {sub ? (
+        <span className={SETTINGS_LABEL}>
+          {label}
+          <span className="mt-0.5 block text-[0.75rem] text-text-muted">{sub}</span>
+        </span>
+      ) : (
+        <span className={SETTINGS_LABEL}>{label}</span>
+      )}
       {children}
       {note}
     </div>

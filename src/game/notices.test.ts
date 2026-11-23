@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createI18n } from '../i18n/createI18n';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import { TransportError } from '../transport/transport';
-import { errorNotice, warningNotice } from './notices';
+import { cacheNotice, errorNotice, warningNotice } from './notices';
 import { makeSnapshot } from './testing';
 
 const zh = createI18n('zh-CN').t;
@@ -105,5 +105,22 @@ describe('warning notices', () => {
 
   it('are nothing without warnings', () => {
     expect(warningNotice([], at183, zh)).toBeNull();
+  });
+});
+
+describe('the cache notice', () => {
+  const t = createI18n('zh-CN').t;
+  const stats = { usedBytes: 0, capBytes: 1024 ** 3, persistent: true, reason: null };
+
+  it('says nothing while the cache file is in use', () => {
+    expect(cacheNotice(stats, t)).toBeNull();
+  });
+
+  it('says results are not kept when the file cannot be used', () => {
+    expect(cacheNotice({ ...stats, persistent: false, reason: 'disk I/O error' }, t)).toEqual({
+      kind: 'warning',
+      title: '分析结果不会保留',
+      detail: '缓存文件无法使用，结果只保留到 Aji 退出。',
+    });
   });
 });

@@ -394,6 +394,30 @@
       "title": "Always on top",
       "on": "On",
       "off": "Off"
+    },
+    "analyseOnOpen": {
+      "title": "Analyse the whole game on open",
+      "sub": "In the background, with the last choices.",
+      "on": "On",
+      "off": "Off"
+    },
+    "saveAnalysis": {
+      "title": "Write analysis when saving",
+      "sub": "Save As keeps them, in LizzieYzy's format.",
+      "on": "On",
+      "off": "Off"
+    },
+    "cache": {
+      "title": "Analysis cache",
+      "used": "{{used}} used of {{cap}}. When it is full, the positions looked at longest ago go first.",
+      "cap": "Cache limit",
+      "clear": "Clear…",
+      "memoryOnly": "The cache file can't be used, so results last only until Aji quits.",
+      "reason": "Reason: {{reason}}",
+      "confirmTitle": "Clear all analysis results?",
+      "confirmBody": "Every game's results are deleted. This can't be undone.",
+      "confirm": "Clear",
+      "failed": "Couldn't clear the analysis results"
     }
   },
   "game": {
@@ -432,7 +456,11 @@
     },
     "dropHere": "Release to open the record",
     "jobFailed": "Couldn't start the game analysis",
-    "clearFailed": "Couldn't clear the analysis"
+    "clearFailed": "Couldn't clear the analysis",
+    "cacheMemoryOnly": {
+      "title": "Analysis results aren't being kept",
+      "detail": "The cache file can't be used, so results last only until Aji quits."
+    }
   },
   "rules": {
     "title": "Analysis rules",

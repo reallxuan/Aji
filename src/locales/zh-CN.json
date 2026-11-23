@@ -394,6 +394,30 @@
       "title": "总在最前",
       "on": "开",
       "off": "关"
+    },
+    "analyseOnOpen": {
+      "title": "打开棋谱时分析全局",
+      "sub": "按上次的选择在后台进行。",
+      "on": "开",
+      "off": "关"
+    },
+    "saveAnalysis": {
+      "title": "保存时写入分析结果",
+      "sub": "另存为时写进棋谱，LizzieYzy 能读。",
+      "on": "开",
+      "off": "关"
+    },
+    "cache": {
+      "title": "分析缓存",
+      "used": "已用 {{used}}，上限 {{cap}}。满了以后先删最久没看过的局面。",
+      "cap": "缓存上限",
+      "clear": "清除…",
+      "memoryOnly": "缓存文件无法使用，结果只保留到 Aji 退出。",
+      "reason": "原因：{{reason}}",
+      "confirmTitle": "清除全部分析结果？",
+      "confirmBody": "所有棋局的分析结果都会删除，无法恢复。",
+      "confirm": "清除",
+      "failed": "无法清除分析结果"
     }
   },
   "game": {
@@ -432,7 +456,11 @@
     },
     "dropHere": "松开以打开棋谱",
     "jobFailed": "无法开始全局分析",
-    "clearFailed": "无法清除分析结果"
+    "clearFailed": "无法清除分析结果",
+    "cacheMemoryOnly": {
+      "title": "分析结果不会保留",
+      "detail": "缓存文件无法使用，结果只保留到 Aji 退出。"
+    }
   },
   "rules": {
     "title": "分析规则",
