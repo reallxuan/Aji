@@ -411,7 +411,9 @@
         "detail": "已按新棋局默认规则分析，可点击规则标签更改。"
       }
     },
-    "dropHere": "松开以打开棋谱"
+    "dropHere": "松开以打开棋谱",
+    "jobFailed": "无法开始全局分析",
+    "clearFailed": "无法清除分析结果"
   },
   "rules": {
     "title": "分析规则",
@@ -474,7 +476,13 @@
     "saveAs": "另存为…",
     "today": "今天",
     "yesterday": "昨天",
-    "view": "视图"
+    "view": "视图",
+    "analyseGame": "分析全局…",
+    "clearAnalysis": "清除分析结果",
+    "clearPosition": "本局面",
+    "clearGame": "整局",
+    "finalScoring": "终局点目",
+    "estimate": "形势判断"
   },
   "layout": {
     "panels": {
@@ -521,11 +529,21 @@
       "new19": "新建 19 路棋局"
     },
     "analysis": {
-      "toggle": "暂停或继续分析"
+      "toggle": "暂停或继续分析",
+      "game": "分析全局",
+      "stopGame": "停止全局分析",
+      "clearPosition": "清除本局面的分析结果",
+      "clearGame": "清除整局的分析结果"
     },
     "candidates": {
       "toggleHidden": "显示或隐藏候选",
       "peek": "按住时隐藏候选"
+    },
+    "scoring": {
+      "start": "终局点目"
+    },
+    "estimate": {
+      "toggle": "显示或隐藏形势判断"
     }
   },
   "screenshot": {
@@ -540,5 +558,44 @@
     "copyFailed": "无法复制",
     "saveFailed": "截图未能保存",
     "notShown": "{{target}}不在屏幕上"
+  },
+  "job": {
+    "title": "分析全局",
+    "range": "范围",
+    "whole": "整局",
+    "moves": "一段",
+    "fromLabel": "起始手数",
+    "toLabel": "结束手数",
+    "side": "分析",
+    "both": "双方",
+    "black": "只黑",
+    "white": "只白",
+    "visits": "每手计算量",
+    "boost": "波动时加强",
+    "thresholdLabel": "加强阈值",
+    "boostVisitsLabel": "加强计算量",
+    "estimate": {
+      "cached_one": "已有 {{count}} 个局面有结果，会跳过。",
+      "cached_other": "已有 {{count}} 个局面有结果，会跳过。",
+      "allCached_one": "{{count}} 个局面都已有结果",
+      "allCached_other": "{{count}} 个局面都已有结果",
+      "boostOnly": "，只做加强",
+      "rest": "其余 {{count}} 个",
+      "all_one": "共 {{count}} 个局面",
+      "all_other": "共 {{count}} 个局面",
+      "black_one": "只分析黑棋的 {{count}} 手",
+      "black_other": "只分析黑棋的 {{count}} 手",
+      "white_one": "只分析白棋的 {{count}} 手",
+      "white_other": "只分析白棋的 {{count}} 手",
+      "minutes": "，约需 {{count}} 分钟",
+      "underMinute": "，不到 1 分钟",
+      "boost": "，加强另计",
+      "end": "。"
+    },
+    "browse": "分析时可以照常浏览，当前局面总是先算。",
+    "cancel": "取消",
+    "start": "开始",
+    "rangeLine": "第 <from/> 到 <to/> 手",
+    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
   }
 }

@@ -1,7 +1,10 @@
+import { useEstimateStore } from '../analysis/estimateStore';
 import { useViewStore } from '../analysis/viewStore';
 import { openFromPicker, saveAs, startNewGame } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
+import { clearAnalysis, openJobPanel, stopGameJob } from '../job/actions';
 import { useJobStore } from '../job/jobStore';
+import { useScoringStore } from '../scoring/scoringStore';
 import { engineAction, runEngineAction } from '../engine/engineAction';
 import type { NavTarget } from '../transport/generated/NavTarget';
 import type { Command, CommandContext, CommandId } from './registry';
@@ -58,6 +61,13 @@ export const BUILTINS: Command[] = [
     },
     { scope: 'always' },
   ),
+  // P2 M2 design 5.10: the whole-game job, the cache, final scoring and the estimate.
+  press('analysis.game', () => openJobPanel()),
+  press('analysis.stopGame', (ctx) => void stopGameJob(ctx.actions)),
+  press('analysis.clearPosition', (ctx) => void clearAnalysis(ctx.actions, 'position')),
+  press('analysis.clearGame', (ctx) => void clearAnalysis(ctx.actions, 'game')),
+  press('scoring.start', () => useScoringStore.getState().start()),
+  press('estimate.toggle', () => useEstimateStore.getState().toggle()),
   press('candidates.toggleHidden', () => useViewStore.getState().toggleHidden(), {
     scope: 'always',
   }),

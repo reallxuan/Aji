@@ -34,6 +34,7 @@ const BOARD: Array<[string, CommandId]> = [
   ['Space', 'analysis.toggle'],
   ['F', 'candidates.toggleHidden'],
   ['Z', 'candidates.peek'],
+  ['T', 'estimate.toggle'],
 ];
 
 const FILE: Array<[string, CommandId]> = [
@@ -44,7 +45,8 @@ const FILE: Array<[string, CommandId]> = [
 
 /**
  * The keys out of the box (P2 M1 design 5.11). On macOS, and until the system is known, the file
- * chords are left out: the native menu bar owns ⌘O, ⇧⌘S and ⌘N.
+ * chords are left out: the native menu bar owns ⌘O, ⇧⌘S and ⌘N, and ⇧⌘A (分析全局…, P2 M2).
+ * Elsewhere 分析全局… has no key.
  */
 export function defaultKeymap(os: OsKind | null): Map<string, CommandId> {
   return new Map(os === null || os === 'macos' ? BOARD : [...BOARD, ...FILE]);

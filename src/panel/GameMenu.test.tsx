@@ -99,3 +99,47 @@ it('does not reopen on ↓ right after choosing an item', async () => {
   });
   expect(screen.queryByRole('menu')).toBeNull();
 });
+
+it('game menu has the m2 items in order', async () => {
+  const { requests } = renderWithGame(<GameMenu />, {
+    snapshot: makeSnapshot({ hasMoves: true }),
+    answer: (request) => (request.type === 'cacheClear' ? { type: 'ok' } : undefined),
+  });
+  await act(async () => {});
+  const menu = await openMenu('未命名棋局');
+  const names = within(menu)
+    .getAllByRole('menuitem')
+    .map((item) => item.textContent);
+  expect(names).toEqual(
+    ['新建棋局', '打开棋谱…', '打开最近', '另存为…', '分析全局…', '清除分析结果', '终局点目'].map(
+      (name) => expect.stringMatching(new RegExp(`^${name}`)),
+    ),
+  );
+  const clear = await openSub(menu, '清除分析结果');
+  expect(
+    within(clear)
+      .getAllByRole('menuitem')
+      .map((i) => i.textContent),
+  ).toEqual(['本局面', '整局']);
+  await act(async () => {
+    fireEvent.click(within(clear).getByRole('menuitem', { name: '整局' }));
+  });
+  expect(requests).toContainEqual({ type: 'cacheClear', scope: 'game' });
+});
+
+it('analyse game opens its panel under the title, with 开始 focused', async () => {
+  const { useJobPanelStore } = await import('../job/jobPanelStore');
+  renderWithGame(<GameMenu />, { snapshot: makeSnapshot({ hasMoves: true }) });
+  await act(async () => {});
+  const menu = await openMenu('未命名棋局');
+  await act(async () => {
+    fireEvent.click(within(menu).getByRole('menuitem', { name: '分析全局…' }));
+  });
+  const start = screen.getByRole('button', { name: '开始' });
+  expect(start).toHaveFocus();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+  });
+  expect(screen.queryByRole('button', { name: '开始' })).toBeNull();
+  expect(useJobPanelStore.getState().open).toBe(false);
+});

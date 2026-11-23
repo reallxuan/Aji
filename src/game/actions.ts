@@ -20,6 +20,9 @@ import { fileNameFor, gameTitle } from './title';
 import { PRESET_IDS, presetLayout } from '../layout/presets';
 import { setLayout } from '../layout/useLayout';
 import { shotFromMenu } from '../panel/screenshots';
+import { useEstimateStore } from '../analysis/estimateStore';
+import { clearAnalysis, openJobPanel, stopGameJob } from '../job/actions';
+import { useScoringStore } from '../scoring/scoringStore';
 
 export interface ActionContext {
   transport: Transport;
@@ -173,5 +176,20 @@ export function runMenuCommand(ctx: ActionContext, command: MenuCommand): Promis
       return saveAs(ctx);
     case 'clearRecent':
       return ctx.files.clearRecent().catch(() => {});
+    case 'analyseGame':
+      openJobPanel();
+      return Promise.resolve();
+    case 'stopGame':
+      return stopGameJob(ctx);
+    case 'clearPosition':
+      return clearAnalysis(ctx, 'position');
+    case 'clearGame':
+      return clearAnalysis(ctx, 'game');
+    case 'finalScoring':
+      useScoringStore.getState().start();
+      return Promise.resolve();
+    case 'estimate':
+      useEstimateStore.getState().toggle();
+      return Promise.resolve();
   }
 }

@@ -411,7 +411,9 @@
         "detail": "Analysing with the default rules for new games; change them from the rules chip."
       }
     },
-    "dropHere": "Release to open the record"
+    "dropHere": "Release to open the record",
+    "jobFailed": "Couldn't start the game analysis",
+    "clearFailed": "Couldn't clear the analysis"
   },
   "rules": {
     "title": "Analysis rules",
@@ -474,7 +476,13 @@
     "saveAs": "Save As…",
     "today": "Today",
     "yesterday": "Yesterday",
-    "view": "View"
+    "view": "View",
+    "analyseGame": "Analyse Game…",
+    "clearAnalysis": "Clear Analysis",
+    "clearPosition": "This Position",
+    "clearGame": "Whole Game",
+    "finalScoring": "Final Scoring",
+    "estimate": "Position Estimate"
   },
   "layout": {
     "panels": {
@@ -521,11 +529,21 @@
       "new19": "New 19×19 game"
     },
     "analysis": {
-      "toggle": "Pause or resume analysis"
+      "toggle": "Pause or resume analysis",
+      "game": "Analyse game",
+      "stopGame": "Stop game analysis",
+      "clearPosition": "Clear this position's analysis",
+      "clearGame": "Clear the game's analysis"
     },
     "candidates": {
       "toggleHidden": "Show or hide candidates",
       "peek": "Hide candidates while held"
+    },
+    "scoring": {
+      "start": "Final scoring"
+    },
+    "estimate": {
+      "toggle": "Show or hide the position estimate"
     }
   },
   "screenshot": {
@@ -540,5 +558,44 @@
     "copyFailed": "Could not copy",
     "saveFailed": "The screenshot was not saved",
     "notShown": "The {{target}} is not on screen"
+  },
+  "job": {
+    "title": "Analyse Game",
+    "range": "Range",
+    "whole": "Whole game",
+    "moves": "Moves",
+    "fromLabel": "First move",
+    "toLabel": "Last move",
+    "side": "Analyse",
+    "both": "Both",
+    "black": "Black only",
+    "white": "White only",
+    "visits": "Visits per move",
+    "boost": "Boost big swings",
+    "thresholdLabel": "Boost threshold",
+    "boostVisitsLabel": "Boost visits",
+    "estimate": {
+      "cached_one": "Skips {{count}} position that already has results. ",
+      "cached_other": "Skips {{count}} positions that already have results. ",
+      "allCached_one": "The {{count}} position already has results",
+      "allCached_other": "All {{count}} positions already have results",
+      "boostOnly": ", so only boosting runs",
+      "rest": "Analyses the other {{count}}",
+      "all_one": "Analyses {{count}} position",
+      "all_other": "Analyses {{count}} positions",
+      "black_one": "Analyses Black's {{count}} move",
+      "black_other": "Analyses Black's {{count}} moves",
+      "white_one": "Analyses White's {{count}} move",
+      "white_other": "Analyses White's {{count}} moves",
+      "minutes": " in about {{count}} min",
+      "underMinute": " in under a minute",
+      "boost": ", plus boosting",
+      "end": "."
+    },
+    "browse": "You can browse while it runs; the position on the board always goes first.",
+    "cancel": "Cancel",
+    "start": "Start",
+    "rangeLine": "From <from/> to <to/>",
+    "boostLine": "Swings over <threshold/>% get <visits/> visits"
   }
 }
