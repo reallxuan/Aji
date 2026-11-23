@@ -34,6 +34,25 @@
 - Section numbers below (5.3 and so on) refer to the design.
 - The phase plan is [Phase 2 plan](2026-11-21-phase-2-roadmap.md).
 
+**Status:** Built on 2026-11-23, except the items under Outstanding.
+- **Checks.** Every check passes on the Mac: `cargo fmt --check`, clippy with `-D warnings`, 793 Rust tests, `pnpm lint`, `pnpm typecheck`, 736 TypeScript tests in 119 files, `cargo deny check licenses`, the npm licence check, the notices test and the generated bindings. New dependency: `rusqlite` with `bundled` (MIT; SQLite is public domain).
+- **Final review.** A fresh review of the whole branch found nothing critical and three important issues; two minors were re-graded important. Each was fixed with a test that failed first and folded into the commit it corrects:
+  - under 日韩 rules the final count and the estimate gave a dead stone one point, not two (its point and the prisoner); the card, the dev scenario, the mockup and design 5.8 now count both;
+  - an imported LizzieYzy row could hide fresher analysis still on disk for the session (import now reads the stored row first and keeps the better one);
+  - the cache file never shrank after a clear or a lower cap (the store now uses incremental auto-vacuum, converting an older file once, and gives the pages back after clears and evictions);
+  - each write summed the whole table to check the cap (the store keeps a running total);
+  - a job resumed over a half-analysed game estimated "under a minute" for minutes, because positions found in the cache counted as searched (the rate now comes from searched positions only).
+- **Mac exit check** in `pnpm dev` in the browser pane: the job-running, job-done and analysing scenarios, final scoring (marking a group dead and back, 已改动, reset, leaving on navigation), the new settings rows, both themes, 375 × 812 and 768 × 1024. The app from `pnpm tauri build --bundles app` (14.25 MiB, from `5e2b36d`, not notarised) is ready for the walk.
+- **Found in `pnpm tauri dev` after the review.** No result was ever kept on disk: the engine identity read the network and config by the names KataGo's command line uses, which are relative to KataGo's working folder, so it looked in Aji's own folder, failed, and left the cache in memory. This hit the development engine and installed sets alike; the tests had used absolute paths. The identity now reads both files from the working folder (`identity_finds_files_named_relative_to_the_working_folder` failed first), folded into the commit that added it.
+- **Found when the owner counted a resigned game.** Final scoring of 第30届三星杯决赛 第2局 (白中盘胜) said 黑胜 7.5 目 while KataGo had White ahead: the flood fill only holds on a played-out game, so the open lower side counted for neither player and small regions touching only Black went to Black. Open regions now follow the position's ownership (the 0.6 rule), finished games count as before, and the card says when ownership was used (design 5.8); `scoreGame` in the interface also passes the new field on. Tests that failed first: `open_regions_follow_the_ownership`, `game_score_estimate_and_final`, `an_unfinished_game_says_open_areas_follow_katago`, `api shapes match the protocol`.
+- **For existing users.** A layout stored before M2 keeps its arrangement, so it has no 波动 tab: show it from 显示 → 布局 (the 视图 button on Windows and in the browser), or reset the layout. New devices get it beside 候选.
+- **KataGo and superko.** KataGo 1.18.2 accepts a positional-superko repeat under `tromp-taylor` and analyses it; Phase 1's design 5.1 assumed it would be rejected. The engine test now records the acceptance.
+- **Outstanding:**
+  - the owner's walk of design 10 with the real KataGo (Task 21 Step 2), including the cap evicting on a real file and final scoring against a hand count under both rule sets;
+  - the job's throughput at 500 visits with the network's name, and the gap between job positions, from the engine log (design 9);
+  - whether a cached 300-move game draws its graph in under 200 ms (design 5.9);
+  - opening a file saved with analysis in LizzieYzy itself [To verify].
+
 ## Global Constraints
 
 - **Everything from Phase 1 and P2 M1 still holds:**
