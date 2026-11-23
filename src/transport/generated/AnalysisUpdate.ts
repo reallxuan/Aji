@@ -11,4 +11,9 @@ export type AnalysisUpdate = { position: PositionKey, boardSize: number, rootVis
  * The root visits the position had in the cache when this search started: a new search
  * starts from zero, and is catching up while it has fewer (design 5.2).
  */
-previousVisits: number, };
+previousVisits: number, 
+/**
+ * KataGo's ownership, one signed byte per point row by row (`round(v × 127)`), Black's
+ * view: positive is Black's (P2 M2 design 5.2).
+ */
+ownership: Array<number> | null, };

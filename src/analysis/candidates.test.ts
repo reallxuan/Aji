@@ -13,6 +13,7 @@ const update = (rootVisits: number, previousVisits: number): AnalysisUpdate => (
   isFinal: false,
   candidates: [],
   previousVisits,
+  ownership: null,
 });
 
 it('catching up compares previous visits', () => {

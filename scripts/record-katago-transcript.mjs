@@ -1,6 +1,7 @@
 // Records real KataGo analysis sessions as JSON Lines transcripts, used as test fixtures.
 // Usage: node scripts/record-katago-transcript.mjs --katago <path> --model <path>
-//          --config <path> --out-dir <dir>
+//          --config <path> --out-dir <dir> [--only ownership]
+// `--only ownership` records analysis-ownership.jsonl alone (P2 M2), leaving the other files.
 // Each line: {"t": <seconds since spawn>, "s": "in" | "out" | "err" | "ctl", "line": "<text>"}
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -222,6 +223,46 @@ async function recordAnalysis(opts) {
   return s;
 }
 
+// Ownership, and a positional-superko repeat (P2 M2; M7 minor 11).
+async function recordOwnership(opts) {
+  const s = new Session(opts.katago, opts.model, opts.config);
+  s.send({ id: 'aji-version', action: 'query_version' });
+  await s.waitFinal('aji-version');
+  await s.waitFor('ready line', (e) => e.s === 'err' && e.line.includes(READY));
+
+  // White to move, so the recorded ownership shows whose view it is in.
+  s.send({
+    id: 'o1',
+    ...empty,
+    moves: [['B', 'Q16']],
+    maxVisits: 100,
+    includeOwnership: true,
+  });
+  await s.waitFinal('o1');
+
+  // A ko taken back after two passes recreates an earlier whole-board position: legal under
+  // simple ko (KataGo's "chinese"), a repeat under positional superko ("tromp-taylor").
+  const ko = [
+    ['B', 'E12'],
+    ['W', 'F12'],
+    ['B', 'D11'],
+    ['W', 'E11'],
+    ['B', 'E10'],
+    ['W', 'G11'],
+    ['B', 'Q4'],
+    ['W', 'F10'],
+    ['B', 'F11'],
+    ['W', 'pass'],
+    ['B', 'pass'],
+    ['W', 'E11'],
+  ];
+  s.send({ id: 'sk1', ...empty, rules: 'tromp-taylor', moves: ko, maxVisits: 10 });
+  await s.waitFinal('sk1');
+  await sleep(300);
+  await s.closeAndWait();
+  return s;
+}
+
 async function recordBadModel(opts, missingModel) {
   const s = new Session(opts.katago, missingModel, opts.config);
   await Promise.race([
@@ -261,6 +302,17 @@ async function main() {
   };
   const outDir = resolve(a['out-dir']);
   mkdirSync(outDir, { recursive: true });
+
+  if (a.only === 'ownership') {
+    const own = await recordOwnership(opts);
+    const file = join(outDir, 'analysis-ownership.jsonl');
+    own.write(file);
+    console.log(`${file}: ${statSync(file).size} bytes`);
+    for (const [id, r] of summarise(own.log)) {
+      console.log(`${id}: reports=${r.reports} final=${r.final} moveInfos=${r.moveInfos}`);
+    }
+    return;
+  }
 
   const analysis = await recordAnalysis(opts);
   const analysisFile = join(outDir, 'analysis.jsonl');

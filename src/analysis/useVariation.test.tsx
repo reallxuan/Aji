@@ -39,6 +39,7 @@ function update(engine: EngineStore, ...lines: Move[][]) {
         pv,
       })),
       previousVisits: 0,
+      ownership: null,
     },
   });
 }

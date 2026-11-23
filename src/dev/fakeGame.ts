@@ -235,6 +235,7 @@ export function fakeAnalysis(
     isFinal: false,
     candidates,
     previousVisits,
+    ownership: null,
   };
 }
 

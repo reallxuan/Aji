@@ -23,6 +23,7 @@ function update(position: string, rootVisits: number): AnalysisUpdate {
     isFinal: false,
     candidates: [],
     previousVisits: 0,
+    ownership: null,
   };
 }
 
@@ -53,6 +54,7 @@ it('keeps the latest analysis update', () => {
     isFinal: false,
     candidates: [],
     previousVisits: 0,
+    ownership: null,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   expect(store.getState().analysis).toEqual(analysis);
@@ -70,6 +72,7 @@ it('an analysis update does not block the status reply', () => {
     isFinal: false,
     candidates: [],
     previousVisits: 0,
+    ownership: null,
   };
   store.getState().applyEvent({ type: 'analysisUpdate', analysis });
   store.getState().applyStatus(status({ state: 'analysing', version: '1' }));

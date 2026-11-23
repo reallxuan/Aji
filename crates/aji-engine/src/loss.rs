@@ -123,6 +123,7 @@ mod tests {
                 })
                 .collect(),
             previous_visits: 0,
+            ownership: None,
         }
     }
 

@@ -1543,3 +1543,46 @@ async fn summaries_read_the_cache_in_order() {
 fn default_options_keep_every_candidate_katago_reports() {
     assert!(EngineOptions::default().max_candidates > 19 * 19);
 }
+
+/// The positional-superko repeat recorded in `analysis-ownership.jsonl`: a ko taken back after
+/// two passes, under Tromp-Taylor rules.
+fn superko_repeat() -> Position {
+    let mut p = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::TrompTaylor,
+        Komi::new(7.5).unwrap(),
+    );
+    let at = |s: &str| aji_core::move_from_gtp(s, BoardSize::NINETEEN).unwrap();
+    let mut color = Color::Black;
+    for s in [
+        "E12", "F12", "D11", "E11", "E10", "G11", "Q4", "F10", "F11", "pass", "pass", "E11",
+    ] {
+        p.moves.push((color, at(s)));
+        color = color.opponent();
+    }
+    p
+}
+
+#[tokio::test]
+async fn real_katago_accepts_a_superko_repeat_as_recorded() {
+    // M7 minor 11: KataGo 1.18.2's analysis engine analyses a positional-superko repeat rather
+    // than refusing it, so Aji shows its analysis and reports no rejection.
+    let mut p = start(Some(files("ownership")), superko_repeat());
+    let seen = p.until_final().await;
+    assert!(rejections(&seen).is_empty(), "{seen:?}");
+    let fin = updates(&seen).into_iter().last().unwrap().clone();
+    assert_eq!(fin.position, superko_repeat().key());
+    assert!(!fin.candidates.is_empty());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn engine_updates_carry_ownership() {
+    let mut p = start(Some(files("ownership")), position(&[(Color::Black, 15, 3)]));
+    let seen = p.until_final().await;
+    let fin = updates(&seen).into_iter().last().unwrap().clone();
+    let own = fin.ownership.expect("ownership");
+    assert_eq!(own.len(), 361);
+    assert!(own[3 * 19 + 15] > 76, "Black's Q16 is Black's");
+    bounded(p.engine.shutdown()).await;
+}

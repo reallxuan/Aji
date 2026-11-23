@@ -103,6 +103,7 @@ mod tests {
             is_final,
             candidates: vec![],
             previous_visits: 0,
+            ownership: None,
         }
     }
 

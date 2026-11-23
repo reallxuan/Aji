@@ -56,6 +56,7 @@ function analysis(overrides: Partial<AnalysisUpdate> = {}): AnalysisUpdate {
     isFinal: false,
     candidates: CANDIDATES,
     previousVisits: 0,
+    ownership: null,
     ...overrides,
   };
 }

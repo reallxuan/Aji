@@ -81,6 +81,7 @@ export function subBoardHarness() {
           isFinal: false,
           candidates,
           previousVisits: 0,
+          ownership: null,
         },
       }),
     );

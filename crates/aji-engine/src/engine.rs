@@ -1208,7 +1208,8 @@ impl Actor {
             &id,
             &self.position,
             self.limit_for(key),
-            self.options.report_every,
+            Some(self.options.report_every),
+            true,
         ) else {
             return;
         };

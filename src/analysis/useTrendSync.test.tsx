@@ -50,6 +50,7 @@ const update = (i: number, visits = 100): AnalysisUpdate => ({
   isFinal: false,
   candidates: [],
   previousVisits: 0,
+  ownership: null,
 });
 
 function mount(trend: () => TrendNode[]) {

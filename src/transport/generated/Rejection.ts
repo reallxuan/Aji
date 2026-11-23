@@ -2,7 +2,8 @@
 import type { PositionKey } from "./PositionKey";
 
 /**
- * KataGo refused to analyse a position, for example a superko repeat (design 5.1).
+ * KataGo refused to analyse a position, for example an illegal move (design 5.1). (KataGo
+ * 1.18.2 analyses a positional-superko repeat instead: see `analysis-ownership.jsonl`.)
  */
 export type Rejection = { position: PositionKey, 
 /**

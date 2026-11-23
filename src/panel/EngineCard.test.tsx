@@ -70,6 +70,7 @@ function mount(
         isFinal: false,
         candidates: [],
         previousVisits: 0,
+        ownership: null,
       },
     });
   }

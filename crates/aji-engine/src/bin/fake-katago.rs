@@ -54,6 +54,11 @@ struct Scenario {
     failure: Option<Failure>,
     /// Prints nothing and never exits.
     hang: bool,
+    /// Answers any position that has no recorded query, with made-up but deterministic
+    /// numbers (P2 M2's whole-game tests).
+    synthesize: bool,
+    /// The search speed of synthetic answers.
+    visits_per_second: f64,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +108,8 @@ impl Default for Scenario {
             benchmark: None,
             failure: None,
             hang: false,
+            synthesize: false,
+            visits_per_second: 2000.0,
         }
     }
 }
@@ -362,6 +369,7 @@ struct Shared {
 
 struct Config {
     speed: f64,
+    visits_per_second: f64,
     crash_after_reports: Option<u64>,
     crash_stderr_lines: u64,
     stall_after_reports: Option<u64>,
@@ -446,6 +454,157 @@ fn start_replay(
             .is_some_and(|r| r.generation == generation)
         {
             state.replays.remove(&id);
+        }
+    });
+}
+
+// --------------------------------------------------------------- synthetic
+
+const GTP_LETTERS: &[u8] = b"ABCDEFGHJKLMNOPQRST";
+
+/// FNV-1a over the fields that make a position.
+fn seed_of(query: &Value) -> u64 {
+    let text = format!(
+        "{}|{}|{}|{}|{}|{}",
+        query["moves"],
+        query["initialStones"],
+        query["rules"],
+        query["komi"],
+        query["boardXSize"],
+        query["boardYSize"]
+    );
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// A cheap mix, so each point and candidate gets its own number from one seed.
+fn mix(seed: u64, n: u64) -> u64 {
+    let mut z = seed ^ n.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+struct Synthetic {
+    seed: u64,
+    x: u64,
+    y: u64,
+    turn_number: usize,
+    ownership: bool,
+}
+
+impl Synthetic {
+    fn answer(&self, id: &str, visits: u64, during: bool) -> Value {
+        let winrate = 0.3 + (self.seed % 401) as f64 / 1000.0;
+        let points = self.x * self.y;
+        let mut taken = Vec::new();
+        let infos: Vec<Value> = [6u64, 3, 1]
+            .iter()
+            .enumerate()
+            .map(|(k, share)| {
+                let mut at = mix(self.seed, k as u64) % points;
+                while taken.contains(&at) {
+                    at = (at + 1) % points;
+                }
+                taken.push(at);
+                let vertex = format!(
+                    "{}{}",
+                    GTP_LETTERS[(at % self.x) as usize] as char,
+                    self.y - at / self.x
+                );
+                let w = winrate - 0.02 * k as f64;
+                json!({
+                    "move": vertex,
+                    "order": k,
+                    "visits": visits * share / 10,
+                    "winrate": w,
+                    "scoreLead": (w - 0.5) * 20.0,
+                    "prior": 0.5 / (k as f64 + 1.0),
+                    "pv": [vertex],
+                })
+            })
+            .collect();
+        let mut line = json!({
+            "id": id,
+            "isDuringSearch": during,
+            "turnNumber": self.turn_number,
+            "rootInfo": {
+                "visits": visits,
+                "winrate": winrate,
+                "scoreLead": (winrate - 0.5) * 20.0,
+            },
+            "moveInfos": infos,
+        });
+        if self.ownership {
+            let own: Vec<f64> = (0..points)
+                .map(|i| (mix(self.seed, 1000 + i) % 201) as f64 / 100.0 - 1.0)
+                .collect();
+            line["ownership"] = json!(own);
+        }
+        line
+    }
+}
+
+/// Searches any position at `visits_per_second`, reporting at the query's interval, until its
+/// `maxVisits` or a terminate.
+fn start_synthetic(query: &Value, id: String, shared: &Arc<Mutex<Shared>>, config: &Arc<Config>) {
+    let synthetic = Synthetic {
+        seed: seed_of(query),
+        x: query["boardXSize"].as_u64().unwrap_or(19).max(1),
+        y: query["boardYSize"].as_u64().unwrap_or(19).max(1),
+        turn_number: query["moves"].as_array().map_or(0, Vec::len),
+        ownership: query["includeOwnership"] == true,
+    };
+    let max_visits = query["maxVisits"].as_u64().unwrap_or(u64::MAX).max(1);
+    let every = query["reportDuringSearchEvery"]
+        .as_f64()
+        .filter(|s| *s > 0.0)
+        .map(Duration::from_secs_f64);
+    let generation = {
+        let mut state = shared.lock().unwrap();
+        let generation = state.next_generation;
+        state.next_generation += 1;
+        state.replays.insert(
+            id.clone(),
+            Replay {
+                generation,
+                last_report: None,
+                turn_number: synthetic.turn_number,
+            },
+        );
+        generation
+    };
+    let vps = config.visits_per_second;
+    let shared = Arc::clone(shared);
+    thread::spawn(move || {
+        let started = Instant::now();
+        let finish = started + Duration::from_secs_f64((max_visits as f64 / vps).min(1e6));
+        loop {
+            let next = every.map_or(finish, |e| (Instant::now() + e).min(finish));
+            sleep_until(next);
+            let reached = (started.elapsed().as_secs_f64() * vps) as u64;
+            let done = Instant::now() >= finish;
+            let visits = if done {
+                max_visits
+            } else {
+                reached.clamp(1, max_visits)
+            };
+            let line = synthetic.answer(&id, visits, !done);
+            let mut state = shared.lock().unwrap();
+            let Some(replay) = state.replays.get_mut(&id) else {
+                return;
+            };
+            if replay.generation != generation {
+                return;
+            }
+            if done {
+                state.replays.remove(&id);
+                emit(&line);
+                return;
+            }
+            replay.last_report = Some(line.clone());
+            emit(&line);
         }
     });
 }
@@ -651,6 +810,7 @@ fn analysis(scenario: Scenario, transcript_path: &Path) -> ! {
 
     let config = Arc::new(Config {
         speed: scenario.speed,
+        visits_per_second: scenario.visits_per_second,
         crash_after_reports: scenario.crash_after_reports,
         crash_stderr_lines: scenario.crash_stderr_lines,
         stall_after_reports: scenario.stall_after_reports,
@@ -704,6 +864,7 @@ fn analysis(scenario: Scenario, transcript_path: &Path) -> ! {
                     .and_then(|k| transcript.queries.iter().find(|q| q.key.matches(k)));
                 match found {
                     Some(recorded) => start_replay(&query, id, recorded, &shared, &config),
+                    None if scenario.synthesize => start_synthetic(&query, id, &shared, &config),
                     None => emit(&json!({
                         "error": "fake-katago: no recorded query for this position",
                         "field": "moves",

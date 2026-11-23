@@ -12,6 +12,10 @@ pub struct RawAnalysis {
     pub turn_number: u32,
     pub root_info: RawRootInfo,
     pub move_infos: Vec<RawMoveInfo>,
+    /// One value per point, row by row from the top, −1..1; Black's view under the launch
+    /// override `reportAnalysisWinratesAs=BLACK` (recorded in `analysis-ownership.jsonl`).
+    #[serde(default)]
+    pub ownership: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
