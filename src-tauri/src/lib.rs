@@ -2,6 +2,7 @@ pub mod follow;
 pub mod game;
 mod ipc;
 pub mod job;
+pub mod lizzie;
 pub mod platform;
 pub mod protocol;
 pub mod service;
@@ -35,9 +36,6 @@ use platform::menu::MenuLanguage;
 use protocol::{AppEvent, OsKind};
 use service::{AppContext, EventSink, FilePicker};
 use settings::{LanguagePreference, Settings};
-
-/// The results store's size cap until the settings give one (P2 M2 design 5.2).
-const CACHE_CAP_BYTES: u64 = 1 << 30;
 
 /// How long exit waits for an install job and KataGo to stop before giving up on them.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
@@ -182,9 +180,11 @@ fn start_engine(
     visit_limit: Option<u32>,
     sink: Arc<dyn EventSink>,
     data_dir: &Path,
+    cache_cap_mb: u32,
 ) -> (Engine, mpsc::UnboundedReceiver<EngineEvent>) {
     let (follow, followed) = mpsc::unbounded_channel();
-    let store = Store::open(data_dir.join("analysis.sqlite"), CACHE_CAP_BYTES);
+    let cap = u64::from(cache_cap_mb.max(1)) * 1024 * 1024;
+    let store = Store::open(data_dir.join("analysis.sqlite"), cap);
     let engine = tauri::async_runtime::block_on(async {
         Engine::spawn_with_store(
             files.clone(),
@@ -326,6 +326,7 @@ pub fn run() {
                 settings.ui.visit_limit,
                 Arc::clone(&sink),
                 &data_dir,
+                settings.ui.cache_cap_mb,
             );
             let setup = start_setup(&version, data_dir.join("manifest"));
             let source = watch::Sender::new(download_source(&settings));

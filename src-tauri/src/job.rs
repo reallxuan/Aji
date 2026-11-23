@@ -60,6 +60,21 @@ pub struct JobOptions {
     pub boost: BoostOptions,
 }
 
+impl JobOptions {
+    /// Options a job can run with: some visits, a forward range of moves, a positive threshold.
+    pub fn is_valid(&self) -> bool {
+        let range = match self.range {
+            JobRange::Whole => true,
+            JobRange::Moves { from, to } => 1 <= from && from <= to,
+        };
+        range
+            && self.visits > 0
+            && self.boost.visits > 0
+            && self.boost.threshold.is_finite()
+            && self.boost.threshold > 0.0
+    }
+}
+
 impl Default for JobOptions {
     fn default() -> Self {
         JobOptions {
@@ -105,8 +120,8 @@ pub struct JobProgress {
     pub eta_seconds: Option<u32>,
 }
 
-/// The side to move in a node's position.
-fn to_move(node: &LineNode) -> Option<Color> {
+/// The side to move in a node's position; `None` on an illegal node.
+pub(crate) fn to_move(node: &LineNode) -> Option<Color> {
     let position = node.position.as_ref()?;
     Some(
         position
@@ -352,6 +367,11 @@ impl JobFlow {
 
     pub fn is_running(&self) -> bool {
         self.run.is_some()
+    }
+
+    /// The running job's options.
+    pub fn options(&self) -> Option<JobOptions> {
+        self.run.as_ref().map(|r| r.options)
     }
 
     /// The main line the job runs on.

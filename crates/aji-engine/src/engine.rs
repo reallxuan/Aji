@@ -498,6 +498,8 @@ enum Report {
     JobKnown(u64, Vec<(PositionKey, u32)>),
     /// The store's row for a position missing from the in-memory layer.
     Cached(PositionKey, Option<Box<Row>>),
+    /// Imported rows, each with the store's row for its position when memory lacked one.
+    Imported(Vec<(Row, Option<Row>)>, Reply<()>),
     Spawned(u64, io::Result<Box<Spawned>>),
     Line(u64, KataLine),
     Exited(u64, ExitInfo, Vec<String>),
@@ -715,10 +717,7 @@ impl Actor {
                 let _ = reply.send(self.continue_analysis());
             }
             Command::Summaries(keys, reply) => self.summaries(keys, reply),
-            Command::Import(rows, reply) => {
-                self.import(rows);
-                let _ = reply.send(());
-            }
+            Command::Import(rows, reply) => self.import(rows, reply),
             Command::Clear(scope, reply) => {
                 self.clear(scope);
                 let _ = reply.send(());
@@ -944,9 +943,49 @@ impl Actor {
         true
     }
 
-    fn import(&mut self, rows: Vec<Row>) {
-        for row in rows {
+    /// Imports `rows`. A position the in-memory layer lacks may still have a fresh row on
+    /// disk from another session, so that row is read first and offered before the imported
+    /// one: the store's precedence (design 5.11) then holds for the session too.
+    fn import(&mut self, rows: Vec<Row>, reply: Reply<()>) {
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            self.keep_imported(rows.into_iter().map(|row| (row, None)).collect());
+            let _ = reply.send(());
+            return;
+        };
+        let waits: Vec<(Row, Option<oneshot::Receiver<Option<Row>>>)> = rows
+            .into_iter()
+            .map(|row| {
+                let key = row.update.position;
+                if self.cache.peek(key).is_some() {
+                    return (row, None);
+                }
+                let (tx, rx) = oneshot::channel();
+                store.get(identity, key, move |stored| {
+                    let _ = tx.send(stored);
+                });
+                (row, Some(rx))
+            })
+            .collect();
+        let reports = self.report_tx.clone();
+        self.runtime.spawn(async move {
+            let mut rows = Vec::with_capacity(waits.len());
+            for (row, wait) in waits {
+                let stored = match wait {
+                    Some(rx) => rx.await.ok().flatten(),
+                    None => None,
+                };
+                rows.push((row, stored));
+            }
+            let _ = reports.send(Report::Imported(rows, reply));
+        });
+    }
+
+    fn keep_imported(&mut self, rows: Vec<(Row, Option<Row>)>) {
+        for (row, stored) in rows {
             let key = row.update.position;
+            if let Some(stored) = stored {
+                self.cache.offer_row(stored.update, stored.imported);
+            }
             let kept = self.keep(&row.update, true, row.katago_version);
             if kept && self.next_key() == Some(key) {
                 self.refresh_next();
@@ -1221,6 +1260,10 @@ impl Actor {
     fn on_report(&mut self, report: Report) {
         match report {
             Report::Cached(key, row) => self.on_cached(key, row),
+            Report::Imported(rows, reply) => {
+                self.keep_imported(rows);
+                let _ = reply.send(());
+            }
             Report::JobKnown(seq, known) => {
                 if let Some(job) = self.job.as_mut().filter(|j| j.seq == seq) {
                     job.known.extend(known);

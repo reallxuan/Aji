@@ -771,7 +771,11 @@ mod tests {
                 json!({"type": "settingsSet", "settings": {"language": "en", "theme": "light",
                        "discLines": ["visits", "scoreLead"], "visitLimit": null,
                        "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false,
-                       "perspective": "white"}}),
+                       "perspective": "white", "showNextMove": false, "analyseOnOpen": true,
+                       "cacheCapMb": 2048, "saveAnalysis": true,
+                       "jobOptions": {"range": {"kind": "whole"}, "side": "both",
+                           "visits": 500, "boost": {"on": true, "threshold": 10.0,
+                           "visits": 3000}}}}),
                 Request::SettingsSet {
                     settings: UiSettings {
                         language: crate::settings::LanguagePreference::En,
@@ -784,6 +788,11 @@ mod tests {
                         default_rules: AnalysisRules::JapaneseKorean,
                         show_coordinates: false,
                         perspective: crate::settings::Perspective::White,
+                        show_next_move: false,
+                        analyse_on_open: true,
+                        cache_cap_mb: 2048,
+                        save_analysis: true,
+                        job_options: crate::job::JobOptions::default(),
                     },
                 },
             ),
@@ -980,7 +989,10 @@ mod tests {
             json!({"type": "settings", "settings": {"language": "system", "theme": "system",
                    "discLines": ["winrate", "scoreLead"], "visitLimit": null,
                    "defaultRules": {"kind": "chinese"}, "showCoordinates": true,
-                   "perspective": "black"}})
+                   "perspective": "black", "showNextMove": true, "analyseOnOpen": false,
+                   "cacheCapMb": 1024, "saveAnalysis": false,
+                   "jobOptions": {"range": {"kind": "whole"}, "side": "both", "visits": 500,
+                       "boost": {"on": true, "threshold": 10.0, "visits": 3000}}}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::SettingsChanged { settings }).unwrap()["type"],

@@ -222,6 +222,11 @@ impl Game {
     }
 
     /// The root, then each node's first child.
+    /// The node's properties as the file had them.
+    pub fn sgf(&self, node: NodeId) -> &SgfNode {
+        &self.nodes[node].sgf
+    }
+
     pub fn main_line(&self) -> &[NodeId] {
         &self.main_line
     }

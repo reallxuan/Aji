@@ -267,11 +267,21 @@ async fn next_pass(ctx: &AppContext, id: u64) {
 /// Starts a job on the session's main line, replacing a running one.
 pub(crate) async fn job_start(
     ctx: &AppContext,
-    mut options: JobOptions,
+    options: JobOptions,
 ) -> Result<Response, ProtocolError> {
+    let session = ctx.game.lock().await;
+    start_on(ctx, &session, options).await?;
+    Ok(Response::Ok)
+}
+
+/// `job_start` with the session already locked.
+pub(crate) async fn start_on(
+    ctx: &AppContext,
+    session: &GameSession,
+    mut options: JobOptions,
+) -> Result<(), ProtocolError> {
     options.visits = options.visits.max(1);
     options.boost.visits = options.boost.visits.max(1);
-    let session = ctx.game.lock().await;
     let plan = lock(ctx)
         .flow
         .start(session.line(), session.index(), options);
@@ -279,7 +289,7 @@ pub(crate) async fn job_start(
         lock(ctx).flow.stop();
         return Err(e.into());
     }
-    Ok(Response::Ok)
+    Ok(())
 }
 
 /// Stops the running job, if any, and tells every client.

@@ -54,6 +54,16 @@ function mount(
       defaultRules: { kind: 'chinese' },
       showCoordinates: true,
       perspective: 'black',
+      showNextMove: true,
+      analyseOnOpen: false,
+      cacheCapMb: 1024,
+      saveAnalysis: false,
+      jobOptions: {
+        range: { kind: 'whole' },
+        side: 'both',
+        visits: 500,
+        boost: { on: true, threshold: 10, visits: 3000 },
+      },
     },
   });
   store.getState().applyEvent({ type: 'engineState', engine });

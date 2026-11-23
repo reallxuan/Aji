@@ -1775,6 +1775,58 @@ fn imported_row(position: &Position, visits: u32) -> Row {
 }
 
 #[tokio::test]
+async fn imported_rows_never_replace_fresh_ones() {
+    let capped = EngineOptions {
+        visit_limit: Some(100),
+        ..options()
+    };
+    let mut p = start_stored(
+        "synthetic",
+        anywhere(8),
+        capped,
+        memory_store(),
+        identity(1),
+    );
+    p.until_final().await;
+    let key = anywhere(8).key();
+    let fresh = bounded(p.engine.summaries(vec![key])).await[0].expect("a fresh result");
+    bounded(p.engine.import(vec![imported_row(&anywhere(8), 50_000)])).await;
+    let kept = bounded(p.engine.summaries(vec![key])).await[0];
+    assert_eq!(kept.map(|s| s.visits), Some(fresh.visits));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn imported_rows_never_hide_a_fresh_row_still_on_disk() {
+    // Final review #2: a new session whose memory is empty. The store holds a fresh result
+    // for the position; a LizzieYzy file then brings an imported one with far more visits.
+    let store = memory_store();
+    let fresh = Row {
+        imported: false,
+        ..imported_row(&anywhere(30), 400)
+    };
+    store.put(&identity(1), fresh);
+    bounded(async { store.flush().await.unwrap() }).await;
+    let mut p = start_stored("synthetic", anywhere(31), options(), store, identity(1));
+    p.until_state(|s| *s == analysing()).await;
+    bounded(p.engine.import(vec![imported_row(&anywhere(30), 50_000)])).await;
+    let kept = bounded(p.engine.summaries(vec![anywhere(30).key()])).await;
+    assert_eq!(
+        kept[0].map(|s| s.visits),
+        Some(400),
+        "the fresh row wins for the session"
+    );
+    let events = p.collect_for(Duration::from_millis(100)).await;
+    assert!(
+        stored(&events)
+            .iter()
+            .all(|(_, stats)| stats.visits != 50_000),
+        "no imported result reaches the trend"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
 async fn a_progress_report_does_not_replace_an_imported_row() {
     let mut p = start_stored(
         "synthetic",

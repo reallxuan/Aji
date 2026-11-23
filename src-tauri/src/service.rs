@@ -5,9 +5,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use aji_core::PositionKey;
 use aji_core::game::{AnalysisRules, estimate, final_score, suggested_dead};
 use aji_core::{Move, ScoringRule};
-use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles};
+use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles, Row};
 use aji_manager::Setup;
 use aji_manager::install::{
     DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
@@ -16,7 +17,6 @@ use aji_manager::install::{
 use base64::Engine as _;
 use tokio::sync::{Mutex, mpsc, watch};
 
-use crate::follow;
 use crate::game::{GameSession, NavTarget, OpenError};
 use crate::protocol::{
     AppEvent, AppInfo, CacheScope, ErrorCode, OsKind, ProtocolError, Request, Response,
@@ -26,6 +26,7 @@ use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
     update_settings,
 };
+use crate::{follow, job, lizzie};
 
 /// Facts about this installation, and the services, that requests may need.
 #[derive(Clone)]
@@ -263,6 +264,8 @@ async fn set_settings(ctx: &AppContext, settings: UiSettings) -> Result<Response
     save_ui_settings(&ctx.settings_path, &settings)
         .map_err(|e| error(ErrorCode::Internal, e.to_string()))?;
     ctx.engine.set_visit_limit(settings.visit_limit).await?;
+    ctx.engine
+        .set_cache_cap(u64::from(settings.cache_cap_mb.max(1)) * 1024 * 1024);
     ctx.events.emit(AppEvent::SettingsChanged {
         settings: settings.clone(),
     });
@@ -315,11 +318,37 @@ impl From<OpenError> for ProtocolError {
     }
 }
 
+/// The interface preferences; the defaults when the settings cannot be read.
+fn ui_settings(ctx: &AppContext) -> UiSettings {
+    load_settings(&ctx.settings_path)
+        .map(|s| s.ui)
+        .unwrap_or_default()
+}
+
 /// The rules new games and rule-less files start with; Chinese when the settings cannot be read.
 fn default_rules(ctx: &AppContext) -> AnalysisRules {
-    load_settings(&ctx.settings_path)
-        .map(|s| s.ui.default_rules)
-        .unwrap_or_default()
+    ui_settings(ctx).default_rules
+}
+
+/// The file's LizzieYzy analysis as imported rows for the main line's positions (design 5.11).
+/// Values that do not read are skipped.
+fn lizzie_rows(session: &GameSession) -> Vec<Row> {
+    let size = session.size();
+    let points = usize::from(size.get()) * usize::from(size.get());
+    session
+        .line()
+        .iter()
+        .zip(session.lizzie())
+        .filter_map(|(node, text)| {
+            let data = aji_core::sgf::parse_lz(&text?, points)?;
+            let update = lizzie::update_from_lz(&data, node.key?, size, job::to_move(node)?);
+            Some(Row {
+                update,
+                imported: true,
+                katago_version: String::new(),
+            })
+        })
+        .collect()
 }
 
 /// Tells every client of the current node, then hands its position to the engine (or idles it
@@ -376,20 +405,32 @@ async fn game_open(
     if bytes.len() > (crate::game::MAX_SGF_BYTES / 3 + 1) * 4 {
         return Err(OpenError::TooLarge.into());
     }
-    let defaults = default_rules(ctx);
-    let next = tokio::task::spawn_blocking(move || {
+    let ui = ui_settings(ctx);
+    let defaults = ui.default_rules;
+    let (next, rows) = tokio::task::spawn_blocking(move || {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(bytes.as_bytes())
             .map_err(|e| error(ErrorCode::Internal, format!("bytes are not base64: {e}")))?;
-        GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)
+        let session = GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)?;
+        let rows = lizzie_rows(&session);
+        Ok::<_, ProtocolError>((session, rows))
     })
     .await
     .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
     let mut session = ctx.game.lock().await;
     follow::stop_job(ctx).await;
     session.replace(next);
+    // Before the position goes out, so a stored row shows at once.
+    if !rows.is_empty() {
+        ctx.engine.import(rows).await;
+    }
     let reply = publish(ctx, &session, true).await;
     push_trend(ctx, &session).await;
+    if ui.analyse_on_open
+        && let Err(e) = follow::start_on(ctx, &session, ui.job_options).await
+    {
+        eprintln!("aji: cannot analyse the opened game: {}", e.message);
+    }
     Ok(reply)
 }
 
@@ -499,12 +540,32 @@ async fn game_preview(ctx: &AppContext, moves: &[Move]) -> Response {
     }
 }
 
+/// With `saveAnalysis` on, every main-line node with a kept result carries it as LizzieYzy's
+/// `LZ` (design 5.11).
 async fn game_export(ctx: &AppContext) -> Result<Response, ProtocolError> {
-    let (name, text) = ctx
-        .game
-        .lock()
-        .await
-        .export()
+    let session = ctx.game.lock().await;
+    let lz = match ui_settings(ctx).save_analysis {
+        true => {
+            let line = session.line();
+            let keys = line
+                .iter()
+                .map(|n| n.key.unwrap_or(PositionKey(0)))
+                .collect();
+            let updates = ctx.engine.updates(keys).await;
+            line.iter()
+                .zip(updates)
+                .map(|(node, update)| {
+                    node.key?;
+                    let data =
+                        lizzie::lz_from_update(&update?, session.size(), job::to_move(node)?);
+                    Some(aji_core::sgf::write_lz(&data))
+                })
+                .collect()
+        }
+        false => Vec::new(),
+    };
+    let (name, text) = session
+        .export_with(&lz)
         .ok_or_else(|| error(ErrorCode::GameEmpty, "the game holds no move"))?;
     Ok(Response::GameExport { name, text })
 }
@@ -1293,6 +1354,7 @@ mod tests {
             default_rules: AnalysisRules::JapaneseKorean,
             show_coordinates: false,
             perspective: crate::settings::Perspective::White,
+            ..UiSettings::default()
         };
         assert_eq!(
             handle(
@@ -1940,7 +2002,6 @@ mod tests {
     use aji_core::PositionKey;
     use aji_engine::{JobRun, JobStatus, Row};
 
-    use crate::follow;
     use crate::job::{JobOptions, JobProgress, JobState};
     use crate::protocol::{CacheScope, ScoreMode, TrendNodeUpdate};
 
@@ -2288,5 +2349,180 @@ mod tests {
             panic!()
         };
         assert!(!stats.persistent);
+    }
+
+    // ------------------------------------------------------------ P2 M2: LizzieYzy analysis
+
+    const LIZZIE: &[u8] = include_bytes!("../../crates/aji-core/tests/fixtures/sgf/lizzie.sgf");
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    #[tokio::test]
+    async fn opening_the_lizzie_fixture_imports_its_rows_as_black_view() {
+        let ctx = ctx();
+        open(&ctx, "lizzie.sgf", LIZZIE).await.unwrap();
+        let Ok(Response::Trend { nodes, .. }) = handle(&ctx, Request::GameTrend).await else {
+            panic!()
+        };
+        let stats: Vec<_> = nodes.iter().map(|n| n.stats).collect();
+        // Root (LZOP, Black to move): 100 − 48.6 is Black's 51.4%; the lead is Black's.
+        let root = stats[0].unwrap();
+        assert!(close(root.winrate, 0.514) && close(root.score_lead, 0.4));
+        assert_eq!(root.visits, 850);
+        // After B Q16 White is to move: White's 48.7% is Black's 51.3%; White's −0.5 is +0.5.
+        let one = stats[1].unwrap();
+        assert!(close(one.winrate, 0.513) && close(one.score_lead, 0.5));
+        assert_eq!(one.visits, 1300);
+        let two = stats[2].unwrap();
+        assert!(close(two.winrate, 0.516) && two.visits == 13_000);
+        assert_eq!(stats[3], None, "a node without analysis");
+        assert_eq!(stats[4].unwrap().visits, 12_500_000);
+
+        let keys = line_keys(&ctx).await;
+        let updates = ctx.engine.updates(keys.clone()).await;
+        let root = updates[0].as_ref().unwrap();
+        assert_eq!(root.candidates[0].mv, Move::Play(Point { x: 15, y: 3 }));
+        assert!(close(root.candidates[0].winrate, 0.514));
+        assert_eq!(root.candidates[0].pv.len(), 3);
+        let one = updates[1].as_ref().unwrap();
+        assert_eq!(one.candidates[0].mv, Move::Play(Point { x: 3, y: 15 }));
+        assert!(close(one.candidates[0].winrate, 0.513));
+        assert!(close(one.candidates[0].score_lead, 0.5));
+        // Black is to move after W D16, so the ownership is Black's as written.
+        let own = updates[2].as_ref().unwrap().ownership.as_ref().unwrap();
+        assert_eq!(own.len(), 361);
+        assert_eq!(own[0], aji_engine::quantise_ownership(0.9));
+        assert_eq!(own[3 * 19 + 3], aji_engine::quantise_ownership(-0.95));
+    }
+
+    #[tokio::test]
+    async fn analyse_on_open_starts_a_job_with_the_saved_options() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ctx = ctx_in(dir.path(), None);
+        // KataGo is missing, but the engine has files, so it takes the job.
+        let position = ctx.game.lock().await.position().unwrap();
+        ctx.engine = Engine::spawn(
+            Some(EngineFiles {
+                katago: dir.path().join("no-katago"),
+                model: dir.path().join("no-model"),
+                config: dir.path().join("no-config"),
+                working_dir: dir.path().to_path_buf(),
+                path_prepend: Vec::new(),
+            }),
+            position,
+            aji_engine::EngineOptions::default(),
+            |_| {},
+        );
+        let options = JobOptions {
+            side: crate::job::JobSide::Black,
+            visits: 200,
+            ..JobOptions::default()
+        };
+        open(&ctx, "nine.sgf", NINE.as_bytes()).await.unwrap();
+        assert!(
+            !ctx.follow.lock().unwrap().flow.is_running(),
+            "off by default"
+        );
+        let settings = UiSettings {
+            analyse_on_open: true,
+            job_options: options,
+            ..UiSettings::default()
+        };
+        handle(&ctx, Request::SettingsSet { settings })
+            .await
+            .unwrap();
+        open(&ctx, "nine.sgf", NINE.as_bytes()).await.unwrap();
+        let running = ctx.follow.lock().unwrap().flow.options();
+        assert_eq!(running, Some(options));
+        ctx.engine.shutdown().await;
+    }
+
+    /// `NINE` with a kept result at every node.
+    async fn nine_analysed(dir: &Path) -> (AppContext, Vec<PositionKey>) {
+        let (ctx, _) = nine(dir).await;
+        let keys = line_keys(&ctx).await;
+        let rows = keys
+            .iter()
+            .enumerate()
+            .map(|(i, &k)| {
+                let mut row = kept(k, 0.4 + 0.05 * i as f64, Some(vec![-64; 81]));
+                row.update.score_lead = -1.5 + i as f64;
+                row.update.candidates = vec![aji_engine::Candidate {
+                    mv: Move::Play(Point { x: 4, y: 4 }),
+                    order: 0,
+                    visits: 400,
+                    winrate: 0.45,
+                    score_lead: -0.5,
+                    prior: 0.25,
+                    pv: vec![Move::Play(Point { x: 4, y: 4 }), Move::Pass],
+                }];
+                row
+            })
+            .collect();
+        ctx.engine.import(rows).await;
+        (ctx, keys)
+    }
+
+    async fn export_text(ctx: &AppContext) -> String {
+        let Ok(Response::GameExport { text, .. }) = handle(ctx, Request::GameExport).await else {
+            panic!()
+        };
+        text
+    }
+
+    async fn save_analysis(ctx: &AppContext, on: bool) {
+        let settings = UiSettings {
+            save_analysis: on,
+            ..UiSettings::default()
+        };
+        handle(ctx, Request::SettingsSet { settings })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn export_writes_lz_only_when_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine_analysed(dir.path()).await;
+        let text = export_text(&ctx).await;
+        assert!(!text.contains("LZ"), "{text}");
+        save_analysis(&ctx, true).await;
+        let text = export_text(&ctx).await;
+        assert_eq!(text.matches("LZOP[KataGo ").count(), 1, "{text}");
+        assert_eq!(text.matches("LZ[KataGo ").count(), 4, "{text}");
+        assert!(text.contains(" ownership "), "{text}");
+    }
+
+    #[tokio::test]
+    async fn export_then_open_round_trips_the_analysis() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, keys) = nine_analysed(dir.path()).await;
+        save_analysis(&ctx, true).await;
+        let text = export_text(&ctx).await;
+        let before = ctx.engine.updates(keys.clone()).await;
+
+        let again = ctx_in(&dir.path().join("again"), None);
+        open(&again, "nine.sgf", text.as_bytes()).await.unwrap();
+        let after = again.engine.updates(keys).await;
+        for (b, a) in before.iter().zip(&after) {
+            let (b, a) = (b.as_ref().unwrap(), a.as_ref().unwrap());
+            assert!(
+                (a.winrate - b.winrate).abs() < 1e-3,
+                "{} {}",
+                a.winrate,
+                b.winrate
+            );
+            assert!((a.score_lead - b.score_lead).abs() < 0.05);
+            assert_eq!(a.root_visits, b.root_visits);
+            assert_eq!(a.candidates.len(), 1);
+            assert_eq!(a.candidates[0].mv, b.candidates[0].mv);
+            assert_eq!(a.candidates[0].pv, b.candidates[0].pv);
+            assert!((a.candidates[0].winrate - b.candidates[0].winrate).abs() < 1e-4);
+            assert!((a.candidates[0].prior - b.candidates[0].prior).abs() < 1e-4);
+            let (ao, bo) = (a.ownership.as_ref().unwrap(), b.ownership.as_ref().unwrap());
+            assert!(ao.iter().zip(bo).all(|(x, y)| (x - y).abs() <= 1));
+        }
     }
 }
