@@ -115,7 +115,7 @@ it('shows the speed, visits, engine, network and the pause hint while analysing'
   expect(screen.getByText('分析中')).toBeInTheDocument();
   expect(row('速度')).toHaveTextContent('1,240 次/秒');
   expect(row('计算量')).toHaveTextContent('3,104');
-  await waitFor(() => expect(row('引擎')).toHaveTextContent('KataGo 1.18.2 · Metal'));
+  await waitFor(() => expect(row('引擎')).toHaveTextContent('KataGo 1.18.2（Metal）'));
   // Truncated in the middle to 24 characters.
   expect(row('网络')).toHaveTextContent('kata1-b28c51…d4960414494');
   expect(screen.getByText('点击暂停')).toBeInTheDocument();

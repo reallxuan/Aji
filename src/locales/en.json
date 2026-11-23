@@ -1,6 +1,6 @@
 {
   "about": {
-    "versionLine": "Aji version {{version}} · {{os}} {{arch}}",
+    "versionLine": "Aji version {{version}} ({{os}} {{arch}})",
     "title": "About Aji",
     "licence": "Aji is free software, released under the GNU Affero General Public License, version 3 or later.",
     "source": "Source code:",
@@ -95,7 +95,7 @@
       "speedValue": "{{speed}} visits/s",
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
-      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "engineWithBackend": "KataGo {{version}} ({{backend}})",
       "job": "Game analysis {{done}}/{{total}}",
       "jobWaiting": "Game analysis {{done}}/{{total}}, searching move {{move}} first",
       "hint": {
@@ -135,7 +135,7 @@
     },
     "best": "Best",
     "played": "Played {{diff}}",
-    "playedBest": "Played · best",
+    "playedBest": "Played, best",
     "bar": {
       "lead": "leads by {{points}}"
     },
@@ -345,7 +345,7 @@
     "visitLimitNone": "No limit",
     "visitLimitNote": "Analysis stops at the limit and the graphics card idles; it starts again on the next move.",
     "engine": "Engine",
-    "engineLine": "KataGo {{version}} · {{backend}}",
+    "engineLine": "KataGo {{version}} ({{backend}})",
     "networkLine": "Network {{network}}",
     "threadsDefault": "Search threads: {{threads}} (default, not measured)",
     "threadsMeasured": "Search threads: {{threads}} (measured, {{speed}} visits/s)",
@@ -363,7 +363,7 @@
     "board": {
       "title": "Board style",
       "board": "Board",
-      "set": "{{board}} · {{stones}}",
+      "set": "{{board}} with {{stones}}",
       "custom": "Custom",
       "boards": {
         "honey": "Honey",
@@ -473,7 +473,7 @@
     "area": "Area",
     "territory": "Territory",
     "fixedKomi": "{{komi}} points",
-    "fixedHint": "{{scoring}} · set by the rules",
+    "fixedHint": "{{scoring}}, set by the rules",
     "stepHint": "Steps of 0.5",
     "komiDown": "Lower komi",
     "komiUp": "Raise komi",
@@ -482,8 +482,8 @@
       "japaneseKorean": "Japanese",
       "custom": "Custom"
     },
-    "chip": "{{rules}} · {{komi}}",
-    "chipChanged": "{{rules}} · {{komi}}, changed from the file",
+    "chip": "{{rules}} {{komi}}",
+    "chipChanged": "{{rules}} {{komi}}, changed from the file",
     "described": {
       "chinese": "Chinese rules",
       "japaneseKorean": "Japanese/Korean rules",
@@ -732,5 +732,6 @@
     "waiting": "Counting…",
     "failed": "Could not count this position.",
     "openByOwnership": "The game was not played out, so open areas follow KataGo's judgement."
-  }
+  },
+  "separator": ", "
 }

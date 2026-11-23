@@ -21,12 +21,12 @@ function renderWith(language: Language, handler: (request: Request) => Response)
 
 it('shows the version line in English', async () => {
   renderWith('en', () => ({ type: 'appInfo', version: '0.1.0', os: 'macos', arch: 'aarch64' }));
-  expect(await screen.findByText('Aji version 0.1.0 · macOS aarch64')).toBeInTheDocument();
+  expect(await screen.findByText('Aji version 0.1.0 (macOS aarch64)')).toBeInTheDocument();
 });
 
 it('translates an unknown OS in Chinese', async () => {
   renderWith('zh-CN', () => ({ type: 'appInfo', version: '0.1.0', os: 'other', arch: 'riscv64' }));
-  expect(await screen.findByText('Aji 版本 0.1.0 · 未知系统 riscv64')).toBeInTheDocument();
+  expect(await screen.findByText('Aji 版本 0.1.0（未知系统 riscv64）')).toBeInTheDocument();
 });
 
 it('shows localised error text, not the raw message', async () => {

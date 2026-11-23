@@ -246,7 +246,7 @@ describe('SettingsPanel', () => {
 
   it('names the active engine and runs the engine actions', async () => {
     const transport = mount();
-    expect(await screen.findByText('KataGo 1.18.2 · Metal')).toBeInTheDocument();
+    expect(await screen.findByText('KataGo 1.18.2（Metal）')).toBeInTheDocument();
     expect(screen.getByText('权重 kata1-tf3-b11c768-s12382M-d6533M')).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '重启引擎' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '停止引擎' })));
@@ -398,7 +398,7 @@ describe('Unused downloaded files', () => {
 
   it('is hidden when nothing is unused', async () => {
     mount();
-    await screen.findByText('KataGo 1.18.2 · Metal');
+    await screen.findByText('KataGo 1.18.2（Metal）');
     expect(screen.queryByText('未使用的已下载文件')).not.toBeInTheDocument();
   });
 

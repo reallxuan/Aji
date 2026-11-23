@@ -264,9 +264,8 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Hover a candidate to show its variation, with replay | 1 |
 | Start and pause analysis | 1 |
 | Hide the candidates while analysis keeps running (F; hold Z) | 1 |
-| Candidate list panel (sortable table) | 2 (Phase 1 shipped the table; Phase 2 adds sorting, columns and docking) |
+| Candidate list panel (sortable table) | 2 (done in P2 M2: Phase 1 shipped the table; P2 M1 docked it; M2 added sorting, columns and the share of visits) |
 | Winrate graph and score curve; click to jump | 1 (moved from Phase 2 in M7: drawn from the results already cached). Mistake bars were removed in M7 at the owner's request (M7 design 13.2) |
-| Move quality marks (each move coloured by loss) | 2 |
 | Next-move hint (where the move actually played ranks among candidates) | 2 |
 | Ownership and territory display in several styles (square size, opacity and so on) | 2 |
 | Position estimate (形势判断) and final scoring (终局点目) | 2 |
@@ -281,7 +280,8 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 |---|---|---|
 | Whole-game analysis (LizzieYzy's 闪电分析): whole game, a range of moves, all branches | 2 | The default path; can start in the background when a game is opened |
 | Persisted results, no recomputation on reopen | 2 | |
-| Automatic deeper analysis of moves with large swings | 5 | |
+| Automatic deeper analysis of moves with large swings (波动时加强) | 2 | Moved from Phase 5 in P2 M2: the whole-game job's boost pass |
+| Swing list (波动): each side's moves that lost the most, by win rate or score | 2 | Added in P2 M2 (decision P9) |
 | Batch analysis of many games with a progress table | 5 | |
 | Hawk-eye analysis (鹰眼分析): AI match rate, average loss, list of mistakes, statistics by game stage, comparison charts for both players | 5 | Thresholds configurable |
 | Analysis report export | 5 | Not in LizzieYzy; covers part of what kifu sharing was used for |

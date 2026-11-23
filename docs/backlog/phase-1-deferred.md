@@ -15,7 +15,7 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 
 - **M2 N1 (re-check):** no deadline after killing a KataGo that does not die. Assigned to M4.
 - **M2 N2:** the watchdog's unbiased `select!` can pick the timer over a queued reply. Fix only if Windows CI flakes.
-- **M2 N3 (re-check):** the 100 ms throttle equals the report interval, so updates may drop to 5–10 per second. Assigned to M4.
+- **M2 N3 (re-checked in Phase 2 M2, left as it is):** the 100 ms throttle equals the report interval, so updates may drop to 5–10 per second. That reads smoothly on the Mac and no test shows a problem. Assigned to M4 if the live numbers ever look choppy.
 - **M2 N4:** subscribing before reading the status relies on IPC ordering. This matters for Phase 3's WebSocket transport.
 - **M3, for M4 (re-check):**
   - `refresh` discards its `FetchError`;
@@ -38,11 +38,11 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 - **M5 minor 10:** the declined-licence offer uses `recommendation.backends`, while the server's offer uses default plus fallbacks. Neither skips a backend that needs the same licence.
 - **M5 minor 11:** `remove_unused` holds the jobs lock through deletion and can race `import_network`'s unlocked copy.
 - **M5 minor 12:** a write failure during download is `downloadFailed`, not `diskError`.
-- **M7 minor 2:** `continue_analysis` does not resubmit while a query is in flight.
-- **M7 minor 11, test gaps:**
-  - a burst test (30 positions in 300 ms send at most 4 queries);
-  - the service's cache-to-trend wiring;
-  - superko rejection with real KataGo.
+- ~~**M7 minor 2:** `continue_analysis` does not resubmit while a query is in flight.~~ Fixed in Phase 2 M2 (`continue_analysis_resubmits_while_a_query_is_in_flight`).
+- ~~**M7 minor 11, test gaps:**~~ Closed in Phase 2 M2:
+  - ~~a burst test (30 positions in 300 ms send at most 4 queries);~~ `a_burst_of_30_positions_in_300ms_sends_at_most_4_queries`;
+  - ~~the service's cache-to-trend wiring;~~ `stored_results_reach_the_trend_without_a_refetch`;
+  - ~~superko rejection with real KataGo.~~ KataGo 1.18.2 does **not** reject a positional-superko repeat under Tromp-Taylor rules: it analyses it (recorded, `real_katago_accepts_a_superko_repeat_as_recorded`). Phase 1's assumption that it rejects one was wrong, so no superko case reaches the rejection path.
 - **M4 open:** the Metal thread counts. Speed fell as threads rose (6: 45.8 visits/s, 10: 36.8, 16: 26.0). Settings' 测速 measures them per machine.
 - **R4 in full:** CUDA 13.2, CUDA 12.8, DirectML and OpenCL on the RTX 5070 with the same networks. M8 proved that the default (CUDA 13.2) installs and runs; no backend speeds were measured. `scripts/benchmark-windows.ps1` exists, but it takes the newest version with a CUDA engine (1.18.2), which has no DirectML or OpenCL build. Fix its version choice before using it.
 - **The PC hardware capture:** `scripts/capture-hardware-windows.ps1` and the test `pc_capture_gives_the_rtx5070`, including a null `displayVersion`.
@@ -66,12 +66,12 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 ## Analysis interface
 
 - ~~**M7 minor 7:** the wheel over a table row scrolls the table instead of stepping the hovered line.~~ Fixed in Phase 2 M1.
-- **M7 minor 8:** the trend can race between a fetch or push and live updates.
+- ~~**M7 minor 8:** the trend can race between a fetch or push and live updates.~~ Fixed in Phase 2 M2: trend pushes carry a revision and an older one is ignored.
 - ~~**M7 minor 9:** Z can stick on macOS while Cmd is held (no keyup).~~ Fixed in Phase 2 M1.
 - ~~**M7 minor 10:** font loading awaits only 12px Inter 400 before the discs draw.~~ Fixed in Phase 2 M1.
 - **M7 minor 12:**
-  - a cached update keeps its stored `previous_visits`;
-  - test placement in `update.rs`;
+  - ~~a cached update keeps its stored `previous_visits`;~~ Fixed in Phase 2 M2: a cached update has none (`a_cached_update_has_no_previous_visits`);
+  - test placement in `update.rs` (not touched in Phase 2 M2);
   - ~~the bar's `toFixed` is not locale-aware;~~ Fixed in Phase 2 M1.
   - ~~"黑领先 0.0 目" at an even lead.~~ Fixed in Phase 2 M1: it reads 均势 / Even.
 

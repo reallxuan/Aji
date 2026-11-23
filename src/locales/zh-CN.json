@@ -1,6 +1,6 @@
 {
   "about": {
-    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}",
+    "versionLine": "Aji 版本 {{version}}（{{os}} {{arch}}）",
     "title": "关于 Aji",
     "licence": "Aji 是自由软件，按 GNU Affero 通用公共许可证第 3 版或更高版本发布。",
     "source": "源代码：",
@@ -95,7 +95,7 @@
       "speedValue": "{{speed}} 次/秒",
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
-      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "engineWithBackend": "KataGo {{version}}（{{backend}}）",
       "job": "全局分析 {{done}}/{{total}}",
       "jobWaiting": "全局分析 {{done}}/{{total}}，正在先算第 {{move}} 手",
       "hint": {
@@ -135,7 +135,7 @@
     },
     "best": "最佳",
     "played": "实战 {{diff}}",
-    "playedBest": "实战 · 最佳",
+    "playedBest": "实战 最佳",
     "bar": {
       "lead": "领先 {{points}} 目"
     },
@@ -345,7 +345,7 @@
     "visitLimitNone": "不限",
     "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
     "engine": "引擎",
-    "engineLine": "KataGo {{version}} · {{backend}}",
+    "engineLine": "KataGo {{version}}（{{backend}}）",
     "networkLine": "权重 {{network}}",
     "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
     "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
@@ -363,7 +363,7 @@
     "board": {
       "title": "棋盘样式",
       "board": "棋盘",
-      "set": "{{board}} · {{stones}}",
+      "set": "{{board}}配{{stones}}",
       "custom": "自定义",
       "boards": {
         "honey": "蜜色",
@@ -473,7 +473,7 @@
     "area": "数子",
     "territory": "数目",
     "fixedKomi": "{{komi}} 目",
-    "fixedHint": "{{scoring}} · 由规则决定",
+    "fixedHint": "{{scoring}}，由规则决定",
     "stepHint": "每次 0.5 目",
     "komiDown": "减少贴目",
     "komiUp": "增加贴目",
@@ -482,8 +482,8 @@
       "japaneseKorean": "日韩",
       "custom": "自定义"
     },
-    "chip": "{{rules}} · {{komi}}",
-    "chipChanged": "{{rules}} · {{komi}}，已改动",
+    "chip": "{{rules}} {{komi}}",
+    "chipChanged": "{{rules}} {{komi}}，已改动",
     "described": {
       "chinese": "中国规则",
       "japaneseKorean": "日韩规则",
@@ -732,5 +732,6 @@
     "waiting": "正在点目…",
     "failed": "无法点目。",
     "openByOwnership": "棋局未下完，未封闭的区域按 KataGo 判断。"
-  }
+  },
+  "separator": "，"
 }

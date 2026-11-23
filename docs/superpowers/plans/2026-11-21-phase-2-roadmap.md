@@ -35,13 +35,12 @@ The owner judges it against their own habits (charter D3). Before Phase 2 the ow
   - saving and restoring a working session.
 - **7.3 Live analysis:**
   - the candidate list panel;
-  - move-quality marks;
   - the next-move hint;
   - ownership and territory display;
   - position estimate and final scoring;
   - the sub-board;
   - the perspective and score options.
-- **7.4 Whole-game analysis:** whole-game analysis (whole game, a range of moves, all branches), and persisted results.
+- **7.4 Whole-game analysis:** whole-game analysis (whole game, a range of moves, all branches), persisted results, the boost pass for big swings (moved from Phase 5 in M2), and the swing list.
 - **7.9 Interface:** selectable board and stone styles; dockable, resizable layouts with presets; customisable shortcuts with a LizzieYzy preset; always on top.
 - **Charter section 8:** layouts and the board component adapt to small screens and touch, so Phase 3 does not rework them.
 - **Additions from the menu check**, once the owner approves them (section 9).
@@ -79,7 +78,7 @@ A third order, by the owner's daily-use list, was not available: the owner agree
 | P5 | Where the analysis cache lives and how large it may grow | One SQLite file in the local data folder, with a size cap in settings and a "clear analysis" command | M2 |
 | P6 | Whether the last session is restored at launch (audit P2-G3) | Ask on the first launch after a session was left open, then remember the answer | M4 |
 | P7 | The Phase 2 release | `v0.2.0`, built and released like `v0.1.0` after the M4 acceptance walk. No releases between milestones | M4 |
-| P8 | Mistake bars on the trend graph (audit P2-Q3). M7 removed them at the owner's request | They stay out. M2 builds the loss thresholds for the quality marks and the swing list only | M2 |
+| P8 | Mistake bars on the trend graph (audit P2-Q3). M7 removed them at the owner's request | They stay out. M2 builds the loss thresholds for the swing list only (move-quality marks were dropped at the owner's request, 2026-11-23) | M2 |
 | P9 | The swing list: each side's biggest drops, click to jump (audit P2-G7, P2-Q4) | In Phase 2, in M2, since whole-game analysis feeds it | M2 |
 | P10 | Try-out (audit P2-Q1). Interface design 4.1 says "no try-a-move button" [Decided], and section 6 makes every played move a variation | A variation marked as a try-out, which one step discards. Interface design 4.1 is revised to allow its toggle | M3 |
 | P11 | Markup (audit P2-Q2). Interface design 6 has "no marking without playing, for now" [Proposed] | Marks and labels found in opened files are always drawn. The tools are triangle, square, circle, cross and letters first, saved into the SGF; freehand drawing stays on screen and is not saved | M3 |
@@ -130,7 +129,7 @@ These are **[Proposed]**. Each milestone design restates the parts it uses.
 | | Milestone | Proves | Depends on |
 |---|---|---|---|
 | M1 | Layout, board styles and input | Today's screen runs inside the panel system, with the sub-board. It works at phone width with touch, and the board and stones have their new styles | — |
-| M2 | Whole-game analysis and cache | A game is analysed once and remembered. The candidate list, quality marks, next-move hint and ownership come from that analysis | M1 |
+| M2 | Whole-game analysis and cache | A game is analysed once and remembered. The candidate list, swing list, next-move hint and ownership come from that analysis | M1 |
 | M3 | Game editing | A review can branch, comment, mark up and set up positions, with undo, and save cleanly | M1, M2 |
 | M4 | Engines, shortcuts, session, acceptance | Engine profiles and the console, the shortcut editor and sessions. Phase 2 acceptance on both machines, and `v0.2.0` | M1, M2, M3 |
 
@@ -184,16 +183,16 @@ One branch per milestone, for example `feat/p2-m1-layout`. Each ends with CI gre
 
 ### M2. Whole-game analysis and cache
 
-**Before building, to the owner:** the designs for the whole-game analysis controls and progress, the move-quality marks, the next-move hint, and the ownership display (interface design section 8).
+**Before building, to the owner:** the designs for the whole-game analysis controls and progress, the next-move hint, and the ownership display (interface design section 8). Move-quality marks were dropped at the owner's request (2026-11-23, P2 M2 design 12).
 
 **Build:**
 
 - **The persisted cache** (4.3) with its size cap and "clear analysis" for a position or the whole game (P5, audit P2-G6). The engine identity is part of the key.
 - **Whole-game analysis:** the main line, a range of moves, and only Black's or only White's moves (audit P2-G2). LizzieYzy runs it on a separate engine; Aji uses its one analysis engine. Background on open, per P4. It can be paused, shows progress, and puts the current position first. All branches come in M3.
-- **Loss thresholds** that set the quality marks, and the trend graph's options. Mistake bars only if P8 brings them back.
+- **The boost pass** (波动时加强, moved from Phase 5): after the job's first pass, moves whose loss passes a threshold are searched again with more visits. Mistake bars only if P8 brings them back.
 - **The swing list** (P9, audit P2-G7): each side's biggest win-rate or score drops above a threshold, with "only after this move"; a click jumps to the move.
 - **The candidate list panel:** sortable, with the fields of 7.3.
-- **Move-quality marks** on the stones, and the **next-move hint**.
+- The **next-move hint**.
 - **Ownership and territory display**, in the styles the design settles. **Position estimate** (形势判断), and the count of **final scoring** (终局点目): the user marks dead stones and sees the result. Writing that result into the record (`RE`) comes in M3, with the game information editor and undo. **[Proposed, the author's call]**
 - **LizzieYzy analysis import:** the `LZ` and `LZOP` properties are read into the cache when a file opens (charter 6.7). `LZ2` and `LZOP2` hold a second engine's analysis and wait for dual-engine mode in Phase 5 (audit P2-L2). LizzieYzy stores visits abbreviated (such as `1.2k`), so imported results are marked as imported, and any fresh analysis of the position replaces them. The importer confirms whose side each stored win rate is from. **Save with analysis** writes `LZ` and `LZOP`, so LizzieYzy reads Aji's analysis.
 - **Backlog items in code M2 touches:**
@@ -206,7 +205,7 @@ One branch per milestone, for example `feat/p2-m1-layout`. Each ends with CI gre
 **Exit (Mac):**
 
 - With background analysis on open turned on (P4), a game opened for the first time is analysed in the background while the user navigates, and the current position always answers first.
-- Quitting and reopening shows the whole graph and the quality marks at once, with no new analysis.
+- Quitting and reopening shows the whole graph and the swing list at once, with no new analysis.
 - A record analysed in LizzieYzy shows its analysis in Aji. A record saved with analysis from Aji opens in LizzieYzy with its analysis.
 - Ownership and the estimate show on a finished game.
 

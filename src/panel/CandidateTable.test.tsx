@@ -160,10 +160,10 @@ it('labels the played move, in bold', () => {
   expect(rows()[2].querySelector('[data-played]')).not.toBeNull();
 });
 
-it('reads 实战 · 最佳 when the played move is the best', () => {
+it('reads 实战 最佳 when the played move is the best', () => {
   withVsBest();
   mount({ nextMove: play(15) });
-  expect(within(rows()[0]).getByText('实战 · 最佳')).toBeInTheDocument();
+  expect(within(rows()[0]).getByText('实战 最佳')).toBeInTheDocument();
 });
 
 it('fades the rows while catching up', () => {

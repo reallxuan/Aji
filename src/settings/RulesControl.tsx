@@ -118,7 +118,7 @@ function KomiStepper({ komi, onChange }: { komi: number; onChange(komi: number):
 }
 
 /**
- * The analysis rules (design 5.5, mockup frame C): 中国规则 · 日韩规则 · 自定义. A preset fixes
+ * The analysis rules (design 5.5, mockup frame C): 中国规则, 日韩规则, 自定义. A preset fixes
  * its komi and scoring; Custom frees both, starting from the preset it leaves.
  */
 export function RulesControl({

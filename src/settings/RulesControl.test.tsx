@@ -24,7 +24,7 @@ const custom = (komi: number, scoring: 'area' | 'territory' = 'area'): AnalysisR
 it('chooses a preset, which shows its fixed komi and no stepper', () => {
   const { onChange } = show({ kind: 'chinese' });
   expect(screen.getByText('7.5 目')).toBeInTheDocument();
-  expect(screen.getByText('数子 · 由规则决定')).toBeInTheDocument();
+  expect(screen.getByText('数子，由规则决定')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '增加贴目' })).toBeNull();
   fireEvent.click(screen.getByRole('radio', { name: '日韩规则' }));
   expect(onChange).toHaveBeenCalledWith({ kind: 'japaneseKorean' });

@@ -293,8 +293,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
                 {t('analysis.graph.winrate', {
                   winrate: formatPercent(hovered.stats!.winrate, lang),
                 })}
-                {' · '}
-                <span className="text-score">
+                <span className="ml-2 text-score">
                   {t('analysis.graph.lead', {
                     lead: isEvenLead(hovered.stats!.scoreLead)
                       ? t('analysis.even')
