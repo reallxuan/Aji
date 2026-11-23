@@ -5,7 +5,7 @@ import { formatKomi, komiOf } from '../game/komi';
 import { GameInfoContent } from './GameInfoPopover';
 
 /**
- * The rules and komi KataGo analyses with (`中国 · 7.5`), beside the title. An amber dot marks a
+ * The rules and komi KataGo analyses with (`中国 7.5`), beside the title. An amber dot marks a
  * change from the file's reading. Opens the game information popover.
  */
 export function RulesChip() {

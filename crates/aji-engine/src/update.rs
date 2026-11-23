@@ -38,9 +38,30 @@ pub struct AnalysisUpdate {
     /// The root visits the position had in the cache when this search started: a new search
     /// starts from zero, and is catching up while it has fewer (design 5.2).
     pub previous_visits: u32,
+    /// KataGo's ownership, one signed byte per point row by row (`round(v × 127)`), Black's
+    /// view: positive is Black's (P2 M2 design 5.2).
+    pub ownership: Option<Vec<i8>>,
+    /// The record's next move when it is not among the candidates shown: the next position's
+    /// root and the move's loss, once that position has a result (P2 M2 design 5.6).
+    pub next: Option<NextResult>,
 }
 
-/// KataGo refused to analyse a position, for example a superko repeat (design 5.1).
+/// The next position's result, for the next-move hint.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct NextResult {
+    pub stats: TrendStats,
+    pub loss: crate::Loss,
+}
+
+/// Quantises one ownership value in −1..1.
+pub fn quantise_ownership(v: f64) -> i8 {
+    (v.clamp(-1.0, 1.0) * 127.0).round() as i8
+}
+
+/// KataGo refused to analyse a position, for example an illegal move (design 5.1). (KataGo
+/// 1.18.2 analyses a positional-superko repeat instead: see `analysis-ownership.jsonl`.)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -106,12 +127,49 @@ pub fn to_update(raw: &RawAnalysis, position: &Position, max_candidates: usize) 
         is_final: !raw.is_during_search,
         candidates,
         previous_visits: 0,
+        ownership: raw
+            .ownership
+            .as_ref()
+            .map(|o| o.iter().map(|&v| quantise_ownership(v)).collect()),
+        next: None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ownership_is_quantised_to_black_view() {
+        // KataGo 1.18.2, White to move after B Q16, launched with reportAnalysisWinratesAs=BLACK:
+        // the recorded ownership is already Black's (Q16 is +0.79), so it is not flipped.
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/katago/1.18.2-metal/analysis-ownership.jsonl"
+        );
+        let text = std::fs::read_to_string(path).unwrap();
+        let raw = text
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter(|e| e["s"] == "out")
+            .find_map(|e| match crate::parse_line(e["line"].as_str().unwrap()) {
+                crate::KataLine::Analysis(a) if a.id == "o1" && !a.is_during_search => Some(a),
+                _ => None,
+            })
+            .expect("o1 final");
+        let mut p = pos();
+        p.moves = vec![(
+            aji_core::Color::Black,
+            aji_core::Move::Play(aji_core::Point { x: 15, y: 3 }),
+        )];
+        let own = to_update(&raw, &p, 10).ownership.expect("ownership");
+        assert_eq!(own.len(), 361);
+        let at = |x: usize, y: usize| own[y * 19 + x];
+        let raw_own = raw.ownership.as_ref().unwrap();
+        assert_eq!(at(15, 3), (raw_own[3 * 19 + 15] * 127.0).round() as i8);
+        assert!(at(15, 3) > 76, "Black's stone is Black's: {}", at(15, 3));
+        assert_eq!(at(3, 15), (raw_own[15 * 19 + 3] * 127.0).round() as i8);
+    }
 
     #[test]
     fn a_converted_update_has_no_previous_visits() {
@@ -125,6 +183,7 @@ mod tests {
                 score_lead: 0.0,
             },
             move_infos: Vec::new(),
+            ownership: None,
         };
         let position = Position::empty(
             aji_core::BoardSize::NINETEEN,
@@ -159,6 +218,7 @@ mod tests {
                 score_lead: 0.0,
             },
             move_infos: infos,
+            ownership: None,
         }
     }
 

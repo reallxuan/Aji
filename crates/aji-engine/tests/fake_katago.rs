@@ -339,3 +339,66 @@ fn stall_repeats_the_nth_report_until_terminated() {
         "the stalled replay stops after terminate"
     );
 }
+
+fn anywhere(id: &str, moves: &str, max_visits: u64, every: Option<f64>) -> String {
+    let every = every.map_or(String::new(), |s| {
+        format!(r#","reportDuringSearchEvery":{s}"#)
+    });
+    format!(
+        r#"{{"id":"{id}","moves":{moves},"rules":"japanese","komi":6.5,"boardXSize":19,"boardYSize":19,"maxVisits":{max_visits},"includeOwnership":true{every}}}"#
+    )
+}
+
+/// Every line for `id` up to and including its final.
+fn until_final(fake: &Fake, id: &str) -> Vec<Value> {
+    let mut seen = Vec::new();
+    loop {
+        let v = fake.recv();
+        if v["id"] != id {
+            continue;
+        }
+        let done = during_search(&v) == Some(false);
+        seen.push(v);
+        if done {
+            return seen;
+        }
+    }
+}
+
+#[test]
+fn synthetic_fake_answers_any_position_deterministically() {
+    let mut fake = Fake::spawn("synthetic");
+    let moves = r#"[["B","K10"],["W","C3"]]"#;
+    fake.send(&anywhere("s1", moves, 100, Some(0.01)));
+    let first = until_final(&fake, "s1");
+    assert!(first.len() > 1, "reports before the final: {first:?}");
+    let fin = first.last().unwrap();
+    assert_eq!(fin["rootInfo"]["visits"], 100);
+    assert_eq!(fin["moveInfos"].as_array().unwrap().len(), 3);
+    assert_eq!(fin["ownership"].as_array().unwrap().len(), 361);
+    assert_eq!(fin["turnNumber"], 2);
+
+    fake.send(&anywhere("s2", moves, 100, None));
+    let again = until_final(&fake, "s2");
+    assert_eq!(again.len(), 1, "no reports without an interval");
+    assert_eq!(again[0]["rootInfo"]["winrate"], fin["rootInfo"]["winrate"]);
+    assert_eq!(again[0]["moveInfos"], fin["moveInfos"]);
+
+    fake.send(&anywhere("s3", r#"[["B","D4"]]"#, 100, None));
+    let other = until_final(&fake, "s3");
+    assert_ne!(other[0]["moveInfos"], fin["moveInfos"]);
+}
+
+#[test]
+fn synthetic_fake_honours_terminate() {
+    let mut fake = Fake::spawn("synthetic");
+    fake.send(&anywhere("long", r#"[["B","E5"]]"#, 1 << 50, Some(0.02)));
+    let report = fake.recv();
+    assert_eq!(report["id"], "long");
+    assert_eq!(during_search(&report), Some(true));
+    fake.send(r#"{"id":"t","action":"terminate","terminateId":"long"}"#);
+    let fin = until_final(&fake, "long");
+    let fin = fin.last().unwrap();
+    assert_eq!(fin["moveInfos"].as_array().unwrap().len(), 3);
+    assert!(fake.recv_within(200).is_none_or(|v| v["id"] != "long"));
+}

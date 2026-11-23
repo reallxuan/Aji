@@ -75,6 +75,8 @@ describe('development scenarios', () => {
       'mac',
       'game',
       'analysing',
+      'job-running',
+      'job-done',
     ]);
     expect(scenarioTransport('nope')).toBeNull();
   });
@@ -157,6 +159,68 @@ describe('development scenarios', () => {
     await throughTheWizard();
     expect(await screen.findByText('KataGo 已就绪。', undefined, settle)).toBeInTheDocument();
     expect(transport.unhandled).toEqual([]);
+  });
+
+  it('job-running plays a job: progress, trend nodes, a boost pass, and done', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = scenarioTransport('job-running', { tick: 50 })!;
+      const events: AppEvent[] = [];
+      transport.subscribe((event) => events.push(event));
+      vi.advanceTimersByTime(60_000);
+      const progress = events.flatMap((e) => (e.type === 'jobProgress' ? [e.progress] : []));
+      const states = progress.map((p) => p.state);
+      expect(states[0]).toBe('running');
+      expect(states).toContain('boosting');
+      expect(states.at(-1)).toBe('done');
+      expect(progress.at(-1)).toMatchObject({ done: 243, total: 243 });
+      const trend = await transport.request({ type: 'gameTrend' });
+      if (trend.type !== 'trend') throw new Error('no trend');
+      expect(trend.nodes.every((n) => n.stats !== null)).toBe(true);
+      expect(trend.nodes.some((n) => n.loss && Math.abs(n.loss.winrate) >= 10)).toBe(true);
+      const pushed = events.flatMap((e) => (e.type === 'trendNodes' ? [e] : []));
+      expect(pushed.length).toBeGreaterThan(0);
+      expect(pushed.every((e) => e.revision === trend.revision)).toBe(true);
+
+      // Started again and stopped: the status reads stopped.
+      const settings = await transport.request({ type: 'settingsGet' });
+      if (settings.type !== 'settings') throw new Error('no settings');
+      await transport.request({ type: 'jobStart', options: settings.settings.jobOptions });
+      vi.advanceTimersByTime(100);
+      await transport.request({ type: 'jobStop' });
+      const last = events.flatMap((e) => (e.type === 'jobProgress' ? [e.progress] : [])).at(-1);
+      expect(last?.state).toBe('stopped');
+      await transport.request({ type: 'cacheClear', scope: 'game' });
+      await expect(transport.request({ type: 'cacheStats' })).resolves.toMatchObject({
+        type: 'cacheStats',
+        persistent: true,
+      });
+      await expect(
+        transport.request({ type: 'gameScore', mode: { kind: 'estimate' } }),
+      ).rejects.toMatchObject({ code: 'scoreUnavailable' });
+      expect(transport.unhandled).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('job-done opens on an analysed game with the job just done', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = scenarioTransport('job-done', { tick: 50 })!;
+      const events: AppEvent[] = [];
+      transport.subscribe((event) => events.push(event));
+      vi.advanceTimersByTime(1000);
+      const progress = events.flatMap((e) => (e.type === 'jobProgress' ? [e.progress] : []));
+      expect(progress.map((p) => p.state)).toEqual(['done']);
+      const trend = await transport.request({ type: 'gameTrend' });
+      if (trend.type !== 'trend') throw new Error('no trend');
+      expect(trend.nodes).toHaveLength(243);
+      expect(trend.nodes.every((n) => n.stats !== null)).toBe(true);
+      expect(transport.unhandled).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('analysing feeds the position on the board, stops at the limit and continues', async () => {

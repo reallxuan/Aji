@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ShownCandidate } from '../analysis/candidates';
 import type { Move } from '../transport/generated/Move';
-import { candidateAt } from './candidates';
+import { PLAYED_RING } from '../analysis/palette';
+import { candidateAt, drawNextRing } from './candidates';
 import { boardGeometry } from './geometry';
 
 const disc = (rank: number, move: Move): ShownCandidate => ({
@@ -46,5 +47,27 @@ describe('candidateAt', () => {
     expect(candidateAt((g.lines[3] + g.lines[4]) / 2, g.lines[3], view, discs)).toBeNull();
     expect(candidateAt(0, 0, view, discs)).toBeNull();
     expect(candidateAt(-5, 1000, view, discs)).toBeNull();
+  });
+});
+
+describe('drawNextRing', () => {
+  it('draws the played ring alone around an empty point, without clearing the layer', () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const view = { cssSize: 560, dpr: 2, boardSize: 19 };
+    drawNextRing(ctx, view, { x: 3, y: 15 });
+    const g = boardGeometry(560, 19);
+    const events = (
+      ctx as unknown as {
+        __getEvents(): Array<{ type: string; props: Record<string, number | string> }>;
+      }
+    ).__getEvents();
+    const arcs = events.filter((e) => e.type === 'arc');
+    expect(arcs).toHaveLength(1);
+    expect(arcs[0].props).toMatchObject({ x: g.lines[3] * 2, y: g.lines[15] * 2 });
+    // Centred half its width outside where a disc would end, as on a disc (design 13.3).
+    expect(arcs[0].props.radius).toBeCloseTo((g.stoneRadius + PLAYED_RING.width / 2) * 2);
+    expect(events.find((e) => e.type === 'lineWidth')?.props.value).toBe(PLAYED_RING.width * 2);
+    expect(events.some((e) => e.type === 'clearRect')).toBe(false);
   });
 });

@@ -81,7 +81,13 @@ describe('the scenarios’ fake game', () => {
     const reply = handle({ type: 'gameTrend' });
     if (reply?.type !== 'trend') throw new Error('no trend');
     expect(reply.nodes).toHaveLength(243);
-    expect(reply.nodes[0]).toEqual({ moveNumber: 0, mover: null, move: null, stats: null });
+    expect(reply.nodes[0]).toEqual({
+      moveNumber: 0,
+      mover: null,
+      move: null,
+      stats: null,
+      loss: null,
+    });
     expect(reply.nodes[2]).toMatchObject({ moveNumber: 2, mover: 'white' });
   });
 });

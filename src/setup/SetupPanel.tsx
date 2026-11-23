@@ -64,7 +64,7 @@ function ProgressLine({ segment }: { segment: number }) {
   );
 }
 
-/** `中文 · EN`: writes the language setting, as the settings page does (K2). */
+/** `中文 | EN`: writes the language setting, as the settings page does (K2). */
 function LanguageSwitch() {
   const { t, i18n } = useTranslation();
   const transport = useTransport();
@@ -97,7 +97,7 @@ function LanguageSwitch() {
   return (
     <div className="flex items-center gap-2 text-[0.75rem]">
       {chinese}
-      <span aria-hidden className="size-0.5 rounded-full bg-text-muted" />
+      <span aria-hidden className="h-3 w-px bg-hairline" />
       {english}
     </div>
   );

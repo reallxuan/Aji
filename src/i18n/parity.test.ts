@@ -47,3 +47,13 @@ it('English text contains no Chinese characters', () => {
     expect(/[㐀-鿿]/.test(value), key).toBe(false);
   }
 });
+
+it('no_locale_string_contains_a_middle_dot', () => {
+  // The owner's rule (CLAUDE.md): never "·" as a separator in interface text, in any language.
+  const dotted = Object.entries(locales).flatMap(([lang, strings]) =>
+    Object.entries(strings)
+      .filter(([, value]) => value.includes('·'))
+      .map(([key]) => `${lang}: ${key}`),
+  );
+  expect(dotted).toEqual([]);
+});

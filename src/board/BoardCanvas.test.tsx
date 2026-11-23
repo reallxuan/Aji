@@ -40,8 +40,8 @@ describe('BoardCanvas', () => {
       <BoardCanvas cssSize={400} boardSize={19} stones={empty(19)} lastMove={null} />,
     );
     const canvases = container.querySelectorAll('canvas');
-    // Wood and grid, stones, candidate discs.
-    expect(canvases).toHaveLength(3);
+    // Wood and grid, stones, the position estimate's squares, candidate discs.
+    expect(canvases).toHaveLength(4);
     for (const canvas of canvases) {
       expect(canvas.width).toBe(800);
       expect(canvas.height).toBe(800);
@@ -101,6 +101,51 @@ describe('BoardCanvas candidates', () => {
     pv: [],
   };
 
+  it('rings the record’s next move alone on the candidate layer', () => {
+    stubRatio(1);
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const { container } = render(
+      <BoardCanvas {...props} candidates={[best]} nextRing={{ x: 9, y: 9 }} />,
+    );
+    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="candidates"]')!;
+    const events = (
+      layer.getContext('2d') as unknown as {
+        __getEvents(): Array<{ type: string; props: { x: number } }>;
+      }
+    ).__getEvents();
+    const g = boardGeometry(400, 19);
+    const arcs = events.filter((e) => e.type === 'arc').map((e) => e.props.x);
+    // The best disc's fill and ring, then the next move's ring alone.
+    expect(arcs.at(-1)).toBeCloseTo(g.lines[9]);
+  });
+
+  it('draws the ownership squares on their own layer, between the stones and the discs', () => {
+    stubRatio(1);
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const owners = empty(19);
+    owners[0] = 'black';
+    owners[1] = 'white';
+    const { container, rerender } = render(
+      <BoardCanvas {...props} candidates={[best]} ownership={{ owners, dead: [] }} />,
+    );
+    const layers = [...container.querySelectorAll('canvas')].map((c) => c.dataset.layer ?? 'board');
+    expect(layers.indexOf('ownership')).toBe(layers.indexOf('candidates') - 1);
+    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="ownership"]')!;
+    const fills = () =>
+      (layer.getContext('2d') as unknown as { __getDrawCalls(): Array<{ type: string }> })
+        .__getDrawCalls()
+        .filter((c) => c.type === 'fillRect').length;
+    expect(fills()).toBe(2);
+    // Off again: the layer is cleared.
+    rerender(<BoardCanvas {...props} candidates={[best]} ownership={null} />);
+    const cleared = (
+      layer.getContext('2d') as unknown as { __getEvents(): Array<{ type: string }> }
+    )
+      .__getEvents()
+      .filter((e) => e.type === 'clearRect').length;
+    expect(cleared).toBeGreaterThanOrEqual(2);
+  });
+
   it('fades the candidate layer while a new search catches up', () => {
     stubRatio(1);
     const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
@@ -158,6 +203,36 @@ describe('BoardCanvas candidates', () => {
     const x = g.lines[18] + g.stoneRadius * 0.9;
     fireEvent.mouseMove(area, { clientX: x, clientY: g.lines[18] });
     expect(onHover.mock.calls).toEqual([[corner.move]]);
+  });
+
+  it('reports the point clicked or tapped while points are asked for, and no candidate', () => {
+    stubRatio(1);
+    const onTapPoint = vi.fn();
+    const onTapCandidate = vi.fn();
+    const { container } = render(
+      <BoardCanvas
+        cssSize={400}
+        boardSize={19}
+        stones={empty(19)}
+        lastMove={null}
+        candidates={[best]}
+        onTapCandidate={onTapCandidate}
+        onTapPoint={onTapPoint}
+      />,
+    );
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19);
+    // Within half a spacing of D16's lines (x 3, y 3), where a disc also sits.
+    fireEvent.click(area, { clientX: g.lines[3] + g.spacing * 0.4, clientY: g.lines[3] });
+    // Off the grid, in the coordinates' margin: nothing.
+    fireEvent.click(area, { clientX: 1, clientY: 1 });
+    const touch = { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0 };
+    fireEvent.pointerDown(area, { ...touch, clientX: g.lines[18], clientY: g.lines[0] });
+    fireEvent.pointerUp(area, { ...touch, clientX: g.lines[18], clientY: g.lines[0] });
+    // The click a browser sends after the tap is not a second one.
+    fireEvent.click(area, { clientX: g.lines[18], clientY: g.lines[0] });
+    expect(onTapPoint.mock.calls).toEqual([[{ x: 3, y: 3 }], [{ x: 18, y: 0 }]]);
+    expect(onTapCandidate).not.toHaveBeenCalled();
   });
 
   it('a reorder under a still pointer is not a new hover', () => {

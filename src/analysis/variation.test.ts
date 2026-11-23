@@ -29,6 +29,11 @@ describe('linePrefix', () => {
     const long = Array.from({ length: 25 }, (_, i) => p(i % 19, Math.floor(i / 19)));
     expect(linePrefix(long)).toHaveLength(20);
   });
+
+  it('stops at the chosen line length', () => {
+    const long = Array.from({ length: 25 }, (_, i) => p(i % 19, Math.floor(i / 19)));
+    expect(linePrefix(long, 5)).toHaveLength(5);
+  });
 });
 
 describe('variationBoard', () => {

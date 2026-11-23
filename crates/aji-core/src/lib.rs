@@ -3,8 +3,10 @@
 
 mod coords;
 pub mod game;
+mod katarules;
 mod position;
 pub mod sgf;
 
 pub use coords::*;
+pub use katarules::*;
 pub use position::*;

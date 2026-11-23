@@ -36,6 +36,7 @@ export const MIN_SIZES: Record<PanelKind, { width: number; height: number }> = {
   winrate: { width: 200, height: 44 },
   trend: { width: 240, height: 120 },
   candidates: { width: 260, height: 160 },
+  swings: { width: 260, height: 160 },
   subboard: { width: 200, height: 220 },
 };
 

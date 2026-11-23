@@ -1,10 +1,12 @@
 import { act, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
+import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { LayoutFrame } from './LayoutFrame';
+import { hidePanel } from './ops';
 import type { Layout } from './model';
 import { presetLayout } from './presets';
 
@@ -125,10 +127,37 @@ describe('LayoutFrame', () => {
     // CSS gives out only part of the free space when the grow factors sum below 1.
     mount(null);
     const grows = ['trend', 'candidates'].map((id) => {
-      const wrapper = document.querySelector(`[data-panel="${id}"]`)!.parentElement!;
+      // The slot holding the panel: a tab group's, for 候选 beside 波动.
+      let wrapper = document.querySelector(`[data-panel="${id}"]`)!.parentElement!;
+      while (!wrapper.style.flex) wrapper = wrapper.parentElement!;
       return Number.parseFloat(wrapper.style.flex);
     });
     expect(grows[0] + grows[1]).toBeGreaterThanOrEqual(1);
     expect(grows[1] / grows[0]).toBeCloseTo(2);
+  });
+
+  describe('while scoring', () => {
+    afterEach(() => resetScoringStore());
+
+    it('the count takes the bar and the graph, and the layout is kept', async () => {
+      useScoringStore.setState({ active: true });
+      mount(null);
+      const stored = useDeviceStore.getState().settings.layout;
+      expect(shown()).toEqual(['header', 'winrate', 'candidates']);
+      expect(screen.getByTestId('scoring-card')).toBeInTheDocument();
+      expect(screen.queryByTestId('winrate-bar')).toBeNull();
+      // Nothing to drag while scoring: the panels have no grips.
+      expect(document.querySelector('[data-grip]')).toBeNull();
+      act(() => useScoringStore.setState({ active: false }));
+      expect(shown()).toEqual(['header', 'winrate', 'trend', 'candidates']);
+      expect(screen.getByTestId('winrate-bar')).toBeInTheDocument();
+      expect(useDeviceStore.getState().settings.layout).toBe(stored);
+    });
+
+    it('the count shows even where the bar is hidden', () => {
+      useScoringStore.setState({ active: true });
+      mount(hidePanel(presetLayout('default'), { kind: 'winrate' }));
+      expect(screen.getByTestId('scoring-card')).toBeInTheDocument();
+    });
   });
 });

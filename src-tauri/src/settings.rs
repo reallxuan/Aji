@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
+use crate::job::JobOptions;
+
 /// The contents of `settings.json`. Unknown fields are ignored, and a missing or unreadable
 /// field takes its default.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -74,7 +76,7 @@ pub enum Perspective {
 }
 
 /// The preferences the settings page edits.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct UiSettings {
@@ -90,6 +92,16 @@ pub struct UiSettings {
     pub show_coordinates: bool,
     /// Whose numbers the analysis shows; switched from the graph's legend.
     pub perspective: Perspective,
+    /// The hint for the main line's next move (P2 M2 design 5.6).
+    pub show_next_move: bool,
+    /// Opening a file starts a job with `job_options`.
+    pub analyse_on_open: bool,
+    /// The results store's size cap, in megabytes.
+    pub cache_cap_mb: u32,
+    /// Save as… writes LizzieYzy's `LZ` analysis (design 5.11).
+    pub save_analysis: bool,
+    /// The whole-game analysis dialog's last options.
+    pub job_options: JobOptions,
 }
 
 impl Default for UiSettings {
@@ -102,6 +114,11 @@ impl Default for UiSettings {
             default_rules: AnalysisRules::Chinese,
             show_coordinates: true,
             perspective: Perspective::Black,
+            show_next_move: true,
+            analyse_on_open: false,
+            cache_cap_mb: 1024,
+            save_analysis: false,
+            job_options: JobOptions::default(),
         }
     }
 }
@@ -194,6 +211,15 @@ pub fn load_settings(path: &Path) -> Result<Settings, SettingsError> {
                 .unwrap_or_default(),
             show_coordinates: field(&map, "showCoordinates").unwrap_or(defaults.show_coordinates),
             perspective: field(&map, "perspective").unwrap_or_default(),
+            show_next_move: field(&map, "showNextMove").unwrap_or(defaults.show_next_move),
+            analyse_on_open: field(&map, "analyseOnOpen").unwrap_or(defaults.analyse_on_open),
+            cache_cap_mb: field::<u32>(&map, "cacheCapMb")
+                .filter(|mb| *mb > 0)
+                .unwrap_or(defaults.cache_cap_mb),
+            save_analysis: field(&map, "saveAnalysis").unwrap_or(defaults.save_analysis),
+            job_options: field::<JobOptions>(&map, "jobOptions")
+                .filter(JobOptions::is_valid)
+                .unwrap_or(defaults.job_options),
         },
     };
     if let Some(dev) = &settings.dev_engine {
@@ -575,6 +601,11 @@ mod tests {
                 default_rules: AnalysisRules::Chinese,
                 show_coordinates: true,
                 perspective: Perspective::Black,
+                show_next_move: true,
+                analyse_on_open: false,
+                cache_cap_mb: 1024,
+                save_analysis: false,
+                job_options: JobOptions::default(),
             }
         );
     }
@@ -594,6 +625,14 @@ mod tests {
             default_rules: AnalysisRules::JapaneseKorean,
             show_coordinates: false,
             perspective: Perspective::White,
+            show_next_move: false,
+            analyse_on_open: true,
+            cache_cap_mb: 4096,
+            save_analysis: true,
+            job_options: JobOptions {
+                side: crate::job::JobSide::White,
+                ..JobOptions::default()
+            },
         };
         save_ui_settings(&path, &ui).unwrap();
         let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -621,13 +660,17 @@ mod tests {
             },
             show_coordinates: false,
             perspective: Perspective::White,
+            ..UiSettings::default()
         };
         assert_eq!(
             serde_json::to_value(&ui).unwrap(),
             serde_json::json!({"language":"zh-CN","theme":"dark",
                 "discLines":["winrate","visits"],"visitLimit":5000,
                 "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory"},
-                "showCoordinates":false,"perspective":"white"})
+                "showCoordinates":false,"perspective":"white","showNextMove":true,
+                "analyseOnOpen":false,"cacheCapMb":1024,"saveAnalysis":false,
+                "jobOptions":{"range":{"kind":"whole"},"side":"both","visits":500,
+                    "boost":{"on":true,"threshold":10.0,"visits":3000}}})
         );
         assert_eq!(
             serde_json::from_value::<UiSettings>(serde_json::to_value(&ui).unwrap()).unwrap(),
@@ -685,5 +728,37 @@ mod tests {
             assert_eq!(settings.ui.theme, ThemePreference::Dark, "{bad}");
             assert_eq!(settings.ui.visit_limit, Some(800), "{bad}");
         }
+    }
+
+    // ------------------------------------------------------------ P2 M2: analysis
+
+    #[test]
+    fn old_settings_files_read_new_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let ui = load_settings(&write(&dir, r#"{"theme":"dark"}"#))
+            .unwrap()
+            .ui;
+        assert!(ui.show_next_move);
+        assert!(!ui.analyse_on_open);
+        assert_eq!(ui.cache_cap_mb, 1024);
+        assert!(!ui.save_analysis);
+        assert_eq!(ui.job_options, JobOptions::default());
+        // Bad values fall back alone.
+        let json = r#"{"theme":"dark","cacheCapMb":0,"showNextMove":"yes",
+            "jobOptions":{"visits":"many"},"saveAnalysis":true}"#;
+        let ui = load_settings(&write(&dir, json)).unwrap().ui;
+        assert_eq!(ui.theme, ThemePreference::Dark);
+        assert_eq!(ui.cache_cap_mb, 1024);
+        assert!(ui.show_next_move);
+        assert_eq!(ui.job_options, JobOptions::default());
+        assert!(ui.save_analysis);
+        let json = r#"{"jobOptions":{"range":{"kind":"moves","from":40,"to":3},"side":"both",
+            "visits":0,"boost":{"on":true,"threshold":10,"visits":3000}}}"#;
+        let ui = load_settings(&write(&dir, json)).unwrap().ui;
+        assert_eq!(
+            ui.job_options,
+            JobOptions::default(),
+            "a backwards range or no visits"
+        );
     }
 }

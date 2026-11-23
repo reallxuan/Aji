@@ -17,6 +17,7 @@ import { useWizardStore } from '../setup/wizardStore';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { Response } from '../transport/generated/Response';
 import { TransportProvider } from '../transport/TransportProvider';
+import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { LayoutFrame } from './LayoutFrame';
 import { hidePanel } from './ops';
 import { presetLayout } from './presets';
@@ -60,23 +61,35 @@ describe('the narrow arrangement', () => {
     setWindow(375, 812);
     useWizardStore.setState({ open: false, dismissed: false, rerun: false });
     usePanelStore.setState({ view: 'main' });
+    resetScoringStore();
   });
 
   it('375×812 shows tabs and the bottom navigation', () => {
     renderWithGame(<LayoutFrame />);
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
-    expect(tabs()).toEqual(['走势', '候选']);
+    expect(tabs()).toEqual(['走势', '候选', '波动']);
     expect(shown()).toEqual(['trend']);
     expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(4);
     // The board takes the width, less 4 px each side.
     expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('367px');
   });
 
+  it('while scoring the count takes the panels’ place, with room for all of it', () => {
+    setWindow(768, 1024);
+    useScoringStore.setState({ active: true });
+    renderWithGame(<LayoutFrame />);
+    expect(screen.getByTestId('scoring-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('winrate-bar')).toBeNull();
+    expect(tabs()).toEqual([]);
+    // 1024 − 56 (header) leaves 968; the card keeps 300 of it, the board takes the rest.
+    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('668px');
+  });
+
   it('the phone shows the capture counts under the bar', () => {
     renderWithGame(<LayoutFrame />);
     fireEvent.click(screen.getByRole('tab', { name: '候选' }));
     expect(document.querySelectorAll('[data-captures]')).toHaveLength(1);
-    expect(document.querySelector('[data-captures]')).toHaveTextContent('提子 黑 0 · 白 0');
+    expect(document.querySelector('[data-captures]')).toHaveTextContent('提子 黑 0 白 0');
   });
 
   it('a small landscape window keeps the board above the panels (Review Focus 4)', () => {
@@ -120,7 +133,8 @@ describe('the narrow arrangement', () => {
     setWindow(768, 1024);
     renderWithGame(<LayoutFrame />);
     expect(bottomNav()).toBeNull();
-    expect(screen.queryByRole('tablist')).toBeNull();
+    // The first panel always shows; a strip chooses the second among the rest (候选, 波动).
+    expect(tabs()).toEqual(['候选', '波动']);
     expect(shown()).toEqual(['trend', 'candidates']);
     // The header keeps the full navigation there.
     expect(screen.getByRole('button', { name: '下一手' })).toBeInTheDocument();
@@ -135,7 +149,7 @@ describe('the narrow arrangement', () => {
       .getState()
       .update({ layout: hidePanel(presetLayout('default'), { kind: 'trend' }) });
     renderWithGame(<LayoutFrame />);
-    expect(tabs()).toEqual(['候选']);
+    expect(tabs()).toEqual(['候选', '波动']);
   });
 
   it('the active tab is remembered', () => {

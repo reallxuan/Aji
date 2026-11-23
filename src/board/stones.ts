@@ -1,6 +1,8 @@
 import type { StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
+import { DEAD_ALPHA } from './ownership';
+import type { Point } from '../transport/generated/Point';
 import { asImage, type CanvasFactory, type OffscreenCanvasLike } from './canvasFactory';
 import type { BoardView } from './drawBoard';
 import { boardGeometry, STONE_RADIUS_SHARE } from './geometry';
@@ -213,8 +215,11 @@ export function drawStones(
   stones: readonly (Color | null)[],
   lastMove: Move | null,
   sprites: StoneSprites,
+  /** Dead stones in the position estimate, drawn faded under their owner's square. */
+  faded: readonly Point[] = [],
 ): void {
   const { cssSize, dpr, boardSize } = view;
+  const fade = new Set(faded.map((p) => p.y * boardSize + p.x));
   const size = Math.round(cssSize * dpr);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
@@ -227,11 +232,17 @@ export function drawStones(
       if (!stone) continue;
       const image =
         stone === 'black' ? sprites.black : sprites.white[(x * 7 + y * 3) % WHITE_ROTATIONS];
+      const dim = fade.has(y * boardSize + x);
+      if (dim) {
+        ctx.save();
+        ctx.globalAlpha = DEAD_ALPHA;
+      }
       ctx.drawImage(
         asImage(image),
         Math.round(geometry.lines[x] * dpr - half),
         Math.round(geometry.lines[y] * dpr - half),
       );
+      if (dim) ctx.restore();
     }
   }
   if (lastMove?.type !== 'play') return;

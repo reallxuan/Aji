@@ -32,6 +32,7 @@ const line = (length: number, stats: (i: number) => TrendStats | null = () => nu
     mover: i === 0 ? null : i % 2 ? 'black' : 'white',
     move: null,
     stats: stats(i),
+    loss: null,
   }));
 
 /** A distinct win rate per line index, so a record at the wrong index shows. */
@@ -50,13 +51,15 @@ const update = (i: number, visits = 100): AnalysisUpdate => ({
   isFinal: false,
   candidates: [],
   previousVisits: 0,
+  ownership: null,
+  next: null,
 });
 
 function mount(trend: () => TrendNode[]) {
   const requests: Request[] = [];
   const transport = createFakeTransport((request): Response => {
     requests.push(request);
-    if (request.type === 'gameTrend') return { type: 'trend', nodes: trend() };
+    if (request.type === 'gameTrend') return { type: 'trend', revision: 0, nodes: trend() };
     if (request.type === 'gameSnapshot')
       return { type: 'game', snapshot: makeSnapshot({ revision: 0 }), warnings: [] };
     return {
@@ -99,7 +102,7 @@ it('fetches on mount and replaces on event', async () => {
   expect(trendRequests()).toBe(1);
   expect(useTrendStore.getState().nodes).toHaveLength(3);
   expect(useTrendStore.getState().nodes[1].stats).toEqual(statsOf(1));
-  act(() => transport.emit({ type: 'gameTrend', nodes: line(5) }));
+  act(() => transport.emit({ type: 'gameTrend', revision: 1, nodes: line(5) }));
   expect(useTrendStore.getState().nodes).toHaveLength(5);
   expect(useTrendStore.getState().nodes[1].stats).toBeNull();
 });
@@ -181,8 +184,33 @@ it('a new game starts the shared-key group afresh', async () => {
     moveNumber: 2,
   });
   act(() => transport.emit({ type: 'gameSnapshot', snapshot: elsewhere }));
-  act(() => transport.emit({ type: 'gameTrend', nodes: line(6) }));
+  act(() => transport.emit({ type: 'gameTrend', revision: 2, nodes: line(6) }));
   act(() => transport.emit({ type: 'analysisUpdate', analysis: update(5, 200) }));
   expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(5, 200));
   expect(useTrendStore.getState().nodes[5].stats).toBeNull();
+});
+
+it('applies trend nodes for the line it holds', async () => {
+  const { transport } = mount(() => line(3));
+  await act(async () => {});
+  expect(useTrendStore.getState().revision).toBe(0);
+  const loss = { winrate: 12, score: 3 };
+  act(() =>
+    transport.emit({
+      type: 'trendNodes',
+      revision: 0,
+      nodes: [{ lineIndex: 2, stats: statsOf(2), loss }],
+    }),
+  );
+  expect(useTrendStore.getState().nodes[2]).toMatchObject({ stats: statsOf(2), loss });
+  // A line pushed later: nodes for the old one no longer apply.
+  act(() => transport.emit({ type: 'gameTrend', revision: 3, nodes: line(3) }));
+  act(() =>
+    transport.emit({
+      type: 'trendNodes',
+      revision: 0,
+      nodes: [{ lineIndex: 1, stats: statsOf(1), loss }],
+    }),
+  );
+  expect(useTrendStore.getState().nodes[1].stats).toBeNull();
 });

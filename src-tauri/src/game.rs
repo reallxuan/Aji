@@ -122,6 +122,19 @@ pub struct LineNode {
     pub mv: Option<Move>,
     /// `None` on an illegal node.
     pub key: Option<PositionKey>,
+    /// What KataGo analyses at the node; `None` on an illegal node.
+    pub position: Option<Position>,
+}
+
+/// The nodes of a tree's main line, the first variation at every branch, in order.
+fn main_line_mut(tree: &mut SgfTree) -> Vec<&mut SgfNode> {
+    let mut out = Vec::new();
+    let mut at = Some(tree);
+    while let Some(tree) = at {
+        out.extend(tree.nodes.iter_mut());
+        at = tree.variations.first_mut();
+    }
+    out
 }
 
 impl GameSession {
@@ -236,6 +249,52 @@ impl GameSession {
         self.game.position_at(self.node(), &self.rules)
     }
 
+    /// Increases on every change; a client ignores an event older than what it has.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The current node's index on the main line.
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// The board at the current node, with its capture counts.
+    pub fn board(&self) -> &aji_core::game::Board {
+        self.game.board_at(self.node())
+    }
+
+    pub fn rules(&self) -> AnalysisRules {
+        self.rules
+    }
+
+    pub fn size(&self) -> BoardSize {
+        self.game.size()
+    }
+
+    /// Each main-line node's LizzieYzy analysis as the file had it: the root's `LZOP`, every
+    /// other node's `LZ` (design 5.11).
+    pub fn lizzie(&self) -> Vec<Option<String>> {
+        self.game
+            .main_line()
+            .iter()
+            .enumerate()
+            .map(|(i, &node)| {
+                let id = if i == 0 { "LZOP" } else { "LZ" };
+                self.game.sgf(node).first(id).map(str::to_owned)
+            })
+            .collect()
+    }
+
+    /// The position after the next main-line move, with that move, for the next-move hint;
+    /// `None` at the end, before a node without a move, or when it is illegal.
+    pub fn next(&self) -> Option<(Position, Move)> {
+        let line = self.game.main_line();
+        let &node = line.get(self.index + 1)?;
+        let mv = self.game.last_move(node)?;
+        Some((self.game.position_at(node, &self.rules)?, mv))
+    }
+
     pub fn warnings(&self) -> &[GameWarning] {
         &self.warnings
     }
@@ -286,11 +345,25 @@ impl GameSession {
     /// The file name and UTF-8 text to save; `None` when the game holds nothing to save. The
     /// file's other games follow the open one.
     pub fn export(&self) -> Option<(String, String)> {
+        self.export_with(&[])
+    }
+
+    /// `export`, with `lz[i]` written as main-line node `i`'s LizzieYzy analysis (`LZOP` on the
+    /// root, `LZ` elsewhere), replacing what the file had there.
+    pub fn export_with(&self, lz: &[Option<String>]) -> Option<(String, String)> {
         if self.game.is_empty() {
             return None;
         }
         let changed = self.rules != self.from_file;
-        let mut trees = vec![self.game.to_sgf(changed.then_some(&self.rules))];
+        let mut tree = self.game.to_sgf(changed.then_some(&self.rules));
+        for (i, node) in main_line_mut(&mut tree).into_iter().enumerate() {
+            if let Some(Some(text)) = lz.get(i) {
+                let id = if i == 0 { "LZOP" } else { "LZ" };
+                node.props.retain(|p| p.id != id);
+                node.push(id, [text.clone()]);
+            }
+        }
+        let mut trees = vec![tree];
         // The whole file is written in UTF-8, so a game that names its encoding now names that.
         trees.extend(self.others.iter().cloned().map(|mut tree| {
             if let Some(ca) = tree
@@ -311,11 +384,15 @@ impl GameSession {
         self.game
             .main_line()
             .iter()
-            .map(|&node| LineNode {
-                move_number: self.game.move_number(node),
-                mover: self.game.last_color(node),
-                mv: self.game.last_move(node),
-                key: self.game.position_at(node, &self.rules).map(|p| p.key()),
+            .map(|&node| {
+                let position = self.game.position_at(node, &self.rules);
+                LineNode {
+                    move_number: self.game.move_number(node),
+                    mover: self.game.last_color(node),
+                    mv: self.game.last_move(node),
+                    key: position.as_ref().map(Position::key),
+                    position,
+                }
             })
             .collect()
     }

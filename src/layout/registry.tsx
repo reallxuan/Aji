@@ -2,10 +2,11 @@ import type { ReactNode } from 'react';
 import { CandidateTable } from '../panel/CandidateTable';
 import { HeaderPanel } from '../panel/HeaderPanel';
 import { TrendGraph } from '../panel/TrendGraph';
-import { WinrateBar } from '../panel/WinrateBar';
 import { MIN_SIZES } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
+import { SwingList } from '../panel/SwingList';
+import { WinrateSlot } from '../scoring/WinrateSlot';
 
 export interface PanelSpec {
   kind: PanelKind;
@@ -28,7 +29,7 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     labelKey: 'layout.panels.winrate',
     hideable: true,
     minSize: MIN_SIZES.winrate,
-    Component: () => <WinrateBar />,
+    Component: () => <WinrateSlot />,
   },
   trend: {
     kind: 'trend',
@@ -43,6 +44,13 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     hideable: true,
     minSize: MIN_SIZES.candidates,
     Component: ({ panel }) => <CandidateTable maxRows={panel.maxRows} />,
+  },
+  swings: {
+    kind: 'swings',
+    labelKey: 'layout.panels.swings',
+    hideable: true,
+    minSize: MIN_SIZES.swings,
+    Component: () => <SwingList />,
   },
   subboard: {
     kind: 'subboard',

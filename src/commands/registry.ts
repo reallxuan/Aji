@@ -15,6 +15,12 @@ export type CommandId =
   | 'file.saveAs'
   | 'file.new19'
   | 'analysis.toggle'
+  | 'analysis.game'
+  | 'analysis.stopGame'
+  | 'analysis.clearPosition'
+  | 'analysis.clearGame'
+  | 'scoring.start'
+  | 'estimate.toggle'
   | 'candidates.toggleHidden'
   | 'candidates.peek';
 

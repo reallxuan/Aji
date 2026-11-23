@@ -1,5 +1,5 @@
 //! The macOS menu bar (design 5.6): the app menu, 文件 / File, Edit, 显示 / View (its 布局
-//! submenu, P2 M1 design 5.3) and Window.
+//! submenu, P2 M1 design 5.3, and 形势判断), 分析 / Analysis (P2 M2 design 5.10) and Window.
 //!
 //! The Rust side cannot read the interface's locale files, so the menu's labels live in the
 //! small table below, in both languages, with the one question the save command asks. It is
@@ -72,6 +72,14 @@ pub struct Labels {
     pub replace_prompt: &'static str,
     pub replace: &'static str,
     pub cancel: &'static str,
+    pub analysis: &'static str,
+    pub analyse_game: &'static str,
+    pub stop_game: &'static str,
+    pub clear_analysis: &'static str,
+    pub clear_position: &'static str,
+    pub clear_game: &'static str,
+    pub final_scoring: &'static str,
+    pub estimate: &'static str,
 }
 
 pub fn labels(language: MenuLanguage) -> Labels {
@@ -114,6 +122,14 @@ pub fn labels(language: MenuLanguage) -> Labels {
             replace_prompt: "“{name}”已存在。要替换它吗？",
             replace: "替换",
             cancel: "取消",
+            analysis: "分析",
+            analyse_game: "分析全局…",
+            stop_game: "停止全局分析",
+            clear_analysis: "清除分析结果",
+            clear_position: "本局面",
+            clear_game: "整局",
+            final_scoring: "终局点目",
+            estimate: "形势判断",
         },
         MenuLanguage::En => Labels {
             about: "About Aji",
@@ -161,6 +177,14 @@ pub fn labels(language: MenuLanguage) -> Labels {
             replace_prompt: "“{name}” already exists. Do you want to replace it?",
             replace: "Replace",
             cancel: "Cancel",
+            analysis: "Analysis",
+            analyse_game: "Analyse Game…",
+            stop_game: "Stop Game Analysis",
+            clear_analysis: "Clear Analysis",
+            clear_position: "This Position",
+            clear_game: "Whole Game",
+            final_scoring: "Final Scoring",
+            estimate: "Position Estimate",
         },
     }
 }
@@ -277,8 +301,27 @@ pub fn build<R: Runtime>(
     for (preset, label) in LAYOUT_PRESETS.into_iter().zip(l.presets) {
         layout = layout.item(&item(app, MenuAction::Layout(preset.to_owned()), label)?);
     }
+    // The estimate's key, T, is the interface's: a one-letter accelerator would fire while typing.
     let view = SubmenuBuilder::new(app, l.view)
         .item(&layout.build()?)
+        .separator()
+        .item(&item(app, MenuAction::Estimate, l.estimate)?)
+        .build()?;
+    let clear = SubmenuBuilder::new(app, l.clear_analysis)
+        .item(&item(app, MenuAction::ClearPosition, l.clear_position)?)
+        .item(&item(app, MenuAction::ClearGame, l.clear_game)?)
+        .build()?;
+    let analysis = SubmenuBuilder::new(app, l.analysis)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::AnalyseGame.id(), l.analyse_game)
+                .accelerator("CmdOrCtrl+Shift+A")
+                .build(app)?,
+        )
+        .item(&item(app, MenuAction::StopGame, l.stop_game)?)
+        .separator()
+        .item(&clear)
+        .separator()
+        .item(&item(app, MenuAction::FinalScoring, l.final_scoring)?)
         .build()?;
     let window = SubmenuBuilder::new(app, l.window)
         .item(&PredefinedMenuItem::minimize(app, Some(l.minimize))?)
@@ -291,7 +334,7 @@ pub fn build<R: Runtime>(
         )?)
         .build()?;
     MenuBuilder::new(app)
-        .items(&[&app_menu, &file, &edit, &view, &window])
+        .items(&[&app_menu, &file, &edit, &view, &analysis, &window])
         .build()
 }
 
@@ -369,5 +412,109 @@ mod tests {
         assert_eq!(zh.presets, ["默认", "经典", "极简", "思考", "四盘"]);
         assert_eq!((en.view, en.layout), ("View", "Layout"));
         assert_eq!(en.presets[4], "Four Boards");
+    }
+
+    fn every_label(l: &Labels) -> Vec<&'static str> {
+        let mut all = vec![
+            l.about,
+            l.services,
+            l.hide,
+            l.hide_others,
+            l.show_all,
+            l.quit,
+            l.file,
+            l.new_game,
+            l.size19,
+            l.size13,
+            l.size9,
+            l.open,
+            l.open_recent,
+            l.no_recent,
+            l.clear_recent,
+            l.save_as,
+            l.export_image,
+            l.edit,
+            l.undo,
+            l.redo,
+            l.cut,
+            l.copy,
+            l.paste,
+            l.select_all,
+            l.view,
+            l.layout,
+            l.window,
+            l.minimize,
+            l.zoom,
+            l.fullscreen,
+            l.close_window,
+            l.replace_prompt,
+            l.replace,
+            l.cancel,
+            l.analysis,
+            l.analyse_game,
+            l.stop_game,
+            l.clear_analysis,
+            l.clear_position,
+            l.clear_game,
+            l.final_scoring,
+            l.estimate,
+        ];
+        all.extend(l.save_image);
+        all.extend(l.copy_image);
+        all.extend(l.presets);
+        all
+    }
+
+    #[test]
+    fn menu_labels_have_no_middle_dot() {
+        for language in [MenuLanguage::ZhCn, MenuLanguage::En] {
+            for label in every_label(&labels(language)) {
+                assert!(!label.contains('·'), "{label}");
+            }
+        }
+    }
+
+    #[test]
+    fn both_languages_label_the_analysis_menu() {
+        let zh = labels(MenuLanguage::ZhCn);
+        assert_eq!(
+            [
+                zh.analysis,
+                zh.analyse_game,
+                zh.stop_game,
+                zh.clear_analysis
+            ],
+            ["分析", "分析全局…", "停止全局分析", "清除分析结果"]
+        );
+        assert_eq!(
+            [
+                zh.clear_position,
+                zh.clear_game,
+                zh.final_scoring,
+                zh.estimate
+            ],
+            ["本局面", "整局", "终局点目", "形势判断"]
+        );
+        let en = labels(MenuLanguage::En);
+        assert_eq!(
+            (en.analysis, en.analyse_game),
+            ("Analysis", "Analyse Game…")
+        );
+        assert_eq!(en.estimate, "Position Estimate");
+    }
+
+    #[test]
+    fn analysis_ids_round_trip() {
+        for action in [
+            MenuAction::AnalyseGame,
+            MenuAction::StopGame,
+            MenuAction::ClearPosition,
+            MenuAction::ClearGame,
+            MenuAction::FinalScoring,
+            MenuAction::Estimate,
+        ] {
+            assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+        }
+        assert_eq!(MenuAction::AnalyseGame.id(), "analyseGame");
     }
 }

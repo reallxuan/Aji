@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 whole-game analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --pop:#ffffff; --barblack:#1d1d1b; --barwhite:#ffffff; --baredge:#c9c9c4; --btn:#ebebe8; }
+  .dark  { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --pop:#2a2a2e; --barblack:#050506; --barwhite:#f4f2ec; --baredge:#3a3a40; --btn:#2c2c31; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1140px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1140px; margin:0 auto 48px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1000px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+
+  .crop { width:540px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; position:relative; }
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; align-items:center; font-size:13px; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); margin-left:4px; flex:none; position:relative; }
+  .dot.paused { background:var(--line); }
+  .dot.arc { background:transparent; }
+  .dot.arc svg { position:absolute; left:-5px; top:-5px; }
+
+  .wr { display:flex; align-items:center; gap:14px; padding:16px 24px 6px; }
+  .bar { flex:1; height:26px; display:flex; border-radius:4px; overflow:hidden; box-shadow:inset 0 0 0 1px var(--baredge); font-size:13px; font-weight:600; }
+  .bar .b { background:var(--barblack); color:#f4f2ec; display:flex; align-items:center; gap:10px; padding-left:9px; }
+  .bar .ld { font-weight:400; opacity:.72; }
+  .bar .w { background:var(--barwhite); color:#1d1d1b; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-right:9px; flex:1; box-shadow:inset 0 0 0 1px var(--baredge); }
+
+  .graph { padding:4px 0 0; position:relative; }
+  .graph svg { display:block; }
+  .legend { display:flex; align-items:center; gap:14px; padding:2px 24px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); min-height:38px; }
+  .legend .k { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .legend .sw { width:14px; height:2px; border-radius:1px; }
+  .legend .caps { margin-left:auto; white-space:nowrap; }
+  .pv { display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; }
+  .pv span { padding:2px 7px; display:inline-flex; align-items:center; }
+  .pv span.on { background:var(--soft); }
+  .pv i { width:10px; height:10px; border-radius:50%; display:inline-block; box-shadow:inset 0 0 0 1px var(--line); }
+
+  .act { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; color:var(--text); background:var(--btn); border:1px solid var(--hairline); border-radius:6px; padding:3px 9px; font-size:12px; }
+  .act.focus { outline:2px solid color-mix(in srgb, var(--ok) 60%, transparent); outline-offset:1px; }
+  .act svg { flex:none; }
+  .job { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; color:var(--text); }
+  .job .m { color:var(--muted); }
+  .x { display:inline-flex; width:18px; height:18px; align-items:center; justify-content:center; border-radius:4px; color:var(--muted); }
+  .x:hover, .x.hot { background:var(--soft); color:var(--text); }
+
+  .tbl { padding:10px 24px 10px; font-size:13px; color:var(--muted); }
+
+  .pop { position:absolute; z-index:3; width:318px; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:14px 16px; font-size:13px; }
+  .pop h4 { margin:0 0 10px; font-size:13px; font-weight:600; }
+  .pop .r { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 0; }
+  .pop .r > span:first-child { color:var(--muted); white-space:nowrap; }
+  .pop .note { font-size:12px; color:var(--muted); line-height:1.55; border-top:1px solid var(--hairline); margin-top:8px; padding-top:9px; }
+  .pop .foot { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .pop .go { background:var(--text); color:var(--panel); border-radius:6px; padding:5px 14px; font-weight:500; }
+  .pop .cancel { color:var(--muted); padding:5px 10px; }
+  .seg { display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; font-size:12.5px; }
+  .seg span { padding:3px 10px; color:var(--muted); white-space:nowrap; }
+  .seg span + span { border-left:1px solid var(--hairline); }
+  .seg span.on { background:var(--soft); color:var(--text); font-weight:500; }
+  .field { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12.5px; }
+  .field b { display:inline-block; min-width:44px; text-align:center; color:var(--text); font-weight:400; border:1px solid var(--hairline); border-radius:5px; padding:2px 6px; }
+  .field b.dim { color:var(--line); }
+
+  .card { position:absolute; z-index:3; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:12px 14px; font-size:12.5px; line-height:1.7; white-space:nowrap; }
+  .card .ti { font-weight:600; font-size:13px; margin-bottom:4px; }
+  .card .k { display:inline-block; width:62px; color:var(--muted); }
+  .card .hint { border-top:1px solid var(--hairline); margin-top:6px; padding-top:6px; color:var(--muted); font-size:12px; }
+  .card .new { background:color-mix(in srgb, #7fd1a8 14%, transparent); margin:0 -6px; padding:0 6px; border-radius:3px; }
+
+  .menu { position:absolute; z-index:3; width:236px; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:5px; font-size:13px; }
+  .menu div { padding:6px 10px; border-radius:5px; display:flex; justify-content:space-between; }
+  .menu div.sep { padding:0; height:1px; background:var(--hairline); margin:5px 4px; }
+  .menu div.new { background:color-mix(in srgb, #7fd1a8 14%, transparent); }
+  .menu div .m { color:var(--muted); }
+
+  .settings { width:540px; background:#1e1e21; color:#eceae4; border-radius:8px; outline:1px solid #2a2a2e; padding:16px 24px; font-size:14px; }
+  .settings h3 { font-size:12.5px; color:#a3a19a; font-weight:500; margin:14px 0 6px; }
+  .settings h3:first-child { margin-top:0; }
+  .settings .r { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #28282c; gap:16px; }
+  .settings .r.new { background:color-mix(in srgb, #7fd1a8 12%, transparent); margin:0 -10px; padding:9px 10px; border-radius:4px; }
+  .settings .sub { font-size:12px; color:#a3a19a; margin-top:2px; }
+  .settings .num { font-size:13px; }
+  .tog { width:34px; height:20px; border-radius:10px; background:#3a3a40; position:relative; flex:none; }
+  .tog::after { content:''; position:absolute; left:3px; top:3px; width:14px; height:14px; border-radius:50%; background:#cfcdc6; }
+  .btnline { font-size:12.5px; border:1px solid #303035; border-radius:6px; padding:3px 10px; color:#eceae4; white-space:nowrap; }
+  .macbar { width:420px; height:200px; background:#2b2b2e; border-radius:8px; outline:1px solid #2a2a2e; position:relative; overflow:hidden; }
+  .mb { display:flex; gap:18px; align-items:center; height:26px; padding:0 14px; background:#3a3a3e; font-size:13px; color:#eceae4; }
+  .mb b { width:12px; height:12px; border-radius:3px; background:#bdbbb4; }
+  .mb span:nth-child(2) { font-weight:600; }
+  .mb span.on { background:#4a6fd8; border-radius:4px; padding:1px 7px; margin:0 -7px; }
+  .macbar .menu { --pop:#2a2a2e; --hairline:#3a3a40; --text:#eceae4; --muted:#a3a19a; color:#eceae4; }
+  .pop .sw2 { width:30px; height:18px; border-radius:9px; background:var(--ok); position:relative; flex:none; }
+  .pop .sw2::after { content:''; position:absolute; right:3px; top:3px; width:12px; height:12px; border-radius:50%; background:#fff; }
+  .pop .sw2.off { background:var(--line); }
+  .pop .sw2.off::after { right:auto; left:3px; }
+  .pop .r.sub { padding-top:0; }
+  .pop .r.sub .field { font-size:12px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M2 全局分析 whole-game analysis: start, progress, stop (round 2)</h1>
+  The same made-up 247-move game as the M7 trend-graph mockup, open at move 130. Before the job starts, the user has looked at moves 0–95, 111–130 and 238–247 by stepping through them, so those already have results (the graph's gaps are the rest).
+  <ul>
+    <li><b>Round 1 decisions:</b> start from the menus only (1B); progress as a strip under the graph (3A); no "·" in any interface text, and the captures line now reads 提子 黑 3 白 5.</li>
+    <li><b>New in this round:</b> 波动时加强. Once every move has a result, the moves where the win rate swings sharply get a second, deeper search (sections 2 and 4).</li>
+    <li><b>One engine.</b> The job uses the same KataGo as the board. Whatever position the user is on is always searched first. Results are cached, so a position that already has enough visits is skipped, and after quitting the job carries on where it stopped.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 入口：菜单</h2>
+  <p class="cap"><b>Chosen: menus only.</b> The game menu (title ▾) gains 分析全局… and 清除分析结果 ▸ (本局面 / 整局). On macOS the menu bar gets the same two items under a new 分析 menu, and that's where the shortcut ⌘⇧A shows. The legend row stays as it is today.</p>
+  <div class="row">
+    <div><div class="label"><b>GAME MENU</b></div><div class="crop dark" data-panel='{"state":"idle","menu":true}' style="height:420px"></div></div>
+    <div><div class="label"><b>MACOS MENU BAR</b></div><div class="macbar"><div class="mb"><b></b><span>Aji</span><span>文件</span><span>编辑</span><span>显示</span><span class="on">分析</span><span>窗口</span></div>
+      <div class="menu" style="left:166px;top:30px"><div>分析全局… <span class="m">⌘⇧A</span></div><div>停止全局分析</div><div class="sep"></div><div>清除本局面的分析结果</div><div>清除整局的分析结果</div></div></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 开始前：分析全局…</h2>
+  <p class="cap">分析全局… opens a panel that drops from the game title, the way the rules chip opens its panel today. It holds the three choices the roadmap asks for (audit P2-G2), plus 波动时加强. Every choice is remembered for the next game.
+  <b>每手计算量</b> is the job's own budget, separate from the board's 每步计算量上限 (which can be 不限). Positions that already have this many visits are counted and skipped.
+  <b>波动时加强</b>: after the first pass, wherever the win rate changes by more than the threshold from one move to the next, both positions are searched again, up to the larger budget. A swing measured at 500 visits is often noise; at 3000 it is usually real, and the graph and candidates there become trustworthy.
+  <span class="call">My calls:</span> 500 visits per move; boosting on, at a 10% swing, up to 3000 visits; Return starts.</p>
+  <div class="row">
+    <div><div class="label">整局，双方</div><div class="crop dark" data-panel='{"state":"idle","pop":"all"}' style="height:470px"></div></div>
+    <div><div class="label">一段，只黑，不加强 (LIGHT)</div><div class="crop light" data-panel='{"state":"idle","pop":"range"}' style="height:470px"></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>3 进行中</h2>
+  <p class="cap"><b>Chosen: the strip.</b> The job is running: 158 of the game's 248 positions have results. It has filled the gap at 96–110, skipped what was already analysed, and is now on move 148. Solid cells have a result, faint ones are queued, and the green one is being searched. The legend row shows the job's status after 目差, with ✕ to stop.</p>
+  <div class="row">
+    <div><div class="label">DARK</div><div class="crop dark" data-panel='{"state":"running","strip":true}'></div></div>
+    <div><div class="label">LIGHT, HOVERING ✕</div><div class="crop light" data-panel='{"state":"running","strip":true,"xhot":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>4 加强：第二遍</h2>
+  <p class="cap">The first pass is done and found 9 swings over 10%. Each one's two positions are searched again to 3000 visits. Their cells stand taller in the strip until they're done, then drop back to normal. The status reads 加强分析 3/9. When the second pass finishes, the strip and the status look like section 5's "done". Nothing stays behind to mark the swings (M7 removed mistake bars).
+  Left: during the boost. Right: the same game afterwards. The swing at 162 shrank from 13% to 4% under the deeper search, so it was mostly noise.</p>
+  <div class="row">
+    <div><div class="label">BOOSTING 3 OF 9</div><div class="crop dark" data-panel='{"state":"boost","strip":true}'></div></div>
+    <div><div class="label">AFTER</div><div class="crop dark" data-panel='{"state":"done2","strip":true,"fixed":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>5 浏览时、暂停时、结束时</h2>
+  <p class="cap"><b>While browsing</b>: the user jumps to move 200. That position is searched straight away, up to the board's own limit, and the board shows it as usual. The job carries on from 165 when the user is idle. The engine dot's card gains one line.
+  <b>Paused</b>: clicking the engine dot (or Space) pauses the board and the job together, as today.
+  <b>Done</b>: the status reads 已分析全局 for a few seconds, then the legend goes back to normal. The strip stays, all solid.</p>
+  <div class="row">
+    <div><div class="label">BROWSING MOVE 200</div><div class="crop dark" data-panel='{"state":"browse","strip":true,"card":true}' style="height:440px"></div></div>
+    <div><div class="label">PAUSED</div><div class="crop dark" data-panel='{"state":"paused","strip":true}'></div></div>
+  </div>
+  <div class="row" style="margin-top:18px">
+    <div><div class="label">DONE</div><div class="crop dark" data-panel='{"state":"done","strip":true}'></div></div>
+    <div><div class="label">A FEW SECONDS LATER</div><div class="crop dark" data-panel='{"state":"done2","strip":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>6 设置</h2>
+  <p class="cap">Settings → Analysis gains two rows. <b>打开棋谱时分析全局</b> is off by default (P4). When it's on, the job starts with the remembered choices whenever a game opens. <b>分析缓存</b> shows how much space the cache uses, its size limit (P5) and a 清除 button. The job's own choices live in its panel (section 2), not here.</p>
+  <div class="row">
+    <div class="settings">
+      <h3>分析</h3>
+      <div class="r"><span>候选点第二行</span><span class="num">目差</span></div>
+      <div class="r"><span>每步计算量上限</span><span class="num">不限</span></div>
+      <div class="r new"><div><div>打开棋谱时分析全局</div><div class="sub">按上次的选择在后台进行。</div></div><span class="tog"></span></div>
+      <div class="r new"><div><div>分析缓存</div><div class="sub">已用 38 MB，上限 1 GB。满了以后先删最久没看过的局面。</div></div><span class="btnline">清除…</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Made-up game (from the M7 trend-graph mockup) -------------------------------------
+const TOTAL = 247;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const r = rng(7);
+const lead = []; let l = 0.4;
+const swings = { 15: -2.4, 38: 2.8, 63: -2.6, 88: 3.4, 101: -2.0, 117: -1.6, 124: 2.6, 130: 2.3, 241: -3.0, 162: -4.4, 190: 3.1, 214: -1.8 };
+for (let i = 0; i <= TOTAL; i++) { l += (r() - 0.5) * 0.7 + (swings[i] || 0); if (i > 120) l -= 0.03; lead.push(+l.toFixed(1)); }
+const winrate = lead.map((v, i) => 1 / (1 + Math.exp(-v / (7 - 5 * i / TOTAL))));
+const range = (a, b) => Array.from({ length: b - a + 1 }, (_, k) => a + k);
+const SWINGS = [15, 38, 63, 88, 124, 130, 162, 190, 241];
+const BROWSED = [...range(0, 95), ...range(111, 130), ...range(238, 247)];
+
+// What has a result, what is queued, and which move is being searched, per state.
+function model(state) {
+  const done = new Set(BROWSED), queued = new Set();
+  let working = null, current = 130, status = null;
+  if (state === 'running' || state === 'paused') {
+    range(96, 110).forEach((i) => done.add(i));
+    range(131, 147).forEach((i) => done.add(i));
+    range(148, 237).forEach((i) => queued.add(i));
+    working = state === 'running' ? 148 : null;
+  }
+  if (state === 'browse') {
+    range(96, 110).forEach((i) => done.add(i)); range(131, 164).forEach((i) => done.add(i)); done.add(200);
+    range(165, 237).filter((i) => i !== 200).forEach((i) => queued.add(i));
+    working = 200; current = 200;
+  }
+  let boostQueued = new Set();
+  if (state === 'done' || state === 'done2' || state === 'boost') range(0, TOTAL).forEach((i) => done.add(i));
+  if (state === 'boost') {
+    // Both positions of each of the 9 swings; the first 3 swings are done, the 4th is being searched.
+    const pos = SWINGS.slice(3).flatMap((i) => [i - 1, i]);
+    boostQueued = new Set(pos.slice(1)); working = pos[0];
+  }
+  return { done, queued, working, current, state, boostQueued };
+}
+
+const W = 540, H = 150, PADL = 52, PADR = 44, PADT = 12, PADB = 22, SCORE_RANGE = 10;
+const gw = W - PADL - PADR, gh = H - PADT - PADB;
+const x = (i) => PADL + (i / TOTAL) * gw;
+const yWr = (w) => PADT + (1 - w) * gh;
+const ySc = (s) => PADT + (0.5 - s / (2 * SCORE_RANGE)) * gh;
+
+function graphSvg(m, opt) {
+  const runs = []; let cur = null;
+  for (let i = 0; i <= TOTAL; i++) { if (m.done.has(i)) { if (!cur) runs.push(cur = []); cur.push(i); } else cur = null; }
+  const path = (ids, fy) => ids.map((i, k) => (k ? 'L' : 'M') + x(i).toFixed(1) + ' ' + fy(i).toFixed(1)).join(' ');
+  const adj = (i) => (opt.fixed && i >= 162 ? 1.6 : 0);
+  const wr = (i) => yWr(1 / (1 + Math.exp(-(lead[i] + adj(i)) / (7 - 5 * i / TOTAL)))), sc = (i) => ySc(lead[i] + adj(i));
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(.5)}" y2="${yWr(.5)}" stroke="var(--hairline)" />`;
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(1)}" y2="${yWr(1)}" stroke="var(--soft)" />`;
+  s += `<line x1="${PADL}" x2="${W - PADR}" y1="${yWr(0)}" y2="${yWr(0)}" stroke="var(--soft)" />`;
+  const lab = (t, xx, yy, anchor, col) => `<text x="${xx}" y="${yy + 4}" font-size="10.5" fill="${col}" text-anchor="${anchor}">${t}</text>`;
+  s += lab('100%', PADL - 8, yWr(1), 'end', 'var(--muted)') + lab('50%', PADL - 8, yWr(.5), 'end', 'var(--muted)') + lab('0%', PADL - 8, yWr(0), 'end', 'var(--muted)');
+  s += lab('+' + SCORE_RANGE, W - PADR + 8, yWr(1), 'start', 'var(--score)') + lab('0', W - PADR + 8, yWr(.5), 'start', 'var(--score)') + lab('−' + SCORE_RANGE, W - PADR + 8, yWr(0), 'start', 'var(--score)');
+  for (let k = 50; k < TOTAL; k += 50) s += `<text x="${x(k)}" y="${H - 3}" font-size="9.5" fill="var(--line)" text-anchor="middle">${k}</text>`;
+  // The coverage strip: one cell per move, just under the 0 % line.
+  if (opt.strip) {
+    const y0 = yWr(0) + 3, cw = gw / (TOTAL + 1);
+    for (let i = 0; i <= TOTAL; i++) {
+      const xx = PADL + i * cw;
+      const tall = m.state === 'boost' && (m.boostQueued.has(i) || i === m.working);
+      if (i === m.working && tall) s += `<rect x="${xx - .5}" y="${y0 - 5}" width="${Math.max(2, cw) + 1}" height="8" rx="1" fill="var(--ok)" />`;
+      else if (tall) s += `<rect x="${xx}" y="${y0 - 5}" width="${Math.max(1.6, cw)}" height="8" rx=".5" fill="var(--text)" opacity=".55" />`;
+      else if (i === m.working) s += `<rect x="${xx - .5}" y="${y0 - .5}" width="${Math.max(2, cw) + 1}" height="4" rx="1" fill="var(--ok)" />`;
+      else if (m.done.has(i)) s += `<rect x="${xx}" y="${y0}" width="${cw + .2}" height="3" fill="var(--muted)" opacity=".75" />`;
+      else if (m.queued.has(i)) s += `<rect x="${xx}" y="${y0}" width="${cw + .2}" height="3" fill="var(--line)" opacity=".35" />`;
+    }
+  }
+  const draw = (fy, col, width) => runs.map((run) => run.length === 1
+    ? `<circle cx="${x(run[0])}" cy="${fy(run[0])}" r="1.4" fill="${col}" />`
+    : `<path d="${path(run, fy)}" fill="none" stroke="${col}" stroke-width="${width}" stroke-linejoin="round" />`).join('');
+  s += draw(sc, 'var(--score)', 1.4);
+  s += draw(wr, 'var(--text)', 1.6);
+  const c = m.current;
+  s += `<line x1="${x(c)}" x2="${x(c)}" y1="${PADT - 4}" y2="${yWr(0)}" stroke="var(--muted)" stroke-dasharray="3 3" />`;
+  if (m.done.has(c)) {
+    s += `<circle cx="${x(c)}" cy="${sc(c)}" r="3" fill="var(--score)" stroke="var(--panel)" stroke-width="1.5" />`;
+    s += `<circle cx="${x(c)}" cy="${wr(c)}" r="3.2" fill="var(--text)" stroke="var(--panel)" stroke-width="1.5" />`;
+  }
+  return s + '</svg>';
+}
+
+const PLAY = '<svg width="9" height="10" viewBox="0 0 9 10"><path d="M1 1 L8 5 L1 9 Z" fill="currentColor"/></svg>';
+const X = '<svg width="9" height="9" viewBox="0 0 9 9"><path d="M1 1 L8 8 M8 1 L1 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
+function jobHtml(m, opt) {
+  const n = `${m.done.size}/${TOTAL + 1}`;
+  const x = `<span class="x${opt.xhot ? ' hot' : ''}" title="停止">${X}</span>`;
+  if (m.state === 'running') return `<span class="job">分析全局 ${n}<span class="m">约 2 分钟</span>${x}</span>`;
+  if (m.state === 'browse') return `<span class="job">分析全局 ${n}<span class="m">先算当前局面</span>${x}</span>`;
+  if (m.state === 'paused') return `<span class="job"><span class="m">已暂停</span>${n}${x}</span>`;
+  if (m.state === 'boost') return `<span class="job">加强分析 3/9<span class="m">约 1 分钟</span>${x}</span>`;
+  if (m.state === 'done') return `<span class="job">已分析全局</span>`;
+  return '';
+}
+
+function legendHtml(m, opt) {
+  let s = `<div class="legend"><span class="k"><span class="sw" style="background:var(--text)"></span>胜率</span><span class="k"><span class="sw" style="background:var(--score)"></span>目差</span>`;
+  s += jobHtml(m, opt);
+  const caps = m.current === 200 ? '提子 黑 9 白 7' : '提子 黑 3 白 5';
+  s += `<span class="caps">${caps}</span><span class="pv"><span class="on"><i style="background:#1d1d1b"></i></span><span><i style="background:#f4f2ec"></i></span></span></div>`;
+  return s;
+}
+
+function dotHtml(m, opt) {
+  return `<span class="dot${m.state === 'paused' ? ' paused' : ''}"></span>`;
+}
+
+function popHtml(kind) {
+  const all = kind === 'all';
+  return `<div class="pop" style="left:24px;top:50px;width:344px">
+    <h4>分析全局</h4>
+    <div class="r"><span>范围</span><span class="seg"><span${all ? ' class="on"' : ''}>整局</span><span${all ? '' : ' class="on"'}>一段</span></span></div>
+    ${all ? '' : `<div class="r sub"><span></span><span class="field">第 <b>60</b> 到 <b>140</b> 手</span></div>`}
+    <div class="r"><span>分析</span><span class="seg"><span${all ? ' class="on"' : ''}>双方</span><span${all ? '' : ' class="on"'}>只黑</span><span>只白</span></span></div>
+    <div class="r"><span>每手计算量</span><span class="field"><b>500</b></span></div>
+    <div class="r"><span>波动时加强</span><span class="sw2${all ? '' : ' off'}"></span></div>
+    ${all ? `<div class="r sub"><span></span><span class="field">胜率变化超过 <b>10</b>% 时加算到 <b>3000</b></span></div>` : ''}
+    <div class="note">${all ? '已有 126 个局面有结果，会跳过。其余 122 个约需 2 分钟，加强另计。' : '只分析黑棋的 40 手，约需 1 分钟。'}<br>分析时可以照常浏览，当前局面总是先算。</div>
+    <div class="foot"><span class="cancel">取消</span><span class="go">开始</span></div>
+  </div>`;
+}
+
+function menuHtml() {
+  return `<div class="menu" style="left:24px;top:52px">
+    <div>新建棋局</div><div>打开棋谱…</div><div>打开最近</div><div>另存为…</div>
+    <div class="sep"></div>
+    <div class="new">分析全局…</div>
+    <div class="new">清除分析结果 <span class="m">▸</span></div>
+  </div>`;
+}
+
+function cardHtml() {
+  return `<div class="card" style="right:12px;top:48px">
+    <div class="ti">分析中</div>
+    <div><span class="k">速度</span>812 次/秒</div>
+    <div><span class="k">计算量</span>3,406</div>
+    <div class="new"><span class="k">全局分析</span>176/248，正在先算第 200 手</div>
+    <div><span class="k">引擎</span>KataGo 1.16.4（Metal）</div>
+    <div class="hint">点击暂停</div>
+  </div>`;
+}
+
+function panelHtml(opt) {
+  const m = model(opt.state);
+  const c = m.current, w = (winrate[c] * 100).toFixed(1), ld = lead[c];
+  const leadText = `<span class="ld">领先 ${Math.abs(ld).toFixed(1)} 目</span>`;
+  let s = `<div class="hdr"><span class="t">林清 五段 对 周野 五段 <span style="color:var(--muted)">▾</span></span><span class="chip">中国 7.5</span>
+    <span class="nav">⏮ ‹ <b>${c}</b> / ${TOTAL} › ⏭</span>${dotHtml(m, opt)}<span style="color:var(--muted)">⚙</span></div>`;
+  s += `<div class="wr"><div class="bar"><div class="b" style="width:${w}%">${w}%${ld > 0 ? leadText : ''}</div><div class="w">${ld < 0 ? leadText : ''}${(100 - w).toFixed(1)}%</div></div></div>`;
+  s += `<div class="graph">${graphSvg(m, opt)}</div>`;
+  s += legendHtml(m, opt);
+  s += `<div class="tbl">候选点 …</div>`;
+  if (opt.pop) s += popHtml(opt.pop);
+  if (opt.menu) s += menuHtml();
+  if (opt.card) s += cardHtml();
+  return s;
+}
+
+for (const el of document.querySelectorAll('[data-panel]')) el.innerHTML = panelHtml(JSON.parse(el.dataset.panel));
+</script>
+</body>
+</html>

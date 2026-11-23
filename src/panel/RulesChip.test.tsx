@@ -12,10 +12,10 @@ const withRules = (current: AnalysisRules, changed = false) =>
   makeSnapshot({ rules: { current, fromFile: current, changed, ru: null, km: null } });
 
 it.each([
-  [{ kind: 'chinese' } as AnalysisRules, '中国 · 7.5'],
-  [{ kind: 'japaneseKorean' } as AnalysisRules, '日韩 · 6.5'],
-  [{ kind: 'custom', komi: 7, scoring: 'territory' } as AnalysisRules, '自定义 · 7'],
-  [{ kind: 'custom', komi: -0.5, scoring: 'area' } as AnalysisRules, '自定义 · -0.5'],
+  [{ kind: 'chinese' } as AnalysisRules, '中国 7.5'],
+  [{ kind: 'japaneseKorean' } as AnalysisRules, '日韩 6.5'],
+  [{ kind: 'custom', komi: 7, scoring: 'territory' } as AnalysisRules, '自定义 7'],
+  [{ kind: 'custom', komi: -0.5, scoring: 'area' } as AnalysisRules, '自定义 -0.5'],
 ])('labels %j as %s', (rules, label) => {
   renderWithGame(<RulesChip />, { snapshot: withRules(rules) });
   expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
@@ -33,7 +33,7 @@ it('shows the amber dot only when the rules were changed', () => {
 
 it('opens the game information popover', () => {
   renderWithGame(<RulesChip />, { snapshot: withRules({ kind: 'chinese' }) });
-  fireEvent.click(screen.getByRole('button', { name: '中国 · 7.5' }));
+  fireEvent.click(screen.getByRole('button', { name: '中国 7.5' }));
   expect(screen.getByText('分析规则')).toBeInTheDocument();
 });
 
@@ -43,5 +43,5 @@ it('keeps a komi-only form for a narrow panel, under the full name', () => {
   });
   // The header's container query shows one or the other; both carry the komi.
   expect(document.querySelector('[data-compact]')).toHaveTextContent(/^7$/);
-  expect(screen.getByRole('button', { name: '自定义 · 7' })).toHaveTextContent('自定义 · 7');
+  expect(screen.getByRole('button', { name: '自定义 7' })).toHaveTextContent('自定义 7');
 });

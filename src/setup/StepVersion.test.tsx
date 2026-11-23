@@ -25,7 +25,7 @@ describe('StepVersion', () => {
     expect(radios[1].closest('label')).not.toHaveTextContent('最新');
     expect(radios[0]).toHaveAttribute('aria-checked', 'true');
     expect(transport.requests).toContainEqual({ type: 'setupVersions', backend: 'cuda' });
-    expect(screen.getByText('CUDA · Windows x64')).toBeInTheDocument();
+    expect(screen.getByText('CUDA，Windows x64')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '下一步' }));
     expect(useWizardStore.getState()).toMatchObject({

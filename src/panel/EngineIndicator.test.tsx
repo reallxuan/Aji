@@ -103,5 +103,5 @@ it.each<[EngineState | null, ReturnType<typeof engineAction>]>([
   [{ state: 'stopped' }, null],
   [{ state: 'crashed', reason: 'exited', exit: null, stderrTail: [] }, null],
 ])('the action for %j is %s', (state, action) => {
-  expect(engineAction(state)).toBe(action);
+  expect(engineAction(state, null)).toBe(action);
 });

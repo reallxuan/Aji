@@ -29,6 +29,19 @@ describe('parseDeviceSettings', () => {
       scoreWithKomi: false,
       alwaysOnTop: true,
       migrated: true,
+      candidateSort: { key: 'visits', descending: false },
+      candidateColumns: {
+        winrate: true,
+        scoreLead: false,
+        visits: true,
+        share: false,
+        vsBest: true,
+      },
+      candidateCount: 5,
+      lineLength: 10,
+      swingBy: 'score',
+      swingThreshold: { winrate: 8, score: 3.5 },
+      swingAfterOnly: true,
     };
     expect(parseDeviceSettings(raw)).toEqual(raw);
   });
@@ -49,5 +62,46 @@ describe('parseDeviceSettings', () => {
     expect(parseDeviceSettings({ version: 2, showCoordinates: false })).toEqual(
       DEFAULT_DEVICE_SETTINGS,
     );
+  });
+
+  it('the candidate list starts in KataGo’s order, without 与最佳相比 (P2 M2 design 5.5)', () => {
+    const d = parseDeviceSettings({ version: 1 });
+    expect(d.candidateSort).toEqual({ key: 'rank', descending: true });
+    expect(d.candidateColumns).toEqual({
+      winrate: true,
+      scoreLead: true,
+      visits: true,
+      share: true,
+      vsBest: false,
+    });
+    expect(d.candidateCount).toBe('auto');
+    expect(d.lineLength).toBe(20);
+  });
+
+  it('bad candidate fields fall back alone', () => {
+    const d = parseDeviceSettings({
+      version: 1,
+      candidateSort: { key: 'prior', descending: true },
+      candidateColumns: { winrate: false, scoreLead: 'yes' },
+      candidateCount: 7,
+      lineLength: 0,
+    });
+    expect(d.candidateSort).toEqual({ key: 'rank', descending: true });
+    expect(d.candidateColumns).toEqual({
+      winrate: false,
+      scoreLead: true,
+      visits: true,
+      share: true,
+      vsBest: false,
+    });
+    expect(d.candidateCount).toBe('auto');
+    expect(d.lineLength).toBe(20);
+  });
+
+  it('the swing list starts by win rate over 5%, or 2 points by score (P2 M2 design 5.4)', () => {
+    const d = parseDeviceSettings({ version: 1, swingThreshold: { winrate: -1, score: 'x' } });
+    expect(d.swingBy).toBe('winrate');
+    expect(d.swingThreshold).toEqual({ winrate: 5, score: 2 });
+    expect(d.swingAfterOnly).toBe(false);
   });
 });

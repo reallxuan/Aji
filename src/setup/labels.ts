@@ -18,7 +18,7 @@ export function tagText(t: TFunction, tags: BackendTag[]): string {
           .map((tag) => t(`setup.backend.tags.${tag}`)),
       ]
     : tags.map((tag) => t(`setup.backend.tags.${tag}`));
-  return words.join(' · ');
+  return words.join(t('separator'));
 }
 
 /** The card detection reports first: a real GPU before a software renderer. */

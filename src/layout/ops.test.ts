@@ -11,7 +11,18 @@ function shape(node: Node): unknown {
   if (node.type === 'tabs') return { tabs: node.panels.map((p) => p.kind), active: node.active };
   return { [node.dir]: node.children.map(shape) };
 }
-const def = () => presetLayout('default');
+/**
+ * The M1 default arrangement: 候选 alone at the bottom of the column, without M2's 波动 tab. The
+ * operations under test do not depend on the preset, so the fixture stays put.
+ */
+const def = (): Layout => {
+  const layout = presetLayout('default');
+  (layout.root.children[1] as SplitNode).children[3] = {
+    type: 'panel',
+    panel: { kind: 'candidates' },
+  };
+  return layout;
+};
 
 describe('movePanel', () => {
   it('moving to an edge splits in that direction', () => {

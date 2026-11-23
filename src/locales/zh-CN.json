@@ -1,6 +1,6 @@
 {
   "about": {
-    "versionLine": "Aji 版本 {{version}} · {{os}} {{arch}}",
+    "versionLine": "Aji 版本 {{version}}（{{os}} {{arch}}）",
     "title": "关于 Aji",
     "licence": "Aji 是自由软件，按 GNU Affero 通用公共许可证第 3 版或更高版本发布。",
     "source": "源代码：",
@@ -41,7 +41,8 @@
     "fileReadFailed": "无法读取文件。",
     "fileWriteFailed": "无法保存文件。",
     "fileNotSgf": "只能打开 .sgf 文件。",
-    "fileMissing": "文件已移动或删除。"
+    "fileMissing": "文件已移动或删除。",
+    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。"
   },
   "engine": {
     "state": {
@@ -94,7 +95,9 @@
       "speedValue": "{{speed}} 次/秒",
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
-      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "engineWithBackend": "KataGo {{version}}（{{backend}}）",
+      "job": "全局分析 {{done}}/{{total}}",
+      "jobWaiting": "全局分析 {{done}}/{{total}}，正在先算第 {{move}} 手",
       "hint": {
         "pause": "点击暂停",
         "resume": "点击继续",
@@ -108,7 +111,8 @@
       "winrate": "胜率",
       "scoreLead": "目差",
       "visits": "计算量",
-      "vsBest": "与最佳相比"
+      "vsBest": "与最佳相比",
+      "share": "占比"
     },
     "pass": "停一手",
     "table": {
@@ -116,11 +120,22 @@
       "total": "总计算量 {{visits}}",
       "catchingUp": "总计算量 {{visits}} / {{previous}}",
       "hidden": "已隐藏（F）",
-      "rejected": "KataGo 无法分析这个局面"
+      "rejected": "KataGo 无法分析这个局面",
+      "playedTag": "实战",
+      "share": "{{share}}%",
+      "menu": {
+        "count": "候选点数量",
+        "countAuto": "自动",
+        "countAll": "全部",
+        "countValue": "{{n}} 个",
+        "lineLength": "变化长度",
+        "lineMoves": "{{n}} 手",
+        "katagoOrder": "按 KataGo 排序"
+      }
     },
     "best": "最佳",
     "played": "实战 {{diff}}",
-    "playedBest": "实战 · 最佳",
+    "playedBest": "实战 最佳",
     "bar": {
       "lead": "领先 {{points}} 目"
     },
@@ -148,7 +163,7 @@
       "hint": "点按切换，按住暂时隐藏"
     },
     "even": "均势",
-    "captures": "提子 黑 {{black}} · 白 {{white}}"
+    "captures": "提子 黑 {{black}} 白 {{white}}"
   },
   "setup": {
     "failure": {
@@ -330,7 +345,7 @@
     "visitLimitNone": "不限",
     "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
     "engine": "引擎",
-    "engineLine": "KataGo {{version}} · {{backend}}",
+    "engineLine": "KataGo {{version}}（{{backend}}）",
     "networkLine": "权重 {{network}}",
     "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
     "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
@@ -348,7 +363,7 @@
     "board": {
       "title": "棋盘样式",
       "board": "棋盘",
-      "set": "{{board}} · {{stones}}",
+      "set": "{{board}}配{{stones}}",
       "custom": "自定义",
       "boards": {
         "honey": "蜜色",
@@ -370,10 +385,39 @@
       "board": "盘面"
     },
     "saveFailed": "保存失败",
+    "nextMove": {
+      "title": "显示棋谱的下一手",
+      "show": "显示",
+      "hide": "隐藏"
+    },
     "alwaysOnTop": {
       "title": "总在最前",
       "on": "开",
       "off": "关"
+    },
+    "analyseOnOpen": {
+      "title": "打开棋谱时分析全局",
+      "sub": "按上次的选择在后台进行。",
+      "on": "开",
+      "off": "关"
+    },
+    "saveAnalysis": {
+      "title": "保存时写入分析结果",
+      "sub": "另存为时写进棋谱，LizzieYzy 能读。",
+      "on": "开",
+      "off": "关"
+    },
+    "cache": {
+      "title": "分析缓存",
+      "used": "已用 {{used}}，上限 {{cap}}。满了以后先删最久没看过的局面。",
+      "cap": "缓存上限",
+      "clear": "清除…",
+      "memoryOnly": "缓存文件无法使用，结果只保留到 Aji 退出。",
+      "reason": "原因：{{reason}}",
+      "confirmTitle": "清除全部分析结果？",
+      "confirmBody": "所有棋局的分析结果都会删除，无法恢复。",
+      "confirm": "清除",
+      "failed": "无法清除分析结果"
     }
   },
   "game": {
@@ -410,7 +454,13 @@
         "detail": "已按新棋局默认规则分析，可点击规则标签更改。"
       }
     },
-    "dropHere": "松开以打开棋谱"
+    "dropHere": "松开以打开棋谱",
+    "jobFailed": "无法开始全局分析",
+    "clearFailed": "无法清除分析结果",
+    "cacheMemoryOnly": {
+      "title": "分析结果不会保留",
+      "detail": "缓存文件无法使用，结果只保留到 Aji 退出。"
+    }
   },
   "rules": {
     "title": "分析规则",
@@ -423,7 +473,7 @@
     "area": "数子",
     "territory": "数目",
     "fixedKomi": "{{komi}} 目",
-    "fixedHint": "{{scoring}} · 由规则决定",
+    "fixedHint": "{{scoring}}，由规则决定",
     "stepHint": "每次 0.5 目",
     "komiDown": "减少贴目",
     "komiUp": "增加贴目",
@@ -432,8 +482,8 @@
       "japaneseKorean": "日韩",
       "custom": "自定义"
     },
-    "chip": "{{rules}} · {{komi}}",
-    "chipChanged": "{{rules}} · {{komi}}，已改动",
+    "chip": "{{rules}} {{komi}}",
+    "chipChanged": "{{rules}} {{komi}}，已改动",
     "described": {
       "chinese": "中国规则",
       "japaneseKorean": "日韩规则",
@@ -473,7 +523,13 @@
     "saveAs": "另存为…",
     "today": "今天",
     "yesterday": "昨天",
-    "view": "视图"
+    "view": "视图",
+    "analyseGame": "分析全局…",
+    "clearAnalysis": "清除分析结果",
+    "clearPosition": "本局面",
+    "clearGame": "整局",
+    "finalScoring": "终局点目",
+    "estimate": "形势判断"
   },
   "layout": {
     "panels": {
@@ -481,6 +537,7 @@
       "winrate": "胜率条",
       "trend": "走势",
       "candidates": "候选",
+      "swings": "波动",
       "subboard": "副盘"
     },
     "noCandidate": "无候选",
@@ -520,11 +577,21 @@
       "new19": "新建 19 路棋局"
     },
     "analysis": {
-      "toggle": "暂停或继续分析"
+      "toggle": "暂停或继续分析",
+      "game": "分析全局",
+      "stopGame": "停止全局分析",
+      "clearPosition": "清除本局面的分析结果",
+      "clearGame": "清除整局的分析结果"
     },
     "candidates": {
       "toggleHidden": "显示或隐藏候选",
       "peek": "按住时隐藏候选"
+    },
+    "scoring": {
+      "start": "终局点目"
+    },
+    "estimate": {
+      "toggle": "显示或隐藏形势判断"
     }
   },
   "screenshot": {
@@ -539,5 +606,132 @@
     "copyFailed": "无法复制",
     "saveFailed": "截图未能保存",
     "notShown": "{{target}}不在屏幕上"
-  }
+  },
+  "job": {
+    "title": "分析全局",
+    "range": "范围",
+    "whole": "整局",
+    "moves": "一段",
+    "fromLabel": "起始手数",
+    "toLabel": "结束手数",
+    "side": "分析",
+    "both": "双方",
+    "black": "只黑",
+    "white": "只白",
+    "visits": "每手计算量",
+    "boost": "波动时加强",
+    "thresholdLabel": "加强阈值",
+    "boostVisitsLabel": "加强计算量",
+    "estimate": {
+      "cached_one": "已有 {{count}} 个局面有结果，会跳过。",
+      "cached_other": "已有 {{count}} 个局面有结果，会跳过。",
+      "allCached_one": "{{count}} 个局面都已有结果",
+      "allCached_other": "{{count}} 个局面都已有结果",
+      "boostOnly": "，只做加强",
+      "rest": "其余 {{count}} 个",
+      "all_one": "共 {{count}} 个局面",
+      "all_other": "共 {{count}} 个局面",
+      "black_one": "只分析黑棋的 {{count}} 手",
+      "black_other": "只分析黑棋的 {{count}} 手",
+      "white_one": "只分析白棋的 {{count}} 手",
+      "white_other": "只分析白棋的 {{count}} 手",
+      "minutes": "，约需 {{count}} 分钟",
+      "underMinute": "，不到 1 分钟",
+      "boost": "，加强另计",
+      "end": "。"
+    },
+    "browse": "分析时可以照常浏览，当前局面总是先算。",
+    "cancel": "取消",
+    "start": "开始",
+    "status": {
+      "running": "分析全局 {{done}}/{{total}}",
+      "boosting": "加强分析 {{done}}/{{total}}",
+      "count": "{{done}}/{{total}}",
+      "waiting": "先算当前局面",
+      "paused": "已暂停",
+      "done": "已分析全局",
+      "stopped": "已停止",
+      "minutes": "约 {{count}} 分钟",
+      "underMinute": "不到 1 分钟",
+      "stop": "停止全局分析"
+    },
+    "rangeLine": "第 <from/> 到 <to/> 手",
+    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
+  },
+  "swings": {
+    "by": "按",
+    "winrate": "胜率",
+    "score": "目差",
+    "overWinrate": "超过 <field/>%",
+    "overScore": "超过 <field/> 目",
+    "threshold": "波动阈值",
+    "afterOnly": "仅后续",
+    "black": "黑",
+    "white": "白",
+    "count_one": "{{count}} 手",
+    "count_other": "{{count}} 手",
+    "columns": {
+      "move": "手数",
+      "point": "落点",
+      "winrate": "胜率",
+      "score": "目差"
+    },
+    "none": "没有",
+    "partial_one": "只有 {{count}} 个局面有结果，部分手还没法比较。分析全局后列表才完整。",
+    "partial_other": "只有 {{count}} 个局面有结果，部分手还没法比较。分析全局后列表才完整。",
+    "empty": {
+      "title": "还没有可比较的结果",
+      "body": "从棋局菜单选“分析全局…”，这里会列出双方损失最大的几手。"
+    }
+  },
+  "estimate": {
+    "title": "形势判断",
+    "black": "黑 {{n}}",
+    "white": "白 {{n}}",
+    "komi": "贴目 {{komi}}",
+    "blackLeads": "黑领先 {{n}} 目",
+    "whiteLeads": "白领先 {{n}} 目",
+    "even": "均势",
+    "waiting": "等待这个局面的分析结果",
+    "score": "点目",
+    "close": "关闭形势判断"
+  },
+  "scoring": {
+    "title": "终局点目",
+    "subtitle": "{{rules}}，{{counting}}",
+    "rules": {
+      "chinese": "中国规则",
+      "japaneseKorean": "日韩规则",
+      "custom": "自定义规则"
+    },
+    "counting": {
+      "area": "数子",
+      "territory": "数目"
+    },
+    "columns": {
+      "area": "数子",
+      "territory": "数目",
+      "stones": "棋子",
+      "land": "地",
+      "dead": "死子",
+      "prisoners": "提子",
+      "komi": "贴目",
+      "total": "合计"
+    },
+    "black": "黑",
+    "white": "白",
+    "blackWins": "黑胜 {{n}} 目",
+    "whiteWins": "白胜 {{n}} 目",
+    "draw": "和棋",
+    "changed": "已改动",
+    "hint": "点棋子切换整块的死活。",
+    "fromKataGo": "死子是 KataGo 判断的。",
+    "reset": "恢复 KataGo 的判断",
+    "exit": "退出点目",
+    "rest": "候选点已隐藏，点目时不分析。",
+    "waiting": "正在点目…",
+    "failed": "无法点目。",
+    "openByOwnership": "棋局未下完，未封闭的区域按 KataGo 判断。"
+  },
+  "separator": "，"
 }

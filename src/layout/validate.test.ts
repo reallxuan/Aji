@@ -31,6 +31,39 @@ describe('validateLayout', () => {
     for (const id of PRESET_IDS) expect(validateLayout(presetLayout(id))).toEqual(presetLayout(id));
   });
 
+  it('the default preset has 波动 as a tab beside 候选 (P2 M2 design 5.4)', () => {
+    expect(refs(presetLayout('default').root)).toEqual([
+      'board',
+      'header',
+      'winrate',
+      'trend',
+      'candidates',
+      'swings',
+    ]);
+    for (const id of PRESET_IDS.filter((id) => id !== 'default')) {
+      expect(refs(presetLayout(id).root)).not.toContain('swings');
+    }
+  });
+
+  it('stored_layouts_without_swings_still_validate', () => {
+    // A layout stored before M2: the M1 default, without 波动.
+    const stored = {
+      ...layoutWith([
+        { type: 'board' },
+        column([panel('header'), panel('winrate'), panel('trend'), panel('candidates')]),
+      ]),
+      preset: 'default',
+    };
+    const v = validateLayout(stored);
+    expect(v.preset).toBe('default');
+    expect(refs(v.root)).toEqual(['board', 'header', 'winrate', 'trend', 'candidates']);
+    // And a stored 波动 is a known panel.
+    const withSwings = validateLayout(
+      layoutWith([{ type: 'board' }, column([panel('header'), panel('swings')])]),
+    );
+    expect(refs(withSwings.root)).toEqual(['board', 'header', 'swings']);
+  });
+
   it('unknown kinds and duplicates are dropped', () => {
     const v = validateLayout(
       layoutWith([

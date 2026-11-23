@@ -50,8 +50,8 @@ export function useTrendSync(): void {
     const fetch = () => {
       const mine = ++generation;
       getTrend(transport).then(
-        (nodes) => {
-          if (active && mine === generation) useTrendStore.getState().setNodes(nodes);
+        ({ revision, nodes }) => {
+          if (active && mine === generation) useTrendStore.getState().setNodes(nodes, revision);
         },
         () => {
           // The graph keeps what it has; the next push or restart fetches again.
@@ -62,10 +62,12 @@ export function useTrendSync(): void {
       if (!active) return;
       if (event.type === 'gameTrend') {
         generation++;
-        useTrendStore.getState().setNodes(event.nodes);
+        useTrendStore.getState().setNodes(event.nodes, event.revision);
         // Another game, or the same one re-read: its line indexes are not the old ones.
         group = null;
         join(useGameStore.getState().snapshot);
+      } else if (event.type === 'trendNodes') {
+        useTrendStore.getState().applyNodes(event.revision, event.nodes);
       } else if (event.type === 'engineState' && event.engine.state === 'starting') {
         fetch();
       } else if (event.type === 'analysisUpdate') {

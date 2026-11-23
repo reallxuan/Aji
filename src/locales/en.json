@@ -1,6 +1,6 @@
 {
   "about": {
-    "versionLine": "Aji version {{version}} · {{os}} {{arch}}",
+    "versionLine": "Aji version {{version}} ({{os}} {{arch}})",
     "title": "About Aji",
     "licence": "Aji is free software, released under the GNU Affero General Public License, version 3 or later.",
     "source": "Source code:",
@@ -41,7 +41,8 @@
     "fileReadFailed": "The file could not be read.",
     "fileWriteFailed": "The file could not be saved.",
     "fileNotSgf": "Only .sgf files can be opened.",
-    "fileMissing": "The file has been moved or deleted."
+    "fileMissing": "The file has been moved or deleted.",
+    "scoreUnavailable": "There is no analysis of this position to estimate the score from yet."
   },
   "engine": {
     "state": {
@@ -94,7 +95,9 @@
       "speedValue": "{{speed}} visits/s",
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
-      "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "engineWithBackend": "KataGo {{version}} ({{backend}})",
+      "job": "Game analysis {{done}}/{{total}}",
+      "jobWaiting": "Game analysis {{done}}/{{total}}, searching move {{move}} first",
       "hint": {
         "pause": "Click to pause",
         "resume": "Click to resume",
@@ -108,7 +111,8 @@
       "winrate": "Win rate",
       "scoreLead": "Lead",
       "visits": "Visits",
-      "vsBest": "vs best"
+      "vsBest": "vs best",
+      "share": "Share"
     },
     "pass": "Pass",
     "table": {
@@ -116,11 +120,22 @@
       "total": "Total visits {{visits}}",
       "catchingUp": "Total visits {{visits}} / {{previous}}",
       "hidden": "Hidden (F)",
-      "rejected": "KataGo cannot analyse this position"
+      "rejected": "KataGo cannot analyse this position",
+      "playedTag": "Played",
+      "share": "{{share}}%",
+      "menu": {
+        "count": "Candidates shown",
+        "countAuto": "Auto",
+        "countAll": "All",
+        "countValue": "{{n}}",
+        "lineLength": "Line length",
+        "lineMoves": "{{n}} moves",
+        "katagoOrder": "KataGo's order"
+      }
     },
     "best": "Best",
     "played": "Played {{diff}}",
-    "playedBest": "Played · best",
+    "playedBest": "Played, best",
     "bar": {
       "lead": "leads by {{points}}"
     },
@@ -148,7 +163,7 @@
       "hint": "Tap to toggle, hold to hide for a moment"
     },
     "even": "Even",
-    "captures": "Captures B {{black}} · W {{white}}"
+    "captures": "Captures B {{black}} W {{white}}"
   },
   "setup": {
     "failure": {
@@ -330,7 +345,7 @@
     "visitLimitNone": "No limit",
     "visitLimitNote": "Analysis stops at the limit and the graphics card idles; it starts again on the next move.",
     "engine": "Engine",
-    "engineLine": "KataGo {{version}} · {{backend}}",
+    "engineLine": "KataGo {{version}} ({{backend}})",
     "networkLine": "Network {{network}}",
     "threadsDefault": "Search threads: {{threads}} (default, not measured)",
     "threadsMeasured": "Search threads: {{threads}} (measured, {{speed}} visits/s)",
@@ -348,7 +363,7 @@
     "board": {
       "title": "Board style",
       "board": "Board",
-      "set": "{{board}} · {{stones}}",
+      "set": "{{board}} with {{stones}}",
       "custom": "Custom",
       "boards": {
         "honey": "Honey",
@@ -370,10 +385,39 @@
       "board": "Board count"
     },
     "saveFailed": "Not saved",
+    "nextMove": {
+      "title": "Show the record's next move",
+      "show": "Show",
+      "hide": "Hide"
+    },
     "alwaysOnTop": {
       "title": "Always on top",
       "on": "On",
       "off": "Off"
+    },
+    "analyseOnOpen": {
+      "title": "Analyse the whole game on open",
+      "sub": "In the background, with the last choices.",
+      "on": "On",
+      "off": "Off"
+    },
+    "saveAnalysis": {
+      "title": "Write analysis when saving",
+      "sub": "Save As keeps them, in LizzieYzy's format.",
+      "on": "On",
+      "off": "Off"
+    },
+    "cache": {
+      "title": "Analysis cache",
+      "used": "{{used}} used of {{cap}}. When it is full, the positions looked at longest ago go first.",
+      "cap": "Cache limit",
+      "clear": "Clear…",
+      "memoryOnly": "The cache file can't be used, so results last only until Aji quits.",
+      "reason": "Reason: {{reason}}",
+      "confirmTitle": "Clear all analysis results?",
+      "confirmBody": "Every game's results are deleted. This can't be undone.",
+      "confirm": "Clear",
+      "failed": "Couldn't clear the analysis results"
     }
   },
   "game": {
@@ -410,7 +454,13 @@
         "detail": "Analysing with the default rules for new games; change them from the rules chip."
       }
     },
-    "dropHere": "Release to open the record"
+    "dropHere": "Release to open the record",
+    "jobFailed": "Couldn't start the game analysis",
+    "clearFailed": "Couldn't clear the analysis",
+    "cacheMemoryOnly": {
+      "title": "Analysis results aren't being kept",
+      "detail": "The cache file can't be used, so results last only until Aji quits."
+    }
   },
   "rules": {
     "title": "Analysis rules",
@@ -423,7 +473,7 @@
     "area": "Area",
     "territory": "Territory",
     "fixedKomi": "{{komi}} points",
-    "fixedHint": "{{scoring}} · set by the rules",
+    "fixedHint": "{{scoring}}, set by the rules",
     "stepHint": "Steps of 0.5",
     "komiDown": "Lower komi",
     "komiUp": "Raise komi",
@@ -432,8 +482,8 @@
       "japaneseKorean": "Japanese",
       "custom": "Custom"
     },
-    "chip": "{{rules}} · {{komi}}",
-    "chipChanged": "{{rules}} · {{komi}}, changed from the file",
+    "chip": "{{rules}} {{komi}}",
+    "chipChanged": "{{rules}} {{komi}}, changed from the file",
     "described": {
       "chinese": "Chinese rules",
       "japaneseKorean": "Japanese/Korean rules",
@@ -473,7 +523,13 @@
     "saveAs": "Save As…",
     "today": "Today",
     "yesterday": "Yesterday",
-    "view": "View"
+    "view": "View",
+    "analyseGame": "Analyse Game…",
+    "clearAnalysis": "Clear Analysis",
+    "clearPosition": "This Position",
+    "clearGame": "Whole Game",
+    "finalScoring": "Final Scoring",
+    "estimate": "Position Estimate"
   },
   "layout": {
     "panels": {
@@ -481,6 +537,7 @@
       "winrate": "Win rate",
       "trend": "Trend",
       "candidates": "Candidates",
+      "swings": "Swings",
       "subboard": "Sub-board"
     },
     "noCandidate": "No candidate",
@@ -520,11 +577,21 @@
       "new19": "New 19×19 game"
     },
     "analysis": {
-      "toggle": "Pause or resume analysis"
+      "toggle": "Pause or resume analysis",
+      "game": "Analyse game",
+      "stopGame": "Stop game analysis",
+      "clearPosition": "Clear this position's analysis",
+      "clearGame": "Clear the game's analysis"
     },
     "candidates": {
       "toggleHidden": "Show or hide candidates",
       "peek": "Hide candidates while held"
+    },
+    "scoring": {
+      "start": "Final scoring"
+    },
+    "estimate": {
+      "toggle": "Show or hide the position estimate"
     }
   },
   "screenshot": {
@@ -539,5 +606,132 @@
     "copyFailed": "Could not copy",
     "saveFailed": "The screenshot was not saved",
     "notShown": "The {{target}} is not on screen"
-  }
+  },
+  "job": {
+    "title": "Analyse Game",
+    "range": "Range",
+    "whole": "Whole game",
+    "moves": "Moves",
+    "fromLabel": "First move",
+    "toLabel": "Last move",
+    "side": "Analyse",
+    "both": "Both",
+    "black": "Black only",
+    "white": "White only",
+    "visits": "Visits per move",
+    "boost": "Boost big swings",
+    "thresholdLabel": "Boost threshold",
+    "boostVisitsLabel": "Boost visits",
+    "estimate": {
+      "cached_one": "Skips {{count}} position that already has results. ",
+      "cached_other": "Skips {{count}} positions that already have results. ",
+      "allCached_one": "The {{count}} position already has results",
+      "allCached_other": "All {{count}} positions already have results",
+      "boostOnly": ", so only boosting runs",
+      "rest": "Analyses the other {{count}}",
+      "all_one": "Analyses {{count}} position",
+      "all_other": "Analyses {{count}} positions",
+      "black_one": "Analyses Black's {{count}} move",
+      "black_other": "Analyses Black's {{count}} moves",
+      "white_one": "Analyses White's {{count}} move",
+      "white_other": "Analyses White's {{count}} moves",
+      "minutes": " in about {{count}} min",
+      "underMinute": " in under a minute",
+      "boost": ", plus boosting",
+      "end": "."
+    },
+    "browse": "You can browse while it runs; the position on the board always goes first.",
+    "cancel": "Cancel",
+    "start": "Start",
+    "status": {
+      "running": "Analysing game {{done}}/{{total}}",
+      "boosting": "Boosting {{done}}/{{total}}",
+      "count": "{{done}}/{{total}}",
+      "waiting": "current position first",
+      "paused": "Paused",
+      "done": "Game analysed",
+      "stopped": "Stopped",
+      "minutes": "about {{count}} min",
+      "underMinute": "under a minute",
+      "stop": "Stop game analysis"
+    },
+    "rangeLine": "From <from/> to <to/>",
+    "boostLine": "Swings over <threshold/>% get <visits/> visits"
+  },
+  "swings": {
+    "by": "By",
+    "winrate": "Win rate",
+    "score": "Lead",
+    "overWinrate": "Over <field/>%",
+    "overScore": "Over <field/> pts",
+    "threshold": "Swing threshold",
+    "afterOnly": "After this move",
+    "black": "Black",
+    "white": "White",
+    "count_one": "{{count}} move",
+    "count_other": "{{count}} moves",
+    "columns": {
+      "move": "Move",
+      "point": "Point",
+      "winrate": "Win rate",
+      "score": "Lead"
+    },
+    "none": "None",
+    "partial_one": "Only {{count}} position has a result, so some moves can't be compared yet. Analyse the whole game to complete the list.",
+    "partial_other": "Only {{count}} positions have results, so some moves can't be compared yet. Analyse the whole game to complete the list.",
+    "empty": {
+      "title": "Nothing to compare yet",
+      "body": "Choose “Analyse Game…” from the game menu, and each side's biggest losses will be listed here."
+    }
+  },
+  "estimate": {
+    "title": "Position estimate",
+    "black": "B {{n}}",
+    "white": "W {{n}}",
+    "komi": "Komi {{komi}}",
+    "blackLeads": "Black leads by {{n}}",
+    "whiteLeads": "White leads by {{n}}",
+    "even": "Even",
+    "waiting": "Waiting for this position's result",
+    "score": "Score",
+    "close": "Close the position estimate"
+  },
+  "scoring": {
+    "title": "Final Scoring",
+    "subtitle": "{{rules}}, {{counting}}",
+    "rules": {
+      "chinese": "Chinese rules",
+      "japaneseKorean": "Japanese/Korean rules",
+      "custom": "Custom rules"
+    },
+    "counting": {
+      "area": "area scoring",
+      "territory": "territory scoring"
+    },
+    "columns": {
+      "area": "Area",
+      "territory": "Territory",
+      "stones": "Stones",
+      "land": "Points",
+      "dead": "Dead",
+      "prisoners": "Captures",
+      "komi": "Komi",
+      "total": "Total"
+    },
+    "black": "Black",
+    "white": "White",
+    "blackWins": "Black wins by {{n}}",
+    "whiteWins": "White wins by {{n}}",
+    "draw": "Draw",
+    "changed": "Changed",
+    "hint": "Click a stone to switch its whole group between dead and alive.",
+    "fromKataGo": "KataGo marked the dead stones.",
+    "reset": "Restore KataGo's marking",
+    "exit": "Leave scoring",
+    "rest": "Candidates are hidden, and nothing is analysed while scoring.",
+    "waiting": "Counting…",
+    "failed": "Could not count this position.",
+    "openByOwnership": "The game was not played out, so open areas follow KataGo's judgement."
+  },
+  "separator": ", "
 }

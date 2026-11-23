@@ -12,9 +12,12 @@ import type { Request } from '../transport/generated/Request';
 import type { RunningEngine } from '../transport/generated/RunningEngine';
 import { TransportProvider } from '../transport/TransportProvider';
 import { EngineCard } from './EngineCard';
+import { resetJobStore, useJobStore } from '../job/jobStore';
+import type { JobProgress } from '../transport/generated/JobProgress';
 
 afterEach(() => {
   resetGameStore();
+  resetJobStore();
   useSettingsStore.setState({ settings: null });
 });
 
@@ -54,6 +57,16 @@ function mount(
       defaultRules: { kind: 'chinese' },
       showCoordinates: true,
       perspective: 'black',
+      showNextMove: true,
+      analyseOnOpen: false,
+      cacheCapMb: 1024,
+      saveAnalysis: false,
+      jobOptions: {
+        range: { kind: 'whole' },
+        side: 'both',
+        visits: 500,
+        boost: { on: true, threshold: 10, visits: 3000 },
+      },
     },
   });
   store.getState().applyEvent({ type: 'engineState', engine });
@@ -70,6 +83,8 @@ function mount(
         isFinal: false,
         candidates: [],
         previousVisits: 0,
+        ownership: null,
+        next: null,
       },
     });
   }
@@ -100,7 +115,7 @@ it('shows the speed, visits, engine, network and the pause hint while analysing'
   expect(screen.getByText('分析中')).toBeInTheDocument();
   expect(row('速度')).toHaveTextContent('1,240 次/秒');
   expect(row('计算量')).toHaveTextContent('3,104');
-  await waitFor(() => expect(row('引擎')).toHaveTextContent('KataGo 1.18.2 · Metal'));
+  await waitFor(() => expect(row('引擎')).toHaveTextContent('KataGo 1.18.2（Metal）'));
   // Truncated in the middle to 24 characters.
   expect(row('网络')).toHaveTextContent('kata1-b28c51…d4960414494');
   expect(screen.getByText('点击暂停')).toBeInTheDocument();
@@ -128,4 +143,33 @@ it('names a development engine without a backend', async () => {
 it('asks for the engine status when it opens', async () => {
   const requests = mount({ state: 'analysing', version: '1.18.2' });
   await waitFor(() => expect(requests).toEqual([{ type: 'engineStatus' }]));
+});
+
+const job = (state: JobProgress['state']): JobProgress => ({
+  state,
+  done: 176,
+  total: 248,
+  boostDone: 0,
+  boostTotal: 0,
+  working: 200,
+  queued: [],
+  etaSeconds: 60,
+});
+
+it('engine card shows the job line', async () => {
+  useJobStore.getState().apply(job('waiting'));
+  mount({ state: 'analysing', version: '1.18.2' });
+  useGameStore.getState().apply(makeSnapshot({ revision: 2, positionKey: KEY, moveNumber: 200 }));
+  expect(await screen.findByText('全局分析 176/248，正在先算第 200 手')).toBeInTheDocument();
+});
+
+it('engine card shows the job count while the job runs', async () => {
+  useJobStore.getState().apply(job('running'));
+  mount({ state: 'analysing', version: '1.18.2' });
+  expect(await screen.findByText('全局分析 176/248')).toBeInTheDocument();
+});
+
+it('engine card has no job line without a job', () => {
+  mount({ state: 'analysing', version: '1.18.2' });
+  expect(screen.queryByText(/全局分析/)).toBeNull();
 });

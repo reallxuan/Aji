@@ -5,6 +5,7 @@ import { useDeviceStore } from '../device/deviceStore';
 import { resetGameStore } from '../game/gameStore';
 import { validateLayout } from '../layout/validate';
 import { makeSnapshot } from '../game/testing';
+import { createEngineStore, EngineStoreProvider } from '../engine/engineStore';
 import { createI18n } from '../i18n/createI18n';
 import { createFakeTransport } from '../transport/fake';
 import type { Request } from '../transport/generated/Request';
@@ -30,9 +31,11 @@ it('tells the menu bar the language and runs menu commands', async () => {
   render(
     <I18nextProvider i18n={i18n}>
       <TransportProvider transport={transport}>
-        <PlatformProvider files={files}>
-          <Probe />
-        </PlatformProvider>
+        <EngineStoreProvider store={createEngineStore()}>
+          <PlatformProvider files={files}>
+            <Probe />
+          </PlatformProvider>
+        </EngineStoreProvider>
       </TransportProvider>
     </I18nextProvider>,
   );
@@ -54,9 +57,11 @@ it('applies a layout preset from the menu bar, and ignores an unknown one', asyn
   render(
     <I18nextProvider i18n={createI18n('zh-CN')}>
       <TransportProvider transport={createFakeTransport(() => ({ type: 'ok' }) as never)}>
-        <PlatformProvider files={files}>
-          <Probe />
-        </PlatformProvider>
+        <EngineStoreProvider store={createEngineStore()}>
+          <PlatformProvider files={files}>
+            <Probe />
+          </PlatformProvider>
+        </EngineStoreProvider>
       </TransportProvider>
     </I18nextProvider>,
   );

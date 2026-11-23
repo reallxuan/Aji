@@ -7,13 +7,13 @@
 //! with the process generation so that nothing from an old process is mistaken for the
 //! current one.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aji_core::{Position, PositionKey};
+use aji_core::{Move, Position, PositionKey};
 use tokio::runtime::Handle;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -21,14 +21,22 @@ use tokio::time::{Instant, sleep_until};
 
 use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
 use crate::gate::SubmitGate;
+use crate::identity::EngineIdentity;
+use crate::job::{JOB_REPORT_EVERY, JobItem, JobPlan, JobQueue, JobRun, JobStatus};
+use crate::loss::move_loss;
 use crate::process::{self, EngineFiles, Spawned, katago_launch, lock};
 use crate::query::{action_query, analysis_query, terminate_query};
 use crate::response::{KataLine, RawAnalysis, parse_line};
 use crate::state::{CrashReason, EngineState, ExitInfo};
+use crate::store::{CacheStats, ClearScope, Row, Store};
 use crate::throttle::Throttle;
-use crate::update::{AnalysisUpdate, Rejection, TrendStats, to_update};
+use crate::update::{AnalysisUpdate, NextResult, Rejection, TrendStats, to_update};
 
 const VERSION_ID: &str = "aji-version";
+
+/// How long a position missing from the in-memory layer waits for the store before it is
+/// searched anyway (P2 M2 design 5.2).
+const STORE_WAIT: Duration = Duration::from_millis(200);
 
 /// Engine tuning. `Default` holds the shipped values.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +110,13 @@ pub enum EngineEvent {
     Analysis(AnalysisUpdate),
     /// KataGo refused the current position's query.
     Rejected(Rejection),
+    /// A better result was kept for a position, current or not (P2 M2): the trend follows it.
+    Stored {
+        key: PositionKey,
+        stats: TrendStats,
+    },
+    /// The whole-game job's progress, on every change.
+    Job(JobStatus),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,6 +148,10 @@ struct Snapshot {
     position: Option<PositionKey>,
     analysis: Option<AnalysisUpdate>,
     rejected: Option<Rejection>,
+    /// Analysis queries sent, for the tests of rapid navigation.
+    submitted: u64,
+    /// The most job queries KataGo held at once (terminated ones until they end).
+    job_peak: usize,
 }
 
 /// The engine's state with the current position and the analysis shown for it.
@@ -152,17 +171,26 @@ pub struct EngineStatus {
 type Reply<T> = oneshot::Sender<T>;
 type Outcome = Result<(), EngineError>;
 
+/// A position with the record's next position and move.
+type WithNext = (Position, Option<(Position, Move)>);
+
 enum Command {
-    SetPosition(Position, Reply<Outcome>),
+    SetPosition(WithNext, Reply<Outcome>),
     ClearPosition(Reply<Outcome>),
     Pause(Reply<Outcome>),
     Resume(Reply<Outcome>),
     Restart(Reply<Outcome>),
-    SetFiles(Option<EngineFiles>, Reply<Outcome>),
+    SetFiles(Option<EngineFiles>, Option<EngineIdentity>, Reply<Outcome>),
     Stop(Reply<Outcome>),
     SetVisitLimit(Option<u32>, Reply<Outcome>),
     Continue(Reply<Outcome>),
     Summaries(Vec<PositionKey>, Reply<Vec<Option<TrendStats>>>),
+    Import(Vec<Row>, Reply<()>),
+    Clear(ClearScope, Reply<()>),
+    RunJob(JobPlan, Reply<Outcome>),
+    Updates(Vec<PositionKey>, Reply<Vec<Option<AnalysisUpdate>>>),
+    SetIdentity(Option<EngineIdentity>, Reply<()>),
+    StopJob(Reply<()>),
     Shutdown(Reply<()>),
 }
 
@@ -171,6 +199,7 @@ enum Command {
 pub struct Engine {
     commands: mpsc::UnboundedSender<Command>,
     snapshot: Arc<Mutex<Snapshot>>,
+    store: Option<Store>,
 }
 
 impl fmt::Debug for Engine {
@@ -195,6 +224,19 @@ impl Engine {
         options: EngineOptions,
         on_event: impl Fn(EngineEvent) + Send + Sync + 'static,
     ) -> Engine {
+        Engine::spawn_with_store(files, None, position, options, None, on_event)
+    }
+
+    /// `spawn` with the persistent store behind the in-memory layer (P2 M2 design 5.2). Rows
+    /// are read and written under `identity`; without one the store is not used.
+    pub fn spawn_with_store(
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+        position: Position,
+        options: EngineOptions,
+        store: Option<Store>,
+        on_event: impl Fn(EngineEvent) + Send + Sync + 'static,
+    ) -> Engine {
         let runtime = Handle::current();
         let state = match files {
             Some(_) => EngineState::Starting,
@@ -206,6 +248,8 @@ impl Engine {
             position: Some(position.key()),
             analysis: None,
             rejected: None,
+            submitted: 0,
+            job_peak: 0,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
@@ -215,6 +259,12 @@ impl Engine {
             gate: SubmitGate::new(options.submit_interval),
             submit_at: None,
             files,
+            identity,
+            store: store.clone(),
+            next: None,
+            loading: None,
+            job: None,
+            job_seq: 0,
             options,
             on_event: Box::new(on_event),
             snapshot: Arc::clone(&snapshot),
@@ -239,7 +289,11 @@ impl Engine {
             finished: false,
         };
         runtime.spawn(actor.run());
-        Engine { commands, snapshot }
+        Engine {
+            commands,
+            snapshot,
+            store,
+        }
     }
 
     pub fn state(&self) -> EngineState {
@@ -266,7 +320,17 @@ impl Engine {
     /// position is emitted afterwards. A position with a point off the board gives
     /// `InvalidPosition` and changes nothing.
     pub async fn set_position(&self, position: Position) -> Result<(), EngineError> {
-        self.outcome(|reply| Command::SetPosition(position, reply))
+        self.set_position_next(position, None).await
+    }
+
+    /// `set_position` with the record's next position and the move that reaches it: updates
+    /// for `position` carry the next position's result once it has one (P2 M2 design 5.6).
+    pub async fn set_position_next(
+        &self,
+        position: Position,
+        next: Option<(Position, Move)>,
+    ) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetPosition((position, next), reply))
             .await
     }
 
@@ -294,8 +358,16 @@ impl Engine {
     /// on them and this returns once `starting` is entered; with `None` it is stopped and this
     /// returns once the state is `notConfigured`. The analysis shown and cached is dropped,
     /// since another engine or network gives other numbers.
-    pub async fn set_files(&self, files: Option<EngineFiles>) -> Result<(), EngineError> {
-        self.outcome(|reply| Command::SetFiles(files, reply)).await
+    ///
+    /// `identity` keys the persistent store's rows from now on; the service computes it from the
+    /// files before calling.
+    pub async fn set_files(
+        &self,
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+    ) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetFiles(files, identity, reply))
+            .await
     }
 
     /// Closes stdin, waits up to `shutdown_grace`, then kills. Returns once KataGo has
@@ -319,8 +391,8 @@ impl Engine {
         self.outcome(Command::Continue).await
     }
 
-    /// The cached root of each position, in order; `None` for one never analysed. Reading
-    /// does not change which positions the cache keeps.
+    /// The cached root of each position, in order; `None` for one never analysed. The in-memory
+    /// layer first, then the store. Reading does not change which positions the cache keeps.
     pub async fn summaries(&self, keys: Vec<PositionKey>) -> Vec<Option<TrendStats>> {
         let wanted = keys.len();
         self.ask(|reply| Command::Summaries(keys, reply))
@@ -328,9 +400,82 @@ impl Engine {
             .unwrap_or_else(|| vec![None; wanted])
     }
 
-    /// Stops KataGo like `stop` and ends the actor. Later calls report `NotRunning`.
+    /// Results read from a LizzieYzy file (P2 M2 design 5.11), kept as imported rows.
+    pub async fn import(&self, rows: Vec<Row>) {
+        self.ask(|reply| Command::Import(rows, reply)).await;
+    }
+
+    /// Clears results, from both layers. Clearing the current position restarts its search.
+    pub async fn clear(&self, scope: ClearScope) {
+        self.ask(|reply| Command::Clear(scope, reply)).await;
+    }
+
+    /// The store's size and state; an engine without a store reports an empty memory cache.
+    pub async fn cache_stats(&self) -> CacheStats {
+        let none = CacheStats {
+            used_bytes: 0,
+            cap_bytes: 0,
+            persistent: false,
+            reason: None,
+        };
+        match &self.store {
+            Some(store) => store.stats().await.unwrap_or(none),
+            None => none,
+        }
+    }
+
+    pub fn set_cache_cap(&self, bytes: u64) {
+        if let Some(store) = &self.store {
+            store.set_cap(bytes);
+        }
+    }
+
+    /// Runs a whole-game job: the board's query first, then the job's positions, one queued
+    /// ahead, until each has its visits (P2 M2 design 5.3). Replaces a running job.
+    pub async fn run_job(&self, plan: JobPlan) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::RunJob(plan, reply)).await
+    }
+
+    /// The full kept result of each position, in order: the in-memory layer, then the store.
+    /// For a move's loss from the candidate list (P2 M2 design 5.3).
+    pub async fn updates(&self, keys: Vec<PositionKey>) -> Vec<Option<AnalysisUpdate>> {
+        let wanted = keys.len();
+        self.ask(|reply| Command::Updates(keys, reply))
+            .await
+            .unwrap_or_else(|| vec![None; wanted])
+    }
+
+    /// The identity the store's rows are read and written under, once it is known: hashing a
+    /// network takes a moment, so the app starts the engine first and tells it afterwards.
+    pub async fn set_identity(&self, identity: Option<EngineIdentity>) {
+        self.ask(|reply| Command::SetIdentity(identity, reply))
+            .await;
+    }
+
+    /// Stops the job; its running queries are terminated. Results kept so far stay.
+    pub async fn stop_job(&self) {
+        self.ask(Command::StopJob).await;
+    }
+
+    /// The most job queries KataGo held at once.
+    #[cfg(feature = "test-seams")]
+    pub fn job_peak_in_flight(&self) -> usize {
+        lock(&self.snapshot).job_peak
+    }
+
+    /// Analysis queries sent so far.
+    #[cfg(feature = "test-seams")]
+    pub fn queries_sent(&self) -> u64 {
+        lock(&self.snapshot).submitted
+    }
+
+    /// Stops KataGo like `stop` and ends the actor, then commits the store. Later calls report
+    /// `NotRunning`.
     pub async fn shutdown(&self) {
         self.ask(Command::Shutdown).await;
+        if let Some(store) = &self.store {
+            let _ = store.flush().await;
+        }
     }
 
     async fn ask<T>(&self, command: impl FnOnce(Reply<T>) -> Command) -> Option<T> {
@@ -349,6 +494,12 @@ impl Engine {
 /// What the spawner thread and the per-process tasks report, tagged with the generation of
 /// the process they belong to.
 enum Report {
+    /// The visits the store holds for a job's positions, by job number.
+    JobKnown(u64, Vec<(PositionKey, u32)>),
+    /// The store's row for a position missing from the in-memory layer.
+    Cached(PositionKey, Option<Box<Row>>),
+    /// Imported rows, each with the store's row for its position when memory lacked one.
+    Imported(Vec<(Row, Option<Row>)>, Reply<()>),
     Spawned(u64, io::Result<Box<Spawned>>),
     Line(u64, KataLine),
     Exited(u64, ExitInfo, Vec<String>),
@@ -447,6 +598,16 @@ impl Drop for ProcIo {
 
 struct Actor {
     files: Option<EngineFiles>,
+    identity: Option<EngineIdentity>,
+    store: Option<Store>,
+    /// The record's next position and move, for `AnalysisUpdate::next`.
+    next: Option<(Position, Move)>,
+    /// The current position is being read from the store; it is searched once the row
+    /// arrives, or at the deadline.
+    loading: Option<(PositionKey, Instant)>,
+    job: Option<ActiveJob>,
+    /// Numbers jobs, so a store reply for a replaced job is ignored.
+    job_seq: u64,
     options: EngineOptions,
     on_event: Box<dyn Fn(EngineEvent) + Send + Sync>,
     snapshot: Arc<Mutex<Snapshot>>,
@@ -482,6 +643,21 @@ struct Actor {
     finished: bool,
 }
 
+/// The running whole-game job.
+struct ActiveJob {
+    seq: u64,
+    queue: JobQueue,
+    budget: u32,
+    /// The store's visits for the job's positions have arrived (or there is no store).
+    ready: bool,
+    known: HashMap<PositionKey, u32>,
+    /// Job queries KataGo still holds, terminated ones included, until they end.
+    live: HashSet<String>,
+    /// Each job query in flight: its most visits and when they last rose, for the watchdog.
+    progress: HashMap<String, (u32, Instant)>,
+    last: Option<JobStatus>,
+}
+
 async fn sleep_until_some(at: Option<Instant>) {
     match at {
         Some(at) => sleep_until(at).await,
@@ -492,6 +668,7 @@ async fn sleep_until_some(at: Option<Instant>) {
 impl Actor {
     async fn run(mut self) {
         (self.on_event)(EngineEvent::State(self.state.clone()));
+        self.load(self.position.key(), true);
         if self.files.is_some() {
             self.start_process(false);
         }
@@ -516,8 +693,8 @@ impl Actor {
 
     fn on_command(&mut self, command: Command) {
         match command {
-            Command::SetPosition(position, reply) => {
-                let _ = reply.send(self.set_position(position));
+            Command::SetPosition((position, next), reply) => {
+                let _ = reply.send(self.set_position(position, next));
             }
             Command::ClearPosition(reply) => {
                 let _ = reply.send(self.clear_position());
@@ -531,7 +708,7 @@ impl Actor {
             Command::Restart(reply) => {
                 let _ = reply.send(self.restart());
             }
-            Command::SetFiles(files, reply) => self.set_files(files, reply),
+            Command::SetFiles(files, identity, reply) => self.set_files(files, identity, reply),
             Command::Stop(reply) => self.stop(reply),
             Command::SetVisitLimit(limit, reply) => {
                 let _ = reply.send(self.set_visit_limit(limit));
@@ -539,12 +716,29 @@ impl Actor {
             Command::Continue(reply) => {
                 let _ = reply.send(self.continue_analysis());
             }
-            Command::Summaries(keys, reply) => {
-                let stats = keys
-                    .into_iter()
-                    .map(|key| self.cache.peek(key).map(TrendStats::of))
-                    .collect();
-                let _ = reply.send(stats);
+            Command::Summaries(keys, reply) => self.summaries(keys, reply),
+            Command::Import(rows, reply) => self.import(rows, reply),
+            Command::Clear(scope, reply) => {
+                self.clear(scope);
+                let _ = reply.send(());
+            }
+            Command::RunJob(plan, reply) => {
+                let _ = reply.send(self.run_job(plan));
+            }
+            Command::StopJob(reply) => {
+                self.stop_job();
+                let _ = reply.send(());
+            }
+            Command::Updates(keys, reply) => self.updates(keys, reply),
+            Command::SetIdentity(identity, reply) => {
+                if self.identity != identity {
+                    self.identity = identity;
+                    // The current position may already have a stored result to show.
+                    if !self.cleared && lock(&self.snapshot).analysis.is_none() {
+                        self.load(self.position.key(), true);
+                    }
+                }
+                let _ = reply.send(());
             }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
@@ -553,15 +747,22 @@ impl Actor {
         }
     }
 
-    fn set_position(&mut self, position: Position) -> Outcome {
+    fn set_position(&mut self, position: Position, next: Option<(Position, Move)>) -> Outcome {
         if position.validate().is_err() {
             return Err(EngineError::InvalidPosition);
         }
         if position == self.position && !self.cleared {
+            if next != self.next {
+                self.next = next;
+                self.load_next();
+                self.refresh_next();
+            }
             return Ok(());
         }
         self.terminate_current();
+        self.requeue_job();
         self.position = position;
+        self.next = next;
         self.cleared = false;
         self.throttle = Throttle::new(self.options.throttle);
         {
@@ -570,14 +771,266 @@ impl Actor {
             snapshot.analysis = None;
             snapshot.rejected = None;
         }
-        if let Some(cached) = self.cache.get(self.position.key()).cloned() {
-            self.throttle.admit(std::time::Instant::now(), true);
-            self.emit(EngineEvent::Analysis(cached));
+        self.loading = None;
+        if !self.show_cached() {
+            self.load(self.position.key(), true);
         }
+        self.load_next();
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
         }
         Ok(())
+    }
+
+    /// Shows the current position's result from the in-memory layer, if it has one.
+    fn show_cached(&mut self) -> bool {
+        let Some(mut cached) = self.cache.get(self.position.key()).cloned() else {
+            return false;
+        };
+        // A stored result is not a search catching up (M7 minor 12).
+        cached.previous_visits = 0;
+        self.throttle.admit(std::time::Instant::now(), true);
+        let shown = self.with_next(cached);
+        self.emit(EngineEvent::Analysis(shown));
+        true
+    }
+
+    /// Asks the store for `key` when the in-memory layer lacks it. `wait` holds the current
+    /// position's search until the row arrives, for at most `STORE_WAIT`.
+    fn load(&mut self, key: PositionKey, wait: bool) {
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            return;
+        };
+        if self.cache.peek(key).is_some() {
+            return;
+        }
+        if wait {
+            self.loading = Some((key, Instant::now() + STORE_WAIT));
+        }
+        let reports = self.report_tx.clone();
+        store.get(identity, key, move |row| {
+            let _ = reports.send(Report::Cached(key, row.map(Box::new)));
+        });
+    }
+
+    fn load_next(&mut self) {
+        if let Some(key) = self.next_key() {
+            self.load(key, false);
+        }
+    }
+
+    fn next_key(&self) -> Option<PositionKey> {
+        self.next.as_ref().map(|(position, _)| position.key())
+    }
+
+    /// `update` with the next position's result and the move's loss, when both are known.
+    fn with_next(&self, mut update: AnalysisUpdate) -> AnalysisUpdate {
+        update.next = self.next.as_ref().and_then(|(position, _)| {
+            let after = TrendStats::of(self.cache.peek(position.key())?);
+            let mover = position.moves.last()?.0;
+            Some(NextResult {
+                stats: after,
+                loss: move_loss(&TrendStats::of(&update), &after, mover),
+            })
+        });
+        update
+    }
+
+    /// Shows the current update again with the next position's latest result.
+    fn refresh_next(&mut self) {
+        let shown = lock(&self.snapshot).analysis.clone();
+        if let Some(update) = shown.filter(|u| !self.cleared && u.position == self.position.key()) {
+            let update = self.with_next(update);
+            self.emit(EngineEvent::Analysis(update));
+        }
+    }
+
+    fn on_cached(&mut self, key: PositionKey, row: Option<Box<Row>>) {
+        let accepted = row.is_some_and(|row| self.cache.offer_row(row.update, row.imported));
+        if self.loading.is_some_and(|(loading, _)| loading == key) {
+            self.loading = None;
+            if !self.cleared && key == self.position.key() {
+                if lock(&self.snapshot).analysis.is_none() {
+                    self.show_cached();
+                }
+                if let Some(version) = self.ready_version() {
+                    self.analyse_or_idle(version);
+                }
+            }
+        } else if accepted && self.next_key() == Some(key) {
+            self.refresh_next();
+        }
+    }
+
+    fn summaries(&mut self, keys: Vec<PositionKey>, reply: Reply<Vec<Option<TrendStats>>>) {
+        let mut stats: Vec<Option<TrendStats>> = keys
+            .iter()
+            .map(|&key| self.cache.peek(key).map(TrendStats::of))
+            .collect();
+        let missing: Vec<usize> = (0..keys.len()).filter(|&i| stats[i].is_none()).collect();
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            let _ = reply.send(stats);
+            return;
+        };
+        if missing.is_empty() {
+            let _ = reply.send(stats);
+            return;
+        }
+        let found = store.get_many(identity, missing.iter().map(|&i| keys[i]).collect());
+        self.runtime.spawn(async move {
+            if let Ok(found) = found.await {
+                for (i, row) in missing.into_iter().zip(found) {
+                    stats[i] = row;
+                }
+            }
+            let _ = reply.send(stats);
+        });
+    }
+
+    fn updates(&mut self, keys: Vec<PositionKey>, reply: Reply<Vec<Option<AnalysisUpdate>>>) {
+        let mut found: Vec<Option<AnalysisUpdate>> = keys
+            .iter()
+            .map(|&key| self.cache.peek(key).cloned())
+            .collect();
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            let _ = reply.send(found);
+            return;
+        };
+        let waits: Vec<(usize, oneshot::Receiver<Option<Row>>)> = (0..keys.len())
+            .filter(|&i| found[i].is_none())
+            .map(|i| {
+                let (tx, rx) = oneshot::channel();
+                store.get(identity, keys[i], move |row| {
+                    let _ = tx.send(row);
+                });
+                (i, rx)
+            })
+            .collect();
+        if waits.is_empty() {
+            let _ = reply.send(found);
+            return;
+        }
+        self.runtime.spawn(async move {
+            for (i, rx) in waits {
+                found[i] = rx.await.ok().flatten().map(|row| row.update);
+            }
+            let _ = reply.send(found);
+        });
+    }
+
+    /// Keeps `update` in the in-memory layer and, when better, in the store. Returns whether it
+    /// was kept.
+    fn keep(&mut self, update: &AnalysisUpdate, imported: bool, version: String) -> bool {
+        if !self.cache.offer_row(update.clone(), imported) {
+            return false;
+        }
+        if let (Some(store), Some(identity)) = (&self.store, &self.identity) {
+            let mut row = update.clone();
+            row.next = None;
+            store.put(
+                identity,
+                Row {
+                    update: row,
+                    imported,
+                    katago_version: version,
+                },
+            );
+        }
+        self.emit(EngineEvent::Stored {
+            key: update.position,
+            stats: TrendStats::of(update),
+        });
+        true
+    }
+
+    /// Imports `rows`. A position the in-memory layer lacks may still have a fresh row on
+    /// disk from another session, so that row is read first and offered before the imported
+    /// one: the store's precedence (design 5.11) then holds for the session too.
+    fn import(&mut self, rows: Vec<Row>, reply: Reply<()>) {
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            self.keep_imported(rows.into_iter().map(|row| (row, None)).collect());
+            let _ = reply.send(());
+            return;
+        };
+        let waits: Vec<(Row, Option<oneshot::Receiver<Option<Row>>>)> = rows
+            .into_iter()
+            .map(|row| {
+                let key = row.update.position;
+                if self.cache.peek(key).is_some() {
+                    return (row, None);
+                }
+                let (tx, rx) = oneshot::channel();
+                store.get(identity, key, move |stored| {
+                    let _ = tx.send(stored);
+                });
+                (row, Some(rx))
+            })
+            .collect();
+        let reports = self.report_tx.clone();
+        self.runtime.spawn(async move {
+            let mut rows = Vec::with_capacity(waits.len());
+            for (row, wait) in waits {
+                let stored = match wait {
+                    Some(rx) => rx.await.ok().flatten(),
+                    None => None,
+                };
+                rows.push((row, stored));
+            }
+            let _ = reports.send(Report::Imported(rows, reply));
+        });
+    }
+
+    fn keep_imported(&mut self, rows: Vec<(Row, Option<Row>)>) {
+        for (row, stored) in rows {
+            let key = row.update.position;
+            if let Some(stored) = stored {
+                self.cache.offer_row(stored.update, stored.imported);
+            }
+            let kept = self.keep(&row.update, true, row.katago_version);
+            if kept && self.next_key() == Some(key) {
+                self.refresh_next();
+            }
+        }
+    }
+
+    fn clear(&mut self, scope: ClearScope) {
+        let key = self.position.key();
+        let current = match &scope {
+            ClearScope::All => {
+                self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
+                true
+            }
+            ClearScope::Keys(keys) => {
+                for &k in keys {
+                    self.cache.remove(k);
+                }
+                keys.contains(&key)
+            }
+        };
+        if let (Some(store), Some(identity)) = (&self.store, &self.identity) {
+            store.clear(identity, scope);
+        } else if let (Some(store), ClearScope::All) = (&self.store, &scope) {
+            store.clear(
+                &EngineIdentity {
+                    network: [0; 32],
+                    config: 0,
+                },
+                ClearScope::All,
+            );
+        }
+        if !current || self.cleared {
+            return;
+        }
+        // The search restarts: what a running query finds from now on is not kept.
+        self.targets.remove(&key);
+        if let Some(active) = &self.current {
+            self.queries.remove(&active.id);
+        }
+        self.terminate_current();
+        lock(&self.snapshot).analysis = None;
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
     }
 
     fn clear_position(&mut self) -> Outcome {
@@ -639,8 +1092,11 @@ impl Actor {
         let cached = self.cached_visits(key);
         self.targets.insert(key, cached.saturating_add(limit));
         if let Some(version) = self.ready_version()
-            && self.current.is_none()
+            && !self.paused
         {
+            // A running query stops at its old limit: send it again under the new one (M7
+            // minor 2).
+            self.terminate_current();
             self.analyse_or_idle(version);
         }
         Ok(())
@@ -653,8 +1109,10 @@ impl Actor {
         self.paused = true;
         if let Some(version) = self.ready_version() {
             self.terminate_current();
+            self.requeue_job();
             self.set_state(EngineState::Paused { version });
         }
+        self.emit_job();
         Ok(())
     }
 
@@ -685,16 +1143,26 @@ impl Actor {
         Ok(())
     }
 
-    fn set_files(&mut self, files: Option<EngineFiles>, reply: Reply<Outcome>) {
+    fn set_files(
+        &mut self,
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+        reply: Reply<Outcome>,
+    ) {
         if self.shutting_down() {
             let _ = reply.send(Err(EngineError::NotRunning));
             return;
         }
+        self.stop_job();
         self.files = files;
+        self.identity = identity;
         self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
         self.targets.clear();
         self.throttle = Throttle::new(self.options.throttle);
         lock(&self.snapshot).analysis = None;
+        if !self.cleared {
+            self.load(self.position.key(), true);
+        }
         if self.files.is_some() {
             if self.process.is_some() {
                 self.announce_restart();
@@ -786,10 +1254,26 @@ impl Actor {
         self.current = None;
         self.submit_at = None;
         self.queries.clear();
+        self.forget_job_flights();
     }
 
     fn on_report(&mut self, report: Report) {
         match report {
+            Report::Cached(key, row) => self.on_cached(key, row),
+            Report::Imported(rows, reply) => {
+                self.keep_imported(rows);
+                let _ = reply.send(());
+            }
+            Report::JobKnown(seq, known) => {
+                if let Some(job) = self.job.as_mut().filter(|j| j.seq == seq) {
+                    job.known.extend(known);
+                    job.ready = true;
+                    match self.ready_version() {
+                        Some(version) => self.analyse_or_idle(version),
+                        None => self.pump_job(),
+                    }
+                }
+            }
             Report::Spawned(generation, result) => self.on_spawned(generation, result),
             Report::Line(generation, line) => {
                 if self.is_live(generation) {
@@ -887,6 +1371,7 @@ impl Actor {
         self.current = None;
         self.submit_at = None;
         self.queries.clear();
+        self.forget_job_flights();
         let crashed = |reason| EngineState::Crashed {
             reason,
             exit,
@@ -942,13 +1427,24 @@ impl Actor {
                 ..
             } => Some(*since + self.options.ping_timeout),
         };
-        [watchdog, self.stalled_at(), self.submit_at]
-            .into_iter()
-            .flatten()
-            .min()
+        [
+            watchdog,
+            self.stalled_at(),
+            self.submit_at,
+            self.loading.map(|(_, at)| at),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn on_timer(&mut self, now: Instant) {
+        if self.loading.is_some_and(|(_, at)| now >= at) {
+            self.loading = None;
+            if let Some(version) = self.ready_version() {
+                self.analyse_or_idle(version);
+            }
+        }
         if self.submit_at.is_some_and(|at| now >= at) {
             self.submit_at = None;
             if let Some(version) = self.ready_version() {
@@ -1105,6 +1601,15 @@ impl Actor {
             active.visits = raw.root_info.visits;
             active.progress_at = Instant::now();
         }
+        if let Some((visits, at)) = self
+            .job
+            .as_mut()
+            .and_then(|job| job.progress.get_mut(&raw.id))
+            && raw.root_info.visits > *visits
+        {
+            *visits = raw.root_info.visits;
+            *at = Instant::now();
+        }
         let key = update.position;
         let is_final = update.is_final;
         // The cache keeps the most-visited result per position, for the visit cap and for
@@ -1114,13 +1619,17 @@ impl Actor {
         // count. A query that is no longer the active one (a late final after a newer query
         // started) is cached but not shown.
         let live = self.is_active(&raw.id) || self.current.is_none();
-        self.cache.offer(update.clone());
+        let version = self.ready_version().unwrap_or_default();
+        let kept = self.keep(&update, false, version);
         if live
             && !self.cleared
             && key == self.position.key()
             && self.throttle.admit(std::time::Instant::now(), is_final)
         {
+            let update = self.with_next(update);
             self.emit(EngineEvent::Analysis(update));
+        } else if kept && self.next_key() == Some(key) {
+            self.refresh_next();
         }
         if is_final {
             self.query_ended(&raw.id);
@@ -1147,14 +1656,224 @@ impl Actor {
     /// A query ended with a final, `noResults` or an error. If it was the current one, the
     /// search is over.
     fn query_ended(&mut self, id: &str) {
-        if self.queries.remove(id).is_none() || !self.is_active(id) {
+        let known = self.queries.remove(id).is_some();
+        if let Some(job) = self.job.as_mut() {
+            job.live.remove(id);
+            job.progress.remove(id);
+            job.queue.finished(id);
+        }
+        if known && self.is_active(id) {
+            self.current = None;
+        }
+        if !known {
             return;
         }
-        self.current = None;
+        self.pump_job();
         if let EngineState::Analysing { version } = &self.state {
             let version = version.clone();
-            let state = self.ready_state(version);
+            let state = self.idle_state(version);
             self.set_state(state);
+        }
+    }
+
+    // ------------------------------------------------------------------- job
+
+    fn run_job(&mut self, plan: JobPlan) -> Outcome {
+        if self.files.is_none() {
+            return Err(EngineError::NotConfigured);
+        }
+        if self.shutting_down() {
+            return Err(EngineError::NotRunning);
+        }
+        self.stop_job();
+        self.job_seq += 1;
+        let seq = self.job_seq;
+        let keys: Vec<PositionKey> = plan.items.iter().map(|i| i.position.key()).collect();
+        let store = match (&self.store, &self.identity) {
+            (Some(store), Some(identity)) => Some(store.get_many(identity, keys.clone())),
+            _ => None,
+        };
+        self.job = Some(ActiveJob {
+            seq,
+            queue: JobQueue::new(&plan),
+            budget: plan.budget,
+            ready: store.is_none(),
+            known: HashMap::new(),
+            live: HashSet::new(),
+            progress: HashMap::new(),
+            last: None,
+        });
+        if let Some(found) = store {
+            let reports = self.report_tx.clone();
+            self.runtime.spawn(async move {
+                let stats = found.await.unwrap_or_default();
+                let known = keys
+                    .into_iter()
+                    .zip(stats)
+                    .filter_map(|(key, s)| s.map(|s| (key, s.visits)))
+                    .collect();
+                let _ = reports.send(Report::JobKnown(seq, known));
+            });
+        }
+        // An unlimited board search now stops at the job's budget: send it again under it.
+        if self.options.visit_limit.is_none() && self.current.is_some() {
+            self.terminate_current();
+        }
+        self.emit_job();
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
+        Ok(())
+    }
+
+    fn stop_job(&mut self) {
+        if self.job.is_none() {
+            return;
+        }
+        self.requeue_job();
+        if let Some(job) = self.job.take() {
+            let status = job.queue.status(JobRun::Stopped);
+            self.emit(EngineEvent::Job(status));
+        }
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
+    }
+
+    /// Terminates the job's queries and puts their positions back at the front.
+    fn requeue_job(&mut self) {
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let ids = job.queue.requeue_all();
+        for id in &ids {
+            job.progress.remove(id);
+        }
+        for id in ids {
+            let terminate = format!("aji-terminate-{}", self.next_id);
+            self.next_id += 1;
+            self.send(terminate_query(&terminate, &id));
+        }
+    }
+
+    /// The process is gone: its queries with it. The job keeps its positions.
+    fn forget_job_flights(&mut self) {
+        if let Some(job) = self.job.as_mut() {
+            job.queue.requeue_all();
+            job.live.clear();
+            job.progress.clear();
+        }
+    }
+
+    /// Starts job queries while fewer than two queries are with KataGo (the board's counts),
+    /// and ends the job once every position is done.
+    fn pump_job(&mut self) {
+        if self.paused || self.ready_version().is_none() {
+            self.emit_job();
+            return;
+        }
+        loop {
+            let board_busy =
+                self.current.is_some() || self.submit_at.is_some() || self.loading.is_some();
+            let defer = (!self.cleared && board_busy).then(|| self.position.key());
+            let cache = &self.cache;
+            let Some(job) = self.job.as_mut().filter(|j| j.ready) else {
+                break;
+            };
+            if job.live.len() + usize::from(board_busy) >= 2 {
+                break;
+            }
+            let known = &job.known;
+            let cached = |key: PositionKey| {
+                let memory = cache.peek(key).map_or(0, |u| u.root_visits);
+                memory.max(known.get(&key).copied().unwrap_or(0))
+            };
+            let Some(item) = job.queue.next(cached, defer) else {
+                break;
+            };
+            self.submit_job(item);
+        }
+        let done = self
+            .job
+            .as_ref()
+            .is_some_and(|j| j.ready && j.queue.is_done());
+        if done {
+            if let Some(job) = self.job.take() {
+                self.emit(EngineEvent::Job(job.queue.status(JobRun::Done)));
+            }
+            if let Some(version) = self.ready_version() {
+                self.analyse_or_idle(version);
+            }
+            return;
+        }
+        self.emit_job();
+    }
+
+    fn submit_job(&mut self, item: JobItem) {
+        let id = format!("aji-job-{}", self.next_id);
+        self.next_id += 1;
+        let query = analysis_query(
+            &id,
+            &item.position,
+            Some(item.visits),
+            Some(JOB_REPORT_EVERY),
+            true,
+        );
+        let previous = self
+            .cache
+            .peek(item.position.key())
+            .map_or(0, |u| u.root_visits);
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let Ok(line) = query else {
+            // A position KataGo cannot take: count it done rather than retry it forever.
+            job.queue.started(id.clone(), item);
+            job.queue.finished(&id);
+            return;
+        };
+        self.queries
+            .insert(id.clone(), (item.position.clone(), previous));
+        job.queue.started(id.clone(), item);
+        job.live.insert(id.clone());
+        job.progress.insert(id, (0, Instant::now()));
+        let live = job.live.len();
+        {
+            let mut snapshot = lock(&self.snapshot);
+            snapshot.submitted += 1;
+            snapshot.job_peak = snapshot.job_peak.max(live);
+        }
+        self.send(line);
+    }
+
+    /// Emits the job's status when it changed.
+    fn emit_job(&mut self) {
+        let board_busy =
+            self.current.is_some() || self.submit_at.is_some() || self.loading.is_some();
+        let run = if self.paused {
+            JobRun::Paused
+        } else if board_busy {
+            JobRun::Waiting
+        } else {
+            JobRun::Running
+        };
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let status = job.queue.status(run);
+        if job.last.as_ref() != Some(&status) {
+            job.last = Some(status.clone());
+            self.emit(EngineEvent::Job(status));
+        }
+    }
+
+    /// The state when nothing new is submitted: analysing while any query searches.
+    fn idle_state(&mut self, version: String) -> EngineState {
+        let job_busy = self.job.as_ref().is_some_and(|j| !j.live.is_empty());
+        if self.current.is_some() || self.submit_at.is_some() || job_busy {
+            EngineState::Analysing { version }
+        } else {
+            self.ready_state(version)
         }
     }
 
@@ -1167,13 +1886,16 @@ impl Actor {
             self.set_state(EngineState::Paused { version });
             return;
         }
+        if self.loading.is_some() {
+            // Searched once the store answers, or at its deadline.
+            self.pump_job();
+            return;
+        }
         if self.current.is_none() && self.wants_analysis() {
             self.submit_or_defer(Instant::now());
         }
-        let state = match (&self.current, self.submit_at) {
-            (None, None) => self.ready_state(version),
-            _ => EngineState::Analysing { version },
-        };
+        self.pump_job();
+        let state = self.idle_state(version);
         self.set_state(state);
     }
 
@@ -1208,11 +1930,13 @@ impl Actor {
             &id,
             &self.position,
             self.limit_for(key),
-            self.options.report_every,
+            Some(self.options.report_every),
+            true,
         ) else {
             return;
         };
         self.send(line);
+        lock(&self.snapshot).submitted += 1;
         self.gate.submitted(Instant::now());
         let previous = self.cached_visits(key);
         self.queries
@@ -1227,7 +1951,17 @@ impl Actor {
     /// The most visits for `key`: the larger of the setting and its raised target.
     fn limit_for(&self, key: PositionKey) -> Option<u32> {
         let target = self.targets.get(&key).copied().unwrap_or(0);
-        self.options.visit_limit.map(|limit| limit.max(target))
+        // While a job runs the board's query stops at its budget, even with no limit, so the
+        // job is not starved (design 5.3).
+        let limit = match &self.job {
+            Some(job) => Some(
+                self.options
+                    .visit_limit
+                    .map_or(job.budget, |l| l.min(job.budget)),
+            ),
+            None => self.options.visit_limit,
+        };
+        limit.map(|limit| limit.max(target))
     }
 
     fn cached_visits(&mut self, key: PositionKey) -> u32 {
@@ -1302,8 +2036,14 @@ impl Actor {
         if !matches!(self.state, EngineState::Analysing { .. }) {
             return None;
         }
-        let active = self.current.as_ref()?;
-        Some(active.progress_at + self.options.stall_timeout)
+        // Whichever query is running: the latest rise in visits among them.
+        let board = self.current.as_ref().map(|a| a.progress_at);
+        let job = self
+            .job
+            .as_ref()
+            .and_then(|j| j.progress.values().map(|(_, at)| *at).max());
+        let latest = board.into_iter().chain(job).max()?;
+        Some(latest + self.options.stall_timeout)
     }
 
     /// Enters `starting` for a new attempt. A restart is a transition even from `starting`,

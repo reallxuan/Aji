@@ -103,6 +103,7 @@ fn context() -> AppContext {
         game: Arc::new(tokio::sync::Mutex::new(
             aji_lib::game::GameSession::new(19, Default::default()).unwrap(),
         )),
+        follow: Arc::default(),
     }
 }
 
@@ -191,7 +192,7 @@ fn rpc_answers_engine_status() {
         invoke_rpc(json!({"request": {"type": "engineStatus"}})),
         Ok(
             json!({"type": "engineStatus", "engine": {"state": "notConfigured"},
-               "position": "4d325c64abd378a1", "analysis": null,
+               "position": "3edba656b924370b", "analysis": null,
                "rejected": null, "running": null})
         )
     );

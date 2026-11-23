@@ -4,7 +4,9 @@
 mod board;
 mod record;
 mod rules;
+mod score;
 
 pub use board::*;
 pub use record::*;
 pub use rules::*;
+pub use score::*;

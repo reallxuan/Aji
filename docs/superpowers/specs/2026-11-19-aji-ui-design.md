@@ -84,8 +84,8 @@ Reference size 1440 × 900.
 
 Left to right:
 
-- **Game title**, with a chevron. Clicking it opens the **game menu**: 新建棋局 (19, 13 or 9 路), 打开棋谱…, 打开最近 and 另存为…. **[Decided in M6]** The game library stays closed in Phase 1; an earlier mockup with a permanent sidebar cost the board too much room.
-- **Rules chip** beside the title: the rules and komi KataGo analyses with (`中国 · 7.5`), with an amber dot when they differ from the file's reading. Clicking it opens the game information and the analysis rules. **[Decided in M6]**
+- **Game title**, with a chevron. Clicking it opens the **game menu**: 新建棋局 (19, 13 or 9 路), 打开棋谱…, 打开最近 and 另存为…. **[Decided in M6]** The game library stays closed in Phase 1; an earlier mockup with a permanent sidebar cost the board too much room. Since Phase 2 M2 it also holds 分析全局…, 清除分析结果 ▸ (本局面, 整局) and 终局点目. On macOS these also live in a menu-bar menu of their own, **分析**: 分析全局… (⌘⇧A), 停止全局分析, the two clears and 终局点目. 形势判断 (T) sits under 显示 on macOS and 视图 elsewhere. **[Decided in Phase 2 M2]**
+- **Rules chip** beside the title: the rules and komi KataGo analyses with (`中国 7.5`), with an amber dot when they differ from the file's reading. Clicking it opens the game information and the analysis rules. **[Decided in M6]**
 - **Navigation**: first move, previous, `38 / 247`, next, last move. In a narrow panel (under 500 px) the chip shows only the komi and the first and last buttons step aside, so the title keeps room. **[Decided in M6]**
 - **Engine indicator**: a green dot when analysis is running, and a hollow green ring when the position stopped at its visit limit. Clicking it pauses, resumes, or searches one more visit limit at the limit; Space does the same. Hovering it for 300 ms opens a card with the state, speed, visits, engine and network, and what a click does. **[Decided in M7]**
 - **View** (视图), on Windows and in the browser only: 布局 and 截图. On macOS they live in the menu bar (显示 → 布局, 文件 → 导出图片), and the game menu keeps to the game everywhere. **[Decided in Phase 2 M1]** (owner, 2026-11-22)
@@ -104,10 +104,12 @@ There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no
 
 ### 4.3 Candidate table
 
-Columns: rank chip, point, win rate, score lead, visits, difference from the best move. **[Decided]** Prior ("first instinct") and the continuation were tried and removed at the owner's request. The continuation is still reachable by hovering a candidate on the board.
+Columns: rank chip, point, win rate, score lead, visits, the share of visits, difference from the best move. **[Decided]** Prior ("first instinct") and the continuation were tried and removed at the owner's request. The continuation is still reachable by hovering a candidate on the board.
 
 - The rank chip uses the same styling as that candidate's disc on the board (section 5.3).
-- The move actually played in the game is labelled in the last column (`实战 −3.3%`).
+- The move actually played in the game is labelled in the last column (`实战 −3.3%`). With that column hidden, a 实战 tag marks its row instead. **[Decided in Phase 2 M2]**
+- **Sorting:** a click on a column header sorts by it, a second click reverses it; ties keep KataGo's order, and the header menu returns to KataGo's order. **[Decided in Phase 2 M2]**
+- **Columns:** the header's right-click menu shows or hides each column, and sets 候选点数量 and 变化长度. 计算量 carries its share of the position's visits as a thin bar (占比). 与最佳相比 is off by default. **[Decided in Phase 2 M2]**
 
 ### 4.4 Variations
 
@@ -211,7 +213,7 @@ A four-segment progress line sits at the top of the panel on every step. Each st
 - The opened game library.
 - Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎"). The engine section's "搜索线程" line and its "测速" button run the benchmark in place (M5 design 5.4).
 - The right-click menus of section 6. (The hover preview of a candidate's continuation is designed in M7: solid numbered stones, frozen while hovered, stepped with the wheel.)
-- Ownership and territory display, policy heatmap, move-quality marks on stones.
+- The policy heatmap (removed from Aji, Phase 2 plan). Ownership, the position estimate and final scoring are designed in Phase 2 M2 (`docs/design/mockups/p2-m2/`); move-quality marks were dropped at the owner's request (2026-11-23).
 - Playing against the AI.
 - Layouts for windows wider or smaller than the reference size, and for touch.
 - Error and empty states outside setup. The setup failures, the no-engine panel and the crashed engine are designed (M5).

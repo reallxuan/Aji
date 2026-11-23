@@ -15,7 +15,7 @@ describe('AboutPanel', () => {
 
   it('shows the version, the licence and a source link', async () => {
     renderWithProviders(<AboutPanel />, setupTransport());
-    expect(await screen.findByText('Aji 版本 0.1.0 · macOS aarch64')).toBeInTheDocument();
+    expect(await screen.findByText('Aji 版本 0.1.0（macOS aarch64）')).toBeInTheDocument();
     expect(screen.getByText(/GNU Affero 通用公共许可证第 3 版或更高版本/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'github.com/reallxuan/Aji' }));
     expect(openExternal).toHaveBeenCalledWith('https://github.com/reallxuan/Aji');

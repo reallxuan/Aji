@@ -7,6 +7,7 @@ import { barTexts } from '../analysis/trend';
 import { useShownCandidates } from '../analysis/useShownCandidates';
 import { useDeviceStore } from '../device/deviceStore';
 import { usePanelWidth } from '../layout/usePanelWidth';
+import { EstimateLine } from './EstimateLine';
 
 /** The bar's side padding inside the panel. */
 const PANEL_PADDING = 24;
@@ -114,13 +115,16 @@ export function WinrateBar({
   }
 
   return (
-    <div className="px-6 pt-4 pb-1.5">
-      <div
-        data-testid="winrate-bar"
-        className="flex h-[26px] overflow-hidden rounded-[4px] text-[0.8125rem] font-semibold tabular-nums shadow-[inset_0_0_0_1px_var(--bar-edge)]"
-      >
-        {segments}
+    <>
+      <div className="px-6 pt-4 pb-1.5">
+        <div
+          data-testid="winrate-bar"
+          className="flex h-[26px] overflow-hidden rounded-[4px] text-[0.8125rem] font-semibold tabular-nums shadow-[inset_0_0_0_1px_var(--bar-edge)]"
+        >
+          {segments}
+        </div>
       </div>
-    </div>
+      <EstimateLine />
+    </>
   );
 }

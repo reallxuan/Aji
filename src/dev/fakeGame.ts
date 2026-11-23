@@ -235,6 +235,8 @@ export function fakeAnalysis(
     isFinal: false,
     candidates,
     previousVisits,
+    ownership: null,
+    next: null,
   };
 }
 
@@ -292,6 +294,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move: node.lastMove,
       stats: null,
+      loss: null,
     }));
   }
 
@@ -300,7 +303,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     const next = snapshot();
     emit({ type: 'gameSnapshot', snapshot: next });
     // As the backend does on open, new and a rules change.
-    if (withTrend) emit({ type: 'gameTrend', nodes: trend() });
+    if (withTrend) emit({ type: 'gameTrend', revision, nodes: trend() });
     return { type: 'game', snapshot: next, warnings: withWarnings ? warnings : [] };
   }
 
@@ -369,7 +372,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
           preview: { stones: nodes[index].stones, captured: [], illegalAt: null },
         };
       case 'gameTrend':
-        return { type: 'trend', nodes: trend() };
+        return { type: 'trend', revision, nodes: trend() };
       case 'gameExport':
         if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
         return {

@@ -989,7 +989,8 @@ impl Installer {
             .map_err(|line| disk_stop(line, None))?;
         match engine_files(&self.root, &record, &set) {
             Some(files) => {
-                if let Err(e) = self.engine.set_files(Some(files)).await {
+                let identity = aji_engine::identity_for(&files).await;
+                if let Err(e) = self.engine.set_files(Some(files), identity).await {
                     eprintln!("aji: cannot switch the engine to the new set: {e}");
                 }
             }

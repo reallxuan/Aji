@@ -13,8 +13,8 @@ pub const DEFAULT_CACHE_ENTRIES: usize = 1_024;
 #[derive(Debug)]
 pub struct AnalysisCache {
     capacity: usize,
-    /// Each entry with the tick of its last use.
-    entries: HashMap<PositionKey, (AnalysisUpdate, u64)>,
+    /// Each entry with the tick of its last use and whether it was imported (P2 M2 5.11).
+    entries: HashMap<PositionKey, (AnalysisUpdate, u64, bool)>,
     tick: u64,
 }
 
@@ -43,12 +43,19 @@ impl AnalysisCache {
     /// update counts as a use; a new position arriving at capacity evicts the least
     /// recently used one.
     pub fn offer(&mut self, update: AnalysisUpdate) -> bool {
+        self.offer_row(update, false)
+    }
+
+    /// `offer` for a fresh or an imported result, under the store's rules (design 5.2): an
+    /// imported entry gives way to more visits or a finished search, and never replaces a
+    /// fresh one.
+    pub fn offer_row(&mut self, update: AnalysisUpdate, imported: bool) -> bool {
         let better = match self.entries.get(&update.position) {
             None => true,
-            Some((old, _)) => {
-                update.root_visits > old.root_visits
-                    || (update.root_visits == old.root_visits && update.is_final && !old.is_final)
-            }
+            Some((old, _, old_imported)) => crate::store::outranks(
+                (old.root_visits, old.is_final, *old_imported),
+                (update.root_visits, update.is_final, imported),
+            ),
         };
         if better {
             if !self.entries.contains_key(&update.position) && self.entries.len() >= self.capacity {
@@ -56,14 +63,15 @@ impl AnalysisCache {
                 let oldest = self
                     .entries
                     .iter()
-                    .min_by_key(|(_, (_, used))| *used)
+                    .min_by_key(|(_, (_, used, _))| *used)
                     .map(|(&key, _)| key);
                 if let Some(oldest) = oldest {
                     self.entries.remove(&oldest);
                 }
             }
             self.tick += 1;
-            self.entries.insert(update.position, (update, self.tick));
+            self.entries
+                .insert(update.position, (update, self.tick, imported));
         }
         better
     }
@@ -71,17 +79,21 @@ impl AnalysisCache {
     /// The entry for `key`, without counting as a use: for reading many entries at once
     /// (the trend graph) without reordering what is evicted.
     pub fn peek(&self, key: PositionKey) -> Option<&AnalysisUpdate> {
-        self.entries.get(&key).map(|(update, _)| update)
+        self.entries.get(&key).map(|(update, _, _)| update)
     }
 
     /// The entry for `key`. Reading counts as a use.
     pub fn get(&mut self, key: PositionKey) -> Option<&AnalysisUpdate> {
         self.tick += 1;
         let tick = self.tick;
-        self.entries.get_mut(&key).map(|(update, used)| {
+        self.entries.get_mut(&key).map(|(update, used, _)| {
             *used = tick;
             &*update
         })
+    }
+
+    pub fn remove(&mut self, key: PositionKey) {
+        self.entries.remove(&key);
     }
 }
 
@@ -103,6 +115,8 @@ mod tests {
             is_final,
             candidates: vec![],
             previous_visits: 0,
+            ownership: None,
+            next: None,
         }
     }
 

@@ -2,7 +2,9 @@ import { boardLead } from './lead';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
+import type { Point } from '../transport/generated/Point';
 import { CLOSE_LOSS, DOUBTFUL_LOSS, MAX_CANDIDATES, MIN_VISIT_SHARE } from './constants';
+import type { CandidateCount } from '../device/deviceSettings';
 
 export type Tier = 'best' | 'close' | 'doubtful' | 'poor';
 
@@ -59,11 +61,18 @@ export function shownCandidates(
   perspective: Color,
   /** The komi to take out of the leads (the board count), or `null` for KataGo's lead. */
   boardKomi: number | null = null,
+  /** The device's choice: `auto` is the rule above; a number takes KataGo's first, unfiltered. */
+  count: CandidateCount = 'auto',
 ): ShownCandidate[] {
   const ordered = [...update.candidates].sort((a, b) => a.order - b.order);
   if (ordered.length === 0) return [];
   const threshold = ordered[0].visits * MIN_VISIT_SHARE;
-  const picked = ordered.filter((c) => c.visits >= threshold).slice(0, MAX_CANDIDATES);
+  const picked =
+    count === 'auto'
+      ? ordered.filter((c) => c.visits >= threshold).slice(0, MAX_CANDIDATES)
+      : count === 'all'
+        ? [...ordered]
+        : ordered.slice(0, count);
   const played = ordered.find((c) => sameMove(c.move, nextMove));
   if (played && !picked.includes(played)) picked.push(played);
 
@@ -72,7 +81,7 @@ export function shownCandidates(
   const black = perspective === 'black';
   const viewedLead = (lead: number) =>
     boardKomi === null ? lead : boardLead(lead, boardKomi, perspective);
-  return picked.map((c, i) => {
+  const shown = picked.map((c, i): ShownCandidate => {
     const loss = (best - forMover(c.winrate)) * 100;
     return {
       move: c.move,
@@ -86,4 +95,37 @@ export function shownCandidates(
       pv: c.pv,
     };
   });
+  // The record's next move, which KataGo did not list (P2 M2 design 5.6): a disc of its own from
+  // the next position's result, its tier from the loss the backend sends with it.
+  const { next } = update;
+  if (!played && next && nextMove) {
+    shown.push({
+      move: nextMove,
+      rank: shown.length + 1,
+      tier: tierFor(next.loss.winrate, false),
+      winrate: black ? next.stats.winrate : 1 - next.stats.winrate,
+      scoreLead: viewedLead(black ? next.stats.scoreLead : -next.stats.scoreLead),
+      visits: next.stats.visits,
+      loss: next.loss.winrate,
+      played: true,
+      pv: [nextMove],
+    });
+  }
+  return shown;
+}
+
+/**
+ * Where the record's next move gets the played ring alone (P2 M2 design 5.6): when the hint is on
+ * and the move has no disc among `discs` (no result yet, or the candidates hidden), and no
+ * hovered line has the board. `null` for a pass or no next move.
+ */
+export function nextRingPoint(
+  nextMove: Move | null,
+  show: boolean,
+  discs: readonly ShownCandidate[],
+  lineShown: boolean,
+): Point | null {
+  if (!show || lineShown || nextMove?.type !== 'play') return null;
+  if (discs.some((c) => sameMove(c.move, nextMove))) return null;
+  return { x: nextMove.x, y: nextMove.y };
 }

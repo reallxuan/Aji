@@ -6,10 +6,11 @@ import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
-import { candidateAt, drawCandidates, drawVariationNumbers } from './candidates';
+import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
+import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
-import { boardGeometry } from './geometry';
+import { boardGeometry, pointAt } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
@@ -48,6 +49,15 @@ export interface BoardCanvasProps {
   onTapCandidate?(move: Move | null): void;
   /** A finger swiped one step across the board: forward when moving left. */
   onSwipeStep?(forward: boolean): void;
+  /** The record's next move, ringed alone where it has no disc (P2 M2 design 5.6). */
+  nextRing?: Point | null;
+  /** The position estimate's settled points and dead stones (P2 M2 design 5.7); none when off. */
+  ownership?: Settled | null;
+  /**
+   * A click or tap on an intersection, while the board asks for points (final scoring, P2 M2
+   * design 5.8); a tap then goes here and never to a candidate.
+   */
+  onTapPoint?(point: Point): void;
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
@@ -80,9 +90,13 @@ export function BoardCanvas({
   stoneStyle = 'slate',
   onTapCandidate,
   onSwipeStep,
+  nextRing = null,
+  ownership = null,
+  onTapPoint,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
+  const ownershipLayer = useRef<HTMLCanvasElement>(null);
   const candidateLayer = useRef<HTMLCanvasElement>(null);
   const hovered = useRef<Move | null>(null);
   const dpr = useDevicePixelRatio();
@@ -121,9 +135,23 @@ export function BoardCanvas({
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
     if (ctx && cssSize > 0) {
-      drawStones(ctx, { cssSize, dpr, boardSize, coordinates }, stones, lastMove, sprites);
+      drawStones(
+        ctx,
+        { cssSize, dpr, boardSize, coordinates },
+        stones,
+        lastMove,
+        sprites,
+        ownership?.dead,
+      );
     }
-  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites]);
+  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites, ownership]);
+
+  useEffect(() => {
+    const ctx = ownershipLayer.current?.getContext('2d');
+    if (!ctx) return;
+    const view = { cssSize, dpr, boardSize, coordinates };
+    drawOwnership(ctx, view, ownership?.owners ?? []);
+  }, [cssSize, dpr, boardSize, coordinates, ownership]);
 
   const [first, second] = discLines;
   useEffect(() => {
@@ -131,8 +159,12 @@ export function BoardCanvas({
     if (!ctx) return;
     const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
     if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
-    else drawCandidates(ctx, view, candidates, [first, second], lang);
+    else {
+      drawCandidates(ctx, view, candidates, [first, second], lang);
+      if (nextRing) drawNextRing(ctx, view, nextRing);
+    }
   }, [
+    nextRing,
     cssSize,
     dpr,
     boardSize,
@@ -156,11 +188,23 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
+  const tapPoint = (x: number, y: number) => {
+    const point = pointAt(x, y, { cssSize, boardSize, coordinates });
+    if (point) onTapPoint?.(point);
+  };
   const gestures = useBoardGestures({
     tap: (x, y) =>
-      onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
+      onTapPoint
+        ? tapPoint(x, y)
+        : onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
     step: (forward) => onSwipeStep?.(forward),
   });
+  const onClick = (event: MouseEvent<HTMLDivElement>) => {
+    // A tap has already been handled; the click a browser sends after it is its echo.
+    if (!onTapPoint || gestures.afterTouch()) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    tapPoint(event.clientX - box.left, event.clientY - box.top);
+  };
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     // A browser follows a tap with mouse events; the hover is the mouse's alone.
     if (gestures.afterTouch()) return;
@@ -179,11 +223,21 @@ export function BoardCanvas({
       style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => !gestures.afterTouch() && hover(null)}
+      onClick={onClick}
       {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
       <canvas
         ref={stoneLayer}
+        width={backing}
+        height={backing}
+        className="absolute inset-0"
+        style={style}
+        aria-hidden
+      />
+      <canvas
+        ref={ownershipLayer}
+        data-layer="ownership"
         width={backing}
         height={backing}
         className="absolute inset-0"

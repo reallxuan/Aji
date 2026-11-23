@@ -13,6 +13,7 @@ Aji is a cross-platform KataGo GUI built with Tauri 2 (Rust core, TypeScript and
 - The interface ships in Simplified Chinese (`zh-CN`) and English (`en`). More languages are added later.
 - Every user-visible string goes through the i18n layer. Do not hard-code interface text in components, in either language.
 - When adding or changing a string, update both `zh-CN` and `en` in the same change.
+- Never use the middle dot "·" as a separator in interface text, in any language. Use a space, a comma or parentheses instead. A test in `src/i18n/parity.test.ts` checks the locale files.
 
 ## Git workflow
 

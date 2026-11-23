@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import type { CacheStats } from '../transport/generated/CacheStats';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import { toTransportError } from '../transport/transport';
@@ -12,6 +13,16 @@ export function errorNotice(title: string, error: unknown, t: TFunction): Notice
   // The backend names a size as `19x13`; people read `19×13`.
   const size = (detail ?? '').replace('x', '×');
   return { kind: 'error', title, detail: t(`errors.${code}`, { size }) };
+}
+
+/** The cache file can't be used (P2 M2 design 5.2): results last only for this session. */
+export function cacheNotice(stats: CacheStats, t: TFunction): NoticeContent | null {
+  if (stats.persistent) return null;
+  return {
+    kind: 'warning',
+    title: t('notice.cacheMemoryOnly.title'),
+    detail: t('notice.cacheMemoryOnly.detail'),
+  };
 }
 
 /** Most important first: the one the notice line leads with. */

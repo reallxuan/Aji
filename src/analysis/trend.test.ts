@@ -13,6 +13,7 @@ function nodes(
     mover: movers[i],
     move: movers[i] ? { type: 'play', x: i % 19, y: 0 } : null,
     stats: s && { winrate: s[0], scoreLead: s[1], visits: s[2] },
+    loss: null,
   }));
 }
 

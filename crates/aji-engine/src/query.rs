@@ -12,14 +12,16 @@ pub const PV_LEN_AFTER_FIRST: u32 = 19;
 pub const UNLIMITED_VISITS: u64 = 1 << 50;
 
 /// Builds an analysis query line (without a trailing newline). `max_visits` of `None` sends
-/// [`UNLIMITED_VISITS`].
+/// [`UNLIMITED_VISITS`]. `report_every` of `None` asks for the final result only, and
+/// `ownership` asks for KataGo's ownership map (P2 M2 design 5.7).
 ///
 /// A point off the board gives `PointOffBoard`.
 pub fn analysis_query(
     id: &str,
     position: &Position,
     max_visits: Option<u32>,
-    report_every: Duration,
+    report_every: Option<Duration>,
+    ownership: bool,
 ) -> Result<String, CoreError> {
     let max_visits = max_visits.map_or(UNLIMITED_VISITS, u64::from);
     let moves = position
@@ -35,9 +37,14 @@ pub fn analysis_query(
         "boardXSize": position.size.get(),
         "boardYSize": position.size.get(),
         "maxVisits": max_visits,
-        "reportDuringSearchEvery": report_every.as_secs_f64(),
         "analysisPVLen": PV_LEN_AFTER_FIRST,
     });
+    if let Some(every) = report_every {
+        q["reportDuringSearchEvery"] = json!(every.as_secs_f64());
+    }
+    if ownership {
+        q["includeOwnership"] = json!(true);
+    }
     if let Some(player) = position.initial_player {
         q["initialPlayer"] = json!(player.gtp());
     }
@@ -80,9 +87,41 @@ mod tests {
     }
 
     #[test]
+    fn query_asks_for_ownership_when_told() {
+        let every = Some(Duration::from_millis(100));
+        let with: Value =
+            serde_json::from_str(&analysis_query("a", &p1(), Some(10), every, true).unwrap())
+                .unwrap();
+        assert_eq!(with["includeOwnership"], true);
+        let without: Value =
+            serde_json::from_str(&analysis_query("a", &p1(), Some(10), every, false).unwrap())
+                .unwrap();
+        assert!(without.get("includeOwnership").is_none());
+    }
+
+    #[test]
+    fn query_without_report_interval_omits_it() {
+        let v: Value =
+            serde_json::from_str(&analysis_query("a", &p1(), Some(10), None, false).unwrap())
+                .unwrap();
+        assert!(v.get("reportDuringSearchEvery").is_none());
+        let v: Value = serde_json::from_str(
+            &analysis_query("a", &p1(), Some(10), Some(Duration::from_secs(1)), false).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(v["reportDuringSearchEvery"], 1.0);
+    }
+
+    #[test]
     fn query_json_shape() {
-        let line =
-            analysis_query("aji-1", &p1(), Some(100_000), Duration::from_millis(100)).unwrap();
+        let line = analysis_query(
+            "aji-1",
+            &p1(),
+            Some(100_000),
+            Some(Duration::from_millis(100)),
+            false,
+        )
+        .unwrap();
         assert!(!line.contains('\n'));
         let v: Value = serde_json::from_str(&line).unwrap();
         let want = json!({"id":"aji-1","moves":[["B","Q16"],["W","D4"]],"rules":"chinese","komi":7.5,"boardXSize":19,"boardYSize":19,"maxVisits":100000,"reportDuringSearchEvery":0.1,"analysisPVLen":19});
@@ -91,7 +130,14 @@ mod tests {
 
     #[test]
     fn unlimited_query_sends_two_to_the_fifty() {
-        let line = analysis_query("aji-1", &p1(), None, Duration::from_millis(100)).unwrap();
+        let line = analysis_query(
+            "aji-1",
+            &p1(),
+            None,
+            Some(Duration::from_millis(100)),
+            false,
+        )
+        .unwrap();
         let v: Value = serde_json::from_str(&line).unwrap();
         assert_eq!(v["maxVisits"], json!(1_125_899_906_842_624_u64));
         assert_eq!(UNLIMITED_VISITS, 1 << 50);
@@ -103,7 +149,7 @@ mod tests {
         p.moves.clear();
         p.setup = vec![(Color::Black, Point { x: 3, y: 15 })];
         let v: Value = serde_json::from_str(
-            &analysis_query("a", &p, Some(10), Duration::from_millis(100)).unwrap(),
+            &analysis_query("a", &p, Some(10), Some(Duration::from_millis(100)), false).unwrap(),
         )
         .unwrap();
         assert_eq!(v["initialStones"], json!([["B", "D4"]]));
@@ -113,7 +159,7 @@ mod tests {
     fn initial_player_is_sent_when_set() {
         let query = |p: &Position| -> Value {
             serde_json::from_str(
-                &analysis_query("a", p, Some(10), Duration::from_millis(100)).unwrap(),
+                &analysis_query("a", p, Some(10), Some(Duration::from_millis(100)), false).unwrap(),
             )
             .unwrap()
         };
@@ -130,12 +176,14 @@ mod tests {
             .push((Color::Black, Move::Play(Point { x: 19, y: 0 })));
         let off = Point { x: 19, y: 0 };
         assert_eq!(
-            analysis_query("a", &p, Some(10), Duration::from_millis(100)),
+            analysis_query("a", &p, Some(10), Some(Duration::from_millis(100)), false),
             Err(CoreError::PointOffBoard(off))
         );
         let mut p = p1();
         p.setup = vec![(Color::Black, off)];
-        assert!(analysis_query("a", &p, Some(10), Duration::from_millis(100)).is_err());
+        assert!(
+            analysis_query("a", &p, Some(10), Some(Duration::from_millis(100)), false).is_err()
+        );
     }
 
     #[test]

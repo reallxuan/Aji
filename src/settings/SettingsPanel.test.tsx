@@ -12,6 +12,10 @@ import type { EngineState } from '../transport/generated/EngineState';
 import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
+import { useCacheSync } from '../cache/useCacheSync';
+import { resetCacheStore } from '../cache/cacheStore';
+import { resetNotices, useNoticeStore } from '../game/noticeStore';
+import type { CacheStats } from '../transport/generated/CacheStats';
 import { SettingsPanel } from './SettingsPanel';
 import { useSettingsStore } from './settingsStore';
 
@@ -165,6 +169,18 @@ describe('SettingsPanel', () => {
     );
   });
 
+  it('turns the next-move hint off, for guessing the next move', async () => {
+    const transport = mount();
+    const row = await screen.findByRole('radiogroup', { name: '显示棋谱的下一手' });
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    expect(within(row).getByRole('radio', { name: '显示' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ showNextMove: false });
+  });
+
   it('chooses the lead with komi or the board count', async () => {
     mount();
     const row = await screen.findByRole('radiogroup', { name: '目差' });
@@ -230,7 +246,7 @@ describe('SettingsPanel', () => {
 
   it('names the active engine and runs the engine actions', async () => {
     const transport = mount();
-    expect(await screen.findByText('KataGo 1.18.2 · Metal')).toBeInTheDocument();
+    expect(await screen.findByText('KataGo 1.18.2（Metal）')).toBeInTheDocument();
     expect(screen.getByText('权重 kata1-tf3-b11c768-s12382M-d6533M')).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '重启引擎' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '停止引擎' })));
@@ -382,7 +398,7 @@ describe('Unused downloaded files', () => {
 
   it('is hidden when nothing is unused', async () => {
     mount();
-    await screen.findByText('KataGo 1.18.2 · Metal');
+    await screen.findByText('KataGo 1.18.2（Metal）');
     expect(screen.queryByText('未使用的已下载文件')).not.toBeInTheDocument();
   });
 
@@ -404,5 +420,90 @@ describe('Unused downloaded files', () => {
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '删除' })));
     expect(transport.requests.some((r) => r.type === 'setupRemoveUnused')).toBe(true);
     await waitFor(() => expect(screen.queryByText('未使用的已下载文件')).not.toBeInTheDocument());
+  });
+});
+
+describe('M2 analysis settings', () => {
+  const MB = 1024 * 1024;
+  const kept: CacheStats = {
+    usedBytes: 38 * MB,
+    capBytes: 1024 * MB,
+    persistent: true,
+    reason: null,
+  };
+
+  beforeEach(() => {
+    useSettingsStore.setState({ settings: null });
+    useBenchmarkStore.setState({ job: null });
+    usePanelStore.setState({ view: 'settings' });
+    resetCacheStore();
+    resetNotices();
+  });
+
+  const withCache = (stats: CacheStats, extra: Parameters<typeof setupTransport>[0] = {}) =>
+    mount({
+      cacheStats: () => ({ type: 'cacheStats', ...stats }),
+      cacheClear: () => ({ type: 'ok' }),
+      ...extra,
+    });
+
+  it('cache_row_shows_used_and_cap', async () => {
+    const transport = withCache(kept);
+    const row = (await screen.findByText(/已用 38 MB，上限 1 GB/)).closest('div')!.parentElement!;
+    expect(row).toHaveTextContent('分析缓存');
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    const trigger = screen.getByRole('combobox', { name: '缓存上限' });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const option = await screen.findByRole('option', { name: '2 GB' });
+    await act(async () => fireEvent.keyDown(option, { key: 'Enter' }));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ cacheCapMb: 2048 });
+  });
+
+  it('clear_all_asks_first', async () => {
+    const transport = withCache(kept);
+    fireEvent.click(await screen.findByRole('button', { name: '清除…' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('清除全部分析结果？');
+    expect(transport.requests.some((r) => r.type === 'cacheClear')).toBe(false);
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '清除' })));
+    expect(transport.requests).toContainEqual({ type: 'cacheClear', scope: 'all' });
+    // The row asks again for what is used now.
+    expect(transport.requests.filter((r) => r.type === 'cacheStats').length).toBeGreaterThan(1);
+  });
+
+  it('a_memory_only_cache_shows_its_reason_and_one_notice', async () => {
+    const memory = { ...kept, persistent: false, reason: 'disk I/O error' };
+    const shown = vi.fn();
+    useNoticeStore.subscribe((s, before) => {
+      if (s.notice && s.notice.id !== before.notice?.id) shown(s.notice.title);
+    });
+    function App() {
+      useCacheSync();
+      return <SettingsPanel />;
+    }
+    const transport = setupTransport({
+      setupInstalled: () => ({ type: 'setupInstalled', active, unusedBytes: 0 }),
+      cacheStats: () => ({ type: 'cacheStats', ...memory }),
+    });
+    renderWithProviders(<App />, transport, ready);
+    expect(await screen.findByText(/缓存文件无法使用/)).toBeInTheDocument();
+    expect(screen.getByText(/disk I\/O error/)).toBeInTheDocument();
+    await waitFor(() => expect(shown).toHaveBeenCalledWith('分析结果不会保留'));
+    // Told again by the backend, after a clear: still one notice this session.
+    act(() => transport.emit({ type: 'cacheStatus', status: memory }));
+    expect(shown).toHaveBeenCalledTimes(1);
+  });
+
+  it('the_new_toggles_save', async () => {
+    const transport = withCache(kept);
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    const open = await screen.findByRole('radiogroup', { name: '打开棋谱时分析全局' });
+    expect(screen.getByText('按上次的选择在后台进行。')).toBeInTheDocument();
+    await act(async () => fireEvent.click(within(open).getByRole('radio', { name: '开' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ analyseOnOpen: true });
+    const write = screen.getByRole('radiogroup', { name: '保存时写入分析结果' });
+    await act(async () => fireEvent.click(within(write).getByRole('radio', { name: '开' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ saveAnalysis: true });
   });
 });

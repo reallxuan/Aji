@@ -34,10 +34,12 @@ export function candidate(order: number, winrate: number, pv: Move[]): Candidate
  * Providers for the sub-board: a transport that answers previews (and counts them), an engine
  * store that analyses, and a game at `KEY` with Black to move.
  */
-export function subBoardHarness() {
+export function subBoardHarness(answer?: (request: Request) => Response | undefined) {
   const requests: Request[] = [];
   const transport = createFakeTransport((request): Response => {
     requests.push(request);
+    const answered = answer?.(request);
+    if (answered) return answered;
     if (request.type === 'gamePreview')
       return {
         type: 'gamePreview',
@@ -81,9 +83,11 @@ export function subBoardHarness() {
           isFinal: false,
           candidates,
           previousVisits: 0,
+          ownership: null,
+          next: null,
         },
       }),
     );
   const previews = () => requests.filter((r) => r.type === 'gamePreview');
-  return { requests, wrapper, analyse, previews };
+  return { requests, wrapper, analyse, previews, engine, transport };
 }

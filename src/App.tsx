@@ -1,4 +1,6 @@
 import { useTrendSync } from './analysis/useTrendSync';
+import { useCacheSync } from './cache/useCacheSync';
+import { useJobSync } from './job/useJobSync';
 import { panelMode } from './app/panelMode';
 import { usePanelStore } from './app/panelStore';
 import { useKeyDispatcher } from './commands/useKeyDispatcher';
@@ -27,6 +29,8 @@ export default function App() {
   useSetupProgress();
   const { ready } = useGameSync();
   useTrendSync();
+  useJobSync();
+  useCacheSync();
   usePlatformSync();
   const engine = useEngineStore((s) => s.engine);
   const open = useWizardStore((s) => s.open);

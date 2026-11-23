@@ -5,6 +5,7 @@ use std::fmt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
+use crate::KataRules;
 use crate::coords::{BoardSize, Color, CoreError, Komi, Move, Point, Rules};
 
 /// A 64-bit position hash, written as 16 lowercase hex digits.
@@ -57,15 +58,6 @@ fn color_byte(c: Color) -> u8 {
     }
 }
 
-fn rules_byte(r: Rules) -> u8 {
-    match r {
-        Rules::Chinese => 0,
-        Rules::Japanese => 1,
-        Rules::Korean => 2,
-        Rules::TrompTaylor => 3,
-    }
-}
-
 impl Position {
     pub fn empty(size: BoardSize, rules: Rules, komi: Komi) -> Position {
         Position {
@@ -100,8 +92,12 @@ impl Position {
     }
 
     /// FNV-1a 64 over a fixed encoding; setup stones are sorted by `(y, x, color)`.
+    ///
+    /// The rules are encoded as KataGo's full rule set (P2 M2 design 5.2), so presets KataGo
+    /// plays identically (Japanese and Korean) share a key.
     pub fn key(&self) -> PositionKey {
-        let mut buf = vec![self.size.get(), rules_byte(self.rules)];
+        let mut buf = vec![self.size.get()];
+        buf.extend_from_slice(&KataRules::from(self.rules).key_bytes());
         buf.extend_from_slice(&self.komi.half_points().to_le_bytes());
 
         let mut setup: Vec<(u8, u8, u8)> = self
@@ -157,40 +153,75 @@ mod tests {
     #[test]
     fn position_key_is_pinned() {
         let key = |p: &Position| p.key().to_string();
-        assert_eq!(key(&pos(Rules::Chinese, 7.5)), "4d325c64abd378a1");
-        assert_eq!(key(&pos(Rules::Chinese, 6.5)), "065f24ca87b70513");
-        assert_eq!(key(&pos(Rules::Japanese, 7.5)), "e6fe7ebd69fca626");
+        assert_eq!(key(&pos(Rules::Chinese, 7.5)), "3edba656b924370b");
+        assert_eq!(key(&pos(Rules::Chinese, 6.5)), "85aeddf0dd40aa99");
+        assert_eq!(key(&pos(Rules::Japanese, 7.5)), "a9bd7c8039acb66b");
 
         let mut a = pos(Rules::Chinese, 7.5);
         a.moves = vec![
             (Color::Black, Move::Play(gtp("Q16"))),
             (Color::White, Move::Play(gtp("D4"))),
         ];
-        assert_eq!(key(&a), "f588b40db0c2ff10");
+        assert_eq!(key(&a), "0631f691b6b52f7e");
 
         let mut b = pos(Rules::Chinese, 7.5);
         b.moves = vec![
             (Color::White, Move::Play(gtp("D4"))),
             (Color::Black, Move::Play(gtp("Q16"))),
         ];
-        assert_eq!(key(&b), "7b7a98bb0b960a1a");
+        assert_eq!(key(&b), "f0ae3d5b10b0ad50");
 
         let mut c = pos(Rules::Chinese, 7.5);
         c.moves = vec![(Color::Black, Move::Pass)];
-        assert_eq!(key(&c), "af9ffa44758edc9e");
+        assert_eq!(key(&c), "6a28c8fef62a396c");
 
         let mut d = pos(Rules::Chinese, 0.5);
         d.setup = vec![(Color::Black, gtp("D4")), (Color::Black, gtp("Q16"))];
-        assert_eq!(key(&d), "87ca92a0a8996f5d");
+        assert_eq!(key(&d), "a915f2e29a4e2c87");
+    }
+
+    #[test]
+    fn key_is_pinned_by_a_test_vector() {
+        let mut a = pos(Rules::Chinese, 7.5);
+        a.moves = vec![
+            (Color::Black, Move::Play(gtp("Q16"))),
+            (Color::White, Move::Play(gtp("D4"))),
+        ];
+        assert_eq!(a.key().to_string(), "0631f691b6b52f7e");
+    }
+
+    #[test]
+    fn japanese_and_korean_keys_differ_only_if_their_rules_do() {
+        use crate::KataRules;
+        let same = KataRules::from(Rules::Japanese) == KataRules::from(Rules::Korean);
+        let keys_equal = pos(Rules::Japanese, 6.5).key() == pos(Rules::Korean, 6.5).key();
+        assert_eq!(same, keys_equal);
+        assert!(keys_equal);
+    }
+
+    #[test]
+    fn komi_and_rules_still_change_the_key() {
+        assert_ne!(
+            pos(Rules::Chinese, 7.5).key(),
+            pos(Rules::Chinese, 6.5).key()
+        );
+        assert_ne!(
+            pos(Rules::Chinese, 7.5).key(),
+            pos(Rules::Japanese, 7.5).key()
+        );
+        assert_ne!(
+            pos(Rules::Chinese, 7.5).key(),
+            pos(Rules::TrompTaylor, 7.5).key()
+        );
     }
 
     #[test]
     fn initial_player_changes_the_key_only_when_set() {
         let mut p = pos(Rules::Chinese, 7.5);
         assert_eq!(p.initial_player, None);
-        assert_eq!(p.key().to_string(), "4d325c64abd378a1");
+        assert_eq!(p.key().to_string(), "3edba656b924370b");
         p.initial_player = Some(Color::White);
-        assert_ne!(p.key().to_string(), "4d325c64abd378a1");
+        assert_ne!(p.key().to_string(), "3edba656b924370b");
         let mut q = p.clone();
         q.initial_player = Some(Color::Black);
         assert_ne!(p.key(), q.key());
@@ -208,9 +239,9 @@ mod tests {
     #[test]
     fn position_key_serialises_as_hex_string() {
         let k = pos(Rules::Chinese, 7.5).key();
-        assert_eq!(serde_json::to_string(&k).unwrap(), "\"4d325c64abd378a1\"");
+        assert_eq!(serde_json::to_string(&k).unwrap(), "\"3edba656b924370b\"");
         assert_eq!(
-            serde_json::from_str::<PositionKey>("\"4d325c64abd378a1\"").unwrap(),
+            serde_json::from_str::<PositionKey>("\"3edba656b924370b\"").unwrap(),
             k
         );
     }

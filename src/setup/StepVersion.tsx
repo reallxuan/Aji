@@ -44,7 +44,7 @@ export function StepVersion() {
 
   const subtitle = [backend && backendName(t, backend), platform && platformLabel(t, platform)]
     .filter(Boolean)
-    .join(' · ');
+    .join(t('separator'));
 
   return (
     <StepLayout

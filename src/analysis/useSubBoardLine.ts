@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import { SUBBOARD_FOLLOW_MS } from '../layout/constants';
 import { previewGame } from '../transport/api';
@@ -35,7 +36,11 @@ export function useSubBoardLine(rank: 1 | 2 | 3): SubBoardLine {
   const snapshot = useGameStore((s) => s.snapshot);
   const position = snapshot?.positionKey ?? null;
   const candidate = shown.find((c) => c.rank === rank) ?? null;
-  const moves = useMemo(() => (candidate ? linePrefix(candidate.pv) : []), [candidate]);
+  const lineLength = useDeviceStore((s) => s.settings.lineLength);
+  const moves = useMemo(
+    () => (candidate ? linePrefix(candidate.pv, lineLength) : []),
+    [candidate, lineLength],
+  );
   const lineKey = moves.map(moveKey).join(' ');
   const firstKey = moves.length > 0 ? moveKey(moves[0]) : '';
 

@@ -3,12 +3,13 @@
  * per device. Panels are named by kind (and, for sub-boards, rank), never by component.
  */
 
-export type PanelKind = 'header' | 'winrate' | 'trend' | 'candidates' | 'subboard';
+export type PanelKind = 'header' | 'winrate' | 'trend' | 'candidates' | 'swings' | 'subboard';
 export const PANEL_KINDS: readonly PanelKind[] = [
   'header',
   'winrate',
   'trend',
   'candidates',
+  'swings',
   'subboard',
 ];
 

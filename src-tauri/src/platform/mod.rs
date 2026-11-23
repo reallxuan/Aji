@@ -67,6 +67,14 @@ pub enum MenuAction {
     SaveImage(String),
     /// Copy one of [`SHOT_TARGETS`] to the clipboard as an image.
     CopyImage(String),
+    /// 分析 → 分析全局… (P2 M2 design 5.10).
+    AnalyseGame,
+    StopGame,
+    ClearPosition,
+    ClearGame,
+    FinalScoring,
+    /// 显示 → 形势判断.
+    Estimate,
 }
 
 impl MenuAction {
@@ -107,6 +115,12 @@ impl MenuAction {
             MenuAction::Open,
             MenuAction::SaveAs,
             MenuAction::ClearRecent,
+            MenuAction::AnalyseGame,
+            MenuAction::StopGame,
+            MenuAction::ClearPosition,
+            MenuAction::ClearGame,
+            MenuAction::FinalScoring,
+            MenuAction::Estimate,
         ]
         .into_iter()
         .find(|action| action.id() == id)

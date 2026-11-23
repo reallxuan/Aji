@@ -9,7 +9,7 @@ import { useTransport } from '../transport/TransportProvider';
 type State =
   { status: 'loading' } | { status: 'ok'; info: AppInfo } | { status: 'error'; code: ErrorCode };
 
-/** "Aji 0.1.0 · macOS aarch64", fetched from the Rust side through the transport. */
+/** "Aji version 0.1.0 (macOS aarch64)", fetched from the Rust side through the transport. */
 export function VersionLine() {
   const transport = useTransport();
   const { t } = useTranslation();

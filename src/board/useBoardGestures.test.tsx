@@ -5,6 +5,9 @@ import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
 import { MainBoard } from '../layout/MainBoard';
+import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
+import type { Color } from '../transport/generated/Color';
+import type { Request } from '../transport/generated/Request';
 import { boardGeometry } from './geometry';
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame'] }));
@@ -12,6 +15,7 @@ afterEach(() => {
   vi.useRealTimers();
   resetGameStore();
   resetViewStore();
+  resetScoringStore();
 });
 
 const SIZE = 400;
@@ -158,5 +162,117 @@ describe('touch on the main board', () => {
     await settle();
     tap(15, 15);
     expect(view().hover).toMatchObject({ move: play(15, 15), pinned: true });
+  });
+});
+
+describe('final scoring on the main board', () => {
+  /** A black pair at D16 and D15, a white stone at Q4; KataGo reads the pair as dead. */
+  const STONES: (Color | null)[] = Array.from({ length: 361 }, () => null);
+  STONES[3 * 19 + 3] = 'black';
+  STONES[4 * 19 + 3] = 'black';
+  STONES[15 * 19 + 15] = 'white';
+  const PAIR = [
+    { x: 3, y: 3 },
+    { x: 3, y: 4 },
+  ];
+  const owners = STONES.map((_, i): Color | null => (i % 19 < 10 ? 'white' : null));
+
+  async function scoring() {
+    const h = subBoardHarness((request: Request) =>
+      request.type === 'gameScore'
+        ? {
+            type: 'score',
+            suggestedDead: PAIR,
+            black: { stones: 0, territory: 0, dead: 0, prisoners: 0, total: 0 },
+            white: { stones: 1, territory: 188, dead: 2, prisoners: 0, total: 198.5 },
+            komi: 7.5,
+            margin: -198.5,
+            owners,
+            openByOwnership: false,
+          }
+        : undefined,
+    );
+    const { snapshot } = useGameStore.getState();
+    useGameStore.getState().apply({ ...snapshot!, revision: 2, stones: STONES, atEnd: true });
+    render(
+      <h.wrapper>
+        <MainBoard rect={{ x: 0, y: 0, width: SIZE, height: SIZE }} />
+      </h.wrapper>,
+    );
+    h.analyse([candidate(0, 0.55, LINE), candidate(1, 0.5, OTHER)]);
+    await settle();
+    await act(() => useScoringStore.getState().start({ transport: h.transport, engine: h.engine }));
+    const scored = () =>
+      h.requests
+        .filter((r) => r.type === 'gameScore')
+        .map((r) => (r as Extract<Request, { type: 'gameScore' }>).mode);
+    return { ...h, scored };
+  }
+  const layer = (name: string) =>
+    document
+      .querySelector<HTMLCanvasElement>(`canvas[data-layer="${name}"]`)!
+      .getContext('2d') as unknown as {
+      __getDrawCalls(): Array<{ type: string }>;
+      __clearDrawCalls(): void;
+    };
+
+  it('hides the candidates and shows the count on the board', async () => {
+    const h = await scoring();
+    expect(useScoringStore.getState().dead).toEqual(PAIR);
+    const candidates = layer('candidates');
+    candidates.__clearDrawCalls();
+    // A newer update would draw its discs; while scoring the layer stays empty.
+    h.analyse([candidate(0, 0.6, OTHER), candidate(1, 0.5, LINE)]);
+    await settle();
+    expect(candidates.__getDrawCalls().filter((c) => c.type === 'fill')).toHaveLength(0);
+    // Every owned point but White's living stone gets a square.
+    const squares = layer('ownership')
+      .__getDrawCalls()
+      .filter((c) => c.type === 'fillRect');
+    expect(squares.length).toBeGreaterThanOrEqual(owners.filter(Boolean).length);
+  });
+
+  it('tapping_a_stone_toggles_its_group_and_rescores', async () => {
+    const { scored } = await scoring();
+    // A mouse click on either stone of the dead pair brings both back.
+    fireEvent.click(surface(), at(3, 3));
+    await settle();
+    expect(scored().at(-1)).toEqual({ kind: 'final', dead: [] });
+    // A tap does the same, the other way.
+    tap(3, 4);
+    await settle();
+    expect(scored().at(-1)).toEqual({ kind: 'final', dead: expect.arrayContaining(PAIR) });
+    // A tap on an empty point counts nothing again, and pins no line.
+    const asked = scored().length;
+    tap(9, 9);
+    await settle();
+    expect(scored()).toHaveLength(asked);
+    expect(view().hover).toBeNull();
+  });
+
+  it('moving to another position leaves scoring', async () => {
+    const h = await scoring();
+    const { snapshot } = useGameStore.getState();
+    await act(async () => {
+      useGameStore.getState().apply({ ...snapshot!, revision: 3, moveNumber: 5, lineIndex: 5 });
+    });
+    expect(useScoringStore.getState().active).toBe(false);
+    expect(h.requests.at(-1)?.type).toBe('analysisResume');
+  });
+
+  it('a change of rules counts again', async () => {
+    const { scored } = await scoring();
+    const asked = scored().length;
+    const { snapshot } = useGameStore.getState();
+    const rules = { kind: 'japaneseKorean' } as const;
+    await act(async () => {
+      useGameStore.getState().apply({
+        ...snapshot!,
+        revision: 3,
+        rules: { ...snapshot!.rules, current: rules },
+      });
+    });
+    expect(useScoringStore.getState().active).toBe(true);
+    expect(scored()).toHaveLength(asked + 1);
   });
 });

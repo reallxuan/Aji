@@ -91,3 +91,17 @@ export function boardGeometry(
     rows: lines.map((y, i) => ({ label: String(boardSize - i), y })),
   };
 }
+
+/** The intersection within half a spacing of (`cssX`, `cssY`), or `null` off the grid. Pure. */
+export function pointAt(
+  cssX: number,
+  cssY: number,
+  view: { cssSize: number; boardSize: number; coordinates?: boolean },
+): { x: number; y: number } | null {
+  const { margin, spacing } = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  if (spacing <= 0) return null;
+  const x = Math.round((cssX - margin) / spacing);
+  const y = Math.round((cssY - margin) / spacing);
+  if (x < 0 || y < 0 || x >= view.boardSize || y >= view.boardSize) return null;
+  return { x, y };
+}

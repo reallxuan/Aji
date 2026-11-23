@@ -16,13 +16,13 @@ it('choosing a set and custom mixing update the device settings', () => {
   renderWithGame(<BoardStyleControl />);
   const sets = screen.getByRole('radiogroup', { name: '棋盘样式' });
   // The default, before anything is chosen, is honey with slate and shell.
-  expect(within(sets).getByRole('radio', { name: '蜜色 · 写实' })).toHaveAttribute(
+  expect(within(sets).getByRole('radio', { name: '蜜色配写实' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
   expect(screen.queryByRole('combobox', { name: '棋盘' })).toBeNull();
 
-  fireEvent.click(within(sets).getByRole('radio', { name: '榧木 · 云子' }));
+  fireEvent.click(within(sets).getByRole('radio', { name: '榧木配云子' }));
   expect(stored()).toEqual({ board: 'kaya', stones: 'yunzi' });
 
   fireEvent.click(within(sets).getByRole('radio', { name: '自定义' }));

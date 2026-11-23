@@ -1,5 +1,8 @@
+pub mod follow;
 pub mod game;
 mod ipc;
+pub mod job;
+pub mod lizzie;
 pub mod platform;
 pub mod protocol;
 pub mod service;
@@ -13,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aji_core::Position;
-use aji_engine::{Engine, EngineFiles, EngineOptions};
+use aji_engine::{Engine, EngineEvent, EngineFiles, EngineOptions, Store, identity_for};
 use aji_manager::Setup;
 use aji_manager::install::{
     DownloadSource, InstallOptions, InstallRoot, Installed, Installer, InstallerParts, JobSnapshot,
@@ -24,7 +27,7 @@ use aji_manager::manifest::{
 };
 use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 
 use game::GameSession;
 pub use ipc::{EVENT_CHANNEL, TauriEventSink};
@@ -168,23 +171,40 @@ fn engine_files(
     files
 }
 
+/// Starts the engine on the results store in `data_dir`. The store's rows are keyed by the
+/// engine's identity, which takes a moment to hash, so the engine learns it afterwards. The
+/// receiver is for [`follow::follow_engine`].
 fn start_engine(
     files: Option<EngineFiles>,
     position: Position,
     visit_limit: Option<u32>,
     sink: Arc<dyn EventSink>,
-) -> Engine {
-    tauri::async_runtime::block_on(async {
-        Engine::spawn(
-            files,
+    data_dir: &Path,
+    cache_cap_mb: u32,
+) -> (Engine, mpsc::UnboundedReceiver<EngineEvent>) {
+    let (follow, followed) = mpsc::unbounded_channel();
+    let cap = u64::from(cache_cap_mb.max(1)) * 1024 * 1024;
+    let store = Store::open(data_dir.join("analysis.sqlite"), cap);
+    let engine = tauri::async_runtime::block_on(async {
+        Engine::spawn_with_store(
+            files.clone(),
+            None,
             position,
             EngineOptions {
                 visit_limit,
                 ..EngineOptions::default()
             },
-            service::forward_engine_events(sink),
+            Some(store),
+            service::forward_engine_events(sink, follow),
         )
-    })
+    });
+    if let Some(files) = files {
+        let engine = engine.clone();
+        tauri::async_runtime::spawn(async move {
+            engine.set_identity(identity_for(&files).await).await;
+        });
+    }
+    (engine, followed)
 }
 
 /// The installer, with a download client of its own: the manifest client's whole-request limit
@@ -300,7 +320,14 @@ pub fn run() {
             // The session starts as an empty 19x19 game, and the engine on its position.
             let game = GameSession::new(19, settings.ui.default_rules).expect("19 is supported");
             let position = game.position().expect("an empty board is legal");
-            let engine = start_engine(files, position, settings.ui.visit_limit, Arc::clone(&sink));
+            let (engine, followed) = start_engine(
+                files,
+                position,
+                settings.ui.visit_limit,
+                Arc::clone(&sink),
+                &data_dir,
+                settings.ui.cache_cap_mb,
+            );
             let setup = start_setup(&version, data_dir.join("manifest"));
             let source = watch::Sender::new(download_source(&settings));
             let installer = start_installer(
@@ -311,7 +338,7 @@ pub fn run() {
                 source.subscribe(),
                 Arc::clone(&sink),
             )?;
-            app.manage(AppContext {
+            let ctx = AppContext {
                 version,
                 os: OsKind::current(),
                 arch: std::env::consts::ARCH.to_string(),
@@ -323,7 +350,10 @@ pub fn run() {
                 source,
                 events: sink,
                 game: Arc::new(tokio::sync::Mutex::new(game)),
-            });
+                follow: Arc::default(),
+            };
+            tauri::async_runtime::spawn(follow::follow_engine(ctx.clone(), followed));
+            app.manage(ctx);
             Ok(())
         })
         .build(context)
