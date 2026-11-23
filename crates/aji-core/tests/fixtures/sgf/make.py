@@ -85,16 +85,7 @@ def main():
     write("fox-chinese.sgf", fox.format(km="375", ru="Chinese"), "gbk")
     write("fox-japanese.sgf", fox.format(km="0", ru="Japanese"), "gbk")
 
-    lz = (
-        "(;GM[1]FF[4]CA[UTF-8]SZ[19]KM[7.5]PB[黑]PW[白]"
-        "LZ[KataGo 1.18.2 b18 54.2 3.1k 1.8\nmove Q16 visits 1240 winrate 5420 scoreMean 1.8 pv Q16 D4 Q3]\n"
-        ";B[pd]LZ[KataGo 1.18.2 b18 45.8 2.9k -1.6\nmove D4 visits 1103 winrate 4580 pv D4 Q3]"
-        "LZOP[0.18 0.72 3]"
-        ";W[dd]LZ2[KataGo 1.18.2 b40 53.9 1.2k 1.7\nmove Q3 visits 640 winrate 5390 pv Q3 C16]"
-        "LZOP2[0.12 0.66 2]"
-        ";B[pq];W[dp])\n"
-    )
-    write("lizzie.sgf", lz)
+    # lizzie.sgf is written by hand (see SOURCES.md), not by this script.
 
     write(
         "variations.sgf",

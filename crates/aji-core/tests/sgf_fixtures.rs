@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use aji_core::game::{AnalysisRules, Board, Game, GameError, Illegal};
-use aji_core::sgf::{SgfTree, SgfWarning, decode, parse_sgf, write_sgf};
+use aji_core::sgf::{SgfTree, SgfWarning, decode, parse_lz, parse_sgf, write_sgf};
 use aji_core::{BoardSize, Color, Move};
 use proptest::prelude::*;
 
@@ -122,6 +122,29 @@ fn values<'a>(tree: &'a SgfTree, node: usize, id: &str) -> Option<&'a [String]> 
 }
 
 #[test]
+fn the_fixture_parses_every_lz_node() {
+    let tree = parse_sgf(&decode(&read("lizzie.sgf")).text)
+        .unwrap()
+        .games
+        .remove(0);
+    let lz = |node: usize, id: &str| {
+        let text = &values(&tree, node, id).unwrap()[0];
+        parse_lz(text, 361).unwrap_or_else(|| panic!("node {node} {id}"))
+    };
+    let root = lz(0, "LZOP");
+    assert_eq!(
+        (root.mover_winrate, root.visits, root.moves.len()),
+        (48.6, 850, 2)
+    );
+    assert_eq!(lz(1, "LZ").visits, 1300);
+    let third = lz(2, "LZ");
+    assert_eq!(third.visits, 13_000);
+    assert_eq!(third.ownership.as_ref().map(Vec::len), Some(361));
+    assert!(values(&tree, 3, "LZ").is_none());
+    assert_eq!(lz(4, "LZ").visits, 12_500_000);
+}
+
+#[test]
 fn lizzie_and_unknown_properties_survive() {
     let original = parse_sgf(&decode(&read("lizzie.sgf")).text)
         .unwrap()
@@ -133,7 +156,14 @@ fn lizzie_and_unknown_properties_survive() {
     .unwrap()
     .games
     .remove(0);
-    for (node, id) in [(0, "LZ"), (1, "LZ"), (1, "LZOP"), (2, "LZ2"), (2, "LZOP2")] {
+    for (node, id) in [
+        (0, "LZOP"),
+        (1, "LZ"),
+        (2, "LZ"),
+        (4, "LZ"),
+        (4, "LZ2"),
+        (4, "LZOP2"),
+    ] {
         assert!(values(&original, node, id).is_some(), "{id}");
         assert_eq!(
             values(&saved, node, id),
