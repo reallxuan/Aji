@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShownCandidates } from '../analysis/useShownCandidates';
-import { sameMove } from '../analysis/candidates';
+import { nextRingPoint, sameMove } from '../analysis/candidates';
 import { useVariation } from '../analysis/useVariation';
 import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
@@ -10,6 +10,7 @@ import { useBoardStyle } from '../board/useBoardStyle';
 import { stepLineOrGame, useWheelNavigation } from '../board/useWheelNavigation';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
 import { useFrameNavigate } from '../game/useFrameNavigate';
 import type { Move } from '../transport/generated/Move';
 import type { Rect } from './frameGeometry';
@@ -65,6 +66,13 @@ export function MainBoard({
       setHover({ move, source: 'board', pinned: true });
     }
   }, []);
+  const showNext = useSettingsStore((s) => s.settings?.showNextMove ?? true);
+  const discs = hidden ? NO_DISCS : shown;
+  const nextMove = snapshot?.nextMove ?? null;
+  const nextRing = useMemo(
+    () => nextRingPoint(nextMove, showNext, discs, line !== null),
+    [nextMove, showNext, discs, line],
+  );
   const go = useFrameNavigate();
   const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
 
@@ -82,7 +90,8 @@ export function MainBoard({
         stones={line?.stones ?? snapshot?.stones ?? EMPTY_19}
         // The game's last-move dot is hidden while a line shows.
         lastMove={line ? null : (snapshot?.lastMove ?? null)}
-        candidates={hidden ? NO_DISCS : shown}
+        candidates={discs}
+        nextRing={nextRing}
         discLines={discLines}
         coordinates={coordinates}
         boardStyle={style.board}

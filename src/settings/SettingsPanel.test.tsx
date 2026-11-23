@@ -165,6 +165,18 @@ describe('SettingsPanel', () => {
     );
   });
 
+  it('turns the next-move hint off, for guessing the next move', async () => {
+    const transport = mount();
+    const row = await screen.findByRole('radiogroup', { name: '显示棋谱的下一手' });
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    expect(within(row).getByRole('radio', { name: '显示' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await act(async () => fireEvent.click(within(row).getByRole('radio', { name: '隐藏' })));
+    expect(sets(transport.requests).at(-1)).toMatchObject({ showNextMove: false });
+  });
+
   it('chooses the lead with komi or the board count', async () => {
     mount();
     const row = await screen.findByRole('radiogroup', { name: '目差' });

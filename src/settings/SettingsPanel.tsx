@@ -131,6 +131,11 @@ export function SettingsPanel() {
     ['off', t('settings.alwaysOnTop.off')],
   ];
   const onTop = device.alwaysOnTop ? 'on' : 'off';
+  const nextMove = settings.showNextMove ? 'show' : 'hide';
+  const nextMoveOptions: Array<['show' | 'hide', string]> = [
+    ['show', t('settings.nextMove.show')],
+    ['hide', t('settings.nextMove.hide')],
+  ];
 
   /** Taking the other line's field swaps the two, so the lines stay different. */
   const setDiscLine = (index: 0 | 1, field: DiscField) => {
@@ -240,6 +245,16 @@ export function SettingsPanel() {
             </div>
             <DiscPreview lines={device.discLines} />
           </div>
+          {/* Off for guessing the next move: no ring, no 实战 and no disc give it away. */}
+          <Row label={t('settings.nextMove.title')} note={failedNote(FIELD.showNextMove)}>
+            <Choice
+              label={t('settings.nextMove.title')}
+              value={nextMove}
+              disabled={!loaded}
+              onChange={(choice) => save({ showNextMove: choice === 'show' })}
+              options={nextMoveOptions}
+            />
+          </Row>
           <Row label={t('settings.lead.title')}>
             <Choice
               label={t('settings.lead.title')}
@@ -297,6 +312,7 @@ const FIELD = {
   theme: 'theme',
   defaultRules: 'defaultRules',
   visitLimit: 'visitLimit',
+  showNextMove: 'showNextMove',
 } as const satisfies Record<string, keyof UiSettings>;
 
 /** How long 保存失败 stays beside a control. */

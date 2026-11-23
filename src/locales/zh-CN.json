@@ -385,6 +385,11 @@
       "board": "盘面"
     },
     "saveFailed": "保存失败",
+    "nextMove": {
+      "title": "显示棋谱的下一手",
+      "show": "显示",
+      "hide": "隐藏"
+    },
     "alwaysOnTop": {
       "title": "总在最前",
       "on": "开",

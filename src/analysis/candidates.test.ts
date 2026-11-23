@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Candidate } from '../transport/generated/Candidate';
 import type { Move } from '../transport/generated/Move';
-import { catchingUp, shownCandidates, tierFor } from './candidates';
+import { catchingUp, nextRingPoint, shownCandidates, tierFor } from './candidates';
 
 const update = (rootVisits: number, previousVisits: number): AnalysisUpdate => ({
   position: 'aaaaaaaaaaaaaaaa',
@@ -129,4 +129,71 @@ it('shows the chosen side’s numbers, and rates each move for the side to move'
   // Black's second move loses 3.1 points for Black, whoever is watching.
   expect(white.map((c) => [c.tier, c.loss])).toEqual(black.map((c) => [c.tier, c.loss]));
   expect(white[1].tier).toBe('doubtful');
+});
+
+const NEXT = {
+  stats: { winrate: 0.52, scoreLead: 0.5, visits: 300 },
+  loss: { winrate: 5, score: 1.5 },
+};
+const LISTED = [candidate(0, { visits: 1000 }), candidate(1, { visits: 500 })];
+
+it('unlisted_next_move_gets_a_disc_with_the_ring', () => {
+  const shown = shownCandidates(
+    { ...withCandidates(LISTED), next: NEXT },
+    'black',
+    play(9),
+    'black',
+  );
+  expect(shown).toHaveLength(3);
+  // The next position's result, its tier from its loss, and the played ring.
+  expect(shown[2]).toEqual({
+    move: play(9),
+    rank: 3,
+    tier: 'poor',
+    winrate: 0.52,
+    scoreLead: 0.5,
+    visits: 300,
+    loss: 5,
+    played: true,
+    pv: [play(9)],
+  });
+  // In the side to move's view.
+  const white = shownCandidates(
+    { ...withCandidates(LISTED), next: NEXT },
+    'white',
+    play(9),
+    'white',
+  );
+  expect(white[2]).toMatchObject({ winrate: 0.48, scoreLead: -0.5 });
+  // On tierFor's 2 and 4 point bands.
+  const tier = (winrate: number) =>
+    shownCandidates(
+      { ...withCandidates(LISTED), next: { ...NEXT, loss: { winrate, score: 0 } } },
+      'black',
+      play(9),
+      'black',
+    )[2].tier;
+  expect([tier(1.5), tier(3), tier(4.5)]).toEqual(['close', 'doubtful', 'poor']);
+  // No result for it yet: no disc.
+  expect(shownCandidates(withCandidates(LISTED), 'black', play(9), 'black')).toHaveLength(2);
+});
+
+it('without_a_result_it_is_a_ring_alone', () => {
+  const discs = shownCandidates(withCandidates(LISTED), 'black', play(9), 'black');
+  expect(nextRingPoint(play(9), true, discs, false)).toEqual({ x: 9, y: 0 });
+  // Among the discs, the disc has the ring.
+  expect(nextRingPoint(play(1), true, discs, false)).toBeNull();
+  // A pass has no point, and a hovered line has the board.
+  expect(nextRingPoint({ type: 'pass' }, true, discs, false)).toBeNull();
+  expect(nextRingPoint(play(9), true, discs, true)).toBeNull();
+  expect(nextRingPoint(null, true, discs, false)).toBeNull();
+});
+
+it('hidden_candidates_leave_the_ring', () => {
+  // F or Z: no discs drawn, so even a listed next move is a ring alone.
+  expect(nextRingPoint(play(1), true, [], false)).toEqual({ x: 1, y: 0 });
+});
+
+it('the_setting_hides_both', () => {
+  expect(nextRingPoint(play(9), false, [], false)).toBeNull();
 });

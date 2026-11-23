@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useEngineStore } from '../engine/engineStore';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
+import { useSettingsStore } from '../settings/settingsStore';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import { catchingUp, shownCandidates, type ShownCandidate } from './candidates';
 import { useBoardKomi } from './lead';
@@ -28,7 +29,9 @@ export function useShownCandidates(): Shown {
   const key = snapshot?.positionKey ?? null;
   const current = analysis && key !== null && analysis.position === key ? analysis : null;
   const toPlay = snapshot?.nextColor ?? 'black';
-  const nextMove = snapshot?.nextMove ?? null;
+  // Off, the record's next move is not given away anywhere: no ring, no 实战, no disc (5.6).
+  const showNext = useSettingsStore((s) => s.settings?.showNextMove ?? true);
+  const nextMove = showNext ? (snapshot?.nextMove ?? null) : null;
   const boardKomi = useBoardKomi();
   const count = useDeviceStore((s) => s.settings.candidateCount);
   const shown = useMemo(

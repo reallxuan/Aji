@@ -24,6 +24,7 @@ import type { EngineState } from '../transport/generated/EngineState';
 import type { Move } from '../transport/generated/Move';
 import { PanelSizeContext } from '../layout/usePanelWidth';
 import { CandidateTable } from './CandidateTable';
+import { storedSettings } from '../setup/testing';
 
 afterEach(() => {
   resetGameStore();
@@ -432,4 +433,28 @@ it('wheel_over_a_row_steps_the_line', () => {
   const away = createEvent.wheel(table, { deltaY: -100, deltaMode: 0 });
   fireEvent(table, away);
   expect(away.defaultPrevented).toBe(false);
+});
+
+const NEXT = {
+  stats: { winrate: 0.47, scoreLead: -0.6, visits: 320 },
+  loss: { winrate: 7.2, score: 2.4 },
+};
+
+it('the_table_shows_the_played_row', () => {
+  // The record's next move, R16, is not among KataGo's four.
+  mount({ nextMove: play(16), update: analysis({ next: NEXT }) });
+  expect(chips()).toEqual(['1', '2', '3', '4', '5']);
+  const played = rows()[4];
+  expect(within(played).getAllByRole('cell')[1]).toHaveTextContent('R16实战');
+  expect(within(played).getAllByRole('cell')[2]).toHaveTextContent('47.0%');
+  expect(within(played).getAllByRole('cell')[3]).toHaveTextContent('−0.6');
+  expect(played.querySelector('[data-played]')).not.toBeNull();
+});
+
+it('the setting hides the played marks and the next move’s row', () => {
+  useSettingsStore.setState({ settings: { ...storedSettings, showNextMove: false } });
+  mount({ nextMove: play(13), update: analysis({ next: NEXT }) });
+  expect(chips()).toEqual(['1', '2', '3', '4']);
+  expect(screen.queryByText('实战')).toBeNull();
+  expect(document.querySelector('[data-played]')).toBeNull();
 });

@@ -385,6 +385,11 @@
       "board": "Board count"
     },
     "saveFailed": "Not saved",
+    "nextMove": {
+      "title": "Show the record's next move",
+      "show": "Show",
+      "hide": "Hide"
+    },
     "alwaysOnTop": {
       "title": "Always on top",
       "on": "On",

@@ -88,6 +88,34 @@ export function drawCandidates(
   }
 }
 
+/**
+ * The record's next move as the played ring alone, around its empty point (P2 M2 design 5.6):
+ * where a disc's ring would sit, the next position having no result yet or the candidates being
+ * hidden. Draws over the layer without clearing it.
+ */
+export function drawNextRing(
+  ctx: CanvasRenderingContext2D,
+  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates'>,
+  point: Point,
+): void {
+  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  const px = (css: number) => css * view.dpr;
+  const r = geometry.stoneRadius * view.dpr;
+  if (r <= 0) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.lineWidth = px(PLAYED_RING.width);
+  ctx.strokeStyle = PLAYED_RING.color;
+  ctx.beginPath();
+  ctx.arc(
+    geometry.lines[point.x] * view.dpr,
+    geometry.lines[point.y] * view.dpr,
+    r + px(PLAYED_RING.width) / 2,
+    0,
+    Math.PI * 2,
+  );
+  ctx.stroke();
+}
+
 /** The move of the disc under a CSS point on the board, within the disc's radius; else `null`. */
 export function candidateAt(
   cssX: number,

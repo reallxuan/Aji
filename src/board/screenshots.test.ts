@@ -18,7 +18,7 @@ import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
 import { type BoardView, drawBoard } from './drawBoard';
-import { drawCandidates, drawVariationNumbers } from './candidates';
+import { drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
@@ -197,6 +197,42 @@ describe('board screenshots', () => {
         candidates: mockupDiscs(),
         lines: ['winrate', 'scoreLead'],
       }),
+    );
+  });
+
+  /**
+   * The record's next move at G10, which KataGo did not list (P2 M2 design 5.6): a pale disc of
+   * its own with the played ring. M13 is then an ordinary candidate.
+   */
+  it('next-move-disc: an unlisted next move gets a disc with the played ring', () => {
+    const discs = mockupDiscs().map((c) => ({ ...c, played: false }));
+    const next: ShownCandidate = {
+      move: { type: 'play', x: 6, y: 9 },
+      rank: discs.length + 1,
+      tier: tierFor(7.2, false),
+      winrate: 0.47,
+      scoreLead: -0.6,
+      visits: 320,
+      loss: 7.2,
+      played: true,
+      pv: [],
+    };
+    compare(
+      'next-move-disc@2x',
+      render({ cssSize: CSS_SIZE, dpr: 2, boardSize: 19 }, parse(SAMSUNG_58), SAMSUNG_LAST, {
+        candidates: [...discs, next],
+        lines: ['winrate', 'scoreLead'],
+      }),
+    );
+  });
+
+  it('next-move-ring: without a result, or with the candidates hidden, the ring alone', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19 };
+    compare(
+      'next-move-ring@2x',
+      render(view, parse(SAMSUNG_58), SAMSUNG_LAST, null, (ctx) =>
+        drawNextRing(ctx, view, { x: 6, y: 9 }),
+      ),
     );
   });
 

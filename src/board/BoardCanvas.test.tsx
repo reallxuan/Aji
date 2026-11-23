@@ -101,6 +101,24 @@ describe('BoardCanvas candidates', () => {
     pv: [],
   };
 
+  it('rings the record’s next move alone on the candidate layer', () => {
+    stubRatio(1);
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const { container } = render(
+      <BoardCanvas {...props} candidates={[best]} nextRing={{ x: 9, y: 9 }} />,
+    );
+    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="candidates"]')!;
+    const events = (
+      layer.getContext('2d') as unknown as {
+        __getEvents(): Array<{ type: string; props: { x: number } }>;
+      }
+    ).__getEvents();
+    const g = boardGeometry(400, 19);
+    const arcs = events.filter((e) => e.type === 'arc').map((e) => e.props.x);
+    // The best disc's fill and ring, then the next move's ring alone.
+    expect(arcs.at(-1)).toBeCloseTo(g.lines[9]);
+  });
+
   it('fades the candidate layer while a new search catches up', () => {
     stubRatio(1);
     const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };

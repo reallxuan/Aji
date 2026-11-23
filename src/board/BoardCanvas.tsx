@@ -6,7 +6,7 @@ import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
-import { candidateAt, drawCandidates, drawVariationNumbers } from './candidates';
+import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
 import { boardGeometry } from './geometry';
@@ -48,6 +48,8 @@ export interface BoardCanvasProps {
   onTapCandidate?(move: Move | null): void;
   /** A finger swiped one step across the board: forward when moving left. */
   onSwipeStep?(forward: boolean): void;
+  /** The record's next move, ringed alone where it has no disc (P2 M2 design 5.6). */
+  nextRing?: Point | null;
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
@@ -80,6 +82,7 @@ export function BoardCanvas({
   stoneStyle = 'slate',
   onTapCandidate,
   onSwipeStep,
+  nextRing = null,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -131,8 +134,12 @@ export function BoardCanvas({
     if (!ctx) return;
     const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
     if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
-    else drawCandidates(ctx, view, candidates, [first, second], lang);
+    else {
+      drawCandidates(ctx, view, candidates, [first, second], lang);
+      if (nextRing) drawNextRing(ctx, view, nextRing);
+    }
   }, [
+    nextRing,
     cssSize,
     dpr,
     boardSize,
