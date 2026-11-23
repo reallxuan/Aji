@@ -3,6 +3,7 @@ import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
 import { CLOSE_LOSS, DOUBTFUL_LOSS, MAX_CANDIDATES, MIN_VISIT_SHARE } from './constants';
+import type { CandidateCount } from '../device/deviceSettings';
 
 export type Tier = 'best' | 'close' | 'doubtful' | 'poor';
 
@@ -59,11 +60,18 @@ export function shownCandidates(
   perspective: Color,
   /** The komi to take out of the leads (the board count), or `null` for KataGo's lead. */
   boardKomi: number | null = null,
+  /** The device's choice: `auto` is the rule above; a number takes KataGo's first, unfiltered. */
+  count: CandidateCount = 'auto',
 ): ShownCandidate[] {
   const ordered = [...update.candidates].sort((a, b) => a.order - b.order);
   if (ordered.length === 0) return [];
   const threshold = ordered[0].visits * MIN_VISIT_SHARE;
-  const picked = ordered.filter((c) => c.visits >= threshold).slice(0, MAX_CANDIDATES);
+  const picked =
+    count === 'auto'
+      ? ordered.filter((c) => c.visits >= threshold).slice(0, MAX_CANDIDATES)
+      : count === 'all'
+        ? [...ordered]
+        : ordered.slice(0, count);
   const played = ordered.find((c) => sameMove(c.move, nextMove));
   if (played && !picked.includes(played)) picked.push(played);
 

@@ -55,6 +55,19 @@ it('keeps at most ten, each with two percent of the top visits', () => {
   expect(shown.map((c) => c.rank)).toEqual([1, 2]);
 });
 
+it('the count is today’s rule, a fixed number of KataGo’s first, or all', () => {
+  const many = Array.from({ length: 14 }, (_, i) => candidate(i, { visits: i ? 10 : 1000 }));
+  const count = (n: Parameters<typeof shownCandidates>[5], next: Move | null = null) =>
+    shownCandidates(withCandidates(many), 'black', next, 'black', null, n).map((c) => c.rank);
+  // Auto: the two-percent rule leaves only the first.
+  expect(count('auto')).toEqual([1]);
+  expect(count(5)).toEqual([1, 2, 3, 4, 5]);
+  expect(count(10)).toHaveLength(10);
+  expect(count('all')).toHaveLength(14);
+  // The played move still joins.
+  expect(count(5, play(12))).toEqual([1, 2, 3, 4, 5, 6]);
+});
+
 it('adds the played move below the threshold', () => {
   const thin = [candidate(0, { visits: 1000 }), candidate(1, { visits: 5 })];
   const shown = shownCandidates(withCandidates(thin), 'black', play(1), 'black');

@@ -14,10 +14,10 @@ export interface Variation {
   illegalAt: number | null;
 }
 
-/** At most `MAX_VARIATION` moves of a principal variation, cut before its first pass. */
-export function linePrefix(pv: readonly Move[]): Move[] {
+/** At most `max` moves of a principal variation (the device's line length), cut before its first pass. */
+export function linePrefix(pv: readonly Move[], max: number = MAX_VARIATION): Move[] {
   const pass = pv.findIndex((m) => m.type === 'pass');
-  return pv.slice(0, Math.min(pass < 0 ? pv.length : pass, MAX_VARIATION));
+  return pv.slice(0, Math.min(pass < 0 ? pv.length : pass, max));
 }
 
 /** How many moves of the line can be shown. */

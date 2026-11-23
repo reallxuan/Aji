@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import { previewGame } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
@@ -37,7 +38,7 @@ export function useVariation(): void {
     const snapshot = useGameStore.getState().snapshot;
     const candidate = hover && latest.current.find((c) => sameMove(c.move, hover.move));
     if (!hover || !candidate || !snapshot) return;
-    const moves = linePrefix(candidate.pv);
+    const moves = linePrefix(candidate.pv, useDeviceStore.getState().settings.lineLength);
     if (moves.length === 0) return;
     const other = snapshot.nextColor === 'black' ? 'white' : 'black';
     let active = true;

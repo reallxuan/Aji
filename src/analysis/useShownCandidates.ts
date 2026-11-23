@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useEngineStore } from '../engine/engineStore';
+import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import { catchingUp, shownCandidates, type ShownCandidate } from './candidates';
@@ -29,9 +30,10 @@ export function useShownCandidates(): Shown {
   const toPlay = snapshot?.nextColor ?? 'black';
   const nextMove = snapshot?.nextMove ?? null;
   const boardKomi = useBoardKomi();
+  const count = useDeviceStore((s) => s.settings.candidateCount);
   const shown = useMemo(
-    () => (current ? shownCandidates(current, toPlay, nextMove, toPlay, boardKomi) : NONE),
-    [current, toPlay, nextMove, boardKomi],
+    () => (current ? shownCandidates(current, toPlay, nextMove, toPlay, boardKomi, count) : NONE),
+    [current, toPlay, nextMove, boardKomi, count],
   );
   // Only a running search catches up: paused or restarting, its count is just what it reached.
   return { current, shown, fading: analysing && current !== null && catchingUp(current) };

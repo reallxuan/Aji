@@ -8,12 +8,14 @@ import type { Move } from '../transport/generated/Move';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
 import { TransportProvider } from '../transport/TransportProvider';
+import { resetDeviceStore, useDeviceStore } from '../device/deviceStore';
 import { useVariation } from './useVariation';
 import { resetViewStore, useViewStore } from './viewStore';
 
 afterEach(() => {
   resetGameStore();
   resetViewStore();
+  resetDeviceStore();
 });
 
 const KEY = 'cdcdcdcdcdcdcdcd';
@@ -100,6 +102,15 @@ it('freezes the line while hovering', async () => {
   await act(async () => {});
   expect(useViewStore.getState().variation?.moves).toEqual([p(3, 3), p(4, 4)]);
   expect(requests).toHaveLength(1);
+});
+
+it('the hovered line stops at the device’s line length', async () => {
+  useDeviceStore.getState().update({ lineLength: 2 });
+  const { engine, requests } = mount();
+  update(engine, [p(3, 3), p(4, 4), p(5, 5), p(6, 6)]);
+  await hover(p(3, 3));
+  expect(useViewStore.getState().variation?.moves).toEqual([p(3, 3), p(4, 4)]);
+  expect(requests).toEqual([[p(3, 3), p(4, 4)]]);
 });
 
 it('follows the hovered move, not its rank, when the order changes', async () => {

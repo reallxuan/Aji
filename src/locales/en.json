@@ -111,7 +111,8 @@
       "winrate": "Win rate",
       "scoreLead": "Lead",
       "visits": "Visits",
-      "vsBest": "vs best"
+      "vsBest": "vs best",
+      "share": "Share"
     },
     "pass": "Pass",
     "table": {
@@ -119,7 +120,18 @@
       "total": "Total visits {{visits}}",
       "catchingUp": "Total visits {{visits}} / {{previous}}",
       "hidden": "Hidden (F)",
-      "rejected": "KataGo cannot analyse this position"
+      "rejected": "KataGo cannot analyse this position",
+      "playedTag": "Played",
+      "share": "{{share}}%",
+      "menu": {
+        "count": "Candidates shown",
+        "countAuto": "Auto",
+        "countAll": "All",
+        "countValue": "{{n}}",
+        "lineLength": "Line length",
+        "lineMoves": "{{n}} moves",
+        "katagoOrder": "KataGo's order"
+      }
     },
     "best": "Best",
     "played": "Played {{diff}}",

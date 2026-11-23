@@ -111,7 +111,8 @@
       "winrate": "胜率",
       "scoreLead": "目差",
       "visits": "计算量",
-      "vsBest": "与最佳相比"
+      "vsBest": "与最佳相比",
+      "share": "占比"
     },
     "pass": "停一手",
     "table": {
@@ -119,7 +120,18 @@
       "total": "总计算量 {{visits}}",
       "catchingUp": "总计算量 {{visits}} / {{previous}}",
       "hidden": "已隐藏（F）",
-      "rejected": "KataGo 无法分析这个局面"
+      "rejected": "KataGo 无法分析这个局面",
+      "playedTag": "实战",
+      "share": "{{share}}%",
+      "menu": {
+        "count": "候选点数量",
+        "countAuto": "自动",
+        "countAll": "全部",
+        "countValue": "{{n}} 个",
+        "lineLength": "变化长度",
+        "lineMoves": "{{n}} 手",
+        "katagoOrder": "按 KataGo 排序"
+      }
     },
     "best": "最佳",
     "played": "实战 {{diff}}",

@@ -1,5 +1,14 @@
-import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
-import { useDeviceStore } from '../device/deviceStore';
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
+import { resetDeviceStore, useDeviceStore } from '../device/deviceStore';
+import { DEFAULT_DEVICE_SETTINGS } from '../device/deviceSettings';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
@@ -19,6 +28,7 @@ import { CandidateTable } from './CandidateTable';
 afterEach(() => {
   resetGameStore();
   resetViewStore();
+  resetDeviceStore();
   useSettingsStore.setState({ settings: null });
 });
 
@@ -112,24 +122,37 @@ it('shows the total visits, or how far a new search has come', () => {
   expect(screen.getByText('总计算量 640 / 1,000')).toBeInTheDocument();
 });
 
-it('has the columns of design 4.3 in order', () => {
+/** Turns 与最佳相比 back on: it is off by default since P2 M2 (design 5.5). */
+const withVsBest = () =>
+  useDeviceStore.getState().update({
+    candidateColumns: { ...DEFAULT_DEVICE_SETTINGS.candidateColumns, vsBest: true },
+  });
+const headerNames = () =>
+  within(screen.getAllByRole('row')[0])
+    .getAllByRole('columnheader')
+    .map((c) => c.textContent);
+
+it('has the columns of design 4.3 in order, with the share in the visits cell', () => {
   mount();
-  const header = screen.getAllByRole('row')[0];
-  expect(
-    within(header)
-      .getAllByRole('columnheader')
-      .map((c) => c.textContent),
-  ).toEqual(['', '落点', '胜率', '目差', '计算量', '与最佳相比']);
+  expect(headerNames()).toEqual(['', '落点', '胜率', '目差', '计算量']);
   const first = rows()[0];
   expect(
     within(first)
       .getAllByRole('cell')
       .map((c) => c.textContent),
-  ).toEqual(['1', 'Q16', '54.2%', '+0.8', '1.2k', '最佳']);
+  ).toEqual(['1', 'Q16', '54.2%', '+0.8', '1.2k39%']);
+});
+
+it('with 与最佳相比 on, it is the last column', () => {
+  withVsBest();
+  mount();
+  expect(headerNames()).toEqual(['', '落点', '胜率', '目差', '计算量', '与最佳相比']);
+  expect(within(rows()[0]).getAllByRole('cell').at(-1)).toHaveTextContent('最佳');
   expect(within(rows()[1]).getByText('−1.8%')).toBeInTheDocument();
 });
 
 it('labels the played move, in bold', () => {
+  withVsBest();
   mount({ nextMove: play(13) });
   const played = within(rows()[2]).getByText('实战 −1.1%');
   expect(played).toHaveClass('font-semibold');
@@ -137,6 +160,7 @@ it('labels the played move, in bold', () => {
 });
 
 it('reads 实战 · 最佳 when the played move is the best', () => {
+  withVsBest();
   mount({ nextMove: play(15) });
   expect(within(rows()[0]).getByText('实战 · 最佳')).toBeInTheDocument();
 });
@@ -248,6 +272,7 @@ it('shows how far the wheel has stepped a hovered line beside its point', () => 
 });
 
 it('shows the side to move’s numbers, whatever the graph’s perspective (P2 M1 design 5.10)', () => {
+  withVsBest();
   useDeviceStore.getState().update({ perspective: 'white' });
   mount();
   // Black to move; Black's best is 54.2% and +0.8 for Black.
@@ -258,6 +283,7 @@ it('shows the side to move’s numbers, whatever the graph’s perspective (P2 M
 });
 
 it('shows White’s numbers when White is to move, and the difference of what it shows', () => {
+  withVsBest();
   useDeviceStore.getState().update({ perspective: 'black' });
   mount({ toPlay: 'white' });
   // Black's 54.2% and +0.8 are White's 45.8% and −0.8.
@@ -278,9 +304,109 @@ it('a narrow panel keeps the point, win rate and lead (P2 M1 layouts mockup)', (
   expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(4);
 });
 
-it('a panel of 360 px or more shows every column', () => {
+it('a panel of 360 px or more shows every chosen column', () => {
   mount({ width: 360 });
-  expect(within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')).toHaveLength(6);
+  expect(within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')).toHaveLength(5);
+});
+
+it('narrow_panel_still_falls_back_to_four_columns', () => {
+  withVsBest();
+  mount({ width: 286 });
+  expect(headerNames()).toEqual(['', '落点', '胜率', '目差']);
+  expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(4);
+});
+
+const header = (name: string) =>
+  within(screen.getAllByRole('row')[0]).getByRole('button', { name });
+const chips = () => rows().map((r) => within(r).getAllByRole('cell')[0].textContent);
+
+it('header_click_cycles_descending_ascending_rank', () => {
+  mount();
+  // Leads: 1 +0.8, 2 +0.5, 3 +0.6, 4 −0.2.
+  fireEvent.click(header('目差'));
+  expect(chips()).toEqual(['1', '3', '2', '4']);
+  expect(header('目差').closest('[role=columnheader]')).toHaveAttribute('aria-sort', 'descending');
+  expect(useDeviceStore.getState().settings.candidateSort).toEqual({
+    key: 'scoreLead',
+    descending: true,
+  });
+  fireEvent.click(header('目差'));
+  expect(chips()).toEqual(['4', '2', '3', '1']);
+  expect(header('目差').closest('[role=columnheader]')).toHaveAttribute('aria-sort', 'ascending');
+  fireEvent.click(header('目差'));
+  expect(chips()).toEqual(['1', '2', '3', '4']);
+  expect(header('目差').closest('[role=columnheader]')).not.toHaveAttribute('aria-sort');
+});
+
+it('chips_keep_katago_numbers_when_sorted', () => {
+  useDeviceStore.getState().update({ candidateSort: { key: 'visits', descending: false } });
+  mount();
+  // The fewest visits first, still chip 4: it matches its disc on the board.
+  expect(chips()).toEqual(['4', '3', '2', '1']);
+  expect(within(rows()[0]).getAllByRole('cell')[1]).toHaveTextContent('N16');
+});
+
+it('vs_best_is_off_by_default_and_played_gets_a_tag', () => {
+  mount({ nextMove: play(13) });
+  expect(headerNames()).not.toContain('与最佳相比');
+  const tag = within(rows()[2]).getByText('实战');
+  expect(within(rows()[2]).getAllByRole('cell')[1]).toContainElement(tag);
+  expect(within(rows()[0]).queryByText('实战')).toBeNull();
+});
+
+it('share_shows_in_the_visits_cell', () => {
+  mount();
+  const visits = () => within(rows()[0]).getAllByRole('cell')[4];
+  expect(visits()).toHaveTextContent('1.2k39%');
+  expect(visits().querySelector('[data-share-bar]')).toHaveStyle({ width: '39%' });
+  cleanup();
+  resetGameStore();
+  useDeviceStore.getState().update({
+    candidateColumns: { ...DEFAULT_DEVICE_SETTINGS.candidateColumns, share: false },
+  });
+  mount();
+  expect(visits()).toHaveTextContent(/^1\.2k$/);
+  expect(visits().querySelector('[data-share-bar]')).toBeNull();
+});
+
+it('column_menu_toggles_columns_and_count', async () => {
+  mount();
+  const open = () => fireEvent.contextMenu(screen.getAllByRole('row')[0]);
+  open();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '胜率' }));
+  });
+  // The menu stays open for another column; Escape closes it.
+  await act(async () => {
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  });
+  expect(headerNames()).toEqual(['', '落点', '目差', '计算量']);
+  expect(useDeviceStore.getState().settings.candidateColumns.winrate).toBe(false);
+  open();
+  expect(screen.getByRole('menuitemcheckbox', { name: '胜率' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+  expect(screen.getByRole('menuitemcheckbox', { name: '占比' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await act(async () => {
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /候选点数量/ }), { key: 'ArrowRight' });
+  });
+  await act(async () => {
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '全部' }));
+  });
+  expect(useDeviceStore.getState().settings.candidateCount).toBe('all');
+  useDeviceStore.getState().update({ candidateSort: { key: 'visits', descending: true } });
+  open();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('menuitem', { name: '按 KataGo 排序' }));
+  });
+  expect(useDeviceStore.getState().settings.candidateSort).toEqual({
+    key: 'rank',
+    descending: true,
+  });
 });
 
 it('wheel_over_a_row_steps_the_line', () => {
