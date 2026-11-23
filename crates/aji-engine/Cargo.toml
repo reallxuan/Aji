@@ -8,8 +8,10 @@ publish = false
 
 [dependencies]
 aji-core = { path = "../aji-core" }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 tokio = { version = "1.54.1", features = ["rt", "macros", "process", "io-util", "sync", "time"] }
 ts-rs = "12.0.1"
 
