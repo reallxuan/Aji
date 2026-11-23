@@ -4,6 +4,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { HOVER_CARD_DELAY_MS } from '../analysis/constants';
 import { useEngineStore } from '../engine/engineStore';
 import { useGameStore } from '../game/gameStore';
+import { useJobStore } from '../job/jobStore';
 import { useTransport } from '../transport/TransportProvider';
 import { useRunCommand } from '../commands/useKeyDispatcher';
 import { engineAction, runEngineAction } from '../engine/engineAction';
@@ -22,10 +23,11 @@ export function EngineIndicator({ touch = false }: { touch?: boolean } = {}) {
   const state = engine?.state ?? null;
   // On an illegal node KataGo has no position: the dot greys out, whatever the state.
   const illegal = useGameStore((s) => s.snapshot?.illegal ?? null);
+  const job = useJobStore((s) => s.progress);
 
   const atLimit = engine?.state === 'ready' && engine.limitReached && !illegal;
   const stateText = atLimit ? t('engine.limitReached') : state ? t(`engine.state.${state}`) : '';
-  const action = engineAction(engine);
+  const action = engineAction(engine, job);
   const colour =
     state === 'crashed'
       ? 'bg-engine-error'

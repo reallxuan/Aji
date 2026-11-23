@@ -1,6 +1,7 @@
 import { useViewStore } from '../analysis/viewStore';
 import { openFromPicker, saveAs, startNewGame } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
+import { useJobStore } from '../job/jobStore';
 import { engineAction, runEngineAction } from '../engine/engineAction';
 import type { NavTarget } from '../transport/generated/NavTarget';
 import type { Command, CommandContext, CommandId } from './registry';
@@ -52,7 +53,7 @@ export const BUILTINS: Command[] = [
   press(
     'analysis.toggle',
     (ctx) => {
-      const action = engineAction(ctx.engine.getState().engine);
+      const action = engineAction(ctx.engine.getState().engine, useJobStore.getState().progress);
       if (action !== 'setUp') runEngineAction(action, ctx.actions.transport);
     },
     { scope: 'always' },

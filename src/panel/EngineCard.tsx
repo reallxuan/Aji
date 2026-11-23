@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEngineStore } from '../engine/engineStore';
+import { useJobStore } from '../job/jobStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { getEngineStatus } from '../transport/api';
 import type { RunningEngine } from '../transport/generated/RunningEngine';
@@ -27,6 +28,7 @@ export function EngineCard() {
   const engine = useEngineStore((s) => s.engine);
   const analysis = useEngineStore((s) => s.analysis);
   const speed = useEngineStore((s) => s.speed);
+  const job = useJobStore((s) => s.progress);
   const limit = useSettingsStore((s) => s.settings?.visitLimit ?? null);
   const [running, setRunning] = useState<RunningEngine | null>(null);
 
@@ -49,7 +51,7 @@ export function EngineCard() {
   const title = atLimit ? t('engine.limitReached') : t(`engine.card.title.${engine.state}`);
   const version = 'version' in engine ? engine.version : null;
   const visits = analysis?.rootVisits ?? null;
-  const action = engineAction(engine);
+  const action = engineAction(engine, job);
 
   const rows: Array<[string, string]> = [];
   if (engine.state === 'analysing' && speed !== null)

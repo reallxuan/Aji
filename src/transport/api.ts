@@ -3,9 +3,12 @@ import type { AnalysisUpdate } from './generated/AnalysisUpdate';
 import type { AppInfo } from './generated/AppInfo';
 import type { Backend } from './generated/Backend';
 import type { BackendRecommendation } from './generated/BackendRecommendation';
+import type { CacheScope } from './generated/CacheScope';
+import type { CacheStats } from './generated/CacheStats';
 import type { EngineVersionChoice } from './generated/EngineVersionChoice';
 import type { HardwareReport } from './generated/HardwareReport';
 import type { ImportedNetwork } from './generated/ImportedNetwork';
+import type { JobOptions } from './generated/JobOptions';
 import type { JobSnapshot } from './generated/JobSnapshot';
 import type { LicenceInfo } from './generated/LicenceInfo';
 import type { NetworkList } from './generated/NetworkList';
@@ -21,6 +24,8 @@ import type { Rejection } from './generated/Rejection';
 import type { Request } from './generated/Request';
 import type { Response } from './generated/Response';
 import type { RunningEngine } from './generated/RunningEngine';
+import type { ScoreMode } from './generated/ScoreMode';
+import type { ScoreView } from './generated/ScoreView';
 import type { TrendNode } from './generated/TrendNode';
 import type { UiSettings } from './generated/UiSettings';
 import { TransportError, type Transport } from './transport';
@@ -200,6 +205,34 @@ export async function exportGame(transport: Transport): Promise<{ name: string; 
 }
 
 /** One entry per main-line node, with the engine's cached result where it has one. */
-export async function getTrend(transport: Transport): Promise<TrendNode[]> {
-  return (await expectType(transport, { type: 'gameTrend' }, 'trend')).nodes;
+export async function getTrend(
+  transport: Transport,
+): Promise<{ revision: number; nodes: TrendNode[] }> {
+  const { revision, nodes } = await expectType(transport, { type: 'gameTrend' }, 'trend');
+  return { revision, nodes };
+}
+
+export const startJob = (transport: Transport, options: JobOptions) =>
+  expectOk(transport, { type: 'jobStart', options });
+
+export const stopJob = (transport: Transport) => expectOk(transport, { type: 'jobStop' });
+
+export const clearCache = (transport: Transport, scope: CacheScope) =>
+  expectOk(transport, { type: 'cacheClear', scope });
+
+export async function getCacheStats(transport: Transport): Promise<CacheStats> {
+  const r = await expectType(transport, { type: 'cacheStats' }, 'cacheStats');
+  return {
+    usedBytes: r.usedBytes,
+    capBytes: r.capBytes,
+    persistent: r.persistent,
+    reason: r.reason,
+  };
+}
+
+/** KataGo's estimate, or the final count with `dead` removed, for the position on the board. */
+export async function scoreGame(transport: Transport, mode: ScoreMode): Promise<ScoreView> {
+  const r = await expectType(transport, { type: 'gameScore', mode }, 'score');
+  const { black, white, komi, margin, owners, suggestedDead } = r;
+  return { black, white, komi, margin, owners, suggestedDead };
 }

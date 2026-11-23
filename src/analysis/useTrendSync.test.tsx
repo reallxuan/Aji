@@ -189,3 +189,28 @@ it('a new game starts the shared-key group afresh', async () => {
   expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(5, 200));
   expect(useTrendStore.getState().nodes[5].stats).toBeNull();
 });
+
+it('applies trend nodes for the line it holds', async () => {
+  const { transport } = mount(() => line(3));
+  await act(async () => {});
+  expect(useTrendStore.getState().revision).toBe(0);
+  const loss = { winrate: 12, score: 3 };
+  act(() =>
+    transport.emit({
+      type: 'trendNodes',
+      revision: 0,
+      nodes: [{ lineIndex: 2, stats: statsOf(2), loss }],
+    }),
+  );
+  expect(useTrendStore.getState().nodes[2]).toMatchObject({ stats: statsOf(2), loss });
+  // A line pushed later: nodes for the old one no longer apply.
+  act(() => transport.emit({ type: 'gameTrend', revision: 3, nodes: line(3) }));
+  act(() =>
+    transport.emit({
+      type: 'trendNodes',
+      revision: 0,
+      nodes: [{ lineIndex: 1, stats: statsOf(1), loss }],
+    }),
+  );
+  expect(useTrendStore.getState().nodes[1].stats).toBeNull();
+});

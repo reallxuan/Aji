@@ -7,6 +7,7 @@
 
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
 import { createFakeGame, fakeAnalysis } from './fakeGame';
+import { fakeResult, playFakeJob, type FakeJob, type FakeResult } from './fakeJob';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import type { Backend } from '../transport/generated/Backend';
 import type { BackendRecommendation } from '../transport/generated/BackendRecommendation';
@@ -38,6 +39,8 @@ export const SCENARIOS = [
   'mac',
   'game',
   'analysing',
+  'job-running',
+  'job-done',
 ] as const;
 
 export type ScenarioName = (typeof SCENARIOS)[number];
@@ -379,6 +382,11 @@ const SCRIPTS: Record<ScenarioName, Script> = {
   // discs, the table, the trend graph and hovering. It honours the visit limit, Continue, Pause
   // and Resume, and a revisited position searches again, catching up on what is cached.
   analysing: { ...gameScript, engine: { state: 'analysing', version: '1.18.2' } },
+  // A sample game open and a whole-game job running over it: the strip, the status and the
+  // trend filling in, then the boost pass and done.
+  'job-running': { ...gameScript, engine: { state: 'analysing', version: '1.18.2' } },
+  // The same game with the job just done: every node has a result and a loss.
+  'job-done': gameScript,
 };
 
 /** How often the analysing scenario reports, and how many visits each report adds. */
@@ -436,6 +444,51 @@ export function scenarioTransport(
   const transport = createFakeTransport((request) => handle(request)) as ScenarioTransport;
   transport.unhandled = unhandled;
   const game = createFakeGame((event) => transport.emit(event));
+
+  // The scripted whole-game job and the results it left, by line index.
+  const results = new Map<number, FakeResult>();
+  let fakeJob: FakeJob | null = null;
+  const trendOf = () => {
+    const reply = game({ type: 'gameTrend' });
+    if (reply?.type !== 'trend') throw new Error('the fake game has no trend');
+    return reply;
+  };
+  const startFakeJob = (options: UiSettings['jobOptions']) => {
+    fakeJob?.stop();
+    const { revision, nodes } = trendOf();
+    fakeJob = playFakeJob({
+      count: nodes.length,
+      options,
+      revision,
+      stepMs: Math.max(10, tick / 5),
+      emit: (event) => transport.emit(event),
+      onResult: (i, result) => results.set(i, result),
+    });
+  };
+  const stopFakeJob = () => {
+    fakeJob?.stop();
+    fakeJob = null;
+  };
+  if (name === 'job-running' || name === 'job-done') {
+    game({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    if (name === 'job-running') {
+      setTimeout(() => startFakeJob(settings.jobOptions), tick);
+    } else {
+      const count = trendOf().nodes.length;
+      for (let i = 0; i < count; i++) results.set(i, fakeResult(i, 500));
+      const done = {
+        state: 'done' as const,
+        done: count,
+        total: count,
+        boostDone: 6,
+        boostTotal: 6,
+        working: null,
+        queued: [],
+        etaSeconds: null,
+      };
+      setTimeout(() => transport.emit({ type: 'jobProgress', progress: done }), tick);
+    }
+  }
 
   const setEngine = (state: EngineState) => {
     engine = state;
@@ -732,6 +785,41 @@ export function scenarioTransport(
         settings = request.settings;
         transport.emit({ type: 'settingsChanged', settings });
         return { type: 'settings', settings };
+      case 'jobStart':
+        startFakeJob(request.options);
+        return { type: 'ok' };
+      case 'jobStop':
+        stopFakeJob();
+        return { type: 'ok' };
+      case 'cacheClear':
+        if (request.scope !== 'position') {
+          stopFakeJob();
+          results.clear();
+        }
+        return { type: 'ok' };
+      case 'cacheStats':
+        return {
+          type: 'cacheStats',
+          usedBytes: results.size * 6 * 1024,
+          capBytes: settings.cacheCapMb * 1024 * 1024,
+          persistent: true,
+          reason: null,
+        };
+      case 'gameScore':
+        throw new TransportError('scoreUnavailable', 'the scenarios have no ownership');
+      case 'gameTrend': {
+        const trend = trendOf();
+        return {
+          ...trend,
+          nodes: trend.nodes.map((node, i) => ({ ...node, ...results.get(i) })),
+        };
+      }
+      case 'gameNew':
+      case 'gameOpen':
+      case 'gameSetRules':
+        stopFakeJob();
+        results.clear();
+        return game(request)!;
       default: {
         const answer = game(request);
         if (answer) return answer;

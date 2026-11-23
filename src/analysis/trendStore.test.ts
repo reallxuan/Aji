@@ -35,3 +35,36 @@ it('record ignores a bad index', () => {
   store.record(-1, { winrate: 0.4, scoreLead: -1, visits: 100 });
   expect(useTrendStore.getState().nodes).toBe(before);
 });
+
+const stats = (winrate: number, visits: number) => ({ winrate, scoreLead: 0, visits });
+
+it('trend nodes merge by line index', () => {
+  const store = useTrendStore.getState();
+  store.setNodes([node(0), node(1), node(2)], 4);
+  store.record(1, stats(0.5, 900));
+  store.applyNodes(4, [
+    { lineIndex: 1, stats: stats(0.6, 500), loss: { winrate: 12, score: 3 } },
+    { lineIndex: 2, stats: stats(0.4, 500), loss: null },
+    { lineIndex: 7, stats: stats(0.4, 500), loss: null },
+  ]);
+  const nodes = useTrendStore.getState().nodes;
+  // The deeper live stats stay; the loss comes from the backend.
+  expect(nodes[1].stats).toEqual(stats(0.5, 900));
+  expect(nodes[1].loss).toEqual({ winrate: 12, score: 3 });
+  expect(nodes[2].stats).toEqual(stats(0.4, 500));
+  expect(nodes).toHaveLength(3);
+  // A node the backend has no result for keeps what it has.
+  store.applyNodes(4, [{ lineIndex: 2, stats: null, loss: null }]);
+  expect(useTrendStore.getState().nodes[2].stats).toEqual(stats(0.4, 500));
+});
+
+it('an older revision is ignored', () => {
+  const store = useTrendStore.getState();
+  store.setNodes([node(0), node(1)], 4);
+  const before = useTrendStore.getState().nodes;
+  store.applyNodes(3, [{ lineIndex: 1, stats: stats(0.6, 500), loss: null }]);
+  // A newer one is for a line not sent yet.
+  store.applyNodes(5, [{ lineIndex: 1, stats: stats(0.6, 500), loss: null }]);
+  expect(useTrendStore.getState().nodes).toBe(before);
+  expect(useTrendStore.getState().revision).toBe(4);
+});

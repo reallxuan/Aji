@@ -1,9 +1,11 @@
 import {
   cancelInstall,
+  clearCache,
   continueAnalysis,
   detectHardware,
   getAppInfo,
   getBackends,
+  getCacheStats,
   getEngineStatus,
   getInstalled,
   getInstallStatus,
@@ -17,9 +19,12 @@ import {
   removeUnused,
   restartEngine,
   resumeAnalysis,
+  scoreGame,
   setSettings,
   startInstall,
+  startJob,
   stopEngine,
+  stopJob,
 } from './api';
 import { createFakeTransport } from './fake';
 import type { Response } from './generated/Response';
@@ -231,7 +236,41 @@ it('asks for the trend and unwraps its nodes', async () => {
   const t = createFakeTransport((request) =>
     request.type === 'gameTrend' ? { type: 'trend', revision: 0, nodes } : { type: 'ok' },
   );
-  await expect(getTrend(t)).resolves.toEqual(nodes);
+  await expect(getTrend(t)).resolves.toEqual({ revision: 0, nodes });
   const wrong = createFakeTransport(() => ({ type: 'ok' }));
   await expect(getTrend(wrong)).rejects.toMatchObject({ code: 'internal' });
+});
+
+it('api shapes match the protocol', async () => {
+  const sent: unknown[] = [];
+  const stats = { usedBytes: 10, capBytes: 20, persistent: true, reason: null };
+  const side = { stones: 0, territory: 0, dead: 0, prisoners: 0, total: 0 };
+  const view = { black: side, white: side, komi: 7.5, margin: -7.5, owners: [], suggestedDead: [] };
+  const t = createFakeTransport((request) => {
+    sent.push(request);
+    if (request.type === 'cacheStats') return { type: 'cacheStats', ...stats };
+    if (request.type === 'gameScore') return { type: 'score', ...view };
+    return { type: 'ok' };
+  });
+  const options = {
+    range: { kind: 'moves' as const, from: 3, to: 40 },
+    side: 'black' as const,
+    visits: 500,
+    boost: { on: true, threshold: 10, visits: 3000 },
+  };
+  await startJob(t, options);
+  await stopJob(t);
+  await clearCache(t, 'game');
+  await expect(getCacheStats(t)).resolves.toEqual(stats);
+  await expect(scoreGame(t, { kind: 'final', dead: [{ x: 1, y: 2 }] })).resolves.toEqual(view);
+  expect(sent).toEqual([
+    { type: 'jobStart', options },
+    { type: 'jobStop' },
+    { type: 'cacheClear', scope: 'game' },
+    { type: 'cacheStats' },
+    { type: 'gameScore', mode: { kind: 'final', dead: [{ x: 1, y: 2 }] } },
+  ]);
+  const wrong = createFakeTransport(() => ({ type: 'ok' }));
+  await expect(getCacheStats(wrong)).rejects.toMatchObject({ code: 'internal' });
+  await expect(scoreGame(wrong, { kind: 'estimate' })).rejects.toMatchObject({ code: 'internal' });
 });
