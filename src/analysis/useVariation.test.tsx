@@ -40,6 +40,7 @@ function update(engine: EngineStore, ...lines: Move[][]) {
       })),
       previousVisits: 0,
       ownership: null,
+      next: null,
     },
   });
 }

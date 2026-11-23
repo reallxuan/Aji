@@ -32,6 +32,22 @@ pub fn identity_of(model: &Path, config: &Path) -> io::Result<EngineIdentity> {
     })
 }
 
+/// `identity_of` for an engine's files, on a blocking thread. `None` when either file cannot be
+/// read: the engine then runs without the persistent store. The files are named as KataGo's
+/// command line names them, relative to its working folder (an absolute name stays as it is).
+pub async fn identity_for(files: &crate::EngineFiles) -> Option<EngineIdentity> {
+    let model = files.working_dir.join(&files.model);
+    let config = files.working_dir.join(&files.config);
+    match tokio::task::spawn_blocking(move || identity_of(&model, &config)).await {
+        Ok(Ok(identity)) => Some(identity),
+        Ok(Err(e)) => {
+            eprintln!("aji: cannot identify the engine's files, so results are not kept: {e}");
+            None
+        }
+        Err(_) => None,
+    }
+}
+
 /// Whether a config key only changes speed, devices or logging, never results.
 fn ignored_key(key: &str) -> bool {
     key.starts_with("numSearchThreads")
@@ -102,5 +118,34 @@ mod tests {
         std::fs::write(&model, b"abd").unwrap();
         assert_ne!(identity_of(&model, &config).unwrap(), id);
         assert!(identity_of(&dir.path().join("missing"), &config).is_err());
+    }
+
+    #[tokio::test]
+    async fn identity_finds_files_named_relative_to_the_working_folder() {
+        // Installed sets and the development engine name both files relative to KataGo's
+        // working folder (roadmap 3.3); the identity must read them from there, not from
+        // wherever Aji itself was started.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("networks")).unwrap();
+        std::fs::write(dir.path().join("networks/m.bin.gz"), b"abc").unwrap();
+        std::fs::write(dir.path().join("c.cfg"), "maxVisits = 500\n").unwrap();
+        let files = crate::EngineFiles {
+            katago: dir.path().join("katago"),
+            model: std::path::Path::new("networks").join("m.bin.gz"),
+            config: "c.cfg".into(),
+            working_dir: dir.path().to_path_buf(),
+            path_prepend: Vec::new(),
+        };
+        let id = identity_for(&files).await.expect("identified");
+        assert_eq!(id.network[..4], [0xba, 0x78, 0x16, 0xbf]);
+        assert_eq!(id.config, config_hash("maxVisits = 500"));
+        // A model kept absolute (outside the config folder) is read where it is.
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::fs::write(elsewhere.path().join("n.bin.gz"), b"abc").unwrap();
+        let files = crate::EngineFiles {
+            model: elsewhere.path().join("n.bin.gz"),
+            ..files
+        };
+        assert_eq!(identity_for(&files).await, Some(id));
     }
 }

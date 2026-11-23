@@ -29,13 +29,13 @@ pub struct Row {
 }
 
 /// What `replaces` compares: root visits, final, imported.
-type Rank = (u32, bool, bool);
+pub(crate) type Rank = (u32, bool, bool);
 
 fn rank(row: &Row) -> Rank {
     (row.update.root_visits, row.update.is_final, row.imported)
 }
 
-fn outranks(old: Rank, new: Rank) -> bool {
+pub(crate) fn outranks(old: Rank, new: Rank) -> bool {
     let ((ov, of, oi), (nv, nf, ni)) = (old, new);
     match (oi, ni) {
         (false, true) => false,
@@ -541,6 +541,8 @@ impl Db {
         let mut grown: i64 = 0;
         for ((id, key), (row, used)) in &self.pending {
             let mut plain = row.update.clone();
+            // Filled in when shown, from the next position's own row.
+            plain.next = None;
             let ownership: Option<Vec<u8>> = plain
                 .ownership
                 .take()
@@ -687,6 +689,7 @@ mod tests {
                 }],
                 previous_visits: 0,
                 ownership: Some(vec![-127, 0, 127]),
+                next: None,
             },
             imported,
             katago_version: "1.18.2".into(),

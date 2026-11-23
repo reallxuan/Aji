@@ -12,8 +12,9 @@ use std::time::Duration;
 
 use aji_core::{BoardSize, Color, Komi, Move, Point, Position, Rules};
 use aji_engine::{
-    AnalysisUpdate, CrashReason, Engine, EngineError, EngineEvent, EngineFiles, EngineOptions,
-    EngineState, Rejection, TrendStats, katago_launch,
+    AnalysisUpdate, ClearScope, CrashReason, Engine, EngineError, EngineEvent, EngineFiles,
+    EngineIdentity, EngineOptions, EngineState, NextResult, Rejection, Row, Store, TrendStats,
+    katago_launch, move_loss,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::{Instant, timeout, timeout_at};
@@ -246,7 +247,7 @@ fn updates(events: &[EngineEvent]) -> Vec<&AnalysisUpdate> {
         .iter()
         .filter_map(|e| match e {
             EngineEvent::Analysis(u) => Some(u),
-            EngineEvent::State(_) | EngineEvent::Rejected(_) => None,
+            _ => None,
         })
         .collect()
 }
@@ -256,7 +257,7 @@ fn states(events: &[EngineEvent]) -> Vec<&EngineState> {
         .iter()
         .filter_map(|e| match e {
             EngineEvent::State(s) => Some(s),
-            EngineEvent::Analysis(_) | EngineEvent::Rejected(_) => None,
+            _ => None,
         })
         .collect()
 }
@@ -339,7 +340,12 @@ async fn reaches_analysing_and_streams_updates() {
     assert_eq!(p.next().await, EngineEvent::State(EngineState::Starting));
     assert_eq!(p.next().await, EngineEvent::State(analysing()));
 
-    let events = p.until_state(|_| true).await;
+    let events: Vec<_> = p
+        .until_state(|_| true)
+        .await
+        .into_iter()
+        .filter(|e| !matches!(e, EngineEvent::Stored { .. }))
+        .collect();
     let (last, streamed) = events.split_last().unwrap();
     assert_eq!(last, &EngineEvent::State(ready()));
     let streamed = updates(streamed);
@@ -1085,7 +1091,7 @@ async fn set_files_switches_to_the_new_files() {
 
     // A config that fails at start-up proves the new files are the ones launched.
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("startup-failure")))).await,
+        bounded(p.engine.set_files(Some(files("startup-failure")), None)).await,
         Ok(())
     );
     assert_eq!(p.engine.state(), EngineState::Starting);
@@ -1097,7 +1103,7 @@ async fn set_files_switches_to_the_new_files() {
 
     // And back: the installer's fallback switches from a failed engine to a working one.
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("normal")))).await,
+        bounded(p.engine.set_files(Some(files("normal")), None)).await,
         Ok(())
     );
     p.until_state(|s| *s == analysing()).await;
@@ -1117,7 +1123,7 @@ async fn set_files_none_stops_and_reports_not_configured() {
     p.until_state(|s| *s == analysing()).await;
     let pid = p.engine.pid().expect("a pid while analysing");
 
-    assert_eq!(bounded(p.engine.set_files(None)).await, Ok(()));
+    assert_eq!(bounded(p.engine.set_files(None, None)).await, Ok(()));
     assert_eq!(p.engine.state(), EngineState::NotConfigured);
     assert_eq!(p.engine.pid(), None);
     assert!(!alive(pid), "KataGo {pid} is still alive");
@@ -1132,7 +1138,7 @@ async fn set_files_none_stops_and_reports_not_configured() {
 
     // Not configured, files can be given again.
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("normal")))).await,
+        bounded(p.engine.set_files(Some(files("normal")), None)).await,
         Ok(())
     );
     p.until_state(|s| *s == analysing()).await;
@@ -1146,7 +1152,7 @@ async fn set_files_drops_the_old_analysis() {
     assert!(p.engine.status().analysis.is_some());
 
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("normal")))).await,
+        bounded(p.engine.set_files(Some(files("normal")), None)).await,
         Ok(())
     );
     assert_eq!(
@@ -1272,7 +1278,7 @@ async fn the_limit_is_kept_across_restart_and_set_files() {
     let seen = p.until_state(|s| *s != EngineState::Starting).await;
     assert_eq!(states(&seen), [&EngineState::Starting, &at_limit()]);
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("normal")))).await,
+        bounded(p.engine.set_files(Some(files("normal")), None)).await,
         Ok(())
     );
     // New files clear the cache, so P1 is searched again, to its final.
@@ -1436,7 +1442,7 @@ async fn set_files_clears_targets() {
     assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
     p.until_state(|s| *s == ready()).await;
     assert_eq!(
-        bounded(p.engine.set_files(Some(files("normal")))).await,
+        bounded(p.engine.set_files(Some(files("normal")), None)).await,
         Ok(())
     );
     // Without the raised target, 315 visits are at the limit again.
@@ -1584,5 +1590,291 @@ async fn engine_updates_carry_ownership() {
     let own = fin.ownership.expect("ownership");
     assert_eq!(own.len(), 361);
     assert!(own[3 * 19 + 15] > 76, "Black's Q16 is Black's");
+    bounded(p.engine.shutdown()).await;
+}
+
+// ------------------------------------------------------------ the store (P2 M2)
+
+fn identity(n: u8) -> EngineIdentity {
+    EngineIdentity {
+        network: [n; 32],
+        config: 1,
+    }
+}
+
+/// A position the fake has no recording for, so the synthetic scenarios answer it.
+fn anywhere(n: u8) -> Position {
+    position(&[(Color::Black, n % 19, 9 + n / 19)])
+}
+
+fn start_stored(
+    name: &str,
+    position: Position,
+    options: EngineOptions,
+    store: Store,
+    id: EngineIdentity,
+) -> Probe {
+    let (tx, events) = unbounded_channel();
+    let engine = Engine::spawn_with_store(
+        Some(files(name)),
+        Some(id),
+        position,
+        options,
+        Some(store),
+        move |event| {
+            let _ = tx.send(event);
+        },
+    );
+    Probe { engine, events }
+}
+
+fn memory_store() -> Store {
+    Store::in_memory(1 << 30, None)
+}
+
+fn stored(events: &[EngineEvent]) -> Vec<(aji_core::PositionKey, TrendStats)> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::Stored { key, stats } => Some((*key, *stats)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_restart_of_aji_shows_the_stored_result_without_searching() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("analysis.sqlite");
+    {
+        let store = Store::open(path.clone(), 1 << 30);
+        let mut p = start_stored("synthetic", anywhere(1), capped(50), store, identity(1));
+        p.until_state(|s| *s == at_limit()).await;
+        bounded(p.engine.shutdown()).await;
+    }
+    let store = Store::open(path, 1 << 30);
+    let mut p = start_stored("synthetic", anywhere(1), capped(50), store, identity(1));
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    let shown = updates(&seen);
+    assert_eq!(shown.len(), 1, "{seen:?}");
+    assert_eq!((shown[0].root_visits, shown[0].is_final), (50, true));
+    assert_eq!(
+        shown[0].previous_visits, 0,
+        "a cached update is not a search"
+    );
+    assert!(
+        states(&seen)
+            .iter()
+            .all(|s| !matches!(s, EngineState::Analysing { .. })),
+        "{seen:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn another_identity_searches_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("analysis.sqlite");
+    {
+        let store = Store::open(path.clone(), 1 << 30);
+        let mut p = start_stored("synthetic", anywhere(2), capped(50), store, identity(1));
+        p.until_state(|s| *s == at_limit()).await;
+        bounded(p.engine.shutdown()).await;
+    }
+    let store = Store::open(path, 1 << 30);
+    let mut p = start_stored("synthetic", anywhere(2), capped(50), store, identity(2));
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    assert!(states(&seen).contains(&&analysing()), "{seen:?}");
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn next_result_comes_with_the_update_once_known() {
+    let a = anywhere(3);
+    let mut b = a.clone();
+    let reply = Move::Play(Point { x: 15, y: 15 });
+    b.moves.push((Color::White, reply));
+    let mut p = start_stored(
+        "synthetic",
+        a.clone(),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    // Not yet known: no next result.
+    assert_eq!(
+        bounded(
+            p.engine
+                .set_position_next(a.clone(), Some((b.clone(), reply)))
+        )
+        .await,
+        Ok(())
+    );
+    let shown = p.next_analysis().await;
+    assert_eq!(shown.next, None);
+    assert_eq!(bounded(p.engine.set_position(b.clone())).await, Ok(()));
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    let after = updates(&seen).into_iter().last().unwrap().clone();
+    assert_eq!(
+        bounded(p.engine.set_position_next(a.clone(), Some((b, reply)))).await,
+        Ok(())
+    );
+    let shown = p.next_analysis().await;
+    let after_stats = TrendStats::of(&after);
+    assert_eq!(
+        shown.next,
+        Some(NextResult {
+            stats: after_stats,
+            loss: move_loss(&TrendStats::of(&shown), &after_stats, Color::White),
+        })
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn stored_events_fire_for_better_rows_only() {
+    let mut p = start_stored(
+        "synthetic",
+        anywhere(4),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    let rows = stored(&seen);
+    assert!(!rows.is_empty(), "{seen:?}");
+    assert!(rows.iter().all(|(k, _)| *k == anywhere(4).key()));
+    assert!(rows.windows(2).all(|w| w[1].1.visits >= w[0].1.visits));
+    // Showing a known result again stores nothing.
+    assert_eq!(bounded(p.engine.set_position(anywhere(5))).await, Ok(()));
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.set_position(anywhere(4))).await, Ok(()));
+    let again = p.collect_for(Duration::from_millis(300)).await;
+    assert!(stored(&again).is_empty(), "{again:?}");
+    bounded(p.engine.shutdown()).await;
+}
+
+fn imported_row(position: &Position, visits: u32) -> Row {
+    Row {
+        update: AnalysisUpdate {
+            position: position.key(),
+            board_size: 19,
+            root_visits: visits,
+            winrate: 0.42,
+            score_lead: -1.5,
+            is_final: false,
+            candidates: Vec::new(),
+            previous_visits: 0,
+            ownership: None,
+            next: None,
+        },
+        imported: true,
+        katago_version: String::new(),
+    }
+}
+
+#[tokio::test]
+async fn a_progress_report_does_not_replace_an_imported_row() {
+    let mut p = start_stored(
+        "synthetic",
+        anywhere(6),
+        options(),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == analysing()).await;
+    bounded(p.engine.import(vec![imported_row(&anywhere(7), 10_000)])).await;
+    assert_eq!(bounded(p.engine.set_position(anywhere(7))).await, Ok(()));
+    let first = p.next_analysis().await;
+    assert_eq!(
+        first.root_visits, 10_000,
+        "the imported row is shown at once"
+    );
+    p.collect_for(Duration::from_millis(300)).await;
+    let kept = bounded(p.engine.summaries(vec![anywhere(7).key()])).await;
+    assert_eq!(kept[0].map(|s| s.visits), Some(10_000));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn clearing_the_current_position_restarts_its_search() {
+    let mut p = start_stored(
+        "synthetic",
+        anywhere(8),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    bounded(p.engine.clear(ClearScope::Keys(vec![anywhere(8).key()]))).await;
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    assert!(states(&seen).contains(&&analysing()), "{seen:?}");
+    assert!(updates(&seen).iter().any(|u| u.is_final));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn continue_analysis_resubmits_while_a_query_is_in_flight() {
+    // M7 minor 2.
+    let mut p = start_stored(
+        "synthetic-slow",
+        anywhere(9),
+        capped(100),
+        memory_store(),
+        identity(1),
+    );
+    let first = p.next_analysis().await;
+    assert!(!first.is_final);
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    let fin = updates(&seen).into_iter().rfind(|u| u.is_final).unwrap();
+    assert!(fin.root_visits > 100, "{}", fin.root_visits);
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_cached_update_has_no_previous_visits() {
+    // M7 minor 12: a second search of a position stores its own previous visits; showing the
+    // stored result again is not a search catching up.
+    let mut p = start_stored(
+        "synthetic",
+        anywhere(10),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.continue_analysis()).await, Ok(()));
+    let seen = p.until_state(|s| *s == at_limit()).await;
+    let fin = updates(&seen)
+        .into_iter()
+        .rfind(|u| u.is_final)
+        .unwrap()
+        .clone();
+    assert_eq!(fin.previous_visits, 50);
+    assert_eq!(bounded(p.engine.set_position(anywhere(11))).await, Ok(()));
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.set_position(anywhere(10))).await, Ok(()));
+    let shown = p.next_analysis().await;
+    assert_eq!((shown.root_visits, shown.previous_visits), (100, 0));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_burst_of_30_positions_in_300ms_sends_at_most_4_queries() {
+    // M7 minor 11.
+    let mut p = start_with(Some(files("synthetic")), anywhere(0), gated(100));
+    p.until_state(|s| *s == analysing()).await;
+    let before = p.engine.queries_sent();
+    let begun = Instant::now();
+    for n in 1..=30 {
+        assert_eq!(bounded(p.engine.set_position(anywhere(n))).await, Ok(()));
+        tokio::time::sleep(Duration::from_millis(9)).await;
+    }
+    assert!(begun.elapsed() < Duration::from_millis(400));
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let sent = p.engine.queries_sent() - before;
+    assert!((1..=4).contains(&sent), "{sent} queries");
     bounded(p.engine.shutdown()).await;
 }

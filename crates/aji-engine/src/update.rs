@@ -41,6 +41,18 @@ pub struct AnalysisUpdate {
     /// KataGo's ownership, one signed byte per point row by row (`round(v × 127)`), Black's
     /// view: positive is Black's (P2 M2 design 5.2).
     pub ownership: Option<Vec<i8>>,
+    /// The record's next move when it is not among the candidates shown: the next position's
+    /// root and the move's loss, once that position has a result (P2 M2 design 5.6).
+    pub next: Option<NextResult>,
+}
+
+/// The next position's result, for the next-move hint.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct NextResult {
+    pub stats: TrendStats,
+    pub loss: crate::Loss,
 }
 
 /// Quantises one ownership value in −1..1.
@@ -119,6 +131,7 @@ pub fn to_update(raw: &RawAnalysis, position: &Position, max_candidates: usize) 
             .ownership
             .as_ref()
             .map(|o| o.iter().map(|&v| quantise_ownership(v)).collect()),
+        next: None,
     }
 }
 

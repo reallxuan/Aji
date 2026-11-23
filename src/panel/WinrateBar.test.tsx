@@ -25,6 +25,7 @@ function analysis(overrides: Partial<AnalysisUpdate> = {}): AnalysisUpdate {
     candidates: [],
     previousVisits: 0,
     ownership: null,
+    next: null,
     ...overrides,
   };
 }

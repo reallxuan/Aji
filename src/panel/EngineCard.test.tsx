@@ -71,6 +71,7 @@ function mount(
         candidates: [],
         previousVisits: 0,
         ownership: null,
+        next: null,
       },
     });
   }

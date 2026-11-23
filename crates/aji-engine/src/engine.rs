@@ -13,7 +13,7 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aji_core::{Position, PositionKey};
+use aji_core::{Move, Position, PositionKey};
 use tokio::runtime::Handle;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -21,14 +21,21 @@ use tokio::time::{Instant, sleep_until};
 
 use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
 use crate::gate::SubmitGate;
+use crate::identity::EngineIdentity;
+use crate::loss::move_loss;
 use crate::process::{self, EngineFiles, Spawned, katago_launch, lock};
 use crate::query::{action_query, analysis_query, terminate_query};
 use crate::response::{KataLine, RawAnalysis, parse_line};
 use crate::state::{CrashReason, EngineState, ExitInfo};
+use crate::store::{CacheStats, ClearScope, Row, Store};
 use crate::throttle::Throttle;
-use crate::update::{AnalysisUpdate, Rejection, TrendStats, to_update};
+use crate::update::{AnalysisUpdate, NextResult, Rejection, TrendStats, to_update};
 
 const VERSION_ID: &str = "aji-version";
+
+/// How long a position missing from the in-memory layer waits for the store before it is
+/// searched anyway (P2 M2 design 5.2).
+const STORE_WAIT: Duration = Duration::from_millis(200);
 
 /// Engine tuning. `Default` holds the shipped values.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +109,11 @@ pub enum EngineEvent {
     Analysis(AnalysisUpdate),
     /// KataGo refused the current position's query.
     Rejected(Rejection),
+    /// A better result was kept for a position, current or not (P2 M2): the trend follows it.
+    Stored {
+        key: PositionKey,
+        stats: TrendStats,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,6 +145,8 @@ struct Snapshot {
     position: Option<PositionKey>,
     analysis: Option<AnalysisUpdate>,
     rejected: Option<Rejection>,
+    /// Analysis queries sent, for the tests of rapid navigation.
+    submitted: u64,
 }
 
 /// The engine's state with the current position and the analysis shown for it.
@@ -152,17 +166,22 @@ pub struct EngineStatus {
 type Reply<T> = oneshot::Sender<T>;
 type Outcome = Result<(), EngineError>;
 
+/// A position with the record's next position and move.
+type WithNext = (Position, Option<(Position, Move)>);
+
 enum Command {
-    SetPosition(Position, Reply<Outcome>),
+    SetPosition(WithNext, Reply<Outcome>),
     ClearPosition(Reply<Outcome>),
     Pause(Reply<Outcome>),
     Resume(Reply<Outcome>),
     Restart(Reply<Outcome>),
-    SetFiles(Option<EngineFiles>, Reply<Outcome>),
+    SetFiles(Option<EngineFiles>, Option<EngineIdentity>, Reply<Outcome>),
     Stop(Reply<Outcome>),
     SetVisitLimit(Option<u32>, Reply<Outcome>),
     Continue(Reply<Outcome>),
     Summaries(Vec<PositionKey>, Reply<Vec<Option<TrendStats>>>),
+    Import(Vec<Row>, Reply<()>),
+    Clear(ClearScope, Reply<()>),
     Shutdown(Reply<()>),
 }
 
@@ -171,6 +190,7 @@ enum Command {
 pub struct Engine {
     commands: mpsc::UnboundedSender<Command>,
     snapshot: Arc<Mutex<Snapshot>>,
+    store: Option<Store>,
 }
 
 impl fmt::Debug for Engine {
@@ -195,6 +215,19 @@ impl Engine {
         options: EngineOptions,
         on_event: impl Fn(EngineEvent) + Send + Sync + 'static,
     ) -> Engine {
+        Engine::spawn_with_store(files, None, position, options, None, on_event)
+    }
+
+    /// `spawn` with the persistent store behind the in-memory layer (P2 M2 design 5.2). Rows
+    /// are read and written under `identity`; without one the store is not used.
+    pub fn spawn_with_store(
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+        position: Position,
+        options: EngineOptions,
+        store: Option<Store>,
+        on_event: impl Fn(EngineEvent) + Send + Sync + 'static,
+    ) -> Engine {
         let runtime = Handle::current();
         let state = match files {
             Some(_) => EngineState::Starting,
@@ -206,6 +239,7 @@ impl Engine {
             position: Some(position.key()),
             analysis: None,
             rejected: None,
+            submitted: 0,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
@@ -215,6 +249,10 @@ impl Engine {
             gate: SubmitGate::new(options.submit_interval),
             submit_at: None,
             files,
+            identity,
+            store: store.clone(),
+            next: None,
+            loading: None,
             options,
             on_event: Box::new(on_event),
             snapshot: Arc::clone(&snapshot),
@@ -239,7 +277,11 @@ impl Engine {
             finished: false,
         };
         runtime.spawn(actor.run());
-        Engine { commands, snapshot }
+        Engine {
+            commands,
+            snapshot,
+            store,
+        }
     }
 
     pub fn state(&self) -> EngineState {
@@ -266,7 +308,17 @@ impl Engine {
     /// position is emitted afterwards. A position with a point off the board gives
     /// `InvalidPosition` and changes nothing.
     pub async fn set_position(&self, position: Position) -> Result<(), EngineError> {
-        self.outcome(|reply| Command::SetPosition(position, reply))
+        self.set_position_next(position, None).await
+    }
+
+    /// `set_position` with the record's next position and the move that reaches it: updates
+    /// for `position` carry the next position's result once it has one (P2 M2 design 5.6).
+    pub async fn set_position_next(
+        &self,
+        position: Position,
+        next: Option<(Position, Move)>,
+    ) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetPosition((position, next), reply))
             .await
     }
 
@@ -294,8 +346,16 @@ impl Engine {
     /// on them and this returns once `starting` is entered; with `None` it is stopped and this
     /// returns once the state is `notConfigured`. The analysis shown and cached is dropped,
     /// since another engine or network gives other numbers.
-    pub async fn set_files(&self, files: Option<EngineFiles>) -> Result<(), EngineError> {
-        self.outcome(|reply| Command::SetFiles(files, reply)).await
+    ///
+    /// `identity` keys the persistent store's rows from now on; the service computes it from the
+    /// files before calling.
+    pub async fn set_files(
+        &self,
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+    ) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::SetFiles(files, identity, reply))
+            .await
     }
 
     /// Closes stdin, waits up to `shutdown_grace`, then kills. Returns once KataGo has
@@ -319,8 +379,8 @@ impl Engine {
         self.outcome(Command::Continue).await
     }
 
-    /// The cached root of each position, in order; `None` for one never analysed. Reading
-    /// does not change which positions the cache keeps.
+    /// The cached root of each position, in order; `None` for one never analysed. The in-memory
+    /// layer first, then the store. Reading does not change which positions the cache keeps.
     pub async fn summaries(&self, keys: Vec<PositionKey>) -> Vec<Option<TrendStats>> {
         let wanted = keys.len();
         self.ask(|reply| Command::Summaries(keys, reply))
@@ -328,9 +388,49 @@ impl Engine {
             .unwrap_or_else(|| vec![None; wanted])
     }
 
-    /// Stops KataGo like `stop` and ends the actor. Later calls report `NotRunning`.
+    /// Results read from a LizzieYzy file (P2 M2 design 5.11), kept as imported rows.
+    pub async fn import(&self, rows: Vec<Row>) {
+        self.ask(|reply| Command::Import(rows, reply)).await;
+    }
+
+    /// Clears results, from both layers. Clearing the current position restarts its search.
+    pub async fn clear(&self, scope: ClearScope) {
+        self.ask(|reply| Command::Clear(scope, reply)).await;
+    }
+
+    /// The store's size and state; an engine without a store reports an empty memory cache.
+    pub async fn cache_stats(&self) -> CacheStats {
+        let none = CacheStats {
+            used_bytes: 0,
+            cap_bytes: 0,
+            persistent: false,
+            reason: None,
+        };
+        match &self.store {
+            Some(store) => store.stats().await.unwrap_or(none),
+            None => none,
+        }
+    }
+
+    pub fn set_cache_cap(&self, bytes: u64) {
+        if let Some(store) = &self.store {
+            store.set_cap(bytes);
+        }
+    }
+
+    /// Analysis queries sent so far.
+    #[cfg(feature = "test-seams")]
+    pub fn queries_sent(&self) -> u64 {
+        lock(&self.snapshot).submitted
+    }
+
+    /// Stops KataGo like `stop` and ends the actor, then commits the store. Later calls report
+    /// `NotRunning`.
     pub async fn shutdown(&self) {
         self.ask(Command::Shutdown).await;
+        if let Some(store) = &self.store {
+            let _ = store.flush().await;
+        }
     }
 
     async fn ask<T>(&self, command: impl FnOnce(Reply<T>) -> Command) -> Option<T> {
@@ -349,6 +449,8 @@ impl Engine {
 /// What the spawner thread and the per-process tasks report, tagged with the generation of
 /// the process they belong to.
 enum Report {
+    /// The store's row for a position missing from the in-memory layer.
+    Cached(PositionKey, Option<Box<Row>>),
     Spawned(u64, io::Result<Box<Spawned>>),
     Line(u64, KataLine),
     Exited(u64, ExitInfo, Vec<String>),
@@ -447,6 +549,13 @@ impl Drop for ProcIo {
 
 struct Actor {
     files: Option<EngineFiles>,
+    identity: Option<EngineIdentity>,
+    store: Option<Store>,
+    /// The record's next position and move, for `AnalysisUpdate::next`.
+    next: Option<(Position, Move)>,
+    /// The current position is being read from the store; it is searched once the row
+    /// arrives, or at the deadline.
+    loading: Option<(PositionKey, Instant)>,
     options: EngineOptions,
     on_event: Box<dyn Fn(EngineEvent) + Send + Sync>,
     snapshot: Arc<Mutex<Snapshot>>,
@@ -492,6 +601,7 @@ async fn sleep_until_some(at: Option<Instant>) {
 impl Actor {
     async fn run(mut self) {
         (self.on_event)(EngineEvent::State(self.state.clone()));
+        self.load(self.position.key(), true);
         if self.files.is_some() {
             self.start_process(false);
         }
@@ -516,8 +626,8 @@ impl Actor {
 
     fn on_command(&mut self, command: Command) {
         match command {
-            Command::SetPosition(position, reply) => {
-                let _ = reply.send(self.set_position(position));
+            Command::SetPosition((position, next), reply) => {
+                let _ = reply.send(self.set_position(position, next));
             }
             Command::ClearPosition(reply) => {
                 let _ = reply.send(self.clear_position());
@@ -531,7 +641,7 @@ impl Actor {
             Command::Restart(reply) => {
                 let _ = reply.send(self.restart());
             }
-            Command::SetFiles(files, reply) => self.set_files(files, reply),
+            Command::SetFiles(files, identity, reply) => self.set_files(files, identity, reply),
             Command::Stop(reply) => self.stop(reply),
             Command::SetVisitLimit(limit, reply) => {
                 let _ = reply.send(self.set_visit_limit(limit));
@@ -539,12 +649,14 @@ impl Actor {
             Command::Continue(reply) => {
                 let _ = reply.send(self.continue_analysis());
             }
-            Command::Summaries(keys, reply) => {
-                let stats = keys
-                    .into_iter()
-                    .map(|key| self.cache.peek(key).map(TrendStats::of))
-                    .collect();
-                let _ = reply.send(stats);
+            Command::Summaries(keys, reply) => self.summaries(keys, reply),
+            Command::Import(rows, reply) => {
+                self.import(rows);
+                let _ = reply.send(());
+            }
+            Command::Clear(scope, reply) => {
+                self.clear(scope);
+                let _ = reply.send(());
             }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
@@ -553,15 +665,21 @@ impl Actor {
         }
     }
 
-    fn set_position(&mut self, position: Position) -> Outcome {
+    fn set_position(&mut self, position: Position, next: Option<(Position, Move)>) -> Outcome {
         if position.validate().is_err() {
             return Err(EngineError::InvalidPosition);
         }
         if position == self.position && !self.cleared {
+            if next != self.next {
+                self.next = next;
+                self.load_next();
+                self.refresh_next();
+            }
             return Ok(());
         }
         self.terminate_current();
         self.position = position;
+        self.next = next;
         self.cleared = false;
         self.throttle = Throttle::new(self.options.throttle);
         {
@@ -570,14 +688,195 @@ impl Actor {
             snapshot.analysis = None;
             snapshot.rejected = None;
         }
-        if let Some(cached) = self.cache.get(self.position.key()).cloned() {
-            self.throttle.admit(std::time::Instant::now(), true);
-            self.emit(EngineEvent::Analysis(cached));
+        self.loading = None;
+        if !self.show_cached() {
+            self.load(self.position.key(), true);
         }
+        self.load_next();
         if let Some(version) = self.ready_version() {
             self.analyse_or_idle(version);
         }
         Ok(())
+    }
+
+    /// Shows the current position's result from the in-memory layer, if it has one.
+    fn show_cached(&mut self) -> bool {
+        let Some(mut cached) = self.cache.get(self.position.key()).cloned() else {
+            return false;
+        };
+        // A stored result is not a search catching up (M7 minor 12).
+        cached.previous_visits = 0;
+        self.throttle.admit(std::time::Instant::now(), true);
+        let shown = self.with_next(cached);
+        self.emit(EngineEvent::Analysis(shown));
+        true
+    }
+
+    /// Asks the store for `key` when the in-memory layer lacks it. `wait` holds the current
+    /// position's search until the row arrives, for at most `STORE_WAIT`.
+    fn load(&mut self, key: PositionKey, wait: bool) {
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            return;
+        };
+        if self.cache.peek(key).is_some() {
+            return;
+        }
+        if wait {
+            self.loading = Some((key, Instant::now() + STORE_WAIT));
+        }
+        let reports = self.report_tx.clone();
+        store.get(identity, key, move |row| {
+            let _ = reports.send(Report::Cached(key, row.map(Box::new)));
+        });
+    }
+
+    fn load_next(&mut self) {
+        if let Some(key) = self.next_key() {
+            self.load(key, false);
+        }
+    }
+
+    fn next_key(&self) -> Option<PositionKey> {
+        self.next.as_ref().map(|(position, _)| position.key())
+    }
+
+    /// `update` with the next position's result and the move's loss, when both are known.
+    fn with_next(&self, mut update: AnalysisUpdate) -> AnalysisUpdate {
+        update.next = self.next.as_ref().and_then(|(position, _)| {
+            let after = TrendStats::of(self.cache.peek(position.key())?);
+            let mover = position.moves.last()?.0;
+            Some(NextResult {
+                stats: after,
+                loss: move_loss(&TrendStats::of(&update), &after, mover),
+            })
+        });
+        update
+    }
+
+    /// Shows the current update again with the next position's latest result.
+    fn refresh_next(&mut self) {
+        let shown = lock(&self.snapshot).analysis.clone();
+        if let Some(update) = shown.filter(|u| !self.cleared && u.position == self.position.key()) {
+            let update = self.with_next(update);
+            self.emit(EngineEvent::Analysis(update));
+        }
+    }
+
+    fn on_cached(&mut self, key: PositionKey, row: Option<Box<Row>>) {
+        let accepted = row.is_some_and(|row| self.cache.offer_row(row.update, row.imported));
+        if self.loading.is_some_and(|(loading, _)| loading == key) {
+            self.loading = None;
+            if !self.cleared && key == self.position.key() {
+                if lock(&self.snapshot).analysis.is_none() {
+                    self.show_cached();
+                }
+                if let Some(version) = self.ready_version() {
+                    self.analyse_or_idle(version);
+                }
+            }
+        } else if accepted && self.next_key() == Some(key) {
+            self.refresh_next();
+        }
+    }
+
+    fn summaries(&mut self, keys: Vec<PositionKey>, reply: Reply<Vec<Option<TrendStats>>>) {
+        let mut stats: Vec<Option<TrendStats>> = keys
+            .iter()
+            .map(|&key| self.cache.peek(key).map(TrendStats::of))
+            .collect();
+        let missing: Vec<usize> = (0..keys.len()).filter(|&i| stats[i].is_none()).collect();
+        let (Some(store), Some(identity)) = (&self.store, &self.identity) else {
+            let _ = reply.send(stats);
+            return;
+        };
+        if missing.is_empty() {
+            let _ = reply.send(stats);
+            return;
+        }
+        let found = store.get_many(identity, missing.iter().map(|&i| keys[i]).collect());
+        self.runtime.spawn(async move {
+            if let Ok(found) = found.await {
+                for (i, row) in missing.into_iter().zip(found) {
+                    stats[i] = row;
+                }
+            }
+            let _ = reply.send(stats);
+        });
+    }
+
+    /// Keeps `update` in the in-memory layer and, when better, in the store. Returns whether it
+    /// was kept.
+    fn keep(&mut self, update: &AnalysisUpdate, imported: bool, version: String) -> bool {
+        if !self.cache.offer_row(update.clone(), imported) {
+            return false;
+        }
+        if let (Some(store), Some(identity)) = (&self.store, &self.identity) {
+            let mut row = update.clone();
+            row.next = None;
+            store.put(
+                identity,
+                Row {
+                    update: row,
+                    imported,
+                    katago_version: version,
+                },
+            );
+        }
+        self.emit(EngineEvent::Stored {
+            key: update.position,
+            stats: TrendStats::of(update),
+        });
+        true
+    }
+
+    fn import(&mut self, rows: Vec<Row>) {
+        for row in rows {
+            let key = row.update.position;
+            let kept = self.keep(&row.update, true, row.katago_version);
+            if kept && self.next_key() == Some(key) {
+                self.refresh_next();
+            }
+        }
+    }
+
+    fn clear(&mut self, scope: ClearScope) {
+        let key = self.position.key();
+        let current = match &scope {
+            ClearScope::All => {
+                self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
+                true
+            }
+            ClearScope::Keys(keys) => {
+                for &k in keys {
+                    self.cache.remove(k);
+                }
+                keys.contains(&key)
+            }
+        };
+        if let (Some(store), Some(identity)) = (&self.store, &self.identity) {
+            store.clear(identity, scope);
+        } else if let (Some(store), ClearScope::All) = (&self.store, &scope) {
+            store.clear(
+                &EngineIdentity {
+                    network: [0; 32],
+                    config: 0,
+                },
+                ClearScope::All,
+            );
+        }
+        if !current || self.cleared {
+            return;
+        }
+        // The search restarts: what a running query finds from now on is not kept.
+        self.targets.remove(&key);
+        if let Some(active) = &self.current {
+            self.queries.remove(&active.id);
+        }
+        self.terminate_current();
+        lock(&self.snapshot).analysis = None;
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
     }
 
     fn clear_position(&mut self) -> Outcome {
@@ -639,8 +938,11 @@ impl Actor {
         let cached = self.cached_visits(key);
         self.targets.insert(key, cached.saturating_add(limit));
         if let Some(version) = self.ready_version()
-            && self.current.is_none()
+            && !self.paused
         {
+            // A running query stops at its old limit: send it again under the new one (M7
+            // minor 2).
+            self.terminate_current();
             self.analyse_or_idle(version);
         }
         Ok(())
@@ -685,16 +987,25 @@ impl Actor {
         Ok(())
     }
 
-    fn set_files(&mut self, files: Option<EngineFiles>, reply: Reply<Outcome>) {
+    fn set_files(
+        &mut self,
+        files: Option<EngineFiles>,
+        identity: Option<EngineIdentity>,
+        reply: Reply<Outcome>,
+    ) {
         if self.shutting_down() {
             let _ = reply.send(Err(EngineError::NotRunning));
             return;
         }
         self.files = files;
+        self.identity = identity;
         self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
         self.targets.clear();
         self.throttle = Throttle::new(self.options.throttle);
         lock(&self.snapshot).analysis = None;
+        if !self.cleared {
+            self.load(self.position.key(), true);
+        }
         if self.files.is_some() {
             if self.process.is_some() {
                 self.announce_restart();
@@ -790,6 +1101,7 @@ impl Actor {
 
     fn on_report(&mut self, report: Report) {
         match report {
+            Report::Cached(key, row) => self.on_cached(key, row),
             Report::Spawned(generation, result) => self.on_spawned(generation, result),
             Report::Line(generation, line) => {
                 if self.is_live(generation) {
@@ -942,13 +1254,24 @@ impl Actor {
                 ..
             } => Some(*since + self.options.ping_timeout),
         };
-        [watchdog, self.stalled_at(), self.submit_at]
-            .into_iter()
-            .flatten()
-            .min()
+        [
+            watchdog,
+            self.stalled_at(),
+            self.submit_at,
+            self.loading.map(|(_, at)| at),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn on_timer(&mut self, now: Instant) {
+        if self.loading.is_some_and(|(_, at)| now >= at) {
+            self.loading = None;
+            if let Some(version) = self.ready_version() {
+                self.analyse_or_idle(version);
+            }
+        }
         if self.submit_at.is_some_and(|at| now >= at) {
             self.submit_at = None;
             if let Some(version) = self.ready_version() {
@@ -1114,13 +1437,17 @@ impl Actor {
         // count. A query that is no longer the active one (a late final after a newer query
         // started) is cached but not shown.
         let live = self.is_active(&raw.id) || self.current.is_none();
-        self.cache.offer(update.clone());
+        let version = self.ready_version().unwrap_or_default();
+        let kept = self.keep(&update, false, version);
         if live
             && !self.cleared
             && key == self.position.key()
             && self.throttle.admit(std::time::Instant::now(), is_final)
         {
+            let update = self.with_next(update);
             self.emit(EngineEvent::Analysis(update));
+        } else if kept && self.next_key() == Some(key) {
+            self.refresh_next();
         }
         if is_final {
             self.query_ended(&raw.id);
@@ -1165,6 +1492,10 @@ impl Actor {
     fn analyse_or_idle(&mut self, version: String) {
         if self.paused {
             self.set_state(EngineState::Paused { version });
+            return;
+        }
+        if self.loading.is_some() {
+            // Searched once the store answers, or at its deadline.
             return;
         }
         if self.current.is_none() && self.wants_analysis() {
@@ -1214,6 +1545,7 @@ impl Actor {
             return;
         };
         self.send(line);
+        lock(&self.snapshot).submitted += 1;
         self.gate.submitted(Instant::now());
         let previous = self.cached_visits(key);
         self.queries
