@@ -9,6 +9,7 @@ mod cache;
 mod engine;
 mod gate;
 mod identity;
+mod job;
 mod loss;
 mod process;
 mod query;
@@ -21,6 +22,7 @@ mod update;
 pub use cache::*;
 pub use engine::*;
 pub use identity::*;
+pub use job::{JobItem, JobPlan, JobRun, JobStatus};
 pub use loss::*;
 pub use process::{
     EngineFiles, LaunchSpec, MAX_RUN_STDOUT, RunLimits, RunOutput, katago_benchmark_launch,

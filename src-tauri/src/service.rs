@@ -132,7 +132,7 @@ pub fn forward_engine_events(
             EngineEvent::Analysis(analysis) => AppEvent::AnalysisUpdate { analysis },
             EngineEvent::Rejected(rejection) => AppEvent::AnalysisRejected { rejection },
             // The trend's incremental event comes in P2 M2 Task 9.
-            EngineEvent::Stored { .. } => return,
+            EngineEvent::Stored { .. } | EngineEvent::Job(_) => return,
         });
     }
 }

@@ -7,7 +7,7 @@
 //! with the process generation so that nothing from an old process is mistaken for the
 //! current one.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex};
@@ -22,6 +22,7 @@ use tokio::time::{Instant, sleep_until};
 use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
 use crate::gate::SubmitGate;
 use crate::identity::EngineIdentity;
+use crate::job::{JOB_REPORT_EVERY, JobItem, JobPlan, JobQueue, JobRun, JobStatus};
 use crate::loss::move_loss;
 use crate::process::{self, EngineFiles, Spawned, katago_launch, lock};
 use crate::query::{action_query, analysis_query, terminate_query};
@@ -114,6 +115,8 @@ pub enum EngineEvent {
         key: PositionKey,
         stats: TrendStats,
     },
+    /// The whole-game job's progress, on every change.
+    Job(JobStatus),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -147,6 +150,8 @@ struct Snapshot {
     rejected: Option<Rejection>,
     /// Analysis queries sent, for the tests of rapid navigation.
     submitted: u64,
+    /// The most job queries KataGo held at once (terminated ones until they end).
+    job_peak: usize,
 }
 
 /// The engine's state with the current position and the analysis shown for it.
@@ -182,6 +187,8 @@ enum Command {
     Summaries(Vec<PositionKey>, Reply<Vec<Option<TrendStats>>>),
     Import(Vec<Row>, Reply<()>),
     Clear(ClearScope, Reply<()>),
+    RunJob(JobPlan, Reply<Outcome>),
+    StopJob(Reply<()>),
     Shutdown(Reply<()>),
 }
 
@@ -240,6 +247,7 @@ impl Engine {
             analysis: None,
             rejected: None,
             submitted: 0,
+            job_peak: 0,
         }));
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
@@ -253,6 +261,8 @@ impl Engine {
             store: store.clone(),
             next: None,
             loading: None,
+            job: None,
+            job_seq: 0,
             options,
             on_event: Box::new(on_event),
             snapshot: Arc::clone(&snapshot),
@@ -418,6 +428,23 @@ impl Engine {
         }
     }
 
+    /// Runs a whole-game job: the board's query first, then the job's positions, one queued
+    /// ahead, until each has its visits (P2 M2 design 5.3). Replaces a running job.
+    pub async fn run_job(&self, plan: JobPlan) -> Result<(), EngineError> {
+        self.outcome(|reply| Command::RunJob(plan, reply)).await
+    }
+
+    /// Stops the job; its running queries are terminated. Results kept so far stay.
+    pub async fn stop_job(&self) {
+        self.ask(Command::StopJob).await;
+    }
+
+    /// The most job queries KataGo held at once.
+    #[cfg(feature = "test-seams")]
+    pub fn job_peak_in_flight(&self) -> usize {
+        lock(&self.snapshot).job_peak
+    }
+
     /// Analysis queries sent so far.
     #[cfg(feature = "test-seams")]
     pub fn queries_sent(&self) -> u64 {
@@ -449,6 +476,8 @@ impl Engine {
 /// What the spawner thread and the per-process tasks report, tagged with the generation of
 /// the process they belong to.
 enum Report {
+    /// The visits the store holds for a job's positions, by job number.
+    JobKnown(u64, Vec<(PositionKey, u32)>),
     /// The store's row for a position missing from the in-memory layer.
     Cached(PositionKey, Option<Box<Row>>),
     Spawned(u64, io::Result<Box<Spawned>>),
@@ -556,6 +585,9 @@ struct Actor {
     /// The current position is being read from the store; it is searched once the row
     /// arrives, or at the deadline.
     loading: Option<(PositionKey, Instant)>,
+    job: Option<ActiveJob>,
+    /// Numbers jobs, so a store reply for a replaced job is ignored.
+    job_seq: u64,
     options: EngineOptions,
     on_event: Box<dyn Fn(EngineEvent) + Send + Sync>,
     snapshot: Arc<Mutex<Snapshot>>,
@@ -589,6 +621,21 @@ struct Actor {
     stop_waiters: Vec<Reply<Outcome>>,
     shutdown_waiters: Vec<Reply<()>>,
     finished: bool,
+}
+
+/// The running whole-game job.
+struct ActiveJob {
+    seq: u64,
+    queue: JobQueue,
+    budget: u32,
+    /// The store's visits for the job's positions have arrived (or there is no store).
+    ready: bool,
+    known: HashMap<PositionKey, u32>,
+    /// Job queries KataGo still holds, terminated ones included, until they end.
+    live: HashSet<String>,
+    /// Each job query in flight: its most visits and when they last rose, for the watchdog.
+    progress: HashMap<String, (u32, Instant)>,
+    last: Option<JobStatus>,
 }
 
 async fn sleep_until_some(at: Option<Instant>) {
@@ -658,6 +705,13 @@ impl Actor {
                 self.clear(scope);
                 let _ = reply.send(());
             }
+            Command::RunJob(plan, reply) => {
+                let _ = reply.send(self.run_job(plan));
+            }
+            Command::StopJob(reply) => {
+                self.stop_job();
+                let _ = reply.send(());
+            }
             Command::Shutdown(reply) => {
                 self.shutdown_waiters.push(reply);
                 self.shutdown();
@@ -678,6 +732,7 @@ impl Actor {
             return Ok(());
         }
         self.terminate_current();
+        self.requeue_job();
         self.position = position;
         self.next = next;
         self.cleared = false;
@@ -955,8 +1010,10 @@ impl Actor {
         self.paused = true;
         if let Some(version) = self.ready_version() {
             self.terminate_current();
+            self.requeue_job();
             self.set_state(EngineState::Paused { version });
         }
+        self.emit_job();
         Ok(())
     }
 
@@ -997,6 +1054,7 @@ impl Actor {
             let _ = reply.send(Err(EngineError::NotRunning));
             return;
         }
+        self.stop_job();
         self.files = files;
         self.identity = identity;
         self.cache = AnalysisCache::with_capacity(self.options.cache_entries);
@@ -1097,11 +1155,22 @@ impl Actor {
         self.current = None;
         self.submit_at = None;
         self.queries.clear();
+        self.forget_job_flights();
     }
 
     fn on_report(&mut self, report: Report) {
         match report {
             Report::Cached(key, row) => self.on_cached(key, row),
+            Report::JobKnown(seq, known) => {
+                if let Some(job) = self.job.as_mut().filter(|j| j.seq == seq) {
+                    job.known.extend(known);
+                    job.ready = true;
+                    match self.ready_version() {
+                        Some(version) => self.analyse_or_idle(version),
+                        None => self.pump_job(),
+                    }
+                }
+            }
             Report::Spawned(generation, result) => self.on_spawned(generation, result),
             Report::Line(generation, line) => {
                 if self.is_live(generation) {
@@ -1199,6 +1268,7 @@ impl Actor {
         self.current = None;
         self.submit_at = None;
         self.queries.clear();
+        self.forget_job_flights();
         let crashed = |reason| EngineState::Crashed {
             reason,
             exit,
@@ -1428,6 +1498,15 @@ impl Actor {
             active.visits = raw.root_info.visits;
             active.progress_at = Instant::now();
         }
+        if let Some((visits, at)) = self
+            .job
+            .as_mut()
+            .and_then(|job| job.progress.get_mut(&raw.id))
+            && raw.root_info.visits > *visits
+        {
+            *visits = raw.root_info.visits;
+            *at = Instant::now();
+        }
         let key = update.position;
         let is_final = update.is_final;
         // The cache keeps the most-visited result per position, for the visit cap and for
@@ -1474,14 +1553,224 @@ impl Actor {
     /// A query ended with a final, `noResults` or an error. If it was the current one, the
     /// search is over.
     fn query_ended(&mut self, id: &str) {
-        if self.queries.remove(id).is_none() || !self.is_active(id) {
+        let known = self.queries.remove(id).is_some();
+        if let Some(job) = self.job.as_mut() {
+            job.live.remove(id);
+            job.progress.remove(id);
+            job.queue.finished(id);
+        }
+        if known && self.is_active(id) {
+            self.current = None;
+        }
+        if !known {
             return;
         }
-        self.current = None;
+        self.pump_job();
         if let EngineState::Analysing { version } = &self.state {
             let version = version.clone();
-            let state = self.ready_state(version);
+            let state = self.idle_state(version);
             self.set_state(state);
+        }
+    }
+
+    // ------------------------------------------------------------------- job
+
+    fn run_job(&mut self, plan: JobPlan) -> Outcome {
+        if self.files.is_none() {
+            return Err(EngineError::NotConfigured);
+        }
+        if self.shutting_down() {
+            return Err(EngineError::NotRunning);
+        }
+        self.stop_job();
+        self.job_seq += 1;
+        let seq = self.job_seq;
+        let keys: Vec<PositionKey> = plan.items.iter().map(|i| i.position.key()).collect();
+        let store = match (&self.store, &self.identity) {
+            (Some(store), Some(identity)) => Some(store.get_many(identity, keys.clone())),
+            _ => None,
+        };
+        self.job = Some(ActiveJob {
+            seq,
+            queue: JobQueue::new(&plan),
+            budget: plan.budget,
+            ready: store.is_none(),
+            known: HashMap::new(),
+            live: HashSet::new(),
+            progress: HashMap::new(),
+            last: None,
+        });
+        if let Some(found) = store {
+            let reports = self.report_tx.clone();
+            self.runtime.spawn(async move {
+                let stats = found.await.unwrap_or_default();
+                let known = keys
+                    .into_iter()
+                    .zip(stats)
+                    .filter_map(|(key, s)| s.map(|s| (key, s.visits)))
+                    .collect();
+                let _ = reports.send(Report::JobKnown(seq, known));
+            });
+        }
+        // An unlimited board search now stops at the job's budget: send it again under it.
+        if self.options.visit_limit.is_none() && self.current.is_some() {
+            self.terminate_current();
+        }
+        self.emit_job();
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
+        Ok(())
+    }
+
+    fn stop_job(&mut self) {
+        if self.job.is_none() {
+            return;
+        }
+        self.requeue_job();
+        if let Some(job) = self.job.take() {
+            let status = job.queue.status(JobRun::Stopped);
+            self.emit(EngineEvent::Job(status));
+        }
+        if let Some(version) = self.ready_version() {
+            self.analyse_or_idle(version);
+        }
+    }
+
+    /// Terminates the job's queries and puts their positions back at the front.
+    fn requeue_job(&mut self) {
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let ids = job.queue.requeue_all();
+        for id in &ids {
+            job.progress.remove(id);
+        }
+        for id in ids {
+            let terminate = format!("aji-terminate-{}", self.next_id);
+            self.next_id += 1;
+            self.send(terminate_query(&terminate, &id));
+        }
+    }
+
+    /// The process is gone: its queries with it. The job keeps its positions.
+    fn forget_job_flights(&mut self) {
+        if let Some(job) = self.job.as_mut() {
+            job.queue.requeue_all();
+            job.live.clear();
+            job.progress.clear();
+        }
+    }
+
+    /// Starts job queries while fewer than two queries are with KataGo (the board's counts),
+    /// and ends the job once every position is done.
+    fn pump_job(&mut self) {
+        if self.paused || self.ready_version().is_none() {
+            self.emit_job();
+            return;
+        }
+        loop {
+            let board_busy =
+                self.current.is_some() || self.submit_at.is_some() || self.loading.is_some();
+            let defer = (!self.cleared && board_busy).then(|| self.position.key());
+            let cache = &self.cache;
+            let Some(job) = self.job.as_mut().filter(|j| j.ready) else {
+                break;
+            };
+            if job.live.len() + usize::from(board_busy) >= 2 {
+                break;
+            }
+            let known = &job.known;
+            let cached = |key: PositionKey| {
+                let memory = cache.peek(key).map_or(0, |u| u.root_visits);
+                memory.max(known.get(&key).copied().unwrap_or(0))
+            };
+            let Some(item) = job.queue.next(cached, defer) else {
+                break;
+            };
+            self.submit_job(item);
+        }
+        let done = self
+            .job
+            .as_ref()
+            .is_some_and(|j| j.ready && j.queue.is_done());
+        if done {
+            if let Some(job) = self.job.take() {
+                self.emit(EngineEvent::Job(job.queue.status(JobRun::Done)));
+            }
+            if let Some(version) = self.ready_version() {
+                self.analyse_or_idle(version);
+            }
+            return;
+        }
+        self.emit_job();
+    }
+
+    fn submit_job(&mut self, item: JobItem) {
+        let id = format!("aji-job-{}", self.next_id);
+        self.next_id += 1;
+        let query = analysis_query(
+            &id,
+            &item.position,
+            Some(item.visits),
+            Some(JOB_REPORT_EVERY),
+            true,
+        );
+        let previous = self
+            .cache
+            .peek(item.position.key())
+            .map_or(0, |u| u.root_visits);
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let Ok(line) = query else {
+            // A position KataGo cannot take: count it done rather than retry it forever.
+            job.queue.started(id.clone(), item);
+            job.queue.finished(&id);
+            return;
+        };
+        self.queries
+            .insert(id.clone(), (item.position.clone(), previous));
+        job.queue.started(id.clone(), item);
+        job.live.insert(id.clone());
+        job.progress.insert(id, (0, Instant::now()));
+        let live = job.live.len();
+        {
+            let mut snapshot = lock(&self.snapshot);
+            snapshot.submitted += 1;
+            snapshot.job_peak = snapshot.job_peak.max(live);
+        }
+        self.send(line);
+    }
+
+    /// Emits the job's status when it changed.
+    fn emit_job(&mut self) {
+        let board_busy =
+            self.current.is_some() || self.submit_at.is_some() || self.loading.is_some();
+        let run = if self.paused {
+            JobRun::Paused
+        } else if board_busy {
+            JobRun::Waiting
+        } else {
+            JobRun::Running
+        };
+        let Some(job) = self.job.as_mut() else {
+            return;
+        };
+        let status = job.queue.status(run);
+        if job.last.as_ref() != Some(&status) {
+            job.last = Some(status.clone());
+            self.emit(EngineEvent::Job(status));
+        }
+    }
+
+    /// The state when nothing new is submitted: analysing while any query searches.
+    fn idle_state(&mut self, version: String) -> EngineState {
+        let job_busy = self.job.as_ref().is_some_and(|j| !j.live.is_empty());
+        if self.current.is_some() || self.submit_at.is_some() || job_busy {
+            EngineState::Analysing { version }
+        } else {
+            self.ready_state(version)
         }
     }
 
@@ -1496,15 +1785,14 @@ impl Actor {
         }
         if self.loading.is_some() {
             // Searched once the store answers, or at its deadline.
+            self.pump_job();
             return;
         }
         if self.current.is_none() && self.wants_analysis() {
             self.submit_or_defer(Instant::now());
         }
-        let state = match (&self.current, self.submit_at) {
-            (None, None) => self.ready_state(version),
-            _ => EngineState::Analysing { version },
-        };
+        self.pump_job();
+        let state = self.idle_state(version);
         self.set_state(state);
     }
 
@@ -1560,7 +1848,17 @@ impl Actor {
     /// The most visits for `key`: the larger of the setting and its raised target.
     fn limit_for(&self, key: PositionKey) -> Option<u32> {
         let target = self.targets.get(&key).copied().unwrap_or(0);
-        self.options.visit_limit.map(|limit| limit.max(target))
+        // While a job runs the board's query stops at its budget, even with no limit, so the
+        // job is not starved (design 5.3).
+        let limit = match &self.job {
+            Some(job) => Some(
+                self.options
+                    .visit_limit
+                    .map_or(job.budget, |l| l.min(job.budget)),
+            ),
+            None => self.options.visit_limit,
+        };
+        limit.map(|limit| limit.max(target))
     }
 
     fn cached_visits(&mut self, key: PositionKey) -> u32 {
@@ -1635,8 +1933,14 @@ impl Actor {
         if !matches!(self.state, EngineState::Analysing { .. }) {
             return None;
         }
-        let active = self.current.as_ref()?;
-        Some(active.progress_at + self.options.stall_timeout)
+        // Whichever query is running: the latest rise in visits among them.
+        let board = self.current.as_ref().map(|a| a.progress_at);
+        let job = self
+            .job
+            .as_ref()
+            .and_then(|j| j.progress.values().map(|(_, at)| *at).max());
+        let latest = board.into_iter().chain(job).max()?;
+        Some(latest + self.options.stall_timeout)
     }
 
     /// Enters `starting` for a new attempt. A restart is a transition even from `starting`,

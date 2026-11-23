@@ -13,8 +13,8 @@ use std::time::Duration;
 use aji_core::{BoardSize, Color, Komi, Move, Point, Position, Rules};
 use aji_engine::{
     AnalysisUpdate, ClearScope, CrashReason, Engine, EngineError, EngineEvent, EngineFiles,
-    EngineIdentity, EngineOptions, EngineState, NextResult, Rejection, Row, Store, TrendStats,
-    katago_launch, move_loss,
+    EngineIdentity, EngineOptions, EngineState, JobItem, JobPlan, JobRun, JobStatus, NextResult,
+    Rejection, Row, Store, TrendStats, katago_launch, move_loss,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::{Instant, timeout, timeout_at};
@@ -1876,5 +1876,361 @@ async fn a_burst_of_30_positions_in_300ms_sends_at_most_4_queries() {
     tokio::time::sleep(Duration::from_millis(150)).await;
     let sent = p.engine.queries_sent() - before;
     assert!((1..=4).contains(&sent), "{sent} queries");
+    bounded(p.engine.shutdown()).await;
+}
+
+// ------------------------------------------------------------- whole-game jobs (P2 M2)
+
+/// The positions of a made-up game of `n` moves, from the empty board.
+fn game_line(n: u8) -> Vec<Position> {
+    let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let mut line = vec![p.clone()];
+    for i in 0..n {
+        let color = if i % 2 == 0 {
+            Color::Black
+        } else {
+            Color::White
+        };
+        p.moves.push((
+            color,
+            Move::Play(Point {
+                x: i % 19,
+                y: 2 + i / 19,
+            }),
+        ));
+        line.push(p.clone());
+    }
+    line
+}
+
+fn job_plan(positions: &[Position], visits: u32) -> JobPlan {
+    JobPlan {
+        items: positions
+            .iter()
+            .enumerate()
+            .map(|(i, position)| JobItem {
+                position: position.clone(),
+                line_index: i as u32,
+                visits,
+            })
+            .collect(),
+        budget: visits,
+    }
+}
+
+fn jobs(events: &[EngineEvent]) -> Vec<&JobStatus> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::Job(status) => Some(status),
+            _ => None,
+        })
+        .collect()
+}
+
+impl Probe {
+    async fn until_job(&mut self, run: JobRun) -> Vec<EngineEvent> {
+        self.until(|e| matches!(e, EngineEvent::Job(s) if s.run == run))
+            .await
+    }
+}
+
+#[tokio::test]
+async fn a_job_runs_to_done() {
+    let line = game_line(7);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(bounded(p.engine.run_job(job_plan(&line, 50))).await, Ok(()));
+    let seen = p.until_job(JobRun::Done).await;
+    let last = jobs(&seen).into_iter().last().unwrap().clone();
+    assert_eq!((last.done, last.total), (8, 8));
+    let keys = line.iter().map(Position::key).collect();
+    let stats = bounded(p.engine.summaries(keys)).await;
+    assert!(
+        stats.iter().all(|s| s.is_some_and(|s| s.visits >= 50)),
+        "{stats:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn navigation_mid_job_answers_within_one_round_trip() {
+    let line = game_line(19);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 2000))).await,
+        Ok(())
+    );
+    p.until_job(JobRun::Running).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let asked = Instant::now();
+    assert_eq!(bounded(p.engine.set_position(anywhere(50))).await, Ok(()));
+    p.until(|e| matches!(e, EngineEvent::Analysis(u) if u.position == anywhere(50).key()))
+        .await;
+    assert!(
+        asked.elapsed() < Duration::from_millis(500),
+        "{:?}",
+        asked.elapsed()
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn an_unlimited_board_does_not_starve_the_job() {
+    let line = game_line(3);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        options(),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == analysing()).await;
+    assert_eq!(bounded(p.engine.run_job(job_plan(&line, 50))).await, Ok(()));
+    let seen = p.until_job(JobRun::Done).await;
+    assert_eq!(jobs(&seen).last().map(|s| s.done), Some(4));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn one_query_is_always_queued_ahead() {
+    let line = game_line(5);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(20),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 400))).await,
+        Ok(())
+    );
+    p.until_job(JobRun::Done).await;
+    assert_eq!(p.engine.job_peak_in_flight(), 2);
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn rapid_navigation_never_leaks_queries() {
+    // Review Focus 1: holding → through the game while a job runs.
+    let line = game_line(9);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 200))).await,
+        Ok(())
+    );
+    p.until_job(JobRun::Running).await;
+    for n in 0..40 {
+        assert_eq!(
+            bounded(p.engine.set_position(anywhere(60 + n))).await,
+            Ok(())
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let seen = p.until_job(JobRun::Done).await;
+    assert!(
+        p.engine.job_peak_in_flight() <= 2,
+        "{}",
+        p.engine.job_peak_in_flight()
+    );
+    let last = jobs(&seen).into_iter().last().unwrap().clone();
+    assert_eq!((last.done, last.total), (10, 10));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_stale_final_is_stored_but_not_counted() {
+    // Review Focus 2: a terminated job query's late final.
+    let line = game_line(5);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(50),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 1000))).await,
+        Ok(())
+    );
+    let mut seen = p.until_job(JobRun::Running).await;
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert_eq!(bounded(p.engine.set_position(anywhere(90))).await, Ok(()));
+    seen.extend(p.until_job(JobRun::Done).await);
+    let statuses = jobs(&seen);
+    assert!(statuses.iter().all(|s| s.done <= s.total), "{statuses:?}");
+    assert_eq!(statuses.last().map(|s| (s.done, s.total)), Some((6, 6)));
+    // Something terminated part-way was still kept.
+    assert!(
+        stored(&seen)
+            .iter()
+            .any(|(_, s)| s.visits > 0 && s.visits < 1000),
+        "{seen:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_slow_boost_query_is_not_killed_by_the_watchdog() {
+    let options = EngineOptions {
+        stall_timeout: Duration::from_millis(1500),
+        ..capped(10)
+    };
+    let line = game_line(0);
+    let mut p = start_stored(
+        "synthetic-slow",
+        line[0].clone(),
+        options,
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    // 600 visits at 200 a second: three seconds, twice the stall timeout.
+    let plan = JobPlan {
+        items: vec![JobItem {
+            position: anywhere(30),
+            line_index: 0,
+            visits: 600,
+        }],
+        budget: 600,
+    };
+    assert_eq!(bounded(p.engine.run_job(plan)).await, Ok(()));
+    let seen = p.until_job(JobRun::Done).await;
+    assert!(
+        !states(&seen).contains(&&EngineState::Starting),
+        "the watchdog restarted KataGo: {seen:?}"
+    );
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn state_is_analysing_while_only_the_job_searches() {
+    let line = game_line(3);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(20),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line[1..], 100))).await,
+        Ok(())
+    );
+    let seen = p.until_job(JobRun::Done).await;
+    assert!(states(&seen).contains(&&analysing()), "{seen:?}");
+    p.until_state(|s| *s == at_limit()).await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn pause_holds_the_job_and_resume_continues_it() {
+    let line = game_line(9);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(20),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 400))).await,
+        Ok(())
+    );
+    p.until_job(JobRun::Running).await;
+    assert_eq!(bounded(p.engine.pause()).await, Ok(()));
+    p.until_job(JobRun::Paused).await;
+    p.collect_for(Duration::from_millis(150)).await;
+    let quiet = p.collect_for(Duration::from_millis(500)).await;
+    assert!(
+        stored(&quiet).is_empty(),
+        "searching while paused: {quiet:?}"
+    );
+    assert_eq!(bounded(p.engine.resume()).await, Ok(()));
+    let seen = p.until_job(JobRun::Done).await;
+    assert_eq!(jobs(&seen).last().map(|s| s.done), Some(10));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_kata_go_restart_resumes_the_job() {
+    let line = game_line(5);
+    let mut p = start_stored(
+        "synthetic",
+        line[0].clone(),
+        capped(20),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(p.engine.run_job(job_plan(&line, 400))).await,
+        Ok(())
+    );
+    p.until_job(JobRun::Running).await;
+    assert_eq!(bounded(p.engine.restart()).await, Ok(()));
+    let seen = p.until_job(JobRun::Done).await;
+    assert_eq!(jobs(&seen).last().map(|s| (s.done, s.total)), Some((6, 6)));
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn a_job_result_for_the_next_position_refreshes_next() {
+    let a = anywhere(3);
+    let mut b = a.clone();
+    let reply = Move::Play(Point { x: 15, y: 15 });
+    b.moves.push((Color::White, reply));
+    let mut p = start_stored(
+        "synthetic",
+        a.clone(),
+        capped(20),
+        memory_store(),
+        identity(1),
+    );
+    p.until_state(|s| *s == at_limit()).await;
+    assert_eq!(
+        bounded(
+            p.engine
+                .set_position_next(a.clone(), Some((b.clone(), reply)))
+        )
+        .await,
+        Ok(())
+    );
+    let plan = JobPlan {
+        items: vec![JobItem {
+            position: b.clone(),
+            line_index: 1,
+            visits: 100,
+        }],
+        budget: 100,
+    };
+    assert_eq!(bounded(p.engine.run_job(plan)).await, Ok(()));
+    p.until(|e| matches!(e, EngineEvent::Analysis(u) if u.position == a.key() && u.next.is_some()))
+        .await;
     bounded(p.engine.shutdown()).await;
 }
