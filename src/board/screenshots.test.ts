@@ -19,6 +19,7 @@ import type { Move } from '../transport/generated/Move';
 import type { CanvasFactory, OffscreenCanvasLike } from './canvasFactory';
 import { type BoardView, drawBoard } from './drawBoard';
 import { drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
+import { drawOwnership, settledOwnership } from './ownership';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
@@ -108,6 +109,60 @@ function render(
   }
   return PNG.sync.read(canvas.toBuffer('image/png'));
 }
+
+/**
+ * The position estimate over `stones` (P2 M2 design 5.7): the board, the stones with the dead ones
+ * faded, then the settled points' squares.
+ */
+function renderOwnership(
+  view: BoardView,
+  stones: (Color | null)[],
+  ownership: number[],
+  stoneStyle: StoneId,
+): PNG {
+  const size = Math.round(view.cssSize * view.dpr);
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
+  drawBoard(ctx, view, skia);
+  const settled = settledOwnership(ownership, stones);
+  const upper = createCanvas(size, size);
+  const sprites = makeStoneSprites(
+    boardGeometry(view.cssSize, view.boardSize).spacing,
+    view.dpr,
+    skia,
+    stoneStyle,
+  );
+  drawStones(
+    upper.getContext('2d') as unknown as CanvasRenderingContext2D,
+    view,
+    stones,
+    null,
+    sprites,
+    settled.dead,
+  );
+  ctx.drawImage(upper as unknown as CanvasImageSource, 0, 0);
+  const squares = createCanvas(size, size);
+  drawOwnership(
+    squares.getContext('2d') as unknown as CanvasRenderingContext2D,
+    view,
+    settled.owners,
+  );
+  ctx.drawImage(squares as unknown as CanvasImageSource, 0, 0);
+  return PNG.sync.read(canvas.toBuffer('image/png'));
+}
+
+/**
+ * A made-up ownership for the Samsung position, in bands: Black's left side, White's right side,
+ * Black's bottom middle, and an unsettled top middle. Every White stone in the left band and Black
+ * stone in the right band stands in the other side's area, so it reads as dead.
+ */
+const OWNERSHIP_58 = Array.from({ length: 361 }, (_, i) => {
+  const [x, y] = [i % 19, Math.floor(i / 19)];
+  if (x <= 5) return 110;
+  if (x >= 13) return -110;
+  if (y >= 12) return 90;
+  return y <= 6 ? 30 : 0;
+});
 
 function compare(name: string, actual: PNG) {
   const file = join(BASELINES, `${name}.png`);
@@ -232,6 +287,30 @@ describe('board screenshots', () => {
       'next-move-ring@2x',
       render(view, parse(SAMSUNG_58), SAMSUNG_LAST, null, (ctx) =>
         drawNextRing(ctx, view, { x: 6, y: 9 }),
+      ),
+    );
+  });
+
+  it('ownership-honey-light: settled points get squares, dead stones fade under them', () => {
+    compare(
+      'ownership-honey-light@2x',
+      renderOwnership(
+        { cssSize: CSS_SIZE, dpr: 2, boardSize: 19, style: 'honey' },
+        parse(SAMSUNG_58),
+        OWNERSHIP_58,
+        'slate',
+      ),
+    );
+  });
+
+  it('ownership-walnut-dark: the same on the dark board', () => {
+    compare(
+      'ownership-walnut-dark@2x',
+      renderOwnership(
+        { cssSize: CSS_SIZE, dpr: 2, boardSize: 19, style: 'walnut' },
+        parse(SAMSUNG_58),
+        OWNERSHIP_58,
+        'yunzi',
       ),
     );
   });

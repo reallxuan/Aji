@@ -7,6 +7,7 @@ import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
 import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
+import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
 import { drawBoard } from './drawBoard';
 import { boardGeometry } from './geometry';
@@ -50,6 +51,8 @@ export interface BoardCanvasProps {
   onSwipeStep?(forward: boolean): void;
   /** The record's next move, ringed alone where it has no disc (P2 M2 design 5.6). */
   nextRing?: Point | null;
+  /** The position estimate's settled points and dead stones (P2 M2 design 5.7); none when off. */
+  ownership?: Settled | null;
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
@@ -83,9 +86,11 @@ export function BoardCanvas({
   onTapCandidate,
   onSwipeStep,
   nextRing = null,
+  ownership = null,
 }: BoardCanvasProps) {
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
+  const ownershipLayer = useRef<HTMLCanvasElement>(null);
   const candidateLayer = useRef<HTMLCanvasElement>(null);
   const hovered = useRef<Move | null>(null);
   const dpr = useDevicePixelRatio();
@@ -124,9 +129,23 @@ export function BoardCanvas({
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
     if (ctx && cssSize > 0) {
-      drawStones(ctx, { cssSize, dpr, boardSize, coordinates }, stones, lastMove, sprites);
+      drawStones(
+        ctx,
+        { cssSize, dpr, boardSize, coordinates },
+        stones,
+        lastMove,
+        sprites,
+        ownership?.dead,
+      );
     }
-  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites]);
+  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites, ownership]);
+
+  useEffect(() => {
+    const ctx = ownershipLayer.current?.getContext('2d');
+    if (!ctx) return;
+    const view = { cssSize, dpr, boardSize, coordinates };
+    drawOwnership(ctx, view, ownership?.owners ?? []);
+  }, [cssSize, dpr, boardSize, coordinates, ownership]);
 
   const [first, second] = discLines;
   useEffect(() => {
@@ -191,6 +210,15 @@ export function BoardCanvas({
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
       <canvas
         ref={stoneLayer}
+        width={backing}
+        height={backing}
+        className="absolute inset-0"
+        style={style}
+        aria-hidden
+      />
+      <canvas
+        ref={ownershipLayer}
+        data-layer="ownership"
         width={backing}
         height={backing}
         className="absolute inset-0"

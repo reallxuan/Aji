@@ -40,8 +40,8 @@ describe('BoardCanvas', () => {
       <BoardCanvas cssSize={400} boardSize={19} stones={empty(19)} lastMove={null} />,
     );
     const canvases = container.querySelectorAll('canvas');
-    // Wood and grid, stones, candidate discs.
-    expect(canvases).toHaveLength(3);
+    // Wood and grid, stones, the position estimate's squares, candidate discs.
+    expect(canvases).toHaveLength(4);
     for (const canvas of canvases) {
       expect(canvas.width).toBe(800);
       expect(canvas.height).toBe(800);
@@ -117,6 +117,33 @@ describe('BoardCanvas candidates', () => {
     const arcs = events.filter((e) => e.type === 'arc').map((e) => e.props.x);
     // The best disc's fill and ring, then the next move's ring alone.
     expect(arcs.at(-1)).toBeCloseTo(g.lines[9]);
+  });
+
+  it('draws the ownership squares on their own layer, between the stones and the discs', () => {
+    stubRatio(1);
+    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
+    const owners = empty(19);
+    owners[0] = 'black';
+    owners[1] = 'white';
+    const { container, rerender } = render(
+      <BoardCanvas {...props} candidates={[best]} ownership={{ owners, dead: [] }} />,
+    );
+    const layers = [...container.querySelectorAll('canvas')].map((c) => c.dataset.layer ?? 'board');
+    expect(layers.indexOf('ownership')).toBe(layers.indexOf('candidates') - 1);
+    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="ownership"]')!;
+    const fills = () =>
+      (layer.getContext('2d') as unknown as { __getDrawCalls(): Array<{ type: string }> })
+        .__getDrawCalls()
+        .filter((c) => c.type === 'fillRect').length;
+    expect(fills()).toBe(2);
+    // Off again: the layer is cleared.
+    rerender(<BoardCanvas {...props} candidates={[best]} ownership={null} />);
+    const cleared = (
+      layer.getContext('2d') as unknown as { __getEvents(): Array<{ type: string }> }
+    )
+      .__getEvents()
+      .filter((e) => e.type === 'clearRect').length;
+    expect(cleared).toBeGreaterThanOrEqual(2);
   });
 
   it('fades the candidate layer while a new search catches up', () => {

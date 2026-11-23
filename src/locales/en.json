@@ -655,5 +655,17 @@
       "title": "Nothing to compare yet",
       "body": "Choose “Analyse Game…” from the game menu, and each side's biggest losses will be listed here."
     }
+  },
+  "estimate": {
+    "title": "Position estimate",
+    "black": "B {{n}}",
+    "white": "W {{n}}",
+    "komi": "Komi {{komi}}",
+    "blackLeads": "Black leads by {{n}}",
+    "whiteLeads": "White leads by {{n}}",
+    "even": "Even",
+    "waiting": "Waiting for this position's result",
+    "score": "Score",
+    "close": "Close the position estimate"
   }
 }

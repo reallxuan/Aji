@@ -6,7 +6,9 @@ import { useVariation } from '../analysis/useVariation';
 import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
+import { settledOwnership } from '../board/ownership';
 import { useBoardStyle } from '../board/useBoardStyle';
+import { useEstimateStore } from '../analysis/estimateStore';
 import { stepLineOrGame, useWheelNavigation } from '../board/useWheelNavigation';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
@@ -35,7 +37,7 @@ export function MainBoard({
   const boardArea = useRef<HTMLDivElement>(null);
   useWheelNavigation(boardArea);
   const { i18n } = useTranslation();
-  const { shown, fading } = useShownCandidates();
+  const { current, shown, fading } = useShownCandidates();
   const hidden = useViewStore((s) => s.hidden || s.held);
   const discLines = useDeviceStore((s) => s.settings.discLines);
   const coordinates = useDeviceStore((s) => s.settings.showCoordinates);
@@ -73,6 +75,15 @@ export function MainBoard({
     () => nextRingPoint(nextMove, showNext, discs, line !== null),
     [nextMove, showNext, discs, line],
   );
+  // 形势判断: the settled points of the position on the board, not of a hovered line (5.7).
+  const estimate = useEstimateStore((s) => s.on);
+  const ownership = useMemo(
+    () =>
+      estimate && current?.ownership && snapshot && !line
+        ? settledOwnership(current.ownership, snapshot.stones)
+        : null,
+    [estimate, current, snapshot, line],
+  );
   const go = useFrameNavigate();
   const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
 
@@ -92,6 +103,7 @@ export function MainBoard({
         lastMove={line ? null : (snapshot?.lastMove ?? null)}
         candidates={discs}
         nextRing={nextRing}
+        ownership={ownership}
         discLines={discLines}
         coordinates={coordinates}
         boardStyle={style.board}
