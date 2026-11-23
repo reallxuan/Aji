@@ -8,6 +8,7 @@
 mod cache;
 mod engine;
 mod gate;
+mod loss;
 mod process;
 mod query;
 mod response;
@@ -17,6 +18,7 @@ mod update;
 
 pub use cache::*;
 pub use engine::*;
+pub use loss::*;
 pub use process::{
     EngineFiles, LaunchSpec, MAX_RUN_STDOUT, RunLimits, RunOutput, katago_benchmark_launch,
     katago_launch, run_to_end, run_to_end_watching,
