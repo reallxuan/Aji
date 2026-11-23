@@ -504,6 +504,7 @@
       "winrate": "Win rate",
       "trend": "Trend",
       "candidates": "Candidates",
+      "swings": "Swings",
       "subboard": "Sub-board"
     },
     "noCandidate": "No candidate",
@@ -623,5 +624,31 @@
     },
     "rangeLine": "From <from/> to <to/>",
     "boostLine": "Swings over <threshold/>% get <visits/> visits"
+  },
+  "swings": {
+    "by": "By",
+    "winrate": "Win rate",
+    "score": "Lead",
+    "overWinrate": "Over <field/>%",
+    "overScore": "Over <field/> pts",
+    "threshold": "Swing threshold",
+    "afterOnly": "After this move",
+    "black": "Black",
+    "white": "White",
+    "count_one": "{{count}} move",
+    "count_other": "{{count}} moves",
+    "columns": {
+      "move": "Move",
+      "point": "Point",
+      "winrate": "Win rate",
+      "score": "Lead"
+    },
+    "none": "None",
+    "partial_one": "Only {{count}} position has a result, so some moves can't be compared yet. Analyse the whole game to complete the list.",
+    "partial_other": "Only {{count}} positions have results, so some moves can't be compared yet. Analyse the whole game to complete the list.",
+    "empty": {
+      "title": "Nothing to compare yet",
+      "body": "Choose “Analyse Game…” from the game menu, and each side's biggest losses will be listed here."
+    }
   }
 }

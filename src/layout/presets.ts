@@ -53,7 +53,17 @@ export function presetLayout(id: PresetId): Layout {
         'default',
         split('row', [
           BOARD,
-          split('column', [p('header'), p('winrate'), p('trend'), p('candidates')], [1, 1, 1, 2]),
+          split(
+            'column',
+            [
+              p('header'),
+              p('winrate'),
+              p('trend'),
+              // 波动 is a tab beside 候选 (P2 M2 design 5.4).
+              { type: 'tabs', panels: [{ kind: 'candidates' }, { kind: 'swings' }], active: 0 },
+            ],
+            [1, 1, 1, 2],
+          ),
         ]),
       );
     case 'classic':

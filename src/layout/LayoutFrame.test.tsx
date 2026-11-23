@@ -125,7 +125,9 @@ describe('LayoutFrame', () => {
     // CSS gives out only part of the free space when the grow factors sum below 1.
     mount(null);
     const grows = ['trend', 'candidates'].map((id) => {
-      const wrapper = document.querySelector(`[data-panel="${id}"]`)!.parentElement!;
+      // The slot holding the panel: a tab group's, for 候选 beside 波动.
+      let wrapper = document.querySelector(`[data-panel="${id}"]`)!.parentElement!;
+      while (!wrapper.style.flex) wrapper = wrapper.parentElement!;
       return Number.parseFloat(wrapper.style.flex);
     });
     expect(grows[0] + grows[1]).toBeGreaterThanOrEqual(1);

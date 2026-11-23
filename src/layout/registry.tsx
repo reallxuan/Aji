@@ -6,6 +6,7 @@ import { WinrateBar } from '../panel/WinrateBar';
 import { MIN_SIZES } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
+import { SwingList } from '../panel/SwingList';
 
 export interface PanelSpec {
   kind: PanelKind;
@@ -43,6 +44,13 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     hideable: true,
     minSize: MIN_SIZES.candidates,
     Component: ({ panel }) => <CandidateTable maxRows={panel.maxRows} />,
+  },
+  swings: {
+    kind: 'swings',
+    labelKey: 'layout.panels.swings',
+    hideable: true,
+    minSize: MIN_SIZES.swings,
+    Component: () => <SwingList />,
   },
   subboard: {
     kind: 'subboard',

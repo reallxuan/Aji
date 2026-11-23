@@ -39,6 +39,9 @@ describe('parseDeviceSettings', () => {
       },
       candidateCount: 5,
       lineLength: 10,
+      swingBy: 'score',
+      swingThreshold: { winrate: 8, score: 3.5 },
+      swingAfterOnly: true,
     };
     expect(parseDeviceSettings(raw)).toEqual(raw);
   });
@@ -93,5 +96,12 @@ describe('parseDeviceSettings', () => {
     });
     expect(d.candidateCount).toBe('auto');
     expect(d.lineLength).toBe(20);
+  });
+
+  it('the swing list starts by win rate over 5%, or 2 points by score (P2 M2 design 5.4)', () => {
+    const d = parseDeviceSettings({ version: 1, swingThreshold: { winrate: -1, score: 'x' } });
+    expect(d.swingBy).toBe('winrate');
+    expect(d.swingThreshold).toEqual({ winrate: 5, score: 2 });
+    expect(d.swingAfterOnly).toBe(false);
   });
 });

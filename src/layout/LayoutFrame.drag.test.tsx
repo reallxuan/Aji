@@ -28,13 +28,23 @@ function placeBox(el: Element, box: Box) {
     }) as DOMRect;
 }
 
+/**
+ * The column slot a panel sits in: the wrapper its hairline measures and its flex share sits on,
+ * whether the panel stands alone or in a tab group.
+ */
+function slotOf(el: Element): HTMLElement {
+  let node = el.parentElement!;
+  while (!node.style.flex) node = node.parentElement!;
+  return node;
+}
+
 function place() {
   placeBox(document.querySelector('[data-board]')!, BOXES.board);
   for (const el of document.querySelectorAll('[data-panel]')) {
     const box = BOXES[el.getAttribute('data-panel')!];
     placeBox(el, box);
     // A hairline measures the wrapper its panel sits in.
-    placeBox(el.parentElement!, box);
+    placeBox(slotOf(el), box);
   }
 }
 
@@ -132,14 +142,15 @@ describe('LayoutFrame rearranging', () => {
       });
       expect(outline()).toBeNull();
       up(1170, 640);
-      expect(screen.queryByRole('tablist')).toBeNull();
+      // No drop happened: the default's one tab group (候选, 波动) is all there is.
+      expect(screen.getAllByRole('tablist')).toHaveLength(1);
     }
     expect(useDeviceStore.getState().settings.layout).toBeNull();
   });
 
   it('double click on a hairline evens it', async () => {
     mount();
-    const line = panel('candidates').parentElement!.querySelector('[data-hairline]')!;
+    const line = slotOf(panel('candidates')).querySelector('[data-hairline]')!;
     fireEvent.doubleClick(line);
     await waitFor(() => expect(stored().preset).toBe('custom'));
     const [, , trend, candidates] = column().weights;
@@ -148,7 +159,7 @@ describe('LayoutFrame rearranging', () => {
 
   it('dragging a hairline resizes its neighbours', async () => {
     mount();
-    const line = panel('candidates').parentElement!.querySelector('[data-hairline]')!;
+    const line = slotOf(panel('candidates')).querySelector('[data-hairline]')!;
     fireEvent.pointerDown(line, { pointerId: 1, button: 0, clientX: 1000, clientY: 374 });
     // The pointer leaves the 8 px line at once; the drag follows it anywhere in the window.
     move(1000, 424);
@@ -162,7 +173,7 @@ describe('LayoutFrame rearranging', () => {
   it('a hairline resize cancelled by blur, a window resize or Escape is undone', async () => {
     // Review Focus 3, for resizing.
     mount();
-    const wrapper = panel('candidates').parentElement!;
+    const wrapper = slotOf(panel('candidates'));
     const flex = wrapper.style.flex;
     for (const cancel of [
       () => fireEvent.blur(window),
@@ -173,15 +184,15 @@ describe('LayoutFrame rearranging', () => {
       const line = wrapper.querySelector('[data-hairline]')!;
       fireEvent.pointerDown(line, { pointerId: 1, button: 0, clientX: 1000, clientY: 374 });
       move(1000, 424);
-      expect(panel('candidates').parentElement!.style.flex).not.toBe(flex);
+      expect(slotOf(panel('candidates')).style.flex).not.toBe(flex);
       act(() => {
         cancel();
       });
-      expect(panel('candidates').parentElement!.style.flex).toBe(flex);
+      expect(slotOf(panel('candidates')).style.flex).toBe(flex);
       // The drag is over: the pointer no longer moves the line.
       move(1000, 474);
       up(1000, 474);
-      expect(panel('candidates').parentElement!.style.flex).toBe(flex);
+      expect(slotOf(panel('candidates')).style.flex).toBe(flex);
     }
     await new Promise((r) => setTimeout(r, 600));
     expect(useDeviceStore.getState().settings.layout).toBeNull();

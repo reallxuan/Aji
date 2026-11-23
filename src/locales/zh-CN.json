@@ -504,6 +504,7 @@
       "winrate": "胜率条",
       "trend": "走势",
       "candidates": "候选",
+      "swings": "波动",
       "subboard": "副盘"
     },
     "noCandidate": "无候选",
@@ -623,5 +624,31 @@
     },
     "rangeLine": "第 <from/> 到 <to/> 手",
     "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
+  },
+  "swings": {
+    "by": "按",
+    "winrate": "胜率",
+    "score": "目差",
+    "overWinrate": "超过 <field/>%",
+    "overScore": "超过 <field/> 目",
+    "threshold": "波动阈值",
+    "afterOnly": "仅后续",
+    "black": "黑",
+    "white": "白",
+    "count_one": "{{count}} 手",
+    "count_other": "{{count}} 手",
+    "columns": {
+      "move": "手数",
+      "point": "落点",
+      "winrate": "胜率",
+      "score": "目差"
+    },
+    "none": "没有",
+    "partial_one": "只有 {{count}} 个局面有结果，部分手还没法比较。分析全局后列表才完整。",
+    "partial_other": "只有 {{count}} 个局面有结果，部分手还没法比较。分析全局后列表才完整。",
+    "empty": {
+      "title": "还没有可比较的结果",
+      "body": "从棋局菜单选“分析全局…”，这里会列出双方损失最大的几手。"
+    }
   }
 }

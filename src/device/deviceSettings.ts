@@ -1,6 +1,7 @@
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { CandidateSort, CandidateSortKey } from '../analysis/sortCandidates';
+import type { SwingBy } from '../analysis/swings';
 import { MAX_VARIATION } from '../analysis/constants';
 
 export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed';
@@ -63,6 +64,11 @@ export interface DeviceSettings {
   candidateCount: CandidateCount;
   /** How many moves a hovered line shows. */
   lineLength: number;
+  /** The swing list (P2 M2 design 5.4): by win rate or score, each with its own threshold. */
+  swingBy: SwingBy;
+  swingThreshold: { winrate: number; score: number };
+  /** Only the moves after the current one. */
+  swingAfterOnly: boolean;
   /** The three fields that used to live in the backend's settings have been copied. */
   migrated: boolean;
 }
@@ -84,6 +90,9 @@ export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   candidateColumns: { winrate: true, scoreLead: true, visits: true, share: true, vsBest: false },
   candidateCount: 'auto',
   lineLength: MAX_VARIATION,
+  swingBy: 'winrate',
+  swingThreshold: { winrate: 5, score: 2 },
+  swingAfterOnly: false,
   migrated: false,
 };
 
@@ -129,6 +138,13 @@ function parseColumns(v: unknown, d: CandidateColumns): CandidateColumns {
   };
 }
 
+function parseThreshold(v: unknown, d: DeviceSettings['swingThreshold']) {
+  if (!isRecord(v)) return d;
+  const positive = (x: unknown, fallback: number) =>
+    typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : fallback;
+  return { winrate: positive(v.winrate, d.winrate), score: positive(v.score, d.score) };
+}
+
 /**
  * Reads stored device settings field by field: a field that cannot be read takes its default and
  * the others stand. Anything that is not a version-1 object reads as the defaults. Never throws.
@@ -163,6 +179,9 @@ export function parseDeviceSettings(raw: unknown): DeviceSettings {
       Number.isInteger(raw.lineLength) && (raw.lineLength as number) > 0
         ? (raw.lineLength as number)
         : d.lineLength,
+    swingBy: oneOf<SwingBy>(['winrate', 'score'], raw.swingBy) ? raw.swingBy : d.swingBy,
+    swingThreshold: parseThreshold(raw.swingThreshold, d.swingThreshold),
+    swingAfterOnly: bool(raw.swingAfterOnly, d.swingAfterOnly),
     migrated: bool(raw.migrated, d.migrated),
   };
 }
