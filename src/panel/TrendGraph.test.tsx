@@ -9,12 +9,15 @@ import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import type { TrendNode } from '../transport/generated/TrendNode';
 import { TrendGraph } from './TrendGraph';
+import { resetJobStore, useJobStore } from '../job/jobStore';
+import type { JobProgress } from '../transport/generated/JobProgress';
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame'] }));
 afterEach(() => {
   vi.useRealTimers();
   resetGameStore();
   resetTrendStore();
+  resetJobStore();
   useSettingsStore.setState({ settings: null });
 });
 
@@ -192,7 +195,9 @@ it('captures_show_in_the_legend', () => {
   renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
     snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, captures: [3, 5] }),
   });
-  expect(screen.getByTestId('trend-legend')).toHaveTextContent('提子 黑 3 · 白 5');
+  expect(screen.getByTestId('trend-legend')).toHaveTextContent('提子 黑 3 白 5');
+  // No middle dot anywhere in interface text (owner, 2026-11-23).
+  expect(screen.getByTestId('trend-legend').textContent).not.toContain('·');
 });
 
 it('the score option shows the board count, and an even lead reads 均势', () => {
@@ -221,4 +226,57 @@ it('a legend that wraps takes its room from the chart, so the toggle stays in vi
   expect(svg().getAttribute('height')).toBe('88');
   expect(screen.getByRole('radiogroup', { name: '走势图视角' })).toBeInTheDocument();
   vi.restoreAllMocks();
+});
+
+const job = (
+  state: JobProgress['state'],
+  working: number | null,
+  queued: number[],
+): JobProgress => ({
+  state,
+  done: 0,
+  total: 20,
+  boostDone: 0,
+  boostTotal: 3,
+  working,
+  queued,
+  etaSeconds: 20,
+});
+
+const cells = () => [...document.querySelectorAll('[data-strip] rect')];
+const cell = (i: number) => document.querySelector(`[data-strip] rect[data-index="${i}"]`)!;
+
+it('strip cells follow progress', () => {
+  mount();
+  // No job yet: no strip.
+  expect(document.querySelector('[data-strip]')).toBeNull();
+  const queued = Array.from({ length: 17 }, (_, k) => 43 + k);
+  act(() => useJobStore.getState().apply(job('running', 41, queued)));
+  // Solid with a result (0–40, 42, 60–100), green for the one searched, faint when queued.
+  const kinds = cells().map((c) => c.getAttribute('data-cell'));
+  expect(kinds.filter((k) => k === 'result')).toHaveLength(83);
+  expect(kinds.filter((k) => k === 'queued')).toHaveLength(17);
+  expect(cell(41)).toHaveAttribute('data-cell', 'working');
+  expect(cell(41)).toHaveAttribute('fill', 'var(--engine-ok)');
+  // Cells sit just under the 0% line, centred on their move.
+  expect(Number(cell(30).getAttribute('y'))).toBeGreaterThan(150 - 4 - 22 - 1);
+  const c30 = Number(cell(30).getAttribute('x')) + Number(cell(30).getAttribute('width')) / 2;
+  expect(c30).toBeCloseTo(xOf(30), 0);
+  // It stays, all solid where results are, once the job's status has gone.
+  act(() => useJobStore.setState({ progress: null, doneUntil: null }));
+  expect(cells().every((c) => c.getAttribute('data-cell') === 'result')).toBe(true);
+});
+
+it('boost cells stand taller', () => {
+  mount();
+  act(() => useJobStore.getState().apply(job('boosting', 72, [73, 90])));
+  const height = (i: number) => Number(cell(i).getAttribute('height'));
+  expect(height(72)).toBe(8);
+  expect(height(73)).toBe(8);
+  expect(height(90)).toBe(8);
+  expect(cell(73)).toHaveAttribute('data-cell', 'boost');
+  expect(height(60)).toBe(3);
+  // Once done, they drop back: nothing stays behind to mark the swings.
+  act(() => useJobStore.getState().apply(job('done', null, [])));
+  expect(height(72)).toBe(3);
 });

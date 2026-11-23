@@ -40,3 +40,19 @@ it('a stopped job also clears after four seconds, and a new job cancels the clea
   vi.advanceTimersByTime(5000);
   expect(useJobStore.getState().progress?.state).toBe('running');
 });
+
+it('the strip shows from a job start until the game changes', () => {
+  const store = useJobStore.getState();
+  expect(useJobStore.getState().strip).toBe(false);
+  store.apply(progress('running'));
+  expect(useJobStore.getState().strip).toBe(true);
+  store.apply(progress('done', 10));
+  vi.advanceTimersByTime(4000);
+  // The status goes; the strip stays, all solid.
+  expect(useJobStore.getState()).toMatchObject({ progress: null, strip: true });
+  store.hideStrip();
+  expect(useJobStore.getState().strip).toBe(false);
+  // A late status from the closed game's job does not bring it back.
+  store.apply(progress('stopped'));
+  expect(useJobStore.getState().strip).toBe(false);
+});

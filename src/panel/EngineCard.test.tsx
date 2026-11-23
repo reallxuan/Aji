@@ -12,9 +12,12 @@ import type { Request } from '../transport/generated/Request';
 import type { RunningEngine } from '../transport/generated/RunningEngine';
 import { TransportProvider } from '../transport/TransportProvider';
 import { EngineCard } from './EngineCard';
+import { resetJobStore, useJobStore } from '../job/jobStore';
+import type { JobProgress } from '../transport/generated/JobProgress';
 
 afterEach(() => {
   resetGameStore();
+  resetJobStore();
   useSettingsStore.setState({ settings: null });
 });
 
@@ -140,4 +143,33 @@ it('names a development engine without a backend', async () => {
 it('asks for the engine status when it opens', async () => {
   const requests = mount({ state: 'analysing', version: '1.18.2' });
   await waitFor(() => expect(requests).toEqual([{ type: 'engineStatus' }]));
+});
+
+const job = (state: JobProgress['state']): JobProgress => ({
+  state,
+  done: 176,
+  total: 248,
+  boostDone: 0,
+  boostTotal: 0,
+  working: 200,
+  queued: [],
+  etaSeconds: 60,
+});
+
+it('engine card shows the job line', async () => {
+  useJobStore.getState().apply(job('waiting'));
+  mount({ state: 'analysing', version: '1.18.2' });
+  useGameStore.getState().apply(makeSnapshot({ revision: 2, positionKey: KEY, moveNumber: 200 }));
+  expect(await screen.findByText('全局分析 176/248，正在先算第 200 手')).toBeInTheDocument();
+});
+
+it('engine card shows the job count while the job runs', async () => {
+  useJobStore.getState().apply(job('running'));
+  mount({ state: 'analysing', version: '1.18.2' });
+  expect(await screen.findByText('全局分析 176/248')).toBeInTheDocument();
+});
+
+it('engine card has no job line without a job', () => {
+  mount({ state: 'analysing', version: '1.18.2' });
+  expect(screen.queryByText(/全局分析/)).toBeNull();
 });

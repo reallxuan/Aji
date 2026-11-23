@@ -96,6 +96,8 @@
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
       "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "job": "Game analysis {{done}}/{{total}}",
+      "jobWaiting": "Game analysis {{done}}/{{total}}, searching move {{move}} first",
       "hint": {
         "pause": "Click to pause",
         "resume": "Click to resume",
@@ -149,7 +151,7 @@
       "hint": "Tap to toggle, hold to hide for a moment"
     },
     "even": "Even",
-    "captures": "Captures B {{black}} · W {{white}}"
+    "captures": "Captures B {{black}} W {{white}}"
   },
   "setup": {
     "failure": {
@@ -595,6 +597,18 @@
     "browse": "You can browse while it runs; the position on the board always goes first.",
     "cancel": "Cancel",
     "start": "Start",
+    "status": {
+      "running": "Analysing game {{done}}/{{total}}",
+      "boosting": "Boosting {{done}}/{{total}}",
+      "count": "{{done}}/{{total}}",
+      "waiting": "current position first",
+      "paused": "Paused",
+      "done": "Game analysed",
+      "stopped": "Stopped",
+      "minutes": "about {{count}} min",
+      "underMinute": "under a minute",
+      "stop": "Stop game analysis"
+    },
     "rangeLine": "From <from/> to <to/>",
     "boostLine": "Swings over <threshold/>% get <visits/> visits"
   }

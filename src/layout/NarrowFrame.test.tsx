@@ -76,7 +76,7 @@ describe('the narrow arrangement', () => {
     renderWithGame(<LayoutFrame />);
     fireEvent.click(screen.getByRole('tab', { name: '候选' }));
     expect(document.querySelectorAll('[data-captures]')).toHaveLength(1);
-    expect(document.querySelector('[data-captures]')).toHaveTextContent('提子 黑 0 · 白 0');
+    expect(document.querySelector('[data-captures]')).toHaveTextContent('提子 黑 0 白 0');
   });
 
   it('a small landscape window keeps the board above the panels (Review Focus 4)', () => {

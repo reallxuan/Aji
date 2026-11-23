@@ -9,10 +9,21 @@ export interface JobState {
   progress: JobProgress | null;
   /** When an ended job's status goes away, in `Date.now()` time; `null` while one runs. */
   doneUntil: number | null;
+  /**
+   * Whether the coverage strip shows under the graph: from a job's start until the game is closed
+   * (P2 M2 design 5.3), so it outlives the job's status.
+   */
+  strip: boolean;
   apply(progress: JobProgress): void;
+  /** Another game, or every result gone: the strip has nothing left to show. */
+  hideStrip(): void;
 }
 
-const initial = { progress: null as JobProgress | null, doneUntil: null as number | null };
+const initial = {
+  progress: null as JobProgress | null,
+  doneUntil: null as number | null,
+  strip: false,
+};
 let clearing: ReturnType<typeof setTimeout> | null = null;
 
 const ended = (p: JobProgress) => p.state === 'done' || p.state === 'stopped';
@@ -23,15 +34,17 @@ export const useJobStore = create<JobState>()((set) => ({
     if (clearing) clearTimeout(clearing);
     clearing = null;
     if (!ended(progress)) {
-      set({ progress, doneUntil: null });
+      set({ progress, doneUntil: null, strip: true });
       return;
     }
+    // An ended status never shows the strip: a late one may be the closed game's.
     set({ progress, doneUntil: Date.now() + ENDED_MS });
     clearing = setTimeout(() => {
       clearing = null;
-      set(initial);
+      set({ progress: null, doneUntil: null });
     }, ENDED_MS);
   },
+  hideStrip: () => set({ strip: false }),
 }));
 
 /** Whether a job is searching: it holds the engine's pause, even at the board's visit limit. */

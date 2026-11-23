@@ -96,6 +96,8 @@
       "visitsOfLimit": "{{visits}} / {{limit}}",
       "engineValue": "KataGo {{version}}",
       "engineWithBackend": "KataGo {{version}} · {{backend}}",
+      "job": "全局分析 {{done}}/{{total}}",
+      "jobWaiting": "全局分析 {{done}}/{{total}}，正在先算第 {{move}} 手",
       "hint": {
         "pause": "点击暂停",
         "resume": "点击继续",
@@ -149,7 +151,7 @@
       "hint": "点按切换，按住暂时隐藏"
     },
     "even": "均势",
-    "captures": "提子 黑 {{black}} · 白 {{white}}"
+    "captures": "提子 黑 {{black}} 白 {{white}}"
   },
   "setup": {
     "failure": {
@@ -595,6 +597,18 @@
     "browse": "分析时可以照常浏览，当前局面总是先算。",
     "cancel": "取消",
     "start": "开始",
+    "status": {
+      "running": "分析全局 {{done}}/{{total}}",
+      "boosting": "加强分析 {{done}}/{{total}}",
+      "count": "{{done}}/{{total}}",
+      "waiting": "先算当前局面",
+      "paused": "已暂停",
+      "done": "已分析全局",
+      "stopped": "已停止",
+      "minutes": "约 {{count}} 分钟",
+      "underMinute": "不到 1 分钟",
+      "stop": "停止全局分析"
+    },
     "rangeLine": "第 <from/> 到 <to/> 手",
     "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
   }

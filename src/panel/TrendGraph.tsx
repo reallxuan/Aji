@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { formatLead, formatPercent, isEvenLead } from '../analysis/format';
 import { boardLead, useBoardKomi } from '../analysis/lead';
 import { CapturesLine } from './CapturesLine';
+import { CoverageStrip } from './CoverageStrip';
+import { JobStatus } from './JobStatus';
 import { plotRuns, plotted, scoreRange } from '../analysis/trend';
 import { useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
@@ -217,6 +219,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
               {m}
             </text>
           ))}
+          <CoverageStrip nodes={nodes} x={x} y={bottom + 3} span={gw} />
           {leadLine}
           {winrateLine}
           {current !== null && (
@@ -318,6 +321,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
           <span className="h-0.5 w-3.5 rounded-[1px] bg-score" />
           {t('analysis.graph.legend.scoreLead')}
         </span>
+        <JobStatus />
         <CapturesLine className="ml-auto tabular-nums" />
         <PerspectiveToggle />
       </div>

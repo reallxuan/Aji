@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEngineStore } from '../engine/engineStore';
+import { useGameStore } from '../game/gameStore';
 import { useJobStore } from '../job/jobStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { getEngineStatus } from '../transport/api';
@@ -30,6 +31,7 @@ export function EngineCard() {
   const speed = useEngineStore((s) => s.speed);
   const job = useJobStore((s) => s.progress);
   const limit = useSettingsStore((s) => s.settings?.visitLimit ?? null);
+  const moveNumber = useGameStore((s) => s.snapshot?.moveNumber ?? 0);
   const [running, setRunning] = useState<RunningEngine | null>(null);
 
   useEffect(() => {
@@ -82,6 +84,14 @@ export function EngineCard() {
   if (running)
     rows.push([t('engine.card.network'), middleTruncate(running.networkName, NETWORK_CHARS)]);
 
+  // The whole-game job, while it has work left (P2 M2 design 5.3).
+  const jobLine =
+    !job || job.state === 'done' || job.state === 'stopped'
+      ? null
+      : job.state === 'waiting'
+        ? t('engine.card.jobWaiting', { done: job.done, total: job.total, move: moveNumber })
+        : t('engine.card.job', { done: job.done, total: job.total });
+
   const hint =
     action === 'pause'
       ? t('engine.card.hint.pause')
@@ -100,6 +110,7 @@ export function EngineCard() {
           {value}
         </div>
       ))}
+      {jobLine && <div data-job-line>{jobLine}</div>}
       {hint && (
         <div className="mt-1.5 border-t border-hairline pt-1.5 text-xs text-text-muted">{hint}</div>
       )}
