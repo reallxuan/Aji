@@ -1160,7 +1160,7 @@ mod tests {
             handle(&ctx(), Request::EngineStatus).await,
             Ok(Response::EngineStatus {
                 engine: EngineState::NotConfigured,
-                position: Some(aji_core::PositionKey(0x4d32_5c64_abd3_78a1)),
+                position: Some(aji_core::PositionKey(0x3edb_a656_b924_370b)),
                 analysis: None,
                 rejected: None,
                 running: None,
