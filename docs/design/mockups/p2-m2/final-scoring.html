@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 final scoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --ok:#1e8e5a; --pop:#2a2a2e; --btn:#2c2c31; --chg:#E2A33B; }
+  .light { --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --ok:#1e8e5a; --pop:#ffffff; --btn:#ebebe8; --chg:#B26A00; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1140px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1140px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1000px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+  .board { width:520px; height:520px; border-radius:4px; overflow:hidden; cursor:pointer; }
+  .board canvas { width:520px; height:520px; display:block; }
+
+  .crop { width:520px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; position:relative; overflow:hidden; }
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; align-items:center; font-size:13px; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--line); margin-left:4px; flex:none; }
+
+  .score { padding:16px 24px 18px; border-bottom:1px solid var(--hairline); }
+  .score .top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
+  .score .top .h { font-size:14px; font-weight:600; }
+  .score .top .m { font-size:12px; color:var(--muted); }
+  .score table { width:100%; border-collapse:collapse; font-size:13px; }
+  .score th { font-weight:400; color:var(--muted); text-align:right; padding:0 0 6px; font-size:12px; }
+  .score th:first-child { text-align:left; }
+  .score td { text-align:right; padding:6px 0; border-top:1px solid var(--soft); }
+  .score td:first-child { text-align:left; display:flex; align-items:center; gap:8px; }
+  .score td.tot { font-weight:600; font-size:14px; }
+  .score i { width:12px; height:12px; border-radius:50%; display:inline-block; box-shadow:inset 0 0 0 1px var(--line); }
+  .verdict { margin-top:12px; display:flex; align-items:center; gap:10px; font-size:18px; font-weight:600; }
+  .verdict .chg { font-size:12px; font-weight:500; color:var(--chg); border:1px solid color-mix(in srgb, var(--chg) 50%, transparent); border-radius:999px; padding:1px 8px; }
+  .hint { margin-top:10px; font-size:12px; color:var(--muted); line-height:1.6; }
+  .hint a { color:var(--text); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  .foot { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .foot span { font-size:13px; border:1px solid var(--hairline); border-radius:6px; padding:4px 12px; background:var(--btn); }
+  .rest { padding:14px 24px; font-size:13px; color:var(--muted); }
+
+  .menu { width:236px; background:#2a2a2e; color:#eceae4; border:1px solid #3a3a40; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:5px; font-size:13px; }
+  .menu div { padding:6px 10px; border-radius:5px; display:flex; justify-content:space-between; gap:12px; }
+  .menu div .m { color:#a3a19a; }
+  .menu div.sep { padding:0; height:1px; background:#3a3a40; margin:5px 4px; }
+  .menu div.new { background:color-mix(in srgb, #7fd1a8 14%, transparent); }
+  .est { width:520px; display:flex; align-items:center; gap:16px; padding:10px 24px; font-size:13px; color:#a3a19a; background:#1e1e21; border-radius:8px; outline:1px solid #2a2a2e; }
+  .est .h { color:#eceae4; font-weight:500; }
+  .est b { color:#eceae4; font-weight:500; }
+  .est .v { margin-left:auto; color:#eceae4; font-weight:600; }
+  .est .go { color:#eceae4; font-size:12px; border:1px solid #303035; border-radius:5px; padding:2px 8px; background:color-mix(in srgb, #7fd1a8 14%, transparent); }
+  .est .x { font-size:12px; border:1px solid #303035; border-radius:5px; padding:1px 7px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M2 终局点目 final scoring</h1>
+  A finished 9×9 game, 中国规则 with 7.5 komi. The count uses ownership style C, as chosen: same-size squares, dead stones faded under the other side's square.
+  <ul>
+    <li><b>KataGo proposes, you decide.</b> Scoring opens with KataGo's dead stones already marked. Clicking a group flips it between dead and alive, and the count follows. <b>This page is live: click the stones on the board in section 2.</b></li>
+    <li><b>M2 only shows the result.</b> Writing it into the record (RE) comes in M3, with the game information editor and undo.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>1 进入点目</h2>
+  <p class="cap">Two ways in. The game menu has 终局点目. And when 形势判断 is on at the last move of a game that has ended (two passes, or a result in the record), its line offers 点目. Scoring mode hides the candidate discs and pauses analysis on the board, so the count stays still while you mark stones.</p>
+  <div class="row">
+    <div class="menu"><div>新建棋局</div><div>打开棋谱…</div><div>打开最近</div><div>另存为…</div><div class="sep"></div><div>分析全局…</div><div>清除分析结果 <span class="m">▸</span></div><div class="new">终局点目</div></div>
+    <div class="est"><span class="h">形势判断</span><span>黑 <b>40</b></span><span>白 <b>41</b></span><span>贴目 7.5</span><span class="v">白领先 8.5 目</span><span class="go">点目</span><span class="x">✕</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 点目中（可以点）</h2>
+  <p class="cap">KataGo marked White C5 and Black H4 as dead. The panel's top part (the bar and the graph) gives way to the count until you leave.
+  <b>Click a stone</b> to flip its whole group. Try H4: once it is alive, White's area on the right is no longer White's alone, and the count drops sharply. When you change KataGo's marking, 已改动 shows next to the result, and 恢复 KataGo 的判断 puts it back.
+  <span class="call">My call:</span> neutral points (dame) get no square. Under Chinese rules they count for nobody, and the bare wood shows where they are.</p>
+  <div class="row">
+    <div class="board"><canvas id="live"></canvas></div>
+    <div class="crop dark" id="panel"></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>3 日韩规则：数目</h2>
+  <p class="cap">With the rules chip on 日韩, the same position counts territory: the points inside each side's area (a dead stone's point included), plus each dead stone again as a prisoner taken off at the end, plus stones captured during the game, plus komi. The table has those columns instead.</p>
+  <div class="row">
+    <div class="crop light" id="panelJ"></div>
+  </div>
+</div>
+
+<script>
+// ---- The finished 9×9 game -------------------------------------------------------------
+const N = 9, LET = 'ABCDEFGHJ';
+const ROWS = [
+  '...XO....',
+  '...XO....',
+  '...XO....',
+  '..XXOO...',
+  '..OXXO...',
+  '....XOOX.',
+  '...XXXO..',
+  '...XOOO..',
+  '...XO....',
+];
+const G = ROWS.map((r) => [...r].map((c) => (c === 'X' ? 1 : c === 'O' ? 2 : 0)));
+const CAPTURED = { 1: 2, 2: 3 }; // stones each side captured during the game
+const KATAGO_DEAD = ['C5', 'H4'];
+const KOMI = 7.5;
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+const key = (x, y) => x + ',' + y;
+const nb = (x, y) => [[1,0],[-1,0],[0,1],[0,-1]].map(([dx, dy]) => [x + dx, y + dy]).filter(([a, b]) => a >= 0 && b >= 0 && a < N && b < N);
+
+function group(x, y) {
+  const c = G[y][x], out = [], seen = new Set([key(x, y)]), st = [[x, y]];
+  while (st.length) { const [a, b] = st.pop(); out.push([a, b]); for (const [p, q] of nb(a, b)) if (G[q][p] === c && !seen.has(key(p, q))) { seen.add(key(p, q)); st.push([p, q]); } }
+  return out;
+}
+
+let dead = new Set(KATAGO_DEAD.map((s) => key(...pt(s))));
+const kataDead = new Set(dead);
+
+// Area: live stones, plus empty (or dead) regions that touch only one colour's live stones.
+function score() {
+  const owner = Array.from({ length: N }, () => Array(N).fill(0));
+  const live = (x, y) => G[y][x] && !dead.has(key(x, y)) ? G[y][x] : 0;
+  const seen = new Set();
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (live(x, y)) { owner[y][x] = live(x, y); continue; }
+    if (seen.has(key(x, y))) continue;
+    const region = [], border = new Set(), st = [[x, y]]; seen.add(key(x, y));
+    while (st.length) {
+      const [a, b] = st.pop(); region.push([a, b]);
+      for (const [p, q] of nb(a, b)) {
+        const l = live(p, q);
+        if (l) border.add(l);
+        else if (!seen.has(key(p, q))) { seen.add(key(p, q)); st.push([p, q]); }
+      }
+    }
+    const o = border.size === 1 ? [...border][0] : 0;
+    for (const [a, b] of region) owner[b][a] = o;
+  }
+  const t = { 1: { stones: 0, area: 0, terr: 0, deadOpp: 0 }, 2: { stones: 0, area: 0, terr: 0, deadOpp: 0 } };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const o = owner[y][x]; if (!o) continue;
+    t[o].area++;
+    if (live(x, y)) t[o].stones++;
+    else { t[o].terr++; if (G[y][x]) t[o].deadOpp++; }
+  }
+  return { owner, t };
+}
+
+// ---- Board ----------------------------------------------------------------------------
+function draw(canvas) {
+  const css = 520, dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  const gr = ctx.createLinearGradient(0, 0, W, W); gr.addColorStop(0, '#e0b46c'); gr.addColorStop(1, '#d6a85e');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, W);
+  for (let i = 0; i < 60; i++) { ctx.fillStyle = `rgba(120,80,30,${(.02 + Math.random() * .03).toFixed(3)})`; ctx.fillRect(Math.random() * W, 0, (1 + Math.random() * 3) * dpr, W); }
+  const margin = 38 * dpr, sp = (W - 2 * margin) / (N - 1), at = (i) => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath(); for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N - 1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N - 1), at(i)); } ctx.stroke();
+  ctx.lineWidth = Math.round(1.6 * dpr); ctx.strokeRect(at(0), at(0), at(N - 1) - at(0), at(N - 1) - at(0));
+  ctx.fillStyle = '#3A2A14'; for (const [a, b] of [[2,2],[6,2],[2,6],[6,6],[4,4]]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .07, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${12 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .42); ctx.fillText(String(N - i), margin * .42, at(i)); }
+  const { owner } = score();
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (G[y][x]) {
+    const isDead = dead.has(key(x, y)), r = sp * .47, cx = at(x), cy = at(y);
+    ctx.save(); if (isDead) ctx.globalAlpha = .45;
+    ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .4; ctx.shadowOffsetX = r * .1; ctx.shadowOffsetY = r * .15;
+    const g = G[y][x] === 1 ? ctx.createRadialGradient(cx - r * .38, cy - r * .42, r * .05, cx, cy, r) : ctx.createRadialGradient(cx - r * .35, cy - r * .4, r * .1, cx, cy, r);
+    if (G[y][x] === 1) { g.addColorStop(0, '#6a6a68'); g.addColorStop(.3, '#2c2c2b'); g.addColorStop(1, '#0a0a0a'); } else { g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#f1eee6'); g.addColorStop(1, '#c4bdaf'); }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.restore();
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const o = owner[y][x];
+    if (!o) continue;
+    if (G[y][x] && !dead.has(key(x, y))) continue;
+    const side = sp * .36;
+    ctx.fillStyle = o === 1 ? 'rgba(18,18,18,.86)' : 'rgba(250,248,242,.92)';
+    ctx.strokeStyle = o === 1 ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.28)'; ctx.lineWidth = dpr * .8;
+    ctx.fillRect(at(x) - side / 2, at(y) - side / 2, side, side); ctx.strokeRect(at(x) - side / 2, at(y) - side / 2, side, side);
+  }
+  canvas.onclick = (e) => {
+    const box = canvas.getBoundingClientRect(), s = css / box.width;
+    const x = Math.round(((e.clientX - box.left) * s * dpr - margin) / sp), y = Math.round(((e.clientY - box.top) * s * dpr - margin) / sp);
+    if (x < 0 || y < 0 || x >= N || y >= N || !G[y][x]) return;
+    const grp = group(x, y), makeDead = !dead.has(key(x, y));
+    for (const [a, b] of grp) makeDead ? dead.add(key(a, b)) : dead.delete(key(a, b));
+    render();
+  };
+}
+
+// ---- Panel ----------------------------------------------------------------------------
+const fmt = (v) => (Number.isInteger(v) ? v : v.toFixed(1));
+function panel(mode) {
+  const { t } = score();
+  const changed = [...dead].sort().join() !== [...kataDead].sort().join();
+  const chip = mode === 'area' ? '中国 7.5' : '日韩 6.5';
+  const komi = mode === 'area' ? KOMI : 6.5;
+  let rows, b, w;
+  if (mode === 'area') {
+    b = t[1].area; w = t[2].area + komi;
+    rows = `<tr><th>数子</th><th>棋子</th><th>地</th><th>贴目</th><th>合计</th></tr>
+      <tr><td><i style="background:#1d1d1b"></i>黑</td><td>${t[1].stones}</td><td>${t[1].terr}</td><td></td><td class="tot">${fmt(b)}</td></tr>
+      <tr><td><i style="background:#f4f2ec"></i>白</td><td>${t[2].stones}</td><td>${t[2].terr}</td><td>${komi}</td><td class="tot">${fmt(w)}</td></tr>`;
+  } else {
+    // 地 holds the dead stones' points; each dead stone counts again as a prisoner (死子).
+    const bt = t[1].terr, wt = t[2].terr;
+    b = bt + t[1].deadOpp + CAPTURED[1]; w = wt + t[2].deadOpp + CAPTURED[2] + komi;
+    rows = `<tr><th>数目</th><th>地</th><th>死子</th><th>提子</th><th>贴目</th><th>合计</th></tr>
+      <tr><td><i style="background:#1d1d1b"></i>黑</td><td>${bt}</td><td>${t[1].deadOpp}</td><td>${CAPTURED[1]}</td><td></td><td class="tot">${fmt(b)}</td></tr>
+      <tr><td><i style="background:#f4f2ec"></i>白</td><td>${wt}</td><td>${t[2].deadOpp}</td><td>${CAPTURED[2]}</td><td>${komi}</td><td class="tot">${fmt(w)}</td></tr>`;
+  }
+  const d = b - w;
+  const verdict = d === 0 ? '和棋' : (d > 0 ? '黑胜 ' : '白胜 ') + fmt(Math.abs(d)) + ' 目';
+  return `<div class="hdr"><span class="t">9 路练习 <span style="color:var(--muted)">▾</span></span><span class="chip">${chip}</span><span class="nav">⏮ ‹ <b>62</b> / 62 › ⏭</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+    <div class="score">
+      <div class="top"><span class="h">终局点目</span><span class="m">${mode === 'area' ? '中国规则，数子' : '日韩规则，数目'}</span></div>
+      <table>${rows}</table>
+      <div class="verdict">${verdict}${changed ? '<span class="chg">已改动</span>' : ''}</div>
+      <div class="hint">点棋子切换整块的死活。${changed ? '<a id="reset">恢复 KataGo 的判断</a>' : '死子是 KataGo 判断的。'}</div>
+      <div class="foot"><span>退出点目</span></div>
+    </div>
+    <div class="rest">候选点已隐藏，点目时不分析。</div>`;
+}
+
+function render() {
+  draw(document.getElementById('live'));
+  document.getElementById('panel').innerHTML = panel('area');
+  document.getElementById('panelJ').innerHTML = panel('territory');
+  const r = document.getElementById('reset');
+  if (r) r.onclick = () => { dead = new Set(kataDead); render(); };
+}
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>

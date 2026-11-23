@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 candidate and swing lists</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --pop:#2a2a2e; --btn:#2c2c31; --cur:#2f2f34; }
+  .light { --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --pop:#ffffff; --btn:#ebebe8; --cur:#e8e8e4; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1140px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .part { max-width:1140px; margin:0 auto 10px; font-size:17px; font-weight:600; color:#ECEAE4; border-top:1px solid #2a2a2e; padding-top:22px; }
+  .section { max-width:1140px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1000px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+
+  .crop { width:540px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; position:relative; }
+  .tabs { display:flex; gap:18px; padding:12px 24px 0; font-size:12.5px; border-bottom:1px solid var(--hairline); }
+  .tabs span { padding-bottom:6px; color:var(--muted); }
+  .tabs span.on { color:var(--text); box-shadow:inset 0 -2px 0 var(--text); }
+  .tabs .new { position:relative; }
+  .tabs .new::after { content:''; position:absolute; right:-7px; top:1px; width:5px; height:5px; border-radius:50%; background:#7fd1a8; }
+
+  .tbl { padding:10px 24px 12px; font-size:14px; }
+  .tbl .top { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .tr { display:grid; grid-template-columns:30px 84px 1fr 1fr 1.25fr; gap:0 6px; align-items:center; padding:7px 0; border-bottom:1px solid var(--soft); white-space:nowrap; }
+  .tr > span:nth-child(n+3) { text-align:right; }
+  .tr.h { font-size:12px; color:var(--muted); border-bottom:1px solid var(--hairline); padding:6px 0; }
+  .tr.h span.sort { color:var(--text); font-weight:500; }
+  .tr.h span .ar { font-size:9px; margin-left:3px; }
+  .tr.hov { background:var(--soft); margin:0 -8px; padding-left:8px; padding-right:8px; border-radius:4px; }
+  .rk { width:20px; height:20px; border-radius:50%; font-size:11px; display:inline-flex; align-items:center; justify-content:center; background:#FBF1D9; color:#2B1D0E; }
+  .rk.best { box-shadow:inset 0 0 0 2.5px #B8321F; font-weight:700; background:#FDF6E3; }
+  .rk.close { box-shadow:inset 0 0 0 1.5px #B8321F; }
+  .rk.doubt { box-shadow:inset 0 0 0 1.5px #8A6A32; }
+  .rk.poor { box-shadow:inset 0 0 0 1px rgba(138,106,50,.6); background:#ead9b3; }
+  .rk.played { outline:2px solid #2B1D0E; outline-offset:0; }
+  .vis { position:relative; display:inline-block; min-width:84px; text-align:right; }
+  .vis .b { position:absolute; right:0; bottom:-3px; height:2px; border-radius:1px; background:var(--muted); opacity:.55; }
+  .vis .p { color:var(--muted); font-size:12px; margin-left:6px; }
+  .strong { font-weight:600; }
+  .tr.six { grid-template-columns:30px 54px 1fr 1fr 1.25fr 1.25fr; }
+  .tag { font-size:11px; color:var(--muted); border:1px solid var(--hairline); border-radius:4px; padding:0 4px; margin-left:6px; }
+  .menu { position:absolute; z-index:3; width:178px; background:var(--pop); color:var(--text); border:1px solid var(--hairline); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:5px; font-size:13px; }
+  .menu div { padding:5px 10px; border-radius:5px; display:flex; gap:9px; align-items:center; }
+  .menu div.sep { padding:0; height:1px; background:var(--hairline); margin:5px 4px; }
+  .menu .ck { width:14px; color:var(--text); font-size:12px; }
+  .menu .m { color:var(--muted); }
+
+  .ctl { display:flex; align-items:center; gap:14px; padding:12px 24px 8px; font-size:12.5px; color:var(--muted); flex-wrap:wrap; }
+  .seg { display:inline-flex; border:1px solid var(--hairline); border-radius:6px; overflow:hidden; }
+  .seg span { padding:2px 9px; white-space:nowrap; }
+  .seg span + span { border-left:1px solid var(--hairline); }
+  .seg span.on { background:var(--soft); color:var(--text); font-weight:500; }
+  .field b { display:inline-block; min-width:34px; text-align:center; color:var(--text); font-weight:400; border:1px solid var(--hairline); border-radius:5px; padding:1px 5px; margin:0 3px; }
+  .chk { display:inline-flex; align-items:center; gap:6px; }
+  .chk i { width:13px; height:13px; border-radius:3px; border:1px solid var(--line); display:inline-block; }
+  .chk.on i { background:var(--text); border-color:var(--text); box-shadow:inset 0 0 0 2px var(--panel); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0 22px; padding:0 24px 12px; }
+  .side h4 { margin:6px 0 2px; font-size:12.5px; font-weight:500; display:flex; align-items:center; gap:7px; }
+  .side h4 i { width:11px; height:11px; border-radius:50%; display:inline-block; box-shadow:inset 0 0 0 1px var(--line); }
+  .side h4 .m { color:var(--muted); font-weight:400; }
+  .sr { display:grid; grid-template-columns:44px 36px 1fr 1fr; gap:0 4px; padding:6px 0; border-bottom:1px solid var(--soft); font-size:13px; white-space:nowrap; align-items:center; }
+  .sr > span:nth-child(n+3) { text-align:right; }
+  .sr.h { font-size:11.5px; color:var(--muted); border-bottom:1px solid var(--hairline); }
+  .sr .n { color:var(--muted); }
+  .sr.cur { background:var(--cur); margin:0 -6px; padding-left:6px; padding-right:6px; border-radius:4px; }
+  .sr .sc { color:var(--score); }
+  .foot { padding:8px 24px 14px; font-size:12px; color:var(--muted); border-top:1px solid var(--hairline); }
+  .empty { padding:40px 40px 48px; text-align:center; color:var(--muted); font-size:13px; line-height:1.7; }
+  .empty b { color:var(--text); font-weight:500; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M2 候选列表与波动列表 candidate list and swing list</h1>
+  Two panels in the M1 panel system. Both are drawn here as the default layout's lower panel, where the candidate table lives today, with the swing list as a second tab beside it.
+  <ul>
+    <li><b>候选 (candidate list):</b> today's table gains sorting, the share of visits and a column menu (roadmap M2, audit CA1).</li>
+    <li><b>波动 (swing list), new:</b> each side's biggest losses across the game, from the whole-game analysis. Click a row to go there (P9, audit P2-G7, the LizzieYzy comment pane's 波动 table).</li>
+  </ul>
+</div>
+
+<div class="part">一 候选</div>
+
+<div class="section">
+  <h2>1 排序与占比</h2>
+  <p class="cap"><b>Left, today:</b> KataGo's order, six columns. <b>Right, M2:</b> 与最佳相比 is off by default (it stays in the column menu), and the move actually played gets a small 实战 tag beside its point instead. Next, you can click a column header to sort by it, and click again to reverse. The rank chips keep KataGo's numbers, so a chip still matches its disc on the board. Clicking the active header a third time goes back to KataGo's order.
+  <b>Share of visits</b> goes inside the 计算量 cell instead of a new column: a hairline bar under the number, plus the percentage. You can see at a glance how sure KataGo is, without the table getting wider.
+  <span class="call">My call:</span> the sort is remembered per device, like the layout.</p>
+  <div class="row">
+    <div><div class="label">TODAY</div><div class="crop dark" data-cand='{"sort":"rank","share":false,"vs":true}'></div></div>
+    <div><div class="label">M2, SORTED BY 目差</div><div class="crop dark" data-cand='{"sort":"lead","share":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 列的选择</h2>
+  <p class="cap">Right-clicking the header row opens a menu of the columns. The point and the rank chip always stay. A narrow panel still falls back to four columns on its own, as it does today.
+  The menu also holds 候选点数量 (how many discs and rows; 自动 keeps today's rule) and 变化长度 (how many moves a hovered line shows): the two M7 settings that were left out.</p>
+  <div class="row">
+    <div><div class="label">HEADER MENU (LIGHT)</div><div class="crop light" data-cand='{"sort":"rank","share":true,"menu":true}' style="height:440px"></div></div>
+  </div>
+</div>
+
+<div class="part">二 波动</div>
+
+<div class="section">
+  <h2>3 波动列表</h2>
+  <p class="cap">A new panel, 波动. In the default layout it's a tab beside 候选, and the layout menu can put it anywhere, like any panel. Each side gets its own list of moves that lost more than the threshold, biggest loss first.
+  The controls set what counts as a loss: <b>按</b> win rate or score, the <b>threshold</b>, and <b>仅后续</b> (only moves after the current one).
+  The loss is the same number everywhere: the mover's win rate (or score) before the move minus after it, from whole-game analysis. The candidate discs' tiers already use it.
+  <span class="call">My call:</span> clicking a row goes to the position <i>before</i> that move. You see the candidates KataGo preferred, with the move actually played ringed among them (the next-move hint, B). The row for the current move is highlighted.</p>
+  <div class="row">
+    <div><div class="label">BY 胜率, OVER 5%</div><div class="crop dark" data-swing='{"by":"wr","thr":5}'></div></div>
+    <div><div class="label">BY 目差, OVER 2 目, 仅后续 (LIGHT)</div><div class="crop light" data-swing='{"by":"sc","thr":2,"after":true}'></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>4 还没有分析全局时</h2>
+  <p class="cap">A loss needs results for the positions on both sides of a move. Before whole-game analysis, the list holds only what browsing has produced, and the footer says how much of the game that covers. With nothing at all, the panel says how to fill it.</p>
+  <div class="row">
+    <div><div class="label">PARTLY ANALYSED</div><div class="crop dark" data-swing='{"by":"wr","thr":5,"partial":true}'></div></div>
+    <div><div class="label">NOTHING YET</div><div class="crop dark"><div class="tabs"><span>候选</span><span class="on">波动</span></div>
+      <div class="empty"><b>还没有可比较的结果</b><br>从棋局菜单选“分析全局…”，<br>这里会列出双方损失最大的几手。</div></div></div>
+  </div>
+</div>
+
+<script>
+// ---- Candidates ------------------------------------------------------------------------
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8, v:1240, t:'best' },
+  { p:'M13', w:53.1, s:1.3, v:842, t:'close', played:true },
+  { p:'K12', w:52.4, s:2.3, v:512, t:'close' },
+  { p:'Q10', w:50.9, s:0.2, v:203, t:'doubt' },
+  { p:'C10', w:49.6, s:-0.4, v:96, t:'doubt' },
+  { p:'N11', w:48.8, s:-0.9, v:41, t:'poor' },
+];
+const TOTAL_V = CANDS.reduce((a, c) => a + c.v, 0);
+const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+const kv = (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v));
+
+function candHtml(o) {
+  const rows = CANDS.map((c, i) => ({ ...c, rank: i + 1 }));
+  if (o.sort === 'lead') rows.sort((a, b) => b.s - a.s);
+  const best = CANDS[0];
+  const six = o.vs ? ' six' : '';
+  const hdr = (name, key) => `<span class="${o.sort === key ? 'sort' : ''}">${name}${o.sort === key ? '<span class="ar">▼</span>' : ''}</span>`;
+  let s = `<div class="tabs"><span class="on">候选</span><span>波动</span></div><div class="tbl">
+    <div class="top"><span></span><span>总计算量 ${kv(TOTAL_V)}</span></div>
+    <div class="tr h${six}"><span></span><span>落点</span>${hdr('胜率', 'wr')}${hdr('目差', 'lead')}${hdr('计算量', 'v')}${o.vs ? '<span>与最佳相比</span>' : ''}</div>`;
+  for (const c of rows) {
+    const share = Math.round(c.v / TOTAL_V * 100);
+    const vis = o.share ? `<span class="vis">${kv(c.v)}<span class="p">${share}%</span><span class="b" style="width:${Math.max(3, share * .84)}px"></span></span>` : kv(c.v);
+    const isBest = c.p === best.p;
+    const vs = isBest ? '最佳' : (c.played ? '实战 ' : '') + signed(c.w - best.w) + '%';
+    const tag = !o.vs && c.played ? '<span class="tag">实战</span>' : '';
+    s += `<div class="tr${six}"><span><i class="rk ${c.t}">${c.rank}</i></span><span>${c.p}${tag}</span><span>${c.w.toFixed(1)}%</span><span>${signed(c.s)}</span><span>${vis}</span>${o.vs ? `<span class="${isBest || c.played ? 'strong' : ''}">${vs}</span>` : ''}</div>`;
+  }
+  s += '</div>';
+  if (o.menu) s += `<div class="menu" style="left:150px;top:96px">
+    <div><span class="ck">✓</span>胜率</div><div><span class="ck">✓</span>目差</div><div><span class="ck">✓</span>计算量</div><div><span class="ck">✓</span>占比</div><div><span class="ck"></span>与最佳相比</div>
+    <div class="sep"></div><div><span class="ck"></span>候选点数量 <span class="m" style="margin-left:auto">自动 ▸</span></div><div><span class="ck"></span>变化长度 <span class="m" style="margin-left:auto">10 手 ▸</span></div>
+    <div class="sep"></div><div><span class="ck"></span>按 KataGo 排序</div></div>`;
+  return s;
+}
+
+// ---- Swings: the trend-graph game ----------------------------------------------------------
+const TOTAL = 247, CURRENT = 130;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const r = rng(7);
+const lead = []; let l = 0.4;
+const swings = { 15: -2.4, 38: 2.8, 63: -2.6, 88: 3.4, 101: -2.0, 117: -1.6, 124: 2.6, 130: 2.3, 241: -3.0, 162: -2.2, 190: 3.1, 214: -1.8, 151: -2.9, 176: 2.4 };
+for (let i = 0; i <= TOTAL; i++) { l += (r() - 0.5) * 0.7 + (swings[i] || 0); if (i > 120) l -= 0.03; lead.push(+l.toFixed(1)); }
+const winrate = lead.map((v, i) => 1 / (1 + Math.exp(-v / (7 - 5 * i / TOTAL))));
+const POINTS = ['Q16','D4','Q3','D16','C14','R6','O3','F17','E15','J16','R14','P16','C6','F3','H8','E5','D9','K3','N4','C10','F10','M8','J7','G13','N11','O16','R10','L17','Q8','H3','E12'];
+const nameAt = (i) => POINTS[(i * 7) % POINTS.length];
+
+function losses(o) {
+  const has = (i) => !o.partial || i <= 95 || (i >= 111 && i <= 130) || i >= 238;
+  const out = { b: [], w: [] };
+  for (let i = 1; i <= TOTAL; i++) {
+    if (!has(i) || !has(i - 1)) continue;
+    if (o.after && i <= CURRENT) continue;
+    const black = i % 2 === 1;
+    const dw = (winrate[i - 1] - winrate[i]) * 100 * (black ? 1 : -1);
+    const ds = (lead[i - 1] - lead[i]) * (black ? 1 : -1);
+    const loss = o.by === 'wr' ? dw : ds;
+    if (loss < o.thr) continue;
+    (black ? out.b : out.w).push({ i, dw, ds, loss });
+  }
+  out.b.sort((a, b) => b.loss - a.loss); out.w.sort((a, b) => b.loss - a.loss);
+  return out;
+}
+
+function sideHtml(name, color, list, o) {
+  let s = `<div class="side"><h4><i style="background:${color}"></i>${name}<span class="m">${list.length} 手</span></h4>
+    <div class="sr h"><span>手数</span><span>落点</span><span>胜率</span><span>目差</span></div>`;
+  for (const m of list.slice(0, 8)) {
+    s += `<div class="sr${m.i === CURRENT ? ' cur' : ''}"><span class="n">${m.i}</span><span>${nameAt(m.i)}</span><span>−${m.dw.toFixed(1)}%</span><span class="sc">${m.ds >= 0 ? '−' : '+'}${Math.abs(m.ds).toFixed(1)}</span></div>`;
+  }
+  if (!list.length) s += `<div class="sr"><span class="n" style="grid-column:1/-1">没有</span></div>`;
+  return s + '</div>';
+}
+
+function swingHtml(o) {
+  const L = losses(o);
+  let s = `<div class="tabs"><span>候选</span><span class="on">波动</span></div>
+    <div class="ctl">按 <span class="seg"><span class="${o.by === 'wr' ? 'on' : ''}">胜率</span><span class="${o.by === 'sc' ? 'on' : ''}">目差</span></span>
+    <span class="field">超过<b>${o.thr}</b>${o.by === 'wr' ? '%' : '目'}</span>
+    <span class="chk${o.after ? ' on' : ''}"><i></i>仅后续</span></div>
+    <div class="cols">${sideHtml('黑', '#1d1d1b', L.b, o)}${sideHtml('白', '#f4f2ec', L.w, o)}</div>`;
+  if (o.partial) s += `<div class="foot">只有 154 个局面有结果，部分手还没法比较。分析全局后列表才完整。</div>`;
+  return s;
+}
+
+for (const el of document.querySelectorAll('[data-cand]')) el.innerHTML = candHtml(JSON.parse(el.dataset.cand));
+for (const el of document.querySelectorAll('[data-swing]')) el.innerHTML = swingHtml(JSON.parse(el.dataset.swing));
+</script>
+</body>
+</html>

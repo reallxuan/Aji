@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 next move and ownership</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --score:#E3A548; --ok:#1e8e5a; --barblack:#050506; --barwhite:#f4f2ec; --baredge:#3a3a40; }
+  .light { --panel:#f5f5f3; --hairline:#d6d6d2; --soft:#e6e6e2; --text:#1d1d1b; --muted:#5e5e5a; --line:#a3a39e; --score:#B26A00; --ok:#1e8e5a; --barblack:#1d1d1b; --barwhite:#ffffff; --baredge:#c9c9c4; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1240px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .part { max-width:1340px; margin:0 auto 10px; font-size:17px; font-weight:600; color:#ECEAE4; border-top:1px solid #2a2a2e; padding-top:22px; }
+  .section { max-width:1340px; margin:0 auto 44px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1040px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+  .boardonly { width:868px; zoom:.42; border-radius:4px; overflow:hidden; position:relative; }
+  .boardonly canvas { width:868px; height:868px; display:block; }
+  .zoomed { width:260px; height:260px; border-radius:6px; overflow:hidden; position:relative; }
+  .zoomed canvas { position:absolute; width:868px; height:868px; zoom:2.6; }
+
+  .crop { width:540px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; position:relative; overflow:hidden; }
+  .hdr { display:flex; align-items:center; gap:10px; padding:14px 18px 14px 24px; border-bottom:1px solid var(--hairline); font-size:14px; height:56px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+  .hdr .nav { color:var(--muted); display:flex; gap:10px; align-items:center; font-size:13px; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); margin-left:4px; flex:none; }
+  .wr { padding:16px 24px 6px; }
+  .bar { height:26px; display:flex; border-radius:4px; overflow:hidden; box-shadow:inset 0 0 0 1px var(--baredge); font-size:13px; font-weight:600; }
+  .bar .b { background:var(--barblack); color:#f4f2ec; display:flex; align-items:center; gap:10px; padding-left:9px; }
+  .bar .ld { font-weight:400; opacity:.72; }
+  .bar .w { background:var(--barwhite); color:#1d1d1b; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-right:9px; flex:1; box-shadow:inset 0 0 0 1px var(--baredge); }
+  .est { display:flex; align-items:center; gap:16px; margin:8px 24px 0; padding:8px 0 10px; font-size:13px; color:var(--muted); border-top:1px dashed var(--hairline); }
+  .est .h { color:var(--text); font-weight:500; }
+  .est b { color:var(--text); font-weight:500; }
+  .est .v { margin-left:auto; color:var(--text); font-weight:600; }
+  .est .x { color:var(--muted); font-size:12px; border:1px solid var(--hairline); border-radius:5px; padding:1px 7px; }
+  .rest { padding:14px 24px; font-size:13px; color:var(--muted); border-top:1px solid var(--hairline); margin-top:10px; }
+
+  .menu { width:250px; background:#2a2a2e; color:#eceae4; border:1px solid #3a3a40; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.32); padding:5px; font-size:13px; }
+  .menu div { padding:6px 10px; border-radius:5px; display:flex; justify-content:space-between; gap:12px; }
+  .menu div .m { color:#a3a19a; }
+  .menu div.sep { padding:0; height:1px; background:#3a3a40; margin:5px 4px; }
+  .menu div.new { background:color-mix(in srgb, #7fd1a8 14%, transparent); }
+  .settings { width:540px; background:#1e1e21; color:#eceae4; border-radius:8px; outline:1px solid #2a2a2e; padding:16px 24px; font-size:14px; }
+  .settings h3 { font-size:12.5px; color:#a3a19a; font-weight:500; margin:0 0 6px; }
+  .settings .r { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #28282c; gap:16px; }
+  .settings .r.new { background:color-mix(in srgb, #7fd1a8 12%, transparent); margin:0 -10px; padding:9px 10px; border-radius:4px; }
+  .settings .sub { font-size:12px; color:#a3a19a; margin-top:2px; }
+  .seg { display:inline-flex; border:1px solid #303035; border-radius:6px; overflow:hidden; font-size:13px; }
+  .seg span { padding:3px 11px; color:#a3a19a; white-space:nowrap; }
+  .seg span + span { border-left:1px solid #303035; }
+  .seg span.on { background:#28282c; color:#eceae4; font-weight:500; }
+  .tog { width:34px; height:20px; border-radius:10px; background:#1e8e5a; position:relative; flex:none; }
+  .tog::after { content:''; position:absolute; right:3px; top:3px; width:14px; height:14px; border-radius:50%; background:#fff; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M2 下一手提示与形势 next-move hint and ownership</h1>
+  Same game as the earlier mockups. Part 1 is at move 58, with Black to play move 59. Part 2 is at move 80.
+  <ul>
+    <li><b>Next-move hint:</b> while you review a record, where the record's next move was played. M7 already rings it when it is one of the candidate discs. M2 handles the rest: KataGo didn't list it, or the candidates are hidden.</li>
+    <li><b>形势:</b> KataGo's ownership map, which says who each point and stone will most likely belong to, and the count it adds up to (形势判断). Final scoring with dead stones marked by hand (终局点目) comes in the next mockup.</li>
+  </ul>
+</div>
+
+<div class="part">一 下一手提示</div>
+
+<div class="section">
+  <h2>1 已有：实战下在候选点上</h2>
+  <p class="cap">Shipped in M7, unchanged: the record's move 59 is M13, the second candidate, so its disc gets the dark outer ring. The table says 实战 −1.1%.</p>
+  <div class="row">
+    <div><div class="label">M13 IS A CANDIDATE</div><div class="zoomed"><canvas data-next='{"discs":true,"next":"M13","focus":"M13"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>2 新：实战不在候选点里</h2>
+  <p class="cap">Suppose the record's move 59 is O9, a move KataGo didn't consider worth a search. Today nothing shows. Three ways to mark it:
+  <b>A 空环</b>: the same dark ring as on a played disc, around an empty point. "The ring means the record's next move" stays true everywhere.
+  <b>B 实战圆盘</b>: a full disc with that ring, its numbers taken from the result of the position after O9 (KataGo's view of Black's position once O9 is on the board). It is tiered like any disc, so a bad move looks pale. If that position has no result yet, it shows A's empty ring until it does. With whole-game analysis it nearly always has one.
+  <b>C 虚子</b>: a translucent black stone, the usual way other programs show it.
+  <span class="call">My call:</span> B, falling back to A. The table gets the same row (实战 −10.6%), so the list and the board agree.</p>
+  <div class="row">
+    <div><div class="label"><b>A</b> 空环</div><div class="boardonly"><canvas data-next='{"discs":true,"next":"O9","style":"ring"}'></canvas></div></div>
+    <div><div class="label"><b>B</b> 实战圆盘</div><div class="boardonly"><canvas data-next='{"discs":true,"next":"O9","style":"disc"}'></canvas></div></div>
+    <div><div class="label"><b>C</b> 虚子</div><div class="boardonly"><canvas data-next='{"discs":true,"next":"O9","style":"ghost"}'></canvas></div></div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <div><div class="label"><b>A</b> CLOSE</div><div class="zoomed"><canvas data-next='{"discs":true,"next":"O9","style":"ring","focus":"O10"}'></canvas></div></div>
+    <div><div class="label"><b>B</b> CLOSE</div><div class="zoomed"><canvas data-next='{"discs":true,"next":"O9","style":"disc","focus":"O10"}'></canvas></div></div>
+    <div><div class="label"><b>C</b> CLOSE</div><div class="zoomed"><canvas data-next='{"discs":true,"next":"O9","style":"ghost","focus":"O10"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>3 候选点隐藏时（F）</h2>
+  <p class="cap">With the candidates hidden (F, or Z held), or with the engine stopped, the board shows no discs, so B has nothing to stand among. The next move shows as A's empty ring, as long as the setting below is on. If you want to guess the next move yourself, turn it off.</p>
+  <div class="row">
+    <div><div class="label">HIDDEN, NEXT MOVE M13</div><div class="boardonly"><canvas data-next='{"discs":false,"next":"M13","style":"disc"}'></canvas></div></div>
+    <div class="settings" style="align-self:flex-start">
+      <h3>分析</h3>
+      <div class="r"><span>候选点第二行</span><span>目差</span></div>
+      <div class="r new"><div><div>显示棋谱的下一手</div><div class="sub">打谱时标出实战下在哪里。</div></div><span class="tog"></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="part">二 形势</div>
+
+<div class="section">
+  <h2>4 归属怎么画</h2>
+  <p class="cap">Move 80, Black to play. KataGo's ownership for every point, plus two stones it reads as dead: White F3 at the bottom and White R16 at the top right.
+  <b>A 方块</b>: a square on each point, black or white for the side expected to own it, larger the surer KataGo is. On a dead stone the square is the other colour, on top of the stone. This is the common style: precise and readable point by point, but busy.
+  <b>B 色块</b>: every point's cell is tinted darker (Black's) or lighter (White's), so areas read as regions, the way you'd shade a map. Dead stones are drawn faded. It's calm, but tints on wood look muddy where an area is uncertain.
+  <b>C 只标定型</b>: like A, but only points KataGo is fairly sure of (over 60%), all one size. Contested areas stay bare wood. That's exactly what 形势判断 counts, so the board and the count agree.
+  <span class="call">My call:</span> C. The board stays quiet, and every square you see is one point in the count.</p>
+  <div class="row">
+    <div><div class="label"><b>A</b> 方块</div><div class="boardonly"><canvas data-own='{"style":"squares"}'></canvas></div></div>
+    <div><div class="label"><b>B</b> 色块</div><div class="boardonly"><canvas data-own='{"style":"wash"}'></canvas></div></div>
+    <div><div class="label"><b>C</b> 只标定型</div><div class="boardonly"><canvas data-own='{"style":"count"}'></canvas></div></div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <div><div class="label"><b>A</b> CLOSE, DEAD F3</div><div class="zoomed"><canvas data-own='{"style":"squares","focus":"F3"}'></canvas></div></div>
+    <div><div class="label"><b>B</b> CLOSE</div><div class="zoomed"><canvas data-own='{"style":"wash","focus":"F3"}'></canvas></div></div>
+    <div><div class="label"><b>C</b> CLOSE</div><div class="zoomed"><canvas data-own='{"style":"count","focus":"F3"}'></canvas></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>5 形势判断：开关与数字</h2>
+  <p class="cap">One switch shows both: the board gets the squares, and the panel gets a line under the win-rate bar with the count. 显示 → 形势判断 in the macOS menu bar (视图 on Windows), and the key T. The candidate discs stay on while it's shown; ✕ or T turns it off. It follows the current position as you navigate.
+  The count is area scoring under Chinese rules (or territory under Japanese rules, following the rules chip). Every point is given to the side KataGo leans to, so the two counts add up to 361 and the margin lands close to the bar's lead. The squares on the board show only the points that are settled.</p>
+  <div class="row">
+    <div class="crop dark">
+      <div class="hdr"><span class="t">林清 五段 对 周野 五段 <span style="color:var(--muted)">▾</span></span><span class="chip">中国 7.5</span><span class="nav">⏮ ‹ <b>80</b> / 247 › ⏭</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+      <div class="wr"><div class="bar"><div class="b" style="width:58.4%">58.4%<span class="ld">领先 2.1 目</span></div><div class="w">41.6%</div></div></div>
+      <div class="est"><span class="h">形势判断</span><span>黑 <b id="cb">–</b></span><span>白 <b id="cw">–</b></span><span>贴目 7.5</span><span class="v" id="cv">–</span><span class="x">✕</span></div>
+      <div class="rest">胜率走势 …</div>
+    </div>
+    <div class="menu"><div>布局 <span class="m">▸</span></div><div>截图</div><div class="sep"></div><div class="new">形势判断 <span class="m">T</span></div></div>
+  </div>
+</div>
+
+<script>
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+
+function play(upto, extra) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, upto).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 }));
+  for (const m of (extra || [])) seq.push(m);
+  let last = null;
+  for (const {x, y, c} of seq) {
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+
+// Black to move; w and s are Black's.
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8, v:1240, pv:['L14','M13','M14','N13','L12','M12','K12','N12'] },
+  { p:'M13', w:53.1, s:1.3, v:842,  pv:['M13','L14'], played:true },
+  { p:'K12', w:52.4, s:0.9, v:512,  pv:['K12'] },
+  { p:'Q10', w:50.9, s:0.2, v:203,  pv:['Q10'] },
+  { p:'C10', w:49.6, s:-0.4, v:96,  pv:['C10'] },
+  { p:'N11', w:48.8, s:-0.9, v:41,  pv:['N11'] },
+];
+const tier = (c) => { const loss = CANDS[0].w - c.w; return c === CANDS[0] ? 'best' : loss < 2 ? 'close' : loss <= 4 ? 'doubt' : 'poor'; };
+const shown = (c, view) => view === 'white' ? { w:100 - c.w, s:-c.s } : { w:c.w, s:c.s };
+const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function noise1(r, knots) { const v = Array.from({length:knots + 2}, () => r() * 2 - 1); return (t) => { const i = Math.floor(t), f = t - i, s = f * f * (3 - 2 * f); const a = v[((i % knots) + knots) % knots], b = v[(((i + 1) % knots) + knots) % knots]; return a + (b - a) * s; }; }
+
+// After: straight grain. The same fibres, plus fine growth lines that drift slowly down the board.
+function woodNew(ctx, W) {
+  const r = rand(5), oct = [[.5,.012],[.07,.012],[.014,.014],[.004,.010]].map(([p, w]) => ({ p, w, n:noise1(r, 256) }));
+  const prof = new Float32Array(W * 3);
+  for (let x = 0; x < W * 3; x++) { const u = x / W; let s = 0; for (const o of oct) s += o.n(u / o.p) * o.w; prof[x] = s; }
+  // Growth lines: irregular spacing, each a narrow dip with a soft edge.
+  const lines = new Float32Array(W * 3); let x = 0;
+  while (x < W * 3) {
+    x += W * (.012 + r() * .05);
+    const width = W * (.0015 + r() * .003), depth = .025 + r() * .035;
+    for (let k = -width * 3; k < width * 3; k++) { const i = Math.round(x + k); if (i >= 0 && i < lines.length) lines[i] -= depth * Math.exp(-(k * k) / (2 * width * width)); }
+  }
+  const drift = noise1(r, 64), sway = noise1(r, 64);
+  const img = ctx.createImageData(W, W), d = img.data;
+  for (let y = 0; y < W; y++) {
+    const v = y / W;
+    for (let x2 = 0; x2 < W; x2++) {
+      const u = x2 / W;
+      // The grain leans and wanders a little, more in some places than others.
+      const off = W + (drift(v * 2.2 + u * .8) * .018 + sway(u * 6 + v * .5) * .004 + v * .01) * W;
+      const j = Math.max(0, Math.min(W * 3 - 1, Math.round(x2 + off)));
+      const k = 1 + prof[j] + lines[j] + .015 - .04 * u, i = (y * W + x2) * 4;
+      d[i] = 0xdd * k; d[i+1] = 0xb0 * k; d[i+2] = 0x67 * k; d[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function stone(ctx, cx, cy, r, color, seed) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .55; ctx.shadowOffsetX = r * .14; ctx.shadowOffsetY = r * .2;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.55)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  if (color === 1) { const gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r); gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a'); ctx.fillStyle = gr; }
+  else { const gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa'); ctx.fillStyle = gr; }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1) { const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5); hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); }
+}
+
+function disc(ctx, cx, cy, r, c, dpr, opt) {
+  const t = tier(c), px = (v) => v * dpr, n = shown(c, opt.view);
+  ctx.save();
+  if (t === 'best') { ctx.shadowColor = 'rgba(40,20,4,.35)'; ctx.shadowBlur = px(6); ctx.shadowOffsetY = px(2); }
+  ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1;
+  ctx.fillStyle = t === 'best' ? '#FDF6E3' : '#FBF1D9';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  const ring = { best:[3.5,'#B8321F',1], close:[1.5,'#B8321F',1], doubt:[1.5,'#8A6A32',1], poor:[1,'#8A6A32',.6] }[t];
+  ctx.save(); ctx.globalAlpha = ring[2]; ctx.lineWidth = px(ring[0]); ctx.strokeStyle = ring[1];
+  ctx.beginPath(); ctx.arc(cx, cy, r - px(ring[0]) / 2, 0, 7); ctx.stroke(); ctx.restore();
+  // Before: centred a full ring width out, leaving a gap. After: half a width out, so it touches.
+  if (c.played) { ctx.lineWidth = px(2.5); ctx.strokeStyle = '#2B1D0E'; ctx.beginPath(); ctx.arc(cx, cy, r + px(opt.gap ? 2.5 : 1.25), 0, 7); ctx.stroke(); }
+  ctx.fillStyle = t === 'best' || t === 'close' ? '#2B1D0E' : '#4A3410'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`; ctx.fillText(n.w.toFixed(1), cx, cy - r * .2);
+  ctx.font = `500 ${r * .48}px Inter`; ctx.fillText(signed(n.s), cx, cy + r * .36);
+}
+
+
+// ---- P2 M2: next-move hint and ownership ---------------------------------------------------
+// Ownership made up from the stones: each stone pulls nearby points its way; a few stones are
+// declared dead and pull for the other side. +1 is Black's, -1 White's.
+function ownership(g, dead) {
+  const own = Array.from({length:N}, () => Array(N).fill(0));
+  const src = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) {
+    const isDead = dead.some((p) => { const [dx, dy] = pt(p); return dx === x && dy === y; });
+    src.push({ x, y, s: (g[y][x] === 1 ? 1 : -1) * (isDead ? -1 : 1) });
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let v = 0;
+    for (const t of src) { const d2 = (t.x - x) ** 2 + (t.y - y) ** 2; v += t.s * Math.exp(-d2 / 7); }
+    // The edge belongs a little more firmly to whoever is near it.
+    const edge = Math.min(x, y, N - 1 - x, N - 1 - y) < 2 ? 1.3 : 1;
+    own[y][x] = Math.tanh(v * 1.25 * edge);
+  }
+  return own;
+}
+
+function boardBase(canvas, opt) {
+  const css = 868, dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  woodNew(ctx, W);
+  const margin = 42 * dpr, sp = (W - 2 * margin) / (N - 1), at = i => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N-1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N-1), at(i)); }
+  ctx.stroke();
+  ctx.lineWidth = Math.round(1.6 * dpr); ctx.strokeRect(at(0), at(0), at(N-1) - at(0), at(N-1) - at(0));
+  ctx.fillStyle = '#3A2A14';
+  for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .11, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${12 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i)); }
+  if (opt.focus) { const [fx, fy] = pt(opt.focus); canvas.style.left = (-(at(fx) / dpr) + 50) + 'px'; canvas.style.top = (-(at(fy) / dpr) + 50) + 'px'; }
+  return { ctx, dpr, sp, at };
+}
+
+function drawNext(canvas, opt) {
+  const { ctx, dpr, sp, at } = boardBase(canvas, opt);
+  const { g, last } = play(UPTO);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3);
+  if (last) { const c = g[last[1]][last[0]]; ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a'; ctx.beginPath(); ctx.arc(at(last[0]), at(last[1]), sp * .11, 0, 7); ctx.fill(); }
+  const r = sp * .47, px = (v) => v * dpr;
+  // In "offlist", the record's next move is O9, which KataGo did not list; M13 is just a candidate.
+  const next = opt.next;
+  if (opt.discs) for (const c0 of CANDS) {
+    const c = Object.assign({}, c0, { played: next === 'M13' && c0.p === 'M13' });
+    const [x, y] = pt(c.p); disc(ctx, at(x), at(y), r, c, dpr, { view:'black' });
+  }
+  if (next && next !== 'M13' || (next === 'M13' && !opt.discs)) {
+    const [x, y] = pt(next), cx = at(x), cy = at(y);
+    const style = opt.style;
+    if (style === 'ring' || (style === 'disc' && !opt.discs)) {
+      ctx.lineWidth = px(2.5); ctx.strokeStyle = '#2B1D0E';
+      ctx.beginPath(); ctx.arc(cx, cy, r + px(1.25), 0, 7); ctx.stroke();
+    } else if (style === 'disc') {
+      // Its numbers come from the next position's own result, so it is a disc like any other.
+      const c = { p: next, w: 43.6, s: -2.9, v: 500, played: true };
+      const save = CANDS[0]; disc(ctx, cx, cy, r, c, dpr, { view:'black' });
+    } else if (style === 'ghost') {
+      ctx.save(); ctx.globalAlpha = .45; stone(ctx, cx, cy, sp * .48, 1, 3); ctx.restore();
+    } else if (style === 'num') {
+      ctx.save(); ctx.globalAlpha = .55; stone(ctx, cx, cy, sp * .48, 1, 3); ctx.restore();
+      ctx.fillStyle = '#f4f1ea'; ctx.font = `600 ${sp * .4}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('59', cx, cy + sp * .02);
+    }
+  }
+}
+
+const DEAD = ['F3', 'R16'];
+function drawOwn(canvas, opt) {
+  const { ctx, dpr, sp, at } = boardBase(canvas, opt);
+  const { g, last } = play(80);
+  const own = ownership(g, DEAD);
+  const style = opt.style;
+  // Wash: each point's whole cell is tinted, so areas read as regions. Drawn under the stones.
+  if (style === 'wash') {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const v = own[y][x]; if (Math.abs(v) < .15) continue;
+      ctx.fillStyle = v > 0 ? `rgba(20,16,10,${(Math.abs(v) * .42).toFixed(3)})` : `rgba(255,252,244,${(Math.abs(v) * .55).toFixed(3)})`;
+      ctx.fillRect(at(x) - sp / 2, at(y) - sp / 2, sp + .5, sp + .5);
+    }
+  }
+  const isDead = (x, y) => DEAD.some((p) => { const [dx, dy] = pt(p); return dx === x && dy === y; });
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) {
+    const dead = isDead(x, y) && style !== 'off';
+    ctx.save(); if (dead) ctx.globalAlpha = style === 'squares' ? 1 : .45;
+    stone(ctx, at(x), at(y), sp * .48, g[y][x], x * 7 + y * 3); ctx.restore();
+  }
+  if (last && style === 'off') { const c = g[last[1]][last[0]]; ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a'; ctx.beginPath(); ctx.arc(at(last[0]), at(last[1]), sp * .11, 0, 7); ctx.fill(); }
+  // Squares: a square on every point whose side is the owner, larger the surer KataGo is;
+  // on a dead stone the square is the other colour, on top of it.
+  if (style === 'squares' || style === 'count') {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const v = own[y][x], a = Math.abs(v);
+      const stoneHere = g[y][x];
+      const dead = stoneHere && isDead(x, y);
+      if (stoneHere && !dead) continue;
+      if (style === 'count' && a < .6) continue;
+      if (style === 'squares' && a < .12) continue;
+      const side = style === 'count' ? sp * .36 : sp * (.16 + .34 * a);
+      ctx.fillStyle = v > 0 ? 'rgba(18,18,18,.86)' : 'rgba(250,248,242,.92)';
+      ctx.strokeStyle = v > 0 ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.28)'; ctx.lineWidth = dpr * .8;
+      ctx.fillRect(at(x) - side / 2, at(y) - side / 2, side, side); ctx.strokeRect(at(x) - side / 2, at(y) - side / 2, side, side);
+    }
+  }
+}
+
+function count() {
+  const { g } = play(80); const own = ownership(g, DEAD);
+  let b = 0, w = 0;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { if (own[y][x] > 0) b++; else w++; }
+  return { b, w };
+}
+
+document.fonts.ready.then(() => {
+  document.querySelectorAll('canvas[data-next]').forEach((c) => drawNext(c, JSON.parse(c.dataset.next)));
+  document.querySelectorAll('canvas[data-own]').forEach((c) => drawOwn(c, JSON.parse(c.dataset.own)));
+  const { b, w } = count();
+  document.querySelectorAll('[data-count]').forEach((el) => { el.dataset.b = b; el.dataset.w = w; });
+});
+
+// The line's numbers are made up to agree with the bar: every point goes to the side KataGo
+// leans to, and the margin lands near KataGo's own lead.
+document.getElementById('cb').textContent = '185';
+document.getElementById('cw').textContent = '176';
+document.getElementById('cv').textContent = '黑领先 1.5 目';
+</script>
+</body>
+</html>
