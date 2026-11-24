@@ -8,10 +8,11 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use super::board::{Board, Illegal, expand_points};
+use super::edit::Op;
 use super::rules::{AnalysisRules, RulesReading, is_fox_even_game, read_rules};
 use crate::coords::{BoardSize, Color, Move, Point};
 use crate::position::Position;
-use crate::sgf::{SgfNode, SgfTree};
+use crate::sgf::{SgfNode, SgfProp, SgfTree};
 
 /// A node's index in the game's arena. Ids stay stable when nodes move.
 pub type NodeId = usize;
@@ -194,6 +195,121 @@ impl Game {
         game.main_line = game.line_through(game.root);
         game.illegal_nodes = game.scan_illegal(game.root);
         Ok((game, reading))
+    }
+
+    /// Allocates a parentless node. Arena ids are never reused.
+    pub fn alloc(&mut self, props: Vec<SgfProp>, tryout: bool) -> NodeId {
+        let id = self.nodes.len();
+        self.nodes.push(Node {
+            sgf: SgfNode { props },
+            parent: None,
+            children: Vec::new(),
+            tryout,
+            attached: false,
+        });
+        self.states.push(OnceLock::new());
+        id
+    }
+
+    fn mark_subtree(&mut self, node: NodeId, attached: bool) {
+        let mut stack = vec![node];
+        while let Some(id) = stack.pop() {
+            self.nodes[id].attached = attached;
+            stack.extend_from_slice(self.children(id));
+        }
+    }
+
+    /// Applies a well-formed primitive operation and returns its exact inverse.
+    pub fn apply_op(&mut self, op: &Op) -> Op {
+        use std::mem::replace;
+        match *op {
+            Op::Attach {
+                node,
+                parent,
+                index,
+            } => {
+                assert!(self.parent(node).is_none() && !self.is_attached(node));
+                // An attached parent belongs to a different tree by construction.
+                assert!(
+                    self.is_attached(parent)
+                        || !std::iter::successors(Some(parent), |&p| self.parent(p))
+                            .any(|p| p == node)
+                );
+                self.nodes[parent].children.insert(index, node);
+                self.nodes[node].parent = Some(parent);
+                self.mark_subtree(node, self.is_attached(parent));
+                self.invalidate(node);
+                Op::Detach { node }
+            }
+            Op::Detach { node } => {
+                let parent = self.parent(node).expect("detaching a node with a parent");
+                let index = self
+                    .children(parent)
+                    .iter()
+                    .position(|&id| id == node)
+                    .expect("parent lists the child");
+                self.nodes[parent].children.remove(index);
+                self.nodes[node].parent = None;
+                self.mark_subtree(node, false);
+                self.invalidate(node);
+                Op::Attach {
+                    node,
+                    parent,
+                    index,
+                }
+            }
+            Op::SetProps { node, ref props } => {
+                let props = replace(&mut self.nodes[node].sgf.props, props.clone());
+                self.invalidate(node);
+                Op::SetProps { node, props }
+            }
+            Op::SetTryout { node, on } => {
+                let on = replace(&mut self.nodes[node].tryout, on);
+                Op::SetTryout { node, on }
+            }
+            Op::SetRoot { node } => {
+                assert!(self.parent(node).is_none());
+                let old = replace(&mut self.root, node);
+                if old != node {
+                    self.mark_subtree(old, false);
+                    self.invalidate(old);
+                    self.mark_subtree(node, true);
+                    self.invalidate(node);
+                }
+                Op::SetRoot { node: old }
+            }
+            Op::Reorder {
+                parent,
+                ref children,
+            } => {
+                let mut expected = self.children(parent).to_vec();
+                let mut actual = children.clone();
+                expected.sort_unstable();
+                actual.sort_unstable();
+                assert_eq!(expected, actual, "reorder must preserve the children");
+                let children = replace(&mut self.nodes[parent].children, children.clone());
+                self.main_line = self.line_through(self.root);
+                Op::Reorder { parent, children }
+            }
+        }
+    }
+
+    /// Drops the contents of detached trees that the caller's history can no longer reach.
+    pub fn release(&mut self, nodes: &[NodeId]) {
+        let mut stack = Vec::new();
+        for &id in nodes {
+            if !self.is_attached(id) && self.parent(id).is_none() {
+                stack.push(id);
+            }
+        }
+        while let Some(id) = stack.pop() {
+            let node = &mut self.nodes[id];
+            stack.append(&mut std::mem::take(&mut node.children));
+            node.sgf = SgfNode::default();
+            node.parent = None;
+            node.tryout = false;
+            self.states[id].take();
+        }
     }
 
     pub fn size(&self) -> BoardSize {

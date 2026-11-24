@@ -2,11 +2,13 @@
 //! sent to KataGo.
 
 mod board;
+mod edit;
 mod record;
 mod rules;
 mod score;
 
 pub use board::*;
+pub use edit::*;
 pub use record::*;
 pub use rules::*;
 pub use score::*;
