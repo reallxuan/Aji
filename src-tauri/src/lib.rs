@@ -1,5 +1,6 @@
 pub mod follow;
 pub mod game;
+pub mod history;
 mod ipc;
 pub mod job;
 pub mod lizzie;

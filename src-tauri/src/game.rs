@@ -2,12 +2,16 @@
 //! KataGo analyses it with, and what reading the file repaired. `service` holds it behind a
 //! mutex and tells the engine about every change.
 
-use aji_core::game::{AnalysisRules, Game, GameError, Illegal, NodeId, Preview};
+use aji_core::game::{
+    AnalysisRules, Change, Edit, EditError, Game, GameError, Illegal, InfoField, Mark, NodeId, Op,
+    Preview,
+};
 use aji_core::sgf::{EncodingSource, SgfError, SgfNode, SgfTree, SgfWarning, decode, parse_sgf};
-use aji_core::{BoardSize, Color, Move, Position, PositionKey};
+use aji_core::{BoardSize, Color, Move, Point, Position, PositionKey};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::history::{EntryKind, History, Spot};
 use crate::protocol::GameSnapshot;
 
 /// The largest file Aji opens.
@@ -29,6 +33,86 @@ pub enum NavTarget {
     NextSibling,
     BranchPoint,
     MainLine,
+}
+
+/// An edit requested by the interface. Node IDs belong to the open record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum SessionEdit {
+    Play {
+        mv: Move,
+    },
+    Pass,
+    InsertMove {
+        color: Color,
+        mv: Move,
+    },
+    DeleteBranch {
+        node: u32,
+    },
+    DeleteFrom {
+        node: u32,
+    },
+    Promote {
+        node: u32,
+    },
+    MoveUp {
+        node: u32,
+    },
+    SetComment {
+        node: u32,
+        text: Option<String>,
+    },
+    SetMark {
+        node: u32,
+        point: Point,
+        mark: Option<Mark>,
+    },
+    ClearMarks {
+        node: u32,
+    },
+    SetupStone {
+        point: Point,
+        stone: Option<Color>,
+    },
+    MoveStone {
+        from: Point,
+        to: Point,
+    },
+    SetToPlay {
+        color: Color,
+    },
+    Flatten,
+    SetInfo {
+        field: InfoField,
+        value: Option<String>,
+    },
+    SetRules {
+        rules: Option<AnalysisRules>,
+    },
+    TryoutStart,
+    TryoutEnd,
+    TryoutKeep {
+        node: u32,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    Illegal(Illegal),
+    EndTryoutFirst,
+    NoSuchNode,
+    InvalidRules,
+}
+
+impl From<EditError> for Refusal {
+    fn from(error: EditError) -> Self {
+        match error {
+            EditError::Illegal(reason) => Self::Illegal(reason),
+            EditError::NoSuchNode | EditError::NotTryout => Self::NoSuchNode,
+        }
+    }
 }
 
 /// Something reading the file repaired or guessed. The UI shows one line for them.
@@ -85,6 +169,8 @@ impl From<GameError> for OpenError {
 /// The open game and where the user is in it.
 pub struct GameSession {
     game: Game,
+    history: History,
+    tryout: Option<NodeId>,
     /// The file's other games, written back on export.
     others: Vec<SgfTree>,
     current: NodeId,
@@ -146,6 +232,30 @@ fn main_line_mut(tree: &mut SgfTree) -> Vec<&mut SgfNode> {
     out
 }
 
+/// A rules edit affects every position. For an in-place record edit, compare the
+/// properties used by replay. Structural edits are covered by the line's node IDs.
+fn edited_line_positions(kind: &EntryKind, line: &[NodeId]) -> bool {
+    let EntryKind::Record(change) = kind else {
+        return true;
+    };
+    change
+        .forward
+        .iter()
+        .zip(change.inverse.iter().rev())
+        .any(|(forward, inverse)| {
+            let (Op::SetProps { node, props: after }, Op::SetProps { props: before, .. }) =
+                (forward, inverse)
+            else {
+                return false;
+            };
+            // Core replay uses the first property with each identifier, even in unusual files.
+            line.contains(node)
+                && ["AB", "AW", "AE", "PL", "B", "W", "HA"].iter().any(|&id| {
+                    before.iter().find(|p| p.id == id) != after.iter().find(|p| p.id == id)
+                })
+        })
+}
+
 impl GameSession {
     /// An empty game of `size` lines (5 to 19).
     pub fn new(size: u8, rules: AnalysisRules) -> Result<GameSession, OpenError> {
@@ -164,6 +274,8 @@ impl GameSession {
         };
         let (game, reading) = Game::from_sgf(tree, rules)?;
         Ok(GameSession {
+            history: History::default(),
+            tryout: None,
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
@@ -228,6 +340,8 @@ impl GameSession {
         }
 
         Ok(GameSession {
+            history: History::default(),
+            tryout: None,
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
@@ -264,9 +378,9 @@ impl GameSession {
             .expect("current belongs to the line")
     }
 
-    fn refresh_line(&mut self) {
+    fn refresh_line(&mut self, positions_changed: bool) {
         let line = self.game.line_through(self.tip);
-        if self.selected_line != line {
+        if positions_changed || self.selected_line != line {
             self.selected_line = line;
             self.line_revision += 1;
         }
@@ -291,7 +405,7 @@ impl GameSession {
                 .find(|&id| self.game.is_attached(id))
                 .unwrap_or(self.game.root());
         }
-        self.refresh_line();
+        self.refresh_line(false);
     }
 
     pub fn trim(&mut self) {
@@ -404,7 +518,7 @@ impl GameSession {
         let old_revision = self.line_revision;
         if (to == NavTarget::MainLine && line != self.game.main_line()) || !line.contains(&target) {
             self.tip = target;
-            self.refresh_line();
+            self.refresh_line(false);
         }
         let moved = self.current != target || self.line_revision != old_revision;
         self.current = target;
@@ -415,19 +529,265 @@ impl GameSession {
         moved
     }
 
-    /// Sets the rules KataGo analyses with; `None` goes back to the file's reading. Returns
-    /// whether their effect changed. Rules outside what the interface allows are refused.
-    pub fn set_rules(&mut self, rules: Option<AnalysisRules>) -> Result<bool, AnalysisRules> {
-        let rules = rules.unwrap_or(self.from_file);
-        if !rules.is_valid() {
-            return Err(rules);
+    fn spot(&self) -> Spot {
+        Spot {
+            current: self.current,
+            tip: self.tip,
+            tryout: self.tryout,
         }
-        let changed = !rules.same_effect(&self.rules);
-        if self.rules != rules {
-            self.rules = rules;
+    }
+
+    fn restore(&mut self, spot: Spot, positions_changed: bool) {
+        self.current = spot.current;
+        self.tip = spot.tip;
+        self.tryout = spot.tryout;
+        self.refresh_line(positions_changed);
+        self.trim();
+        self.revision += 1;
+    }
+
+    fn push(&mut self, kind: EntryKind, kept: bool, before: Spot) {
+        let discarded = self.history.push(kind, kept, before, self.spot());
+        self.history.release_discarded(&mut self.game, discarded);
+    }
+
+    fn variation_start(&self, node: u32) -> Result<NodeId, Refusal> {
+        let mut node = node as NodeId;
+        if self.game.is_attached(node) {
+            while let Some(parent) = self.game.parent(node) {
+                if self.game.children(parent).first() != Some(&node) {
+                    return Ok(node);
+                }
+                node = parent;
+            }
+        }
+        Err(Refusal::NoSuchNode)
+    }
+
+    fn check_tryout(&self, edit: &SessionEdit) -> Result<(), Refusal> {
+        use SessionEdit::*;
+        match *edit {
+            TryoutEnd | Pass | Play { .. } => Ok(()),
+            SetComment { node, .. } | DeleteFrom { node } | TryoutKeep { node } => {
+                let id = node as NodeId;
+                if !self.game.is_attached(id) {
+                    return Err(Refusal::NoSuchNode);
+                }
+                if self.game.is_tryout(id) {
+                    Ok(())
+                } else {
+                    Err(Refusal::EndTryoutFirst)
+                }
+            }
+            _ => Err(Refusal::EndTryoutFirst),
+        }
+    }
+
+    fn has_tryout_nodes(&self) -> bool {
+        let mut stack = vec![self.game.root()];
+        while let Some(node) = stack.pop() {
+            if self.game.is_tryout(node) {
+                return true;
+            }
+            stack.extend_from_slice(self.game.children(node));
+        }
+        false
+    }
+
+    fn edit_rules(&mut self, rules: Option<AnalysisRules>) -> Result<bool, Refusal> {
+        let after = rules.unwrap_or(self.from_file);
+        if !after.is_valid() {
+            return Err(Refusal::InvalidRules);
+        }
+        if self.rules == after {
+            return Ok(false);
+        }
+        let old_rules = self.rules;
+        self.rules = after;
+        if !old_rules.same_effect(&after) {
+            self.line_revision += 1;
+            self.push(
+                EntryKind::Rules {
+                    before: old_rules,
+                    after,
+                },
+                true,
+                self.spot(),
+            );
+        }
+        self.revision += 1;
+        Ok(true)
+    }
+
+    /// Returns whether the session changed, including cursor or selected rules form changes.
+    pub fn edit(&mut self, edit: SessionEdit) -> Result<bool, Refusal> {
+        use SessionEdit::*;
+        let before = self.spot();
+        let at = self.current;
+        if self.tryout.is_some() {
+            self.check_tryout(&edit)?;
+        }
+        let record = match edit {
+            TryoutStart => {
+                self.tryout = Some(at);
+                self.push(
+                    EntryKind::Record(Change {
+                        forward: Vec::new(),
+                        inverse: Vec::new(),
+                        focus: at,
+                    }),
+                    false,
+                    before,
+                );
+                self.revision += 1;
+                return Ok(true);
+            }
+            TryoutEnd if self.tryout.is_none() => return Ok(false),
+            TryoutEnd => Edit::DropTryout,
+            TryoutKeep { node } => Edit::KeepTryout {
+                node: node as NodeId,
+            },
+            SetRules { rules } => return self.edit_rules(rules),
+            Play { mv } => self.play_edit(mv),
+            Pass => self.play_edit(Move::Pass),
+            InsertMove { color, mv } => Edit::InsertMove { at, color, mv },
+            DeleteBranch { node } => Edit::Delete {
+                node: self.variation_start(node)?,
+            },
+            DeleteFrom { node } => Edit::Delete {
+                node: node as NodeId,
+            },
+            Promote { node } => Edit::Promote {
+                node: self.variation_start(node)?,
+            },
+            MoveUp { node } => Edit::MoveUp {
+                node: self.variation_start(node)?,
+            },
+            SetComment { node, text } => Edit::SetComment {
+                node: node as NodeId,
+                text,
+            },
+            SetMark { node, point, mark } => Edit::SetMark {
+                node: node as NodeId,
+                point,
+                mark,
+            },
+            ClearMarks { node } => Edit::ClearMarks {
+                node: node as NodeId,
+            },
+            SetupStone { point, stone } => Edit::SetupStone { at, point, stone },
+            MoveStone { from, to } => Edit::MoveStone { at, from, to },
+            SetToPlay { color } => Edit::SetToPlay { at, color },
+            Flatten => Edit::Flatten { at },
+            SetInfo { field, value } => Edit::SetInfo { field, value },
+        };
+
+        self.edit_record(record, before)
+    }
+
+    fn edit_record(&mut self, record: Edit, before: Spot) -> Result<bool, Refusal> {
+        let change = self.game.edit(&record)?;
+        let kept = before.tryout.is_none() || matches!(record, Edit::KeepTryout { .. });
+        match record {
+            Edit::Play { .. } | Edit::InsertMove { .. } | Edit::Flatten { .. } => {
+                self.current = change.focus;
+                self.tip = change.focus;
+            }
+            Edit::SetupStone { .. } | Edit::MoveStone { .. } | Edit::SetToPlay { .. }
+                if change.focus != before.current =>
+            {
+                self.current = change.focus;
+                self.tip = change.focus;
+            }
+            Edit::Delete { .. } => self.retip_after_detach(),
+            Edit::DropTryout => {
+                self.retip_after_detach();
+                self.current = self.tryout.take().expect("active try-out");
+                if !self.selected_line.contains(&self.current) {
+                    self.tip = self.current;
+                }
+            }
+            Edit::KeepTryout { .. } if !self.has_tryout_nodes() => self.tryout = None,
+            Edit::Promote { .. } | Edit::MoveUp { .. } => {
+                // Reordering can move the cursor off the first-child extension of the tip.
+                if !self.game.line_through(self.tip).contains(&before.current) {
+                    self.tip = before.current;
+                }
+            }
+            _ => {}
+        }
+        let has_entry = !change.forward.is_empty() || before.tryout != self.tryout;
+        let kind = EntryKind::Record(change);
+        self.refresh_line(edited_line_positions(&kind, &self.selected_line));
+        if has_entry {
+            self.push(kind, kept, before);
+        } else if self.spot() == before {
+            return Ok(false);
+        }
+        self.revision += 1;
+        self.trim();
+        Ok(true)
+    }
+
+    fn play_edit(&self, mv: Move) -> Edit {
+        Edit::Play {
+            at: self.current,
+            color: self.game.to_play(self.current),
+            mv,
+            tryout: self.tryout.is_some(),
+        }
+    }
+
+    pub fn undo(&mut self) -> bool {
+        let Some(entry) = self.history.undo() else {
+            return false;
+        };
+        let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
+        match &entry.kind {
+            EntryKind::Record(change) => self.game.undo(change),
+            EntryKind::Rules { before, .. } => self.rules = *before,
+        }
+        let spot = entry.before;
+        self.restore(spot, positions_changed);
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let Some(entry) = self.history.redo() else {
+            return false;
+        };
+        let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
+        match &entry.kind {
+            EntryKind::Record(change) => self.game.redo(change),
+            EntryKind::Rules { after, .. } => self.rules = *after,
+        }
+        let spot = entry.after;
+        self.restore(spot, positions_changed);
+        true
+    }
+
+    pub fn changed(&self) -> bool {
+        self.history.changed()
+    }
+
+    pub fn last_kept(&self) -> u64 {
+        self.history.last_kept()
+    }
+
+    pub fn mark_saved(&mut self, id: u64) {
+        let changed = self.changed();
+        self.history.mark_saved(id);
+        if changed != self.changed() {
             self.revision += 1;
         }
-        Ok(changed)
+    }
+
+    /// The original rules request returns whether the effective analysis settings changed.
+    pub fn set_rules(&mut self, rules: Option<AnalysisRules>) -> Result<bool, AnalysisRules> {
+        let before = self.rules;
+        self.edit(SessionEdit::SetRules { rules })
+            .map_err(|_| rules.unwrap_or(self.from_file))?;
+        Ok(!before.same_effect(&self.rules))
     }
 
     /// The board after `moves` from the current node; nothing changes.
@@ -562,6 +922,300 @@ mod tests {
         .unwrap()
     }
 
+    fn comment(text: &str) -> SessionEdit {
+        SessionEdit::SetComment {
+            node: 0,
+            text: Some(text.into()),
+        }
+    }
+
+    #[test]
+    fn changed_follows_the_last_kept_edit() {
+        let mut s = branches();
+        assert_eq!(s.last_kept(), 0);
+        s.edit(comment("one")).unwrap();
+        assert!(s.changed());
+        assert!(s.undo());
+        assert_eq!(s.last_kept(), 0);
+        assert!(!s.changed());
+        assert!(s.redo());
+        assert_eq!(s.game.comment(0), Some("one"));
+        assert!(s.changed());
+    }
+
+    #[test]
+    fn undo_to_the_saved_edit_clears_changed() {
+        let mut s = branches();
+        s.edit(comment("one")).unwrap();
+        let saved = s.last_kept();
+        s.mark_saved(saved);
+        s.edit(comment("two")).unwrap();
+        assert!(s.changed());
+        assert!(s.undo());
+        assert_eq!(s.last_kept(), saved);
+        assert!(!s.changed());
+    }
+
+    #[test]
+    fn a_dropped_redo_past_the_save_stays_changed() {
+        let mut s = branches();
+        s.edit(comment("one")).unwrap();
+        s.mark_saved(s.last_kept());
+        s.undo();
+        s.edit(comment("two")).unwrap();
+        assert!(s.changed());
+        assert!(!s.redo());
+        s.undo();
+        assert!(s.changed());
+    }
+
+    #[test]
+    fn tryout_entries_never_change_changed() {
+        let mut s = branches();
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let scratch = s.current as u32;
+        s.edit(SessionEdit::SetComment {
+            node: scratch,
+            text: Some("scratch".into()),
+        })
+        .unwrap();
+        s.edit(SessionEdit::DeleteFrom { node: scratch }).unwrap();
+        s.edit(SessionEdit::TryoutEnd).unwrap();
+        assert!(!s.changed());
+        while s.undo() {
+            assert!(!s.changed());
+        }
+    }
+
+    #[test]
+    fn keep_tryout_is_a_kept_edit() {
+        let mut s = branches();
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let first = s.current;
+        s.navigate(NavTarget::First);
+        s.edit(SessionEdit::Play { mv: play(2, 2) }).unwrap();
+        let second = s.current;
+        s.edit(SessionEdit::TryoutKeep {
+            node: second as u32,
+        })
+        .unwrap();
+        assert!(s.changed());
+        assert!(s.game.is_tryout(first));
+        assert!(!s.game.is_tryout(second));
+        assert_eq!(s.tryout, Some(0));
+        s.edit(SessionEdit::TryoutKeep { node: first as u32 })
+            .unwrap();
+        assert_eq!(s.tryout, None);
+        s.undo();
+        assert_eq!(s.tryout, Some(0));
+        assert!(s.game.is_tryout(first));
+        s.undo();
+        assert!(!s.changed());
+        assert!(s.game.is_tryout(second));
+    }
+
+    #[test]
+    fn both_pass_commands_make_undoable_scratch_moves() {
+        for pass in [SessionEdit::Pass, SessionEdit::Play { mv: Move::Pass }] {
+            let mut s = branches();
+            s.edit(SessionEdit::TryoutStart).unwrap();
+            s.edit(pass).unwrap();
+            let scratch = s.current;
+            assert!(s.game.is_tryout(scratch));
+            assert_eq!(s.game.last_move(scratch), Some(Move::Pass));
+            assert!(!s.changed());
+            assert!(s.undo());
+            assert_eq!(s.current, 0);
+            assert!(!s.game.is_attached(scratch));
+            assert!(s.redo());
+            assert_eq!(s.current, scratch);
+            assert!(!s.changed());
+        }
+    }
+
+    #[test]
+    fn kept_edits_are_refused_during_tryout() {
+        let mut s = branches();
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        for edit in [
+            comment("x"),
+            SessionEdit::DeleteFrom { node: 1 },
+            SessionEdit::Promote { node: 4 },
+            SessionEdit::SetRules { rules: None },
+            SessionEdit::TryoutStart,
+        ] {
+            assert_eq!(s.edit(edit), Err(Refusal::EndTryoutFirst));
+        }
+        assert_eq!(
+            s.edit(SessionEdit::SetComment {
+                node: u32::MAX,
+                text: None
+            }),
+            Err(Refusal::NoSuchNode)
+        );
+        assert!(!s.changed());
+        assert!(s.undo());
+        assert!(!s.undo());
+    }
+
+    #[test]
+    fn undo_of_tryout_end_restores_the_tryout() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        s.navigate(NavTarget::First);
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let scratch = s.current;
+        s.edit(SessionEdit::TryoutEnd).unwrap();
+        assert_eq!((s.current, s.tryout), (6, None));
+        assert!(!s.game.is_attached(scratch));
+        s.undo();
+        assert_eq!((s.current, s.tip, s.tryout), (scratch, scratch, Some(6)));
+        assert!(s.game.is_tryout(scratch));
+        s.redo();
+        assert_eq!((s.current, s.tryout), (6, None));
+    }
+
+    #[test]
+    fn undo_lands_on_the_node_before_the_edit() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.edit(SessionEdit::DeleteFrom { node: 4 }).unwrap();
+        assert_eq!((s.current, s.tip), (1, 1));
+        s.navigate(NavTarget::First);
+        s.undo();
+        assert_eq!((s.current, s.tip), (6, 6));
+        s.redo();
+        assert_eq!((s.current, s.tip), (1, 1));
+    }
+
+    #[test]
+    fn delete_branch_removes_from_the_variation_start() {
+        let mut s = branches();
+        assert_eq!(
+            s.edit(SessionEdit::DeleteBranch { node: 3 }),
+            Err(Refusal::NoSuchNode)
+        );
+        s.edit(SessionEdit::DeleteBranch { node: 5 }).unwrap();
+        assert_eq!(s.game.children(1), [2]);
+        assert!(!s.game.is_attached(6));
+        s.undo();
+        assert_eq!(s.game.children(1), [2, 4]);
+    }
+
+    #[test]
+    fn rules_edits_undo() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.edit(SessionEdit::SetRules {
+            rules: Some(AnalysisRules::JapaneseKorean),
+        })
+        .unwrap();
+        assert!(s.changed());
+        s.navigate(NavTarget::First);
+        s.undo();
+        assert_eq!(s.rules(), AnalysisRules::Chinese);
+        assert_eq!(s.current, 6);
+        s.redo();
+        assert_eq!(s.rules(), AnalysisRules::JapaneseKorean);
+    }
+
+    #[test]
+    fn entering_an_existing_move_is_not_a_change() {
+        let mut s = branches();
+        s.edit(SessionEdit::Play { mv: play(0, 0) }).unwrap();
+        assert_eq!((s.current, s.tip), (1, 1));
+        assert!(!s.changed());
+        assert!(!s.undo());
+    }
+
+    #[test]
+    fn an_unchanged_comment_or_rules_value_is_not_an_edit() {
+        let mut s = branches();
+        s.edit(comment("one")).unwrap();
+        s.mark_saved(s.last_kept());
+        assert_eq!(s.edit(comment("one")), Ok(false));
+        let equivalent = AnalysisRules::Custom {
+            komi: s.rules().komi(),
+            scoring: s.rules().scoring(),
+            details: None,
+        };
+        s.edit(SessionEdit::SetRules {
+            rules: Some(equivalent),
+        })
+        .unwrap();
+        assert_eq!(s.rules(), equivalent);
+        assert!(!s.changed());
+        s.undo();
+        assert_eq!(s.game.comment(0), None);
+    }
+
+    #[test]
+    fn undo_walks_back_through_the_tryout_start() {
+        let mut s = branches();
+        s.edit(comment("one")).unwrap();
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        s.edit(SessionEdit::Play { mv: play(2, 3) }).unwrap();
+        s.undo();
+        assert_eq!((s.tryout, s.current), (Some(0), 0));
+        s.undo();
+        assert_eq!(s.tryout, None);
+        assert!(s.changed());
+        s.undo();
+        assert!(!s.changed());
+        s.redo();
+        s.redo();
+        assert_eq!(s.tryout, Some(0));
+    }
+
+    #[test]
+    fn discarded_redo_releases_detached_move_contents() {
+        let mut s = branches();
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let id = s.current;
+        s.undo();
+        assert!(s.game.sgf(id).first("B").is_some());
+        s.edit(comment("replaces redo")).unwrap();
+        assert!(s.game.sgf(id).props.is_empty());
+    }
+
+    #[test]
+    fn an_evicted_move_stays_available_to_a_retained_deletion() {
+        let mut s = branches();
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let id = s.current;
+        s.edit(SessionEdit::DeleteFrom { node: id as u32 }).unwrap();
+        for i in 0..999 {
+            s.edit(comment(&i.to_string())).unwrap();
+        }
+        for _ in 0..1000 {
+            assert!(s.undo());
+        }
+        assert_eq!(s.game.last_move(id), Some(play(1, 1)));
+        assert!(s.game.is_attached(id));
+        assert!(s.changed());
+    }
+
+    #[test]
+    fn invalid_rules_are_rejected_without_replacing_history() {
+        let mut s = branches();
+        s.edit(comment("one")).unwrap();
+        s.undo();
+        let rules = AnalysisRules::Custom {
+            komi: aji_core::Komi::new(151.0).unwrap(),
+            scoring: s.rules().scoring(),
+            details: None,
+        };
+        assert_eq!(
+            s.edit(SessionEdit::SetRules { rules: Some(rules) }),
+            Err(Refusal::InvalidRules)
+        );
+        assert_eq!(s.rules(), AnalysisRules::Chinese);
+        assert!(s.redo());
+    }
+
     #[test]
     fn going_back_before_a_branch_keeps_the_variation() {
         let mut s = branches();
@@ -636,6 +1290,88 @@ mod tests {
         assert_eq!(s.current, 4);
         s.navigate(NavTarget::Move(100));
         assert_eq!(s.line()[s.line_index()].node, 6);
+    }
+
+    #[test]
+    fn edits_to_selected_positions_invalidate_the_line_in_both_directions() {
+        let mut s =
+            GameSession::open("line.sgf", b"(;SZ[9];B[aa])", AnalysisRules::Chinese).unwrap();
+        let point = Point { x: 1, y: 1 };
+        let other = Point { x: 2, y: 2 };
+        for edit in [
+            SessionEdit::SetupStone {
+                point,
+                stone: Some(Color::White),
+            },
+            SessionEdit::MoveStone {
+                from: point,
+                to: other,
+            },
+            SessionEdit::SetToPlay {
+                color: Color::White,
+            },
+            SessionEdit::SetRules {
+                rules: Some(AnalysisRules::JapaneseKorean),
+            },
+        ] {
+            let keys = |s: &GameSession| {
+                s.line()
+                    .into_iter()
+                    .map(|node| node.key)
+                    .collect::<Vec<_>>()
+            };
+            let before = keys(&s);
+            let revision = s.line_revision;
+            assert_eq!(s.edit(edit), Ok(true));
+            let after = keys(&s);
+            assert_ne!(before, after);
+            assert_eq!(s.current_line(), [0, 1]);
+            assert_eq!(s.line_revision, revision + 1);
+            assert!(s.undo());
+            assert_eq!(keys(&s), before);
+            assert_eq!(s.line_revision, revision + 2);
+            assert!(s.redo());
+            assert_eq!(keys(&s), after);
+            assert_eq!(s.line_revision, revision + 3);
+        }
+    }
+
+    #[test]
+    fn metadata_and_off_line_edits_preserve_the_line_revision() {
+        let mut s = branches();
+        let revision = s.line_revision;
+        for edit in [
+            comment("still the same position"),
+            SessionEdit::SetMark {
+                node: 0,
+                point: Point { x: 1, y: 1 },
+                mark: Some(Mark::Triangle),
+            },
+            SessionEdit::SetInfo {
+                field: InfoField::Black,
+                value: Some("Black".into()),
+            },
+            SessionEdit::DeleteFrom { node: 4 },
+        ] {
+            assert_eq!(s.edit(edit), Ok(true));
+            assert_eq!(s.line_revision, revision);
+            assert!(s.undo());
+            assert_eq!(s.line_revision, revision);
+            assert!(s.redo());
+            assert_eq!(s.line_revision, revision);
+        }
+        let equivalent = AnalysisRules::Custom {
+            komi: s.rules().komi(),
+            scoring: s.rules().scoring(),
+            details: None,
+        };
+        assert_eq!(
+            s.edit(SessionEdit::SetRules {
+                rules: Some(equivalent)
+            }),
+            Ok(true)
+        );
+        assert_eq!(s.line_revision, revision);
     }
 
     #[test]
