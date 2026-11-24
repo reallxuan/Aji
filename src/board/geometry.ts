@@ -1,6 +1,6 @@
-/** Column letters as Go boards print them: I is skipped so it is never read as J or 1. */
-const COLUMN_LETTERS = 'ABCDEFGHJKLMNOPQRST';
-
+import type { Point } from '../transport/generated/Point';
+import { marginLabels } from './coordinates';
+import { fromView, toView, type Orientation } from './orientation';
 /** A stone's radius as a share of the line spacing: stones are 0.96 of it across (design 5.9). */
 export const STONE_RADIUS_SHARE = 0.48;
 
@@ -29,9 +29,16 @@ export interface BoardGeometry {
   lines: number[];
   /** Star points as [column index, row index], both counted from the top-left corner. */
   stars: Array<[number, number]>;
+  orientation: Orientation;
   columns: Array<{ label: string; x: number }>;
   /** Rows from the top: the top row carries the highest number. */
   rows: Array<{ label: string; y: number }>;
+}
+
+/** CSS position of a logical intersection in the displayed grid. */
+export function gridPosition(g: BoardGeometry, point: Point): Point {
+  const { x, y } = toView(point, g.lines.length, g.orientation);
+  return { x: g.lines[x], y: g.lines[y] };
 }
 
 /** The line indices star points sit on: the 4-4 points (3-3 on small boards) and the centre. */
@@ -69,6 +76,7 @@ export function boardGeometry(
   cssSize: number,
   boardSize: number,
   coordinates = true,
+  orientation: Orientation = 0,
 ): BoardGeometry {
   const size = Math.max(0, cssSize);
   const labelBand = coordinates
@@ -80,6 +88,7 @@ export function boardGeometry(
   const stoneRadius = spacing * STONE_RADIUS_SHARE;
   const margin = labelBand + stoneRadius;
   const lines = Array.from({ length: boardSize }, (_, i) => margin + i * spacing);
+  const labels = lines.map((_, i) => marginLabels(i, boardSize, orientation));
   return {
     margin,
     spacing,
@@ -87,8 +96,10 @@ export function boardGeometry(
     labelBand,
     lines,
     stars: starPoints(boardSize),
-    columns: lines.map((x, i) => ({ label: COLUMN_LETTERS[i] ?? '', x })),
-    rows: lines.map((y, i) => ({ label: String(boardSize - i), y })),
+    orientation,
+
+    columns: lines.map((x, i) => ({ label: labels[i].top, x })),
+    rows: lines.map((y, i) => ({ label: labels[i].left, y })),
   };
 }
 
@@ -96,12 +107,12 @@ export function boardGeometry(
 export function pointAt(
   cssX: number,
   cssY: number,
-  view: { cssSize: number; boardSize: number; coordinates?: boolean },
+  view: { cssSize: number; boardSize: number; coordinates?: boolean; orientation?: Orientation },
 ): { x: number; y: number } | null {
   const { margin, spacing } = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
   if (spacing <= 0) return null;
   const x = Math.round((cssX - margin) / spacing);
   const y = Math.round((cssY - margin) / spacing);
   if (x < 0 || y < 0 || x >= view.boardSize || y >= view.boardSize) return null;
-  return { x, y };
+  return fromView({ x, y }, view.boardSize, view.orientation ?? 0);
 }

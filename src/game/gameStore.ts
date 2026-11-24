@@ -34,6 +34,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const current = get().snapshot;
     if (current && snapshot.revision <= current.revision) return;
     const moved = current?.node !== snapshot.node || current.gameRevision !== snapshot.gameRevision;
+    if (current?.gameRevision !== snapshot.gameRevision) useViewStore.setState({ orientation: 0 });
     if (moved) useFreehandStore.getState().clear();
     if (snapshot.tryout !== null) useModeStore.getState().setMode('normal');
     set({

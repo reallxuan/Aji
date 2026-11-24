@@ -1,3 +1,4 @@
+import { captureReplayVisit, stopReplay } from '../game/replayStore';
 import { setupEdit } from '../edit/setupEdit';
 import { useMarkEdit } from '../edit/useMarkEdit';
 import { FreehandOverlay } from '../edit/FreehandOverlay';
@@ -49,6 +50,7 @@ export function MainBoard({
   /** Where the hovered line is drawn: here, or (Thinking) on the first sub-board. */
   lines?: Layout['lines'];
 }) {
+  const orientation = useViewStore((s) => s.orientation);
   const snapshot = useGameStore((s) => s.snapshot);
   const ctx = useActionContext();
   const markEdit = useMarkEdit(ctx);
@@ -59,6 +61,7 @@ export function MainBoard({
   const nodes = useMemo(() => boardNodes(currentTree), [currentTree]);
   const [menu, setMenu] = useState<BoardMenuTarget | null>(null);
   const moveNumbers = useDeviceStore((s) => s.settings.moveNumbers);
+  const gestureVisit = useRef<(() => boolean) | undefined>(undefined);
   const boardArea = useRef<HTMLDivElement>(null);
   useWheelNavigation(boardArea);
   const { i18n } = useTranslation();
@@ -220,11 +223,19 @@ export function MainBoard({
     <div
       ref={boardArea}
       data-board
+      onPointerDownCapture={() => {
+        gestureVisit.current = captureReplayVisit(ctx.transport);
+        stopReplay();
+      }}
+      onClickCapture={stopReplay}
+      onContextMenuCapture={stopReplay}
       data-line={line ? 'shown' : undefined}
       className="absolute"
       style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
     >
       <BoardCanvas
+        isGestureCurrent={() => gestureVisit.current?.() ?? true}
+        orientation={orientation}
         cssSize={rect.width}
         boardSize={snapshot?.size ?? 19}
         stones={line?.stones ?? snapshot?.stones ?? EMPTY_19}
@@ -270,6 +281,7 @@ export function MainBoard({
       />
       {snapshot && !scoring && (
         <FreehandOverlay
+          orientation={orientation}
           key={`${snapshot.gameRevision}:${snapshot.node}`}
           active={mode === 'markup' && markupTool === 'freehand'}
           cssSize={rect.width}

@@ -71,7 +71,8 @@ describe('the narrow arrangement', () => {
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
     expect(tabs()).toEqual(['走势', '候选', '波动', '评论', '分支']);
     expect(shown()).toEqual(['trend']);
-    expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(4);
+    expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(5);
+    expect(within(bottomNav()!).getByRole('button', { name: '自动播放' })).toBeInTheDocument();
     // The board takes the width, less 4 px each side.
     expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('367px');
   });

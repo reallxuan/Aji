@@ -1,3 +1,4 @@
+import { ReplayButton } from './ReplayButton';
 import { cn } from 'cn';
 import {
   ChevronLeftIcon,
@@ -121,6 +122,7 @@ export function NavButtons({ touch = false }: { touch?: boolean } = {}) {
       {buttons(BACK, atStart)}
       <MoveCounter />
       {buttons(FORWARD, atEnd)}
+      <ReplayButton touch={touch} />
     </div>
   );
 }

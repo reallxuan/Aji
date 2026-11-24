@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
 import { useActionContext } from '../game/useActionContext';
@@ -25,6 +26,7 @@ export function MarkupTools({ touch }: { touch: boolean }) {
   const clear = () => {
     const snapshot = useGameStore.getState().snapshot;
     if (!snapshot || snapshot.tryout !== null || scoringInProgress()) return;
+    stopReplay();
     if (selected === 'freehand') useFreehandStore.getState().clear();
     else void markEdit({ kind: 'clear' });
   };

@@ -323,7 +323,9 @@
     "last": "最后一手",
     "settings": "设置",
     "jumpFrom": "第 {{current}} 手，点击跳到其他手数",
-    "jumpTo": "跳到第几手"
+    "jumpTo": "跳到第几手",
+    "startReplay": "自动播放",
+    "pauseReplay": "暂停自动播放"
   },
   "noEngine": {
     "title": "尚未设置引擎",
@@ -428,7 +430,11 @@
       "confirmBody": "所有棋局的分析结果都会删除，无法恢复。",
       "confirm": "清除",
       "failed": "无法清除分析结果"
-    }
+    },
+    "recentMoves": "最近显示手数",
+    "replaySeconds": "自动播放间隔（秒）",
+    "openAt": "打开棋谱时显示",
+    "gameStart": "棋局开始"
   },
   "game": {
     "players": "{{black}} 对 {{white}}"
@@ -903,5 +909,13 @@
     "mainLine": "主分支 {{n}} 手",
     "position": "第 {{n}} 手，{{next}}",
     "continuations_one": "{{count}} 个后续"
+  },
+  "boardView": {
+    "rotate": "旋转",
+    "numbers": "手数",
+    "off": "不显示",
+    "all": "全部",
+    "last": "最近 {{n}} 手",
+    "restart": "分支内从 1 开始"
   }
 }

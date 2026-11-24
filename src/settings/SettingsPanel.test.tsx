@@ -95,6 +95,25 @@ describe('SettingsPanel', () => {
     }));
   });
 
+  it('sets the replay interval, numbering window and opening position on this device', async () => {
+    mount();
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    for (const [name, value] of [
+      ['自动播放间隔（秒）', '0.75'],
+      ['最近显示手数', '7'],
+    ]) {
+      const field = screen.getByRole('spinbutton', { name });
+      fireEvent.change(field, { target: { value } });
+      fireEvent.blur(field);
+    }
+    fireEvent.click(screen.getByRole('radio', { name: '最后一手' }));
+    expect(useDeviceStore.getState().settings).toMatchObject({
+      autoReplaySeconds: 0.75,
+      moveNumbers: { last: 7 },
+      openAt: 'last',
+    });
+  });
+
   it('saves the default rules for new games, and leaves the open game alone', async () => {
     const transport = mount();
     await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());

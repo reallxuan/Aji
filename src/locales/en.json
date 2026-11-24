@@ -323,7 +323,9 @@
     "last": "Last move",
     "settings": "Settings",
     "jumpFrom": "Move {{current}}; click to go to another move",
-    "jumpTo": "Go to move"
+    "jumpTo": "Go to move",
+    "startReplay": "Play replay",
+    "pauseReplay": "Pause replay"
   },
   "noEngine": {
     "title": "No engine is set up",
@@ -428,7 +430,11 @@
       "confirmBody": "Every game's results are deleted. This can't be undone.",
       "confirm": "Clear",
       "failed": "Couldn't clear the analysis results"
-    }
+    },
+    "recentMoves": "Recent moves to number",
+    "replaySeconds": "Replay interval (seconds)",
+    "openAt": "Open records at",
+    "gameStart": "Start of game"
   },
   "game": {
     "players": "{{black}} vs {{white}}"
@@ -903,5 +909,13 @@
     "mainLine": "Main line: {{n}} moves",
     "continuations_one": "{{count}} continuation",
     "position": "Move {{n}}, {{next}}"
+  },
+  "boardView": {
+    "rotate": "Rotate",
+    "numbers": "Move Numbers",
+    "off": "Off",
+    "all": "All",
+    "last": "Last {{n}} moves",
+    "restart": "Restart at 1 in a branch"
   }
 }

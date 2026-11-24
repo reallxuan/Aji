@@ -1,3 +1,6 @@
+import { orient, setNumberMode, toggleBranchNumbers } from '../board/viewActions';
+import { afterReplay, bindReplay, stopReplay } from './replayStore';
+import { useDeviceStore } from '../device/deviceStore';
 import type { TFunction } from 'i18next';
 import type { EngineStore } from '../engine/engineStore';
 import type { MenuCommand, OpenedFile, PlatformFiles } from '../platform/files';
@@ -17,7 +20,13 @@ import type { NavTarget } from '../transport/generated/NavTarget';
 import { TransportError, toTransportError, type Transport } from '../transport/transport';
 import { discardFailedRecordFields, flushRecordFields, recordFieldVersion } from './fieldWrites';
 import { busy, isTextEditor } from './busy';
-import { commitRecord, drainMutations, mutationsPending, recordLocked } from './recordMutations';
+import {
+  commitRecord,
+  drainMutations,
+  mutationsPending,
+  recordLocked,
+  trackMutation,
+} from './recordMutations';
 import { edit, undo, redo } from './editActions';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
@@ -68,7 +77,13 @@ async function openSelected(ctx: ActionContext, read: () => Promise<OpenedFile |
         // A finished write can supersede the bytes read by the picker or drop,
         // even when it exported a copy without changing the record revision.
         const bytes = diskVersion(ctx) === before ? file.bytes : await ctx.files.reread(file.token);
-        const reply = await openGame(ctx.transport, file.name, bytes, revision);
+        const reply = await openGame(
+          ctx.transport,
+          file.name,
+          bytes,
+          revision,
+          useDeviceStore.getState().settings.openAt === 'last',
+        );
         const snapshot = apply(reply);
         if (currentGame() !== snapshot.gameRevision) return;
         useGameStore.setState({ fileToken: file.token });
@@ -100,6 +115,7 @@ export async function openDropped(ctx: ActionContext, paths: string[]): Promise<
 }
 
 export async function openRecent(ctx: ActionContext, index: number): Promise<void> {
+  stopReplay();
   // Saving from the prompt can move the current record to the top of the list.
   const entry = (await ctx.files.recent().catch(() => []))[index];
   if (!entry) return;
@@ -231,6 +247,7 @@ async function beforeLeaving(
   action: 'open' | 'new' | 'quit',
   prepare: () => Promise<Commit | null>,
 ) {
+  stopReplay();
   if (leaving.has(ctx.transport)) return;
   leaving.add(ctx.transport);
   try {
@@ -302,8 +319,31 @@ export async function startNewGame(ctx: ActionContext, size: number): Promise<vo
   }
 }
 
-export const navigate = (ctx: ActionContext, to: NavTarget) =>
-  change(ctx, () => navigateGame(ctx.transport, to));
+function changePosition(ctx: ActionContext, to: NavTarget) {
+  if (recordLocked(ctx.transport)) return Promise.resolve(null);
+  return change(ctx, () => navigateGame(ctx.transport, to));
+}
+
+export function navigate(ctx: ActionContext, to: NavTarget) {
+  return trackMutation(
+    ctx.transport,
+    afterReplay(ctx.transport, () => changePosition(ctx, to)),
+  );
+}
+
+/** A replay step uses the same tracked navigation as a user gesture. A departure first
+ * cancels the timer, then waits for any request already sent to apply its snapshot. */
+export function connectReplay(ctx: ActionContext) {
+  bindReplay({
+    transport: ctx.transport,
+    canStep: () =>
+      !leaving.has(ctx.transport) &&
+      !recordLocked(ctx.transport) &&
+      !mutationsPending(ctx.transport),
+    next: () => trackMutation(ctx.transport, changePosition(ctx, 'next')),
+  });
+  return () => bindReplay(null);
+}
 
 /** `null` goes back to the file's reading. */
 export async function setRules(ctx: ActionContext, rules: AnalysisRules | null): Promise<void> {
@@ -337,6 +377,20 @@ export async function runMenuCommand(
   if (typeof command === 'object')
     return 'new' in command ? startNewGame(ctx, command.new) : openRecent(ctx, command.recent);
   switch (command) {
+    case 'rotateCw':
+    case 'rotateCcw':
+    case 'flipH':
+    case 'flipV':
+    case 'resetOrientation':
+      return orient(command);
+    case 'numbersOff':
+      return setNumberMode('off');
+    case 'numbersAll':
+      return setNumberMode('all');
+    case 'numbersLast':
+      return setNumberMode('last');
+    case 'numbersRestart':
+      return toggleBranchNumbers();
     case 'open':
       return openFromPicker(ctx);
     case 'save':

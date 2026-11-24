@@ -6,7 +6,8 @@
 //! the only interface text on the Rust side.
 
 use tauri::menu::{
-    Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu, SubmenuBuilder,
+    CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu,
+    SubmenuBuilder,
 };
 use tauri::{AppHandle, Runtime};
 
@@ -26,6 +27,33 @@ impl MenuLanguage {
         match tag {
             "zh-CN" => MenuLanguage::ZhCn,
             _ => MenuLanguage::En,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NumberMode {
+    #[default]
+    Off,
+    All,
+    Last,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NumberDisplay {
+    mode: NumberMode,
+    last: u64,
+    restart_in_branch: bool,
+}
+
+impl Default for NumberDisplay {
+    fn default() -> Self {
+        Self {
+            mode: NumberMode::Off,
+            last: 10,
+            restart_in_branch: false,
         }
     }
 }
@@ -67,6 +95,10 @@ pub struct Labels {
     pub paste: &'static str,
     pub select_all: &'static str,
     pub view: &'static str,
+    pub rotate: &'static str,
+    pub rotations: [&'static str; 5],
+    pub numbers: &'static str,
+    pub number_options: [&'static str; 4],
     pub layout: &'static str,
     /// The presets' names, in the order of [`LAYOUT_PRESETS`].
     pub presets: [&'static str; 5],
@@ -126,6 +158,10 @@ pub fn labels(language: MenuLanguage) -> Labels {
             paste: "粘贴",
             select_all: "全选",
             view: "显示",
+            rotate: "旋转",
+            rotations: ["顺时针 90°", "逆时针 90°", "水平翻转", "垂直翻转", "还原"],
+            numbers: "手数",
+            number_options: ["不显示", "全部", "最近 {n} 手", "分支内从 1 开始"],
             layout: "布局",
             presets: ["默认", "经典", "极简", "思考", "四盘"],
             window: "窗口",
@@ -188,6 +224,16 @@ pub fn labels(language: MenuLanguage) -> Labels {
             paste: "Paste",
             select_all: "Select All",
             view: "View",
+            rotate: "Rotate",
+            rotations: [
+                "Rotate clockwise 90°",
+                "Rotate counterclockwise 90°",
+                "Flip horizontally",
+                "Flip vertically",
+                "Reset orientation",
+            ],
+            numbers: "Move Numbers",
+            number_options: ["Off", "All", "Last {n} moves", "Restart at 1 in a branch"],
             layout: "Layout",
             presets: ["Default", "Classic", "Minimal", "Thinking", "Four Boards"],
             window: "Window",
@@ -271,6 +317,7 @@ pub fn build<R: Runtime>(
     app: &AppHandle<R>,
     language: MenuLanguage,
     recent: &[RecentEntry],
+    numbers: NumberDisplay,
 ) -> tauri::Result<Menu<R>> {
     let l = labels(language);
     let app_menu = SubmenuBuilder::new(app, "Aji")
@@ -347,9 +394,50 @@ pub fn build<R: Runtime>(
     for (preset, label) in LAYOUT_PRESETS.into_iter().zip(l.presets) {
         layout = layout.item(&item(app, MenuAction::Layout(preset.to_owned()), label)?);
     }
+    let mut rotate = SubmenuBuilder::new(app, l.rotate);
+    for (action, label) in [
+        MenuAction::RotateCw,
+        MenuAction::RotateCcw,
+        MenuAction::FlipH,
+        MenuAction::FlipV,
+        MenuAction::ResetOrientation,
+    ]
+    .into_iter()
+    .zip(l.rotations)
+    {
+        rotate = rotate.item(&item(app, action, label)?);
+    }
+    let mut numbering = SubmenuBuilder::new(app, l.numbers);
+    for ((action, mode), label) in [
+        (MenuAction::NumbersOff, NumberMode::Off),
+        (MenuAction::NumbersAll, NumberMode::All),
+        (MenuAction::NumbersLast, NumberMode::Last),
+    ]
+    .into_iter()
+    .zip(l.number_options)
+    {
+        let selected = numbers.mode == mode;
+        let label = label.replace("{n}", &numbers.last.to_string());
+        numbering = numbering.item(
+            &CheckMenuItemBuilder::with_id(action.id(), label)
+                .checked(selected)
+                .enabled(!selected)
+                .build(app)?,
+        );
+    }
+    let numbering = numbering
+        .separator()
+        .item(
+            &CheckMenuItemBuilder::with_id(MenuAction::NumbersRestart.id(), l.number_options[3])
+                .checked(numbers.restart_in_branch)
+                .build(app)?,
+        )
+        .build()?;
     // The estimate's key, T, is the interface's: a one-letter accelerator would fire while typing.
     let view = SubmenuBuilder::new(app, l.view)
         .item(&layout.build()?)
+        .item(&rotate.build()?)
+        .item(&numbering)
         .separator()
         .item(&item(app, MenuAction::Estimate, l.estimate)?)
         .build()?;
@@ -403,6 +491,26 @@ mod tests {
         assert_eq!(en.other_sizes, "Other Sizes");
         assert_eq!((zh.file, zh.save_as), ("文件", "另存为…"));
         assert_eq!((en.file, en.save_as), ("File", "Save As…"));
+    }
+
+    #[test]
+    fn board_view_ids_round_trip() {
+        for id in [
+            "rotateCw",
+            "rotateCcw",
+            "flipH",
+            "flipV",
+            "resetOrientation",
+            "numbersOff",
+            "numbersAll",
+            "numbersLast",
+            "numbersRestart",
+        ] {
+            assert_eq!(
+                MenuAction::from_id(id).map(|action| action.id()).as_deref(),
+                Some(id)
+            );
+        }
     }
 
     #[test]
@@ -509,6 +617,8 @@ mod tests {
             l.select_all,
             l.view,
             l.layout,
+            l.rotate,
+            l.numbers,
             l.window,
             l.minimize,
             l.zoom,
@@ -529,6 +639,8 @@ mod tests {
         all.extend(l.save_image);
         all.extend(l.copy_image);
         all.extend(l.presets);
+        all.extend(l.rotations);
+        all.extend(l.number_options);
         all
     }
 

@@ -372,3 +372,56 @@ it('the last-move dot gives way to a mark on its stone and returns when the mark
   rerender(<BoardCanvas {...props} />);
   expect(drawCalls(stoneLayer).filter((c) => c.type === 'fill')).toHaveLength(1);
 });
+
+it('rotated clicks resolve the logical intersection and offset badge', () => {
+  const point = { x: 1, y: 2 };
+  const onClickPoint = vi.fn(),
+    onContextBadge = vi.fn();
+  const badge = { point, letter: 'A', outlined: true, tryout: false };
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      orientation={1}
+      stones={empty(9)}
+      lastMove={null}
+      badges={[badge]}
+      onClickPoint={onClickPoint}
+      onContextBadge={onContextBadge}
+    />,
+  );
+  const { lines, spacing } = boardGeometry(400, 9);
+  const surface = container.firstElementChild!;
+  fireEvent.click(surface, { clientX: lines[6], clientY: lines[1] });
+  expect(onClickPoint).toHaveBeenCalledWith(point);
+  fireEvent.contextMenu(surface, {
+    clientX: lines[6] + spacing * 0.42,
+    clientY: lines[1] - spacing * 0.42,
+  });
+  expect(onContextBadge).toHaveBeenCalledWith(badge, expect.anything());
+});
+
+it('drags from and to logical points and abandons a drag when the view changes', () => {
+  const status = empty(9);
+  status[19] = 'black';
+  const onDragStone = vi.fn();
+  const props = { cssSize: 400, boardSize: 9, stones: status, lastMove: null, onDragStone };
+  const { container, rerender } = render(<BoardCanvas {...props} orientation={1} />);
+  const surface = container.firstElementChild!;
+  const { lines } = boardGeometry(400, 9);
+  const pointer = { pointerId: 1, pointerType: 'mouse', button: 0 };
+  const start = { ...pointer, clientX: lines[6], clientY: lines[1] };
+  const end = { ...pointer, clientX: lines[5], clientY: lines[4] };
+  for (const turn of [false, true]) {
+    fireEvent.pointerDown(surface, start);
+    fireEvent.pointerMove(surface, end);
+    if (turn) rerender(<BoardCanvas {...props} orientation={2} />);
+    fireEvent.pointerUp(surface, end);
+  }
+  expect(onDragStone.mock.calls).toEqual([
+    [
+      { x: 1, y: 2 },
+      { x: 4, y: 3 },
+    ],
+  ]);
+});

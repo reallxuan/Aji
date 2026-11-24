@@ -149,7 +149,9 @@ export function GameMenu({
           <DropdownMenuTrigger
             className={cn(
               'group -ml-1.5 flex items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft',
-              touch ? 'min-h-11 min-w-11' : 'min-w-0',
+              touch
+                ? 'min-h-11 min-w-11'
+                : 'min-w-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11',
             )}
           >
             <span className="truncate">{title}</span>

@@ -1,3 +1,4 @@
+import type { Orientation } from './orientation';
 import type { Color } from '../transport/generated/Color';
 import type { Point } from '../transport/generated/Point';
 import { type PointerEvent, useCallback, useLayoutEffect, useRef, useState } from 'react';
@@ -43,7 +44,7 @@ type Track = {
  * finger back as well as forward. A vertical drag or a second finger cancels the gesture.
  * Holding still for 500 ms opens the context menu. In setup, drags move stones and never step.
  */
-export function useBoardGestures(gestures: Gestures) {
+export function useBoardGestures(gestures: Gestures, orientation: Orientation = 0) {
   const latest = useRef(gestures);
   useLayoutEffect(() => {
     latest.current = gestures;
@@ -162,7 +163,7 @@ export function useBoardGestures(gestures: Gestures) {
         setGhost(null);
       }
     };
-  }, [dragStones]);
+  }, [dragStones, orientation]);
 
   return {
     ghost,

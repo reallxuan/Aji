@@ -1,3 +1,5 @@
+import { usePlatformFiles } from '../platform/PlatformProvider';
+import { usePanelWidth } from '../layout/usePanelWidth';
 import { PHONE_STATUS_HEIGHT } from '../layout/constants';
 import { useGameStore } from '../game/gameStore';
 import { SettingsIcon } from 'lucide-react';
@@ -34,12 +36,15 @@ export function PanelHeader({
   const { t } = useTranslation();
   const tryout = useGameStore((s) => s.snapshot?.tryout != null);
   const changed = useGameStore((s) => !!s.snapshot?.changed);
+  const panelWidth = usePanelWidth();
+  const separateStatus = compact || (panelWidth > 0 && panelWidth < 680);
   const os = useOs();
+  const { browserMenus } = usePlatformFiles();
   const status = (tryout || changed) && (
     <div
       role="status"
-      className={cn('flex shrink-0 items-center gap-1.5', compact && 'px-3')}
-      style={compact ? { height: PHONE_STATUS_HEIGHT } : undefined}
+      className={cn('flex shrink-0 items-center gap-1.5', separateStatus && 'px-3')}
+      style={separateStatus ? { height: PHONE_STATUS_HEIGHT } : undefined}
     >
       {tryout && (
         <span className="flex-none whitespace-nowrap rounded-full border border-amber-600/50 px-1.5 text-[11px] text-amber-700 dark:text-amber-400">
@@ -59,12 +64,13 @@ export function PanelHeader({
         className={cn(
           'flex items-center gap-2.5 @max-[500px]:gap-1.5',
           compact ? 'h-[51px] px-3' : 'h-[55px] pr-[18px] pl-6',
+          !narrow && !compact && 'pl-[30px] pointer-coarse:pl-[50px]',
         )}
       >
         <div className="flex min-w-0 flex-1 items-center">
-          <GameMenu touch={compact} narrow={narrow} />
+          <GameMenu touch={touch || compact} narrow={narrow} />
         </div>
-        {!compact && status}
+        {!separateStatus && status}
         {compact ? (
           <MoveCounter />
         ) : (
@@ -75,7 +81,7 @@ export function PanelHeader({
         )}
         <EngineIndicator touch={touch} />
         {/* On the Mac, 布局 and 截图 are in the menu bar's 显示 and 文件 menus. */}
-        {os !== null && os !== 'macos' && <ViewMenu touch={touch} />}
+        {(compact || browserMenus || (os !== null && os !== 'macos')) && <ViewMenu touch={touch} />}
         <button
           type="button"
           className={cn(
@@ -88,7 +94,7 @@ export function PanelHeader({
           <SettingsIcon className="size-4" aria-hidden />
         </button>
       </div>
-      {compact && status}
+      {separateStatus && status}
     </header>
   );
 }

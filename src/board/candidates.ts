@@ -6,7 +6,7 @@ import type { DiscField } from '../transport/generated/DiscField';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
-import { boardGeometry } from './geometry';
+import { gridPosition, boardGeometry } from './geometry';
 
 /** The best disc's drop shadow, in CSS pixels. */
 const BEST_SHADOW = { color: 'rgba(40, 20, 4, 0.35)', blur: 6, offsetY: 2 };
@@ -37,7 +37,7 @@ export function drawCandidates(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
   const r = geometry.stoneRadius * dpr;
   const px = (css: number) => css * dpr;
   // A board so small that a disc cannot hold its ring (a window being dragged narrow) shows no
@@ -47,8 +47,9 @@ export function drawCandidates(
   for (const c of discs) {
     if (c.move.type !== 'play') continue;
     const style = TIER_STYLE[c.tier];
-    const cx = geometry.lines[c.move.x] * dpr;
-    const cy = geometry.lines[c.move.y] * dpr;
+    const at = gridPosition(geometry, c.move);
+    const cx = at.x * dpr;
+    const cy = at.y * dpr;
 
     ctx.save();
     // The printed board is flat: nothing casts a shadow on it (P2 M1 design 5.7).
@@ -95,10 +96,10 @@ export function drawCandidates(
  */
 export function drawNextRing(
   ctx: CanvasRenderingContext2D,
-  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates'>,
+  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates' | 'orientation'>,
   point: Point,
 ): void {
-  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates, view.orientation);
   const px = (css: number) => css * view.dpr;
   const r = geometry.stoneRadius * view.dpr;
   if (r <= 0) return;
@@ -106,13 +107,8 @@ export function drawNextRing(
   ctx.lineWidth = px(PLAYED_RING.width);
   ctx.strokeStyle = PLAYED_RING.color;
   ctx.beginPath();
-  ctx.arc(
-    geometry.lines[point.x] * view.dpr,
-    geometry.lines[point.y] * view.dpr,
-    r + px(PLAYED_RING.width) / 2,
-    0,
-    Math.PI * 2,
-  );
+  const at = gridPosition(geometry, point);
+  ctx.arc(at.x * view.dpr, at.y * view.dpr, r + px(PLAYED_RING.width) / 2, 0, Math.PI * 2);
   ctx.stroke();
 }
 
@@ -120,14 +116,15 @@ export function drawNextRing(
 export function candidateAt(
   cssX: number,
   cssY: number,
-  view: Pick<BoardView, 'cssSize' | 'boardSize' | 'coordinates'>,
+  view: Pick<BoardView, 'cssSize' | 'boardSize' | 'coordinates' | 'orientation'>,
   discs: readonly ShownCandidate[],
 ): Move | null {
-  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates, view.orientation);
   for (const c of discs) {
     if (c.move.type !== 'play') continue;
-    const dx = cssX - geometry.lines[c.move.x];
-    const dy = cssY - geometry.lines[c.move.y];
+    const at = gridPosition(geometry, c.move);
+    const dx = cssX - at.x;
+    const dy = cssY - at.y;
     if (dx * dx + dy * dy <= geometry.stoneRadius * geometry.stoneRadius) return c.move;
   }
   return null;
@@ -154,7 +151,7 @@ export function drawVariationNumbers(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
   const spacing = geometry.spacing * dpr;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -163,8 +160,9 @@ export function drawVariationNumbers(
     const stone = stones[index];
     if (!stone || marked?.has(index)) continue;
     const ink = stone === 'black' ? NUMBER_ON_BLACK : NUMBER_ON_WHITE;
-    const cx = geometry.lines[point.x] * dpr;
-    const cy = geometry.lines[point.y] * dpr;
+    const at = gridPosition(geometry, point);
+    const cx = at.x * dpr;
+    const cy = at.y * dpr;
     const isNewest = newest !== null && newest.x === point.x && newest.y === point.y;
     ctx.fillStyle = ink;
     ctx.font = `${isNewest ? 700 : 600} ${0.42 * spacing}px Inter`;

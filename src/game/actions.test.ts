@@ -1,3 +1,4 @@
+import { useDeviceStore } from '../device/deviceStore';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createI18n } from '../i18n/createI18n';
 import { createFakeFiles } from '../platform/fakeFiles';
@@ -239,4 +240,16 @@ it('routes rules edits through the same refusal notice as the other edits', asyn
   });
   await setRules(ctx, { kind: 'japaneseKorean' });
   expect(useNoticeStore.getState().notice?.title).toBe('先结束试下');
+});
+
+it('open at last sends atEnd with the departure revision', async () => {
+  const { ctx, requests } = setup(() => opened(), {
+    files: { '/game.sgf': '(;)' },
+    pick: '/game.sgf',
+  });
+  useDeviceStore.getState().update({ openAt: 'last' });
+  await openFromPicker(ctx);
+  expect(requests).toContainEqual(
+    expect.objectContaining({ type: 'gameOpen', atEnd: true, expectedRevision: 0 }),
+  );
 });

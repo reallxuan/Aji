@@ -17,9 +17,10 @@ export function usePlatformSync(): void {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'zh-CN' ? 'zh-CN' : 'en';
 
+  const numbers = useDeviceStore((s) => s.settings.moveNumbers);
   useEffect(() => {
-    files.setMenuLanguage(language).catch(() => {});
-  }, [files, language]);
+    files.setMenuLanguage(language, numbers).catch(() => {});
+  }, [files, language, numbers]);
   // Always on top is the device's (P2 M1 design 5.9): applied once the device store has loaded,
   // and whenever it changes.
   const loaded = useDeviceStore((s) => s.loaded);

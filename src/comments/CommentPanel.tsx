@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { moveLabel } from '../board/coordinates';
@@ -113,6 +114,7 @@ function CommentField({ snapshot, visit }: { snapshot: GameSnapshot; visit: numb
         defaultValue={comment ?? ''}
         onFocus={() => setFocused(true)}
         onChange={(e) => {
+          stopReplay();
           scratchStart.current = scratch;
           draft.current = e.target.value;
         }}

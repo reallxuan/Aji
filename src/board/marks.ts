@@ -2,7 +2,7 @@ import type { Color } from '../transport/generated/Color';
 import type { Mark } from '../transport/generated/Mark';
 import type { MarkupTool } from '../edit/modeStore';
 import type { BoardView } from './drawBoard';
-import { boardGeometry } from './geometry';
+import { gridPosition, boardGeometry } from './geometry';
 import { BOARD_STYLES } from './styles';
 import type { MarkAt } from '../transport/generated/MarkAt';
 import { branchLetter } from './badges';
@@ -35,7 +35,8 @@ export function drawMarks(
   view: BoardView,
   stones: readonly (Color | null)[],
 ) {
-  const { lines, spacing } = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates, view.orientation);
+  const { spacing } = geometry;
   const wood = BOARD_STYLES[view.style ?? 'honey'];
   const s = spacing * 0.3;
   ctx.save();
@@ -43,8 +44,7 @@ export function drawMarks(
   ctx.clearRect(0, 0, view.cssSize, view.cssSize);
   ctx.lineWidth = 1.7;
   for (const { point, mark } of marks) {
-    const x = lines[point.x],
-      y = lines[point.y];
+    const { x, y } = gridPosition(geometry, point);
     const stone = stones[point.y * view.boardSize + point.x];
     const ink =
       stone === 'black'

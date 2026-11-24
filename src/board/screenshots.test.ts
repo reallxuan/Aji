@@ -354,6 +354,23 @@ describe('board screenshots', () => {
     );
   });
 
+  it('rotated_board_with_numbers', () => {
+    const view: BoardView = { cssSize: CSS_SIZE, dpr: 1, boardSize: 9, orientation: 1 };
+    const stones = empty(9);
+    const numbers = [
+      { point: { x: 1, y: 2 }, n: 1 },
+      { point: { x: 5, y: 7 }, n: 2 },
+    ];
+    stones[19] = 'black';
+    stones[68] = 'white';
+    compare(
+      'rotated_board_with_numbers',
+      render(view, stones, null, null, (ctx) =>
+        drawEditOverlay(ctx, view, stones, [], [], numbers),
+      ),
+    );
+  });
+
   it('badges_and_tryout_numbers', () => {
     const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19 };
     const stones = parse(SAMSUNG_58);

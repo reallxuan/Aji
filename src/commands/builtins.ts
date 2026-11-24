@@ -1,3 +1,5 @@
+import { orient, ROTATIONS, setNumberMode } from '../board/viewActions';
+import { toggleReplay } from '../game/replayStore';
 import { useDeviceStore } from '../device/deviceStore';
 import { useEstimateStore } from '../analysis/estimateStore';
 import { useViewStore } from '../analysis/viewStore';
@@ -46,13 +48,11 @@ const page = (id: CommandId, by: number) =>
 
 /** Today's commands: the board's keys (design 5.7, M7 design 5.10) and the file chords. */
 export const BUILTINS: Command[] = [
+  ...ROTATIONS.map((action) => press(`view.${action}`, () => orient(action))),
+  press('replay.toggle', toggleReplay),
   press('view.moveNumbers', () => {
-    const { settings, update } = useDeviceStore.getState();
-    const { moveNumbers } = settings;
-    const lastOn = moveNumbers.mode === 'off' ? moveNumbers.lastOn : moveNumbers.mode;
-    update({
-      moveNumbers: { ...moveNumbers, lastOn, mode: moveNumbers.mode === 'off' ? lastOn : 'off' },
-    });
+    const { mode, lastOn } = useDeviceStore.getState().settings.moveNumbers;
+    setNumberMode(mode === 'off' ? lastOn : 'off');
   }),
   step('nav.previousSibling', 'previousSibling'),
   step('nav.nextSibling', 'nextSibling'),

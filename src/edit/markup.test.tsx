@@ -1,3 +1,7 @@
+import { createI18n } from '../i18n/createI18n';
+import { useReplayStore } from '../game/replayStore';
+import { connectReplay } from '../game/actions';
+import { useViewStore } from '../analysis/viewStore';
 import { useFreehandStore } from './freehandStore';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it } from 'vitest';
@@ -206,3 +210,51 @@ it.each(['navigate', 'replace', 'navigate back'])(
     expect(requests.filter((r) => r.type === 'gameEdit')).toHaveLength(1);
   },
 );
+
+it('a stroke keeps its fractional logical points when the view turns', async () => {
+  renderWithGame(ui);
+  await click('标记');
+  await click('涂鸦');
+  act(() => useViewStore.setState({ orientation: 1 }));
+  const { margin, spacing } = boardGeometry(400, 19);
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-layer="freehand"]')!;
+  const touch = {
+    pointerId: 1,
+    pointerType: 'touch',
+    button: 0,
+    clientX: margin + 5.5 * spacing,
+    clientY: margin + 7.25 * spacing,
+  };
+  fireEvent.pointerDown(canvas, touch);
+  fireEvent.pointerUp(canvas, touch);
+  const [p] = useFreehandStore.getState().strokes[0];
+  expect(p.x).toBeCloseTo(7.25);
+  expect(p.y).toBeCloseTo(12.5);
+  act(() => useViewStore.setState({ orientation: 0 }));
+  const ctx = canvas.getContext('2d')!;
+  expect(ctx.arc).toHaveBeenLastCalledWith(
+    margin + 7.25 * spacing,
+    margin + 12.5 * spacing,
+    1.5,
+    0,
+    2 * Math.PI,
+  );
+});
+
+it('clearing a freehand drawing interrupts replay without sending a record edit', async () => {
+  const { transport, files, requests } = renderWithGame(ui, {
+    snapshot: makeSnapshot({ atEnd: false }),
+  });
+  await click('标记');
+  await click('涂鸦');
+  const disconnect = connectReplay({ transport, files, t: createI18n('en').t });
+  try {
+    await click('自动播放');
+    expect(useReplayStore.getState().playing).toBe(true);
+    await click('清除涂鸦');
+    expect(useReplayStore.getState().playing).toBe(false);
+    expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([]);
+  } finally {
+    act(disconnect);
+  }
+});

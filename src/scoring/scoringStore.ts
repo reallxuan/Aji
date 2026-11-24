@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import type { TFunction } from 'i18next';
 import { edit } from '../game/editActions';
 import { useModeStore } from '../edit/modeStore';
@@ -114,6 +115,7 @@ export const useScoringStore = create<ScoringState>()((set, get) => {
     ...IDLE,
     lastCount: null,
     async start(ctx) {
+      stopReplay();
       const { transport, engine } = ctx;
       if (get().active || get().starting) return;
       const mine = ++asked;

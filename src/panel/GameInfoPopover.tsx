@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import { useTranslation } from 'react-i18next';
 import { Dialog } from 'radix-ui';
 import { Sheet } from '../layout/Sheet';
@@ -125,7 +126,11 @@ function Form({ snapshot }: { snapshot: GameSnapshot }) {
   const result = editor('result');
   const labelClass = 'self-center text-xs text-text-muted';
   return (
-    <fieldset disabled={snapshot.tryout !== null} className="min-w-0 text-sm disabled:opacity-65">
+    <fieldset
+      onChangeCapture={stopReplay}
+      disabled={snapshot.tryout !== null}
+      className="min-w-0 text-sm disabled:opacity-65"
+    >
       <section className="px-4 py-3.5">
         <h3 className="mb-3 font-medium">{t('gameInfo.title')}</h3>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(4rem,0.45fr)] gap-x-2 gap-y-1.5">

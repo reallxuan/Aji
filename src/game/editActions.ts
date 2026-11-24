@@ -1,3 +1,4 @@
+import { afterReplay } from './replayStore';
 import { editGame, redoGame, undoGame, type GameReply } from '../transport/api';
 import type { SessionEdit } from '../transport/generated/SessionEdit';
 import { toTransportError } from '../transport/transport';
@@ -45,8 +46,12 @@ async function applyChange(
 }
 
 function change(ctx: Pick<ActionContext, 'transport' | 't'>, request: () => Promise<GameReply>) {
-  if (recordLocked(ctx.transport)) return Promise.resolve(null);
-  return trackMutation(ctx.transport, applyChange(ctx, request()));
+  return trackMutation(
+    ctx.transport,
+    afterReplay(ctx.transport, () =>
+      recordLocked(ctx.transport) ? Promise.resolve(null) : applyChange(ctx, request()),
+    ),
+  );
 }
 
 /** A refused request returns null. An accepted but superseded snapshot has no current visit. */

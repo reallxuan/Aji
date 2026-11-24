@@ -3,7 +3,7 @@ import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
-import { boardGeometry, type BoardGeometry } from './geometry';
+import { gridPosition, boardGeometry, type BoardGeometry } from './geometry';
 
 export interface Badge {
   point: Point;
@@ -36,9 +36,10 @@ export function badgesFor(
 }
 
 function badgeBox(g: BoardGeometry, point: Point) {
+  const at = gridPosition(g, point);
   return {
-    x: g.lines[point.x] + 0.22 * g.spacing,
-    y: g.lines[point.y] - 0.62 * g.spacing,
+    x: at.x + 0.22 * g.spacing,
+    y: at.y - 0.62 * g.spacing,
     size: 0.4 * g.spacing,
   };
 }
@@ -59,7 +60,7 @@ export function drawEditOverlay(
   numbers: readonly StoneNumber[] = [],
   marked?: ReadonlySet<number>,
 ) {
-  const g = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
+  const g = boardGeometry(view.cssSize, view.boardSize, view.coordinates, view.orientation);
   if (g.spacing <= 0) return;
   ctx.save();
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -72,7 +73,8 @@ export function drawEditOverlay(
     if (marked?.has(point.y * view.boardSize + point.x)) return;
     ctx.fillStyle = stones[point.y * view.boardSize + point.x] === 'black' ? '#f2f0ea' : '#1a1a1a';
     ctx.font = `600 ${s * 0.42}px Inter`;
-    ctx.fillText(String(n), g.lines[point.x], g.lines[point.y] + 0.5);
+    const at = gridPosition(g, point);
+    ctx.fillText(String(n), at.x, at.y + 0.5);
   };
   numbers.forEach(number);
   for (const entry of tryout) {
@@ -81,7 +83,8 @@ export function drawEditOverlay(
     ctx.lineWidth = 1.6;
     ctx.setLineDash([2.5, 2]);
     ctx.beginPath();
-    ctx.arc(g.lines[point.x], g.lines[point.y], s * 0.56, 0, Math.PI * 2);
+    const at = gridPosition(g, point);
+    ctx.arc(at.x, at.y, s * 0.56, 0, Math.PI * 2);
     ctx.stroke();
     number(entry);
   }
@@ -101,7 +104,8 @@ export function drawEditOverlay(
       ctx.strokeStyle = view.style === 'walnut' ? '#f3efe4' : 'rgba(43,29,14,.7)';
       ctx.lineWidth = 1.3;
       ctx.beginPath();
-      ctx.arc(g.lines[b.point.x], g.lines[b.point.y], s * 0.42, 0, Math.PI * 2);
+      const at = gridPosition(g, b.point);
+      ctx.arc(at.x, at.y, s * 0.42, 0, Math.PI * 2);
       ctx.stroke();
     }
     const { x, y, size } = badgeBox(g, b.point);

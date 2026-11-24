@@ -1,3 +1,4 @@
+import { fromView, toView, type Orientation } from '../board/orientation';
 import { useCallback, useLayoutEffect, useRef, type PointerEvent } from 'react';
 import { boardGeometry } from '../board/geometry';
 import { useDevicePixelRatio } from '../board/useDevicePixelRatio';
@@ -8,11 +9,13 @@ export function FreehandOverlay({
   cssSize,
   boardSize,
   coordinates,
+  orientation = 0,
 }: {
   active: boolean;
   cssSize: number;
   boardSize: number;
   coordinates: boolean;
+  orientation?: Orientation;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const draft = useRef<{ pointer: number; points: Point2[] } | null>(null);
@@ -28,18 +31,22 @@ export function FreehandOverlay({
       ctx.strokeStyle = ctx.fillStyle = 'rgba(37,99,235,.85)';
       ctx.lineCap = ctx.lineJoin = 'round';
       ctx.beginPath();
-      const x = margin + points[0].x * spacing,
-        y = margin + points[0].y * spacing;
+      const first = toView(points[0], boardSize, orientation);
+      const x = margin + first.x * spacing,
+        y = margin + first.y * spacing;
       if (points.length === 1) {
         ctx.arc(x, y, 1.5, 0, 2 * Math.PI);
         ctx.fill();
       } else {
         ctx.moveTo(x, y);
-        for (const p of points.slice(1)) ctx.lineTo(margin + p.x * spacing, margin + p.y * spacing);
+        for (const p of points.slice(1)) {
+          const at = toView(p, boardSize, orientation);
+          ctx.lineTo(margin + at.x * spacing, margin + at.y * spacing);
+        }
         ctx.stroke();
       }
     },
-    [dpr, margin, spacing],
+    [dpr, margin, spacing, orientation, boardSize],
   );
   const redraw = useCallback(() => {
     draft.current = null;
@@ -55,10 +62,14 @@ export function FreehandOverlay({
   };
   const point = (event: PointerEvent<HTMLCanvasElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
-    return {
-      x: (event.clientX - box.left - margin) / spacing,
-      y: (event.clientY - box.top - margin) / spacing,
-    };
+    return fromView(
+      {
+        x: (event.clientX - box.left - margin) / spacing,
+        y: (event.clientY - box.top - margin) / spacing,
+      },
+      boardSize,
+      orientation,
+    );
   };
   if (!active && !strokes.length) return null;
   return (

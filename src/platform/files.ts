@@ -1,3 +1,4 @@
+import type { MoveNumbers } from '../device/deviceSettings';
 import type { MenuAction } from '../transport/generated/MenuAction';
 import type { OpenedFile } from '../transport/generated/OpenedFile';
 import type { RecentEntry } from '../transport/generated/RecentEntry';
@@ -16,6 +17,8 @@ export type DragEvent =
  * link instead. Paths stay on the other side: an opened file comes back with a token to remember.
  */
 export interface PlatformFiles {
+  /** A browser client supplies its own menus even when its engine runs on a Mac. */
+  browserMenus?: boolean;
   /** The open dialog; `null` when the user cancels. */
   pickOpen(): Promise<OpenedFile | null>;
   /** A file dropped on the window. */
@@ -44,7 +47,7 @@ export interface PlatformFiles {
   setAlwaysOnTop(on: boolean): Promise<void>;
   setWindowTitle(title: string): Promise<void>;
   /** The language the menu bar should use. */
-  setMenuLanguage(language: 'zh-CN' | 'en'): Promise<void>;
+  setMenuLanguage(language: 'zh-CN' | 'en', numbers: MoveNumbers): Promise<void>;
   onDrag(handler: (event: DragEvent) => void): () => void;
   onMenu(handler: (command: MenuAction) => void): () => void;
 }

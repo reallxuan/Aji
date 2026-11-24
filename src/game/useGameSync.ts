@@ -1,3 +1,4 @@
+import { connectReplay } from './actions';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEngineStore, useEngineStoreApi } from '../engine/engineStore';
@@ -19,6 +20,8 @@ export function useGameSync(): { ready: boolean } {
   const engine = useEngineStoreApi();
   const files = usePlatformFiles();
   const { t } = useTranslation();
+
+  useEffect(() => connectReplay({ transport, files, t }), [transport, files, t]);
 
   useEffect(() => {
     let active = true;

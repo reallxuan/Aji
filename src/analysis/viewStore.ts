@@ -1,3 +1,4 @@
+import type { Orientation } from '../board/orientation';
 import { create } from 'zustand';
 import type { Move } from '../transport/generated/Move';
 import { shownLength, type Variation } from './variation';
@@ -17,6 +18,7 @@ export interface Hover {
 }
 
 export interface ViewState {
+  orientation: Orientation;
   /** F: candidates hidden for the session. */
   hidden: boolean;
   toggleHidden(): void;
@@ -36,7 +38,14 @@ export interface ViewState {
   reset(): void;
 }
 
-const initial = { hidden: false, held: false, hover: null, variation: null, step: null };
+const initial = {
+  orientation: 0 as Orientation,
+  hidden: false,
+  held: false,
+  hover: null,
+  variation: null,
+  step: null,
+};
 
 export const useViewStore = create<ViewState>()((set) => ({
   ...initial,

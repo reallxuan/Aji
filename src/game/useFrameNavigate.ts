@@ -1,3 +1,4 @@
+import { captureReplayVisit, stopReplay } from './replayStore';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { NavTarget } from '../transport/generated/NavTarget';
 import { navigate } from './actions';
@@ -24,7 +25,12 @@ export function useFrameNavigate(): (to: NavTarget, isCurrent?: () => boolean) =
   );
 
   return useCallback((to: NavTarget, isCurrent?: () => boolean) => {
-    pending.current = { to, isCurrent };
+    stopReplay();
+    const visit = captureReplayVisit(latest.current.transport);
+    pending.current = {
+      to,
+      isCurrent: visit ? () => visit() && (!isCurrent || isCurrent()) : isCurrent,
+    };
     if (frame.current !== null) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = null;

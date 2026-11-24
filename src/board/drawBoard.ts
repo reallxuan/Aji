@@ -1,3 +1,4 @@
+import type { Orientation } from './orientation';
 import { asImage, type CanvasFactory, domCanvas } from './canvasFactory';
 import { boardGeometry } from './geometry';
 import type { BoardId } from '../device/deviceSettings';
@@ -18,6 +19,7 @@ export interface BoardView {
   coordinates?: boolean;
   /** The board style (P2 M1 design 5.7). Default honey. */
   style?: BoardId;
+  orientation?: Orientation;
 }
 
 /**
@@ -34,7 +36,7 @@ export function drawBoard(
   const style = BOARD_STYLES[view.style ?? 'honey'];
   const wood = woodTexture(cssSize, dpr, create, style);
   if (!wood) return;
-  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(asImage(wood), 0, 0);

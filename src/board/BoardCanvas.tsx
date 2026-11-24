@@ -1,3 +1,4 @@
+import type { Orientation } from './orientation';
 import type { MarkAt } from '../transport/generated/MarkAt';
 import { drawMarks } from './marks';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
@@ -21,6 +22,9 @@ import { useDevicePixelRatio } from './useDevicePixelRatio';
 export interface BoardCanvasProps {
   /** The board's side in CSS pixels. */
   cssSize: number;
+  orientation?: Orientation;
+  /** A pending replay step can invalidate the visit between pointer down and release. */
+  isGestureCurrent?(): boolean;
   /** Lines per side. */
   boardSize: number;
   /** Every point, row by row (`y * boardSize + x`). */
@@ -100,6 +104,8 @@ export function BoardCanvas({
   hoveredCandidate,
   variation = null,
   coordinates = true,
+  orientation = 0,
+  isGestureCurrent,
   boardStyle = 'honey',
   stoneStyle = 'slate',
   onTapCandidate,
@@ -147,8 +153,9 @@ export function BoardCanvas({
 
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
-    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates, style: boardStyle });
-  }, [cssSize, dpr, boardSize, coordinates, boardStyle, fontsLoaded]);
+    if (ctx)
+      drawBoard(ctx, { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle });
+  }, [cssSize, dpr, boardSize, orientation, coordinates, boardStyle, fontsLoaded]);
 
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
@@ -170,33 +177,48 @@ export function BoardCanvas({
     if (ctx && cssSize > 0) {
       drawStones(
         ctx,
-        { cssSize, dpr, boardSize, coordinates },
+        { cssSize, dpr, boardSize, orientation, coordinates },
         stones,
         visibleLastMove,
         sprites,
         ownership?.dead,
       );
     }
-  }, [cssSize, dpr, boardSize, coordinates, stones, visibleLastMove, sprites, ownership]);
+  }, [
+    cssSize,
+    dpr,
+    boardSize,
+    orientation,
+    coordinates,
+    stones,
+    visibleLastMove,
+    sprites,
+    ownership,
+  ]);
 
   useEffect(() => {
     const ctx = ownershipLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates };
+    const view = { cssSize, dpr, boardSize, orientation, coordinates };
     drawOwnership(ctx, view, ownership?.owners ?? []);
-  }, [cssSize, dpr, boardSize, coordinates, ownership]);
+  }, [cssSize, dpr, boardSize, orientation, coordinates, ownership]);
 
   useEffect(() => {
     const ctx = markLayer.current?.getContext('2d');
     if (ctx)
-      drawMarks(ctx, marks, { cssSize, dpr, boardSize, coordinates, style: boardStyle }, stones);
-  }, [cssSize, dpr, boardSize, coordinates, boardStyle, stones, marks, fontsLoaded]);
+      drawMarks(
+        ctx,
+        marks,
+        { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle },
+        stones,
+      );
+  }, [cssSize, dpr, boardSize, orientation, coordinates, boardStyle, stones, marks, fontsLoaded]);
 
   const [first, second] = discLines;
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
+    const view = { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle };
     if (variation)
       drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones, marked);
     else {
@@ -208,6 +230,7 @@ export function BoardCanvas({
     cssSize,
     dpr,
     boardSize,
+    orientation,
     coordinates,
     boardStyle,
     candidates,
@@ -235,7 +258,7 @@ export function BoardCanvas({
     if (ctx)
       drawEditOverlay(
         ctx,
-        { cssSize, dpr, boardSize, coordinates, style: boardStyle },
+        { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle },
         stones,
         badges,
         tryoutNumbers,
@@ -247,6 +270,7 @@ export function BoardCanvas({
     cssSize,
     dpr,
     boardSize,
+    orientation,
     coordinates,
     boardStyle,
     stones,
@@ -256,12 +280,13 @@ export function BoardCanvas({
     marked,
     fontsLoaded,
   ]);
-  const view = { cssSize, boardSize, coordinates };
+  const view = { cssSize, boardSize, orientation, coordinates };
   const hitBadge = (x: number, y: number) =>
     badges.length && !variation
-      ? badgeAt(boardGeometry(cssSize, boardSize, coordinates), badges, x, y)
+      ? badgeAt(boardGeometry(cssSize, boardSize, coordinates, orientation), badges, x, y)
       : undefined;
   const choose = (x: number, y: number, touch: boolean) => {
+    if (isGestureCurrent?.() === false) return;
     const point = pointAt(x, y, view);
     if (onTapPoint) {
       if (point) onTapPoint(point);
@@ -279,6 +304,7 @@ export function BoardCanvas({
     if (!disc && point) onClickPoint?.(point);
   };
   const context = (x: number, y: number) => {
+    if (isGestureCurrent?.() === false) return;
     const box = board.current?.getBoundingClientRect();
     if (!box) return;
     const at = { x: x + box.left, y: y + box.top };
@@ -290,22 +316,28 @@ export function BoardCanvas({
     const point = pointAt(x, y, view);
     if (point) onContextPoint?.(point, at);
   };
-  const gestures = useBoardGestures({
-    tap: (x, y) => choose(x, y, true),
-    longPress: context,
-    drag: onDragStone && {
-      stones,
-      stoneAt: (x, y) => {
-        const p = pointAt(x, y, view);
-        return p && stones[p.y * boardSize + p.x] ? p : null;
+  const gestures = useBoardGestures(
+    {
+      tap: (x, y) => choose(x, y, true),
+      longPress: context,
+      drag: onDragStone && {
+        stones,
+        stoneAt: (x, y) => {
+          const p = pointAt(x, y, view);
+          return p && stones[p.y * boardSize + p.x] ? p : null;
+        },
+        drop: (from, x, y) => {
+          if (isGestureCurrent?.() === false) return;
+          const to = pointAt(x, y, view);
+          if (to && (to.x !== from.x || to.y !== from.y)) onDragStone(from, to);
+        },
       },
-      drop: (from, x, y) => {
-        const to = pointAt(x, y, view);
-        if (to && (to.x !== from.x || to.y !== from.y)) onDragStone(from, to);
+      step: (forward) => {
+        if (isGestureCurrent?.() !== false) onSwipeStep?.(forward);
       },
     },
-    step: (forward) => onSwipeStep?.(forward),
-  });
+    orientation,
+  );
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 || gestures.consumeClick()) return;
     const box = event.currentTarget.getBoundingClientRect();

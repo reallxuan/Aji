@@ -1,8 +1,11 @@
+import { createFakeGame } from '../dev/fakeGame';
+import { connectReplay } from '../game/actions';
+import { createI18n } from '../i18n/createI18n';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { boardGeometry } from '../board/geometry';
-import { resetGameStore } from '../game/gameStore';
+import { resetGameStore, useGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import { MainBoard } from '../layout/MainBoard';
@@ -216,3 +219,79 @@ it('try here skips its pending play when scoring starts before the start reply',
     { type: 'gameEdit', edit: { kind: 'tryoutStart' } },
   ]);
 });
+
+it('an occupied-stone click pauses replay without issuing a second action', async () => {
+  const snapshot = makeSnapshot({ atEnd: false });
+  snapshot.stones[3 * 19 + 4] = 'black';
+  const { transport, files, requests } = renderWithGame(
+    <>
+      <HeaderPanel />
+      {board}
+    </>,
+    { snapshot },
+  );
+  const disconnect = connectReplay({ transport, files, t: createI18n('en').t });
+  try {
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '自动播放' })));
+    expect(screen.getByRole('button', { name: '暂停自动播放' })).toBeEnabled();
+    await act(async () => fireEvent.click(surface(), at(4, 3)));
+    expect(screen.getByRole('button', { name: '自动播放' })).toBeEnabled();
+    expect(requests.filter((r) => r.type === 'gameEdit' || r.type === 'gameNavigate')).toEqual([]);
+  } finally {
+    act(disconnect);
+  }
+});
+
+it.each(['click', 'pointer', 'frame'] as const)(
+  'a delayed replay advance never moves a %s action to the following node',
+  async (input) => {
+    vi.useFakeTimers();
+    const service = createFakeGame(() => {});
+    const root = service({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
+    if (root?.type !== 'game') throw Error('expected a game');
+    let deliver!: () => void;
+    const { transport, files, requests } = renderWithGame(
+      <>
+        <HeaderPanel />
+        {board}
+      </>,
+      {
+        snapshot: root.snapshot,
+        answer(request) {
+          const result = service(request);
+          if (request.type === 'gameNavigate' && request.to === 'next' && result)
+            return new Promise((resolve) => {
+              deliver = () => resolve(result);
+            });
+          return result ?? undefined;
+        },
+      },
+    );
+    const disconnect = connectReplay({ transport, files, t: createI18n('en').t });
+    try {
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: '自动播放' })));
+      await act(async () => vi.advanceTimersByTimeAsync(1500));
+      const next = service({ type: 'gameSnapshot' });
+      if (next?.type !== 'game') throw Error('expected a game');
+      expect(next.snapshot.node).not.toBe(root.snapshot.node);
+      expect(useGameStore.getState().snapshot?.node).toBe(root.snapshot.node);
+      const pos = { button: 0, pointerType: 'mouse', pointerId: 7, ...at(1, 1) };
+      if (input === 'click') fireEvent.click(surface(), pos);
+      else if (input === 'pointer') fireEvent.pointerDown(surface(), pos);
+      else fireEvent.click(screen.getByRole('button', { name: '下一手' }), { detail: 0 });
+      await act(async () => deliver());
+      if (input === 'pointer') {
+        fireEvent.pointerUp(surface(), pos);
+        fireEvent.click(surface(), pos);
+      }
+      await act(async () => vi.advanceTimersByTimeAsync(30));
+      expect(requests.filter((r) => r.type === 'gameEdit' || r.type === 'gameNavigate')).toEqual([
+        { type: 'gameNavigate', to: 'next' },
+      ]);
+      expect(service({ type: 'gameSnapshot' })).toEqual(next);
+    } finally {
+      act(disconnect);
+      vi.useRealTimers();
+    }
+  },
+);

@@ -1,3 +1,5 @@
+import type { MenuCommand } from './files';
+import { useViewStore } from '../analysis/viewStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -176,4 +178,24 @@ it('the native file menu dispatches each export option, including an in-place sa
     { scope: 'game', clean: true, inPlace: false },
   ]);
   expect(requests.filter((r) => r.type === 'gameSaved')).toHaveLength(2);
+});
+
+it('native View actions rotate the session and keep the numbered-stone settings in sync', async () => {
+  const { files } = renderWithGame(<SyncProbe />);
+  const choose = async (id: MenuCommand) => act(async () => files.emitMenu(id));
+  await choose('rotateCw');
+  expect(useViewStore.getState().orientation).toBe(1);
+  await choose('flipH');
+  expect(useViewStore.getState().orientation).not.toBe(1);
+  await choose('resetOrientation');
+  expect(useViewStore.getState().orientation).toBe(0);
+  await choose('numbersLast');
+  await choose('numbersRestart');
+  await choose('numbersOff');
+  expect(useDeviceStore.getState().settings.moveNumbers).toEqual({
+    mode: 'off',
+    last: 10,
+    lastOn: 'last',
+    restartInBranch: true,
+  });
 });

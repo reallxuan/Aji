@@ -26,7 +26,11 @@ import { useWizardStore } from '../setup/wizardStore';
 import { getInstalled, removeUnused, restartEngine, stopEngine } from '../transport/api';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import { useDeviceStore } from '../device/deviceStore';
-import { INTERFACE_SCALES, type InterfaceScale } from '../device/deviceSettings';
+import {
+  INTERFACE_SCALES,
+  MAX_REPLAY_SECONDS,
+  type InterfaceScale,
+} from '../device/deviceSettings';
 import type { DiscField } from '../transport/generated/DiscField';
 import type { UiSettings } from '../transport/generated/UiSettings';
 import { toTransportError, type Transport } from '../transport/transport';
@@ -139,6 +143,10 @@ export function SettingsPanel() {
   ];
   const onOpen = settings.analyseOnOpen ? 'on' : 'off';
   const writeAnalysis = settings.saveAnalysis ? 'on' : 'off';
+  const openPositions: Array<['first' | 'last', string]> = [
+    ['first', t('settings.gameStart')],
+    ['last', t('panel.last')],
+  ];
   const nextMove = settings.showNextMove ? 'show' : 'hide';
   const nextMoveOptions: Array<['show' | 'hide', string]> = [
     ['show', t('settings.nextMove.show')],
@@ -184,6 +192,31 @@ export function SettingsPanel() {
               disabled={false}
               onChange={(choice) => updateDevice({ showCoordinates: choice === 'show' })}
               options={coordinateOptions}
+            />
+          </Row>
+          <Row label={t('settings.recentMoves')}>
+            <PositiveNumber
+              label={t('settings.recentMoves')}
+              value={device.moveNumbers.last}
+              integer
+              onCommit={(last) => updateDevice({ moveNumbers: { ...device.moveNumbers, last } })}
+            />
+          </Row>
+          <Row label={t('settings.replaySeconds')}>
+            <PositiveNumber
+              label={t('settings.replaySeconds')}
+              max={MAX_REPLAY_SECONDS}
+              value={device.autoReplaySeconds}
+              onCommit={(autoReplaySeconds) => updateDevice({ autoReplaySeconds })}
+            />
+          </Row>
+          <Row label={t('settings.openAt')}>
+            <Choice
+              label={t('settings.openAt')}
+              value={device.openAt}
+              disabled={false}
+              options={openPositions}
+              onChange={(openAt) => updateDevice({ openAt })}
             />
           </Row>
           <Row label={t('settings.scale')}>
@@ -335,6 +368,47 @@ export function SettingsPanel() {
         </button>
       </div>
     </div>
+  );
+}
+
+function PositiveNumber({
+  label,
+  value,
+  integer,
+  max = Number.MAX_SAFE_INTEGER,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  integer?: boolean;
+  max?: number;
+  onCommit(value: number): void;
+}) {
+  return (
+    <input
+      key={value}
+      type="number"
+      step={integer ? 1 : 'any'}
+      min={integer ? 1 : 0}
+      max={max}
+      defaultValue={value}
+      aria-label={label}
+      className="h-8 w-24 rounded-md border border-hairline bg-transparent px-2 text-sm tabular-nums"
+      onBlur={(e) => {
+        const next = e.currentTarget.valueAsNumber;
+        if (
+          Number.isFinite(next) &&
+          next > 0 &&
+          next <= max &&
+          (!integer || Number.isSafeInteger(next))
+        )
+          onCommit(next);
+        else e.currentTarget.value = String(value);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+    />
   );
 }
 

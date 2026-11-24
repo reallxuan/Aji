@@ -65,7 +65,7 @@ export function createTauriFiles(): PlatformFiles {
     },
     setAlwaysOnTop: (on) => getCurrentWindow().setAlwaysOnTop(on),
     setWindowTitle: (title) => getCurrentWindow().setTitle(title),
-    setMenuLanguage: (language) => call<void>('menu_set_language', { language }),
+    setMenuLanguage: (language, numbers) => call<void>('menu_set_language', { language, numbers }),
     onDrag: (handler) =>
       listening(() =>
         getCurrentWebview().onDragDropEvent(({ payload }) => {

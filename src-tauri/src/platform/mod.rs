@@ -81,6 +81,15 @@ pub enum MenuAction {
     FinalScoring,
     /// 显示 → 形势判断.
     Estimate,
+    RotateCw,
+    RotateCcw,
+    FlipH,
+    FlipV,
+    ResetOrientation,
+    NumbersOff,
+    NumbersAll,
+    NumbersLast,
+    NumbersRestart,
 }
 
 impl MenuAction {
@@ -136,6 +145,15 @@ impl MenuAction {
             MenuAction::ClearGame,
             MenuAction::FinalScoring,
             MenuAction::Estimate,
+            MenuAction::RotateCw,
+            MenuAction::RotateCcw,
+            MenuAction::FlipH,
+            MenuAction::FlipV,
+            MenuAction::ResetOrientation,
+            MenuAction::NumbersOff,
+            MenuAction::NumbersAll,
+            MenuAction::NumbersLast,
+            MenuAction::NumbersRestart,
         ]
         .into_iter()
         .find(|action| action.id() == id)
@@ -337,6 +355,7 @@ pub struct DesktopFiles {
     tokens: Mutex<HashMap<String, GameFile>>,
     next_token: AtomicU64,
     language: Mutex<MenuLanguage>,
+    numbers: Mutex<menu::NumberDisplay>,
 }
 
 impl DesktopFiles {
@@ -348,6 +367,7 @@ impl DesktopFiles {
             tokens: Mutex::new(HashMap::new()),
             next_token: AtomicU64::new(1),
             language: Mutex::new(language),
+            numbers: Mutex::default(),
         }
     }
 
@@ -388,7 +408,8 @@ impl DesktopFiles {
             return;
         }
         let language = *lock(&self.language);
-        let built = menu::build(app, language, entries).and_then(|m| app.set_menu(m));
+        let built =
+            menu::build(app, language, entries, *lock(&self.numbers)).and_then(|m| app.set_menu(m));
         if let Err(e) = built {
             eprintln!("aji: cannot build the menu: {e}");
         }
@@ -694,6 +715,7 @@ async fn confirm_replace<R: Runtime>(
 pub async fn menu_set_language<R: Runtime>(
     app: AppHandle<R>,
     language: String,
+    numbers: Option<menu::NumberDisplay>,
     platform: State<'_, DesktopFiles>,
 ) -> Result<(), ProtocolError> {
     let language = MenuLanguage::from_tag(&language);
@@ -701,7 +723,11 @@ pub async fn menu_set_language<R: Runtime>(
         let mut current = lock(&platform.language);
         std::mem::replace(&mut *current, language) != language
     };
-    if changed {
+    let numbers_changed = numbers.is_some_and(|next| {
+        let mut current = lock(&platform.numbers);
+        std::mem::replace(&mut *current, next) != next
+    });
+    if changed || numbers_changed {
         platform.rebuild_menu(&app, &platform.recent_entries());
     }
     Ok(())
