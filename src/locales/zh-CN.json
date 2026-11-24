@@ -804,6 +804,16 @@
     "deleteBranch": "删除这个分支",
     "tryout": "试下",
     "branch": "分支 {{letter}}",
-    "tryBranch": "试下 {{letter}}"
+    "tryBranch": "试下 {{letter}}",
+    "placeBlack": "放黑子",
+    "placeWhite": "放白子",
+    "alternate": "交替",
+    "toPlay": "轮到 {{symbol}} {{color}}",
+    "insert": "插入一手",
+    "flatten": "折叠为新局面",
+    "removeStone": "删除这颗子",
+    "changeBlack": "改为黑子",
+    "changeWhite": "改为白子",
+    "dragHint": "拖动棋子以移动"
   }
 }

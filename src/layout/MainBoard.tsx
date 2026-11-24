@@ -1,3 +1,4 @@
+import { setupEdit } from '../edit/setupEdit';
 import { useMarkEdit } from '../edit/useMarkEdit';
 import { FreehandOverlay } from '../edit/FreehandOverlay';
 import { badgesFor, branchLetter, type Badge } from '../board/badges';
@@ -151,9 +152,10 @@ export function MainBoard({
     branches?: BoardMenuTarget['branches'],
     chooseMove = false,
   ) => {
-    if (!snapshot || mode !== 'normal' || scoringInProgress()) return;
+    if (!snapshot || mode === 'markup' || scoringInProgress()) return;
+    if (mode === 'setup' && !snapshot.stones[point.y * snapshot.size + point.x]) return;
     useViewStore.getState().setHover(null);
-    setMenu({ point, at, branches, chooseMove, revision: snapshot.revision });
+    setMenu({ mode, point, at, branches, chooseMove, revision: snapshot.revision });
   };
   const activateBadge = (badge: Badge, at: Point, chooseMove: boolean) => {
     if (!snapshot || mode !== 'normal' || scoringInProgress()) return;
@@ -186,6 +188,30 @@ export function MainBoard({
   const markPoint = (point: Point) => {
     if (markupTool !== 'freehand') void markEdit({ kind: 'toggle', point, tool: markupTool });
   };
+  const setup = mode === 'setup' && !scoring && snapshot?.tryout === null;
+  const setupPoint = (point: Point) => {
+    if (!setup || scoringInProgress()) return;
+    const { setupTool, takeAlternateColor, setSetupTool } = useModeStore.getState();
+    if (setupTool === 'insert') {
+      setSetupTool('black');
+      setupEdit(ctx, (s) => ({
+        kind: 'insertMove',
+        color: s.nextColor,
+        mv: { type: 'play', ...point },
+      }));
+      return;
+    }
+    setupEdit(ctx, (s) => {
+      const color = setupTool === 'alternate' ? takeAlternateColor(s.nextColor) : setupTool;
+      return {
+        kind: 'setupStone',
+        point,
+        stone: s.stones[point.y * s.size + point.x] === color ? null : color,
+      };
+    });
+  };
+  const moveStone = (from: Point, to: Point) =>
+    setupEdit(ctx, () => ({ kind: 'moveStone', from, to }));
   const go = useFrameNavigate();
   const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
 
@@ -220,7 +246,8 @@ export function MainBoard({
         onClickPoint={play}
         onClickCandidate={playCandidate}
         onClickBadge={(badge, at) => activateBadge(badge, at, true)}
-        onContextPoint={editing ? openMenu : undefined}
+        onDragStone={setup ? moveStone : undefined}
+        onContextPoint={editing || setup ? openMenu : undefined}
         onContextBadge={editing ? (badge, at) => activateBadge(badge, at, false) : undefined}
         candidates={discs}
         nextRing={nextRing}
@@ -233,7 +260,9 @@ export function MainBoard({
         catchingUp={fading}
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}
-        onTapPoint={scoring ? onTapPoint : mode === 'markup' ? markPoint : undefined}
+        onTapPoint={
+          scoring ? onTapPoint : mode === 'markup' ? markPoint : setup ? setupPoint : undefined
+        }
         onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
         variation={line}
@@ -247,9 +276,18 @@ export function MainBoard({
           coordinates={coordinates}
         />
       )}
-      {menu && snapshot && menu.revision === snapshot.revision && editing && (
-        <BoardMenu target={menu} nodes={nodes} snapshot={snapshot} onClose={() => setMenu(null)} />
-      )}
+      {menu &&
+        snapshot &&
+        menu.revision === snapshot.revision &&
+        !scoring &&
+        menu.mode === mode && (
+          <BoardMenu
+            target={menu}
+            nodes={nodes}
+            snapshot={snapshot}
+            onClose={() => setMenu(null)}
+          />
+        )}
       {overlay}
     </div>
   );

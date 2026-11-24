@@ -9,12 +9,13 @@ import { errorNotice } from './notices';
 async function change(
   ctx: Pick<ActionContext, 't' | 'transport'>,
   request: Promise<GameReply>,
-): Promise<boolean> {
+): Promise<number | null> {
   try {
     const { snapshot } = await request;
     useGameStore.getState().apply(snapshot);
     // A follow-up (for example playing after tryoutStart) belongs to this snapshot.
-    return useGameStore.getState().snapshot?.revision === snapshot.revision;
+    const state = useGameStore.getState();
+    return state.snapshot?.revision === snapshot.revision ? state.nodeVisit : null;
   } catch (cause) {
     const error = toTransportError(cause);
     let label: string | undefined;
@@ -38,11 +39,15 @@ async function change(
           ? { kind: 'warning', title: label }
           : errorNotice(ctx.t('notice.gameFailed'), error, ctx.t),
       );
-    return false;
+    return null;
   }
 }
 
-export const edit = (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
+export const editAndGetVisit = (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
   change(ctx, editGame(ctx.transport, e));
-export const undo = (ctx: ActionContext) => change(ctx, undoGame(ctx.transport));
-export const redo = (ctx: ActionContext) => change(ctx, redoGame(ctx.transport));
+export const edit = async (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
+  (await editAndGetVisit(ctx, e)) !== null;
+export const undo = async (ctx: ActionContext) =>
+  (await change(ctx, undoGame(ctx.transport))) !== null;
+export const redo = async (ctx: ActionContext) =>
+  (await change(ctx, redoGame(ctx.transport))) !== null;

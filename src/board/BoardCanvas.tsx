@@ -13,7 +13,7 @@ import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
 import { badgeAt, drawEditOverlay, type Badge, type StoneNumber } from './badges';
 import { drawBoard } from './drawBoard';
-import { boardGeometry, pointAt } from './geometry';
+import { boardGeometry, pointAt, STONE_RADIUS_SHARE } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
@@ -61,6 +61,7 @@ export interface BoardCanvasProps {
    * design 5.8); a tap then goes here and never to a candidate.
    */
   onTapPoint?(point: Point): void;
+  onDragStone?(from: Point, to: Point): void;
   onClickPoint?(point: Point): void;
   onClickCandidate?(move: Move): void;
   onContextPoint?(point: Point, at: Point): void;
@@ -107,6 +108,7 @@ export function BoardCanvas({
   ownership = null,
   onTapPoint,
   onClickPoint,
+  onDragStone,
   onClickCandidate,
   onClickBadge,
   onContextPoint,
@@ -291,10 +293,21 @@ export function BoardCanvas({
   const gestures = useBoardGestures({
     tap: (x, y) => choose(x, y, true),
     longPress: context,
+    drag: onDragStone && {
+      stones,
+      stoneAt: (x, y) => {
+        const p = pointAt(x, y, view);
+        return p && stones[p.y * boardSize + p.x] ? p : null;
+      },
+      drop: (from, x, y) => {
+        const to = pointAt(x, y, view);
+        if (to && (to.x !== from.x || to.y !== from.y)) onDragStone(from, to);
+      },
+    },
     step: (forward) => onSwipeStep?.(forward),
   });
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || gestures.afterTouch()) return;
+    if (event.button !== 0 || gestures.consumeClick()) return;
     const box = event.currentTarget.getBoundingClientRect();
     choose(event.clientX - box.left, event.clientY - box.top, false);
   };
@@ -313,7 +326,7 @@ export function BoardCanvas({
     <div
       className="relative"
       // Sideways swipes are the board's; the page may still scroll up and down.
-      style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
+      style={{ width: cssSize, height: cssSize, touchAction: onDragStone ? 'none' : 'pan-y' }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => !gestures.afterTouch() && hover(null)}
       onClick={onClick}
@@ -368,6 +381,25 @@ export function BoardCanvas({
         }}
         aria-hidden
       />
+      {gestures.ghost && onDragStone && (
+        <span
+          aria-hidden
+          data-layer="drag-ghost"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed opacity-75"
+          style={{
+            left: gestures.ghost.x,
+            top: gestures.ghost.y,
+            width: spacing * 2 * STONE_RADIUS_SHARE,
+            height: spacing * 2 * STONE_RADIUS_SHARE,
+            backgroundColor:
+              stones[gestures.ghost.from.y * boardSize + gestures.ghost.from.x] ?? undefined,
+            borderColor:
+              stones[gestures.ghost.from.y * boardSize + gestures.ghost.from.x] === 'black'
+                ? 'white'
+                : 'black',
+          }}
+        />
+      )}
       {showEdits && (
         <canvas
           ref={editLayer}

@@ -804,6 +804,16 @@
     "deleteBranch": "Delete this variation",
     "tryout": "Try out",
     "branch": "Variation {{letter}}",
-    "tryBranch": "Try-out {{letter}}"
+    "tryBranch": "Try-out {{letter}}",
+    "placeBlack": "Place black",
+    "placeWhite": "Place white",
+    "alternate": "Alternate",
+    "toPlay": "To play: {{symbol}} {{color}}",
+    "insert": "Insert move",
+    "flatten": "Flatten position",
+    "removeStone": "Remove this stone",
+    "changeBlack": "Change to black",
+    "changeWhite": "Change to white",
+    "dragHint": "Drag a stone to move it."
   }
 }

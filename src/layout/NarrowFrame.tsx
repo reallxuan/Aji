@@ -63,7 +63,7 @@ export function NarrowFrame({
   const notConfigured = useEngineStore((s) => s.engine?.state === 'notConfigured');
   const narrowTab = useDeviceStore((s) => s.settings.narrowTab);
   const update = useDeviceStore((s) => s.update);
-  const marking = useModeStore((s) => s.mode === 'markup');
+  const toolRow = useModeStore((s) => s.mode !== 'normal');
   const phone = width < PHONE_WIDTH;
   const hasStatus = useGameStore((s) => s.snapshot?.tryout != null || !!s.snapshot?.changed);
   const headerHeight = phone ? HEADER.phone + (hasStatus ? PHONE_STATUS_HEIGHT : 0) : HEADER.tablet;
@@ -92,7 +92,7 @@ export function NarrowFrame({
     headerHeight -
     (phone ? NAV : 0) -
     barHeight -
-    (scoring ? 0 : (marking ? 2 : 1) * TOUCH_TARGET);
+    (scoring ? 0 : (toolRow ? 2 : 1) * TOUCH_TARGET);
   const boardRoom = Math.max(
     Math.min(BOARD_FLOOR, room),
     room - (scoring ? SCORING_ROOM : PANELS_MIN),

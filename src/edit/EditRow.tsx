@@ -1,3 +1,4 @@
+import { SetupTools } from './SetupTools';
 import { MarkupTools } from './MarkupTools';
 import { cn } from 'cn';
 import { Undo2, Redo2 } from 'lucide-react';
@@ -76,6 +77,7 @@ export function EditRow({ touch = false }: { touch?: boolean }) {
           );
         })}
       </div>
+      {mode === 'setup' && !scoring && <SetupTools touch={touch} />}
       {mode === 'markup' && !scoring && <MarkupTools touch={touch} />}
     </>
   );

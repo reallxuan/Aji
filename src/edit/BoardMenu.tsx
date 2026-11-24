@@ -1,3 +1,4 @@
+import { setupEdit } from './setupEdit';
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,6 +29,7 @@ const BRANCH_EDITS = ['promote', 'moveUp', 'deleteBranch', 'deleteFrom'] as cons
 const POINT_MARKS = ['triangle', 'square', 'circle', 'cross', 'letter', 'number'] as const;
 
 export interface BoardMenuTarget {
+  mode: 'normal' | 'setup';
   at: Point;
   point: Point;
   revision: number;
@@ -78,6 +80,13 @@ export function BoardMenu({
     if (await boardEdit({ kind: 'tryoutStart' }))
       await boardEdit({ kind: 'play', mv: { type: 'play', ...point } });
   };
+  const removeStone = () => setupEdit(ctx, () => ({ kind: 'setupStone', point, stone: null }));
+  const flipStone = () =>
+    setupEdit(ctx, () => ({
+      kind: 'setupStone',
+      point,
+      stone: stone === 'black' ? 'white' : 'black',
+    }));
   const endTryout = () => void boardEdit({ kind: 'tryoutEnd' });
   const toggleNumbers = () => run('view.moveNumbers');
   const pass = () => void boardEdit({ kind: 'pass' });
@@ -130,7 +139,16 @@ export function BoardMenu({
         <div className="px-2 py-1 text-xs text-text-muted">
           {t(`edit.${stone ?? 'empty'}`, { point: pointLabel(point, snapshot.size) })}
         </div>
-        {branches?.length ? (
+        {target.mode === 'setup' ? (
+          <>
+            <ContextMenuItem onSelect={removeStone}>{t('edit.removeStone')}</ContextMenuItem>
+            <ContextMenuItem onSelect={flipStone}>
+              {t(stone === 'black' ? 'edit.changeWhite' : 'edit.changeBlack')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <div className="px-2 py-1 text-xs text-text-muted">{t('edit.dragHint')}</div>
+          </>
+        ) : branches?.length ? (
           branches.length === 1 ? (
             branchItems(branches[0].node, branches[0].tryout)
           ) : (
