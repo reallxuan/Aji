@@ -1,7 +1,7 @@
 //! A game built from an SGF tree: nodes in an arena, boards per node, the main line, and the
 //! positions KataGo analyses.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use serde::Serialize;
@@ -13,7 +13,7 @@ use crate::coords::{BoardSize, Color, Move, Point};
 use crate::position::Position;
 use crate::sgf::{SgfNode, SgfTree};
 
-/// A node's index in the game's arena. The root is 0; a child's id is larger than its parent's.
+/// A node's index in the game's arena. Ids stay stable when nodes move.
 pub type NodeId = usize;
 
 /// The record's information from the root, for display.
@@ -59,6 +59,8 @@ struct Node {
     sgf: SgfNode,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
+    tryout: bool,
+    attached: bool,
 }
 
 /// What follows from playing the path to a node; computed when first asked for.
@@ -76,7 +78,8 @@ struct NodeState {
 /// A game: the SGF nodes in an arena, with boards and positions derived along any path.
 pub struct Game {
     size: BoardSize,
-    info: GameInfo,
+    root: NodeId,
+    illegal_nodes: Vec<NodeId>,
     nodes: Vec<Node>,
     states: Vec<OnceLock<NodeState>>,
     main_line: Vec<NodeId>,
@@ -139,26 +142,13 @@ impl Game {
         tree: SgfTree,
         default_rules: AnalysisRules,
     ) -> Result<(Game, RulesReading), GameError> {
-        let root_sgf = tree.nodes.first().cloned().unwrap_or_default();
+        let empty = SgfNode::default();
+        let root_sgf = tree.nodes.first().unwrap_or(&empty);
         if root_sgf.first("GM").is_some_and(|gm| gm.trim() != "1") {
             return Err(GameError::NotGo);
         }
-        let size = board_size(&root_sgf)?;
-        let reading = read_rules(&root_sgf, default_rules);
-        let info = GameInfo {
-            black: text(&root_sgf, "PB"),
-            white: text(&root_sgf, "PW"),
-            black_rank: text(&root_sgf, "BR"),
-            white_rank: text(&root_sgf, "WR"),
-            result: text(&root_sgf, "RE"),
-            date: text(&root_sgf, "DT"),
-            event: text(&root_sgf, "EV"),
-            round: text(&root_sgf, "RO"),
-            game_name: text(&root_sgf, "GN"),
-            place: text(&root_sgf, "PC"),
-            handicap: root_sgf.first("HA").and_then(|h| h.trim().parse().ok()),
-        };
-
+        let size = board_size(root_sgf)?;
+        let reading = read_rules(root_sgf, default_rules);
         // Flatten into an arena in pre-order, with an explicit stack.
         let mut nodes: Vec<Node> = Vec::new();
         let mut stack: Vec<(SgfTree, Option<NodeId>)> = vec![(tree, None)];
@@ -170,6 +160,8 @@ impl Game {
                     sgf,
                     parent,
                     children: Vec::new(),
+                    attached: true,
+                    tryout: false,
                 });
                 if let Some(p) = parent {
                     nodes[p].children.push(id);
@@ -186,42 +178,77 @@ impl Game {
                 sgf: SgfNode::default(),
                 parent: None,
                 children: Vec::new(),
+                attached: true,
+                tryout: false,
             });
         }
-        // Children were pushed in the order their subtrees were numbered, which is file order.
-        let mut main_line = vec![0];
-        while let Some(&next) = nodes[*main_line.last().expect("not empty")]
-            .children
-            .first()
-        {
-            main_line.push(next);
-        }
         let states = (0..nodes.len()).map(|_| OnceLock::new()).collect();
-        Ok((
-            Game {
-                size,
-                info,
-                nodes,
-                states,
-                main_line,
-            },
-            reading,
-        ))
+        let mut game = Game {
+            size,
+            root: 0,
+            nodes,
+            states,
+            main_line: Vec::new(),
+            illegal_nodes: Vec::new(),
+        };
+        game.main_line = game.line_through(game.root);
+        game.illegal_nodes = game.scan_illegal(game.root);
+        Ok((game, reading))
     }
 
     pub fn size(&self) -> BoardSize {
         self.size
     }
 
-    pub fn info(&self) -> &GameInfo {
-        &self.info
+    pub fn info(&self) -> GameInfo {
+        let root_sgf = self.sgf(self.root);
+        GameInfo {
+            black: text(root_sgf, "PB"),
+            white: text(root_sgf, "PW"),
+            black_rank: text(root_sgf, "BR"),
+            white_rank: text(root_sgf, "WR"),
+            result: text(root_sgf, "RE"),
+            date: text(root_sgf, "DT"),
+            event: text(root_sgf, "EV"),
+            round: text(root_sgf, "RO"),
+            game_name: text(root_sgf, "GN"),
+            place: text(root_sgf, "PC"),
+            handicap: root_sgf.first("HA").and_then(|h| h.trim().parse().ok()),
+        }
     }
 
     pub fn root(&self) -> NodeId {
-        0
+        self.root
     }
 
-    /// The root, then each node's first child.
+    pub fn children(&self, node: NodeId) -> &[NodeId] {
+        &self.nodes[node].children
+    }
+
+    pub fn is_tryout(&self, node: NodeId) -> bool {
+        self.nodes[node].tryout
+    }
+
+    pub fn is_attached(&self, node: NodeId) -> bool {
+        self.nodes[node].attached
+    }
+
+    pub fn path_to(&self, node: NodeId) -> Vec<NodeId> {
+        let mut path: Vec<_> = std::iter::successors(Some(node), |&id| self.parent(id)).collect();
+        path.reverse();
+        path
+    }
+
+    pub fn line_through(&self, tip: NodeId) -> Vec<NodeId> {
+        let mut line = self.path_to(tip);
+        let mut at = tip;
+        while let Some(&child) = self.children(at).iter().find(|&&id| self.is_attached(id)) {
+            line.push(child);
+            at = child;
+        }
+        line
+    }
+
     /// The node's properties as the file had them.
     pub fn sgf(&self, node: NodeId) -> &SgfNode {
         &self.nodes[node].sgf
@@ -239,21 +266,22 @@ impl Game {
     pub fn is_empty(&self) -> bool {
         self.nodes
             .iter()
+            .filter(|n| n.attached && !n.tryout)
             .all(|n| !has_setup(&n.sgf) && n.sgf.get("B").is_none() && n.sgf.get("W").is_none())
+    }
+
+    /// The node followed by each uncached ancestor, nearest first.
+    fn replay_path(&self, node: NodeId) -> Vec<NodeId> {
+        let ancestors = std::iter::successors(self.parent(node), |&id| self.parent(id))
+            .take_while(|&id| self.states[id].get().is_none());
+        std::iter::once(node).chain(ancestors).collect()
     }
 
     fn state(&self, node: NodeId) -> &NodeState {
         if let Some(state) = self.states[node].get() {
             return state;
         }
-        // Compute from the nearest ancestor that has a state, without recursion.
-        let mut path = vec![node];
-        while let Some(parent) = self.nodes[*path.last().expect("not empty")].parent {
-            if self.states[parent].get().is_some() {
-                break;
-            }
-            path.push(parent);
-        }
+        let path = self.replay_path(node);
         for &id in path.iter().rev() {
             let parent = self.nodes[id]
                 .parent
@@ -315,7 +343,12 @@ impl Game {
             color.opponent()
         } else if let Some(p) = parent {
             p.to_play
-        } else if self.info.handicap.is_some_and(|h| h >= 2) && sgf.get("AB").is_some() {
+        } else if sgf
+            .first("HA")
+            .and_then(|h| h.trim().parse::<u8>().ok())
+            .is_some_and(|h| h >= 2)
+            && sgf.get("AB").is_some()
+        {
             Color::White
         } else {
             Color::Black
@@ -362,9 +395,95 @@ impl Game {
         self.state(node).illegal
     }
 
-    /// Whether any node of the game is flagged illegal.
+    /// Replays the path for a legality scan without retaining the intermediate boards.
+    fn replay_uncached(&self, node: NodeId) -> NodeState {
+        let mut path = self.replay_path(node);
+        let first = path.pop().expect("path includes the node");
+        let parent = self.parent(first).and_then(|p| self.states[p].get());
+        let mut state = self.compute(first, parent);
+        for id in path.into_iter().rev() {
+            state = self.compute(id, Some(&state));
+        }
+        state
+    }
+
+    /// Visits a subtree with one saved position per open fork, regardless of its width.
+    fn scan_illegal(&self, start: NodeId) -> Vec<NodeId> {
+        let mut illegal = Vec::new();
+        if !self.is_attached(start) {
+            return illegal;
+        }
+        let mut at = start;
+        let mut state = self.replay_uncached(start);
+        let mut forks = Vec::new();
+        loop {
+            if state.illegal.is_some() {
+                illegal.push(at);
+            }
+            let mut children = self
+                .children(at)
+                .iter()
+                .copied()
+                .filter(|&c| self.is_attached(c))
+                .peekable();
+            if let Some(child) = children.next() {
+                let next = self.compute(child, Some(&state));
+                if children.peek().is_some() {
+                    forks.push((children, state));
+                }
+                at = child;
+                state = next;
+            } else if let Some((mut siblings, parent)) = forks.pop() {
+                at = siblings.next().expect("fork has a remaining child");
+                state = self.compute(at, Some(&parent));
+                if siblings.peek().is_some() {
+                    forks.push((siblings, parent));
+                }
+            } else {
+                break;
+            }
+        }
+        illegal.sort_unstable();
+        illegal
+    }
+
+    /// Refreshes the illegal flags and main line after changing a subtree.
+    pub fn invalidate(&mut self, node: NodeId) {
+        let mut changed = HashSet::new();
+        let mut stack = vec![node];
+        while let Some(id) = stack.pop() {
+            self.states[id].take();
+            changed.insert(id);
+            stack.extend_from_slice(self.children(id));
+        }
+        self.illegal_nodes.retain(|id| !changed.contains(id));
+        let illegal = self.scan_illegal(node);
+        self.illegal_nodes.extend(illegal);
+        self.illegal_nodes.sort_unstable();
+        self.main_line = self.line_through(self.root);
+    }
+
+    /// Keeps the current path and at most 4096 other cached positions.
+    pub fn trim(&mut self, keep: &[NodeId]) {
+        const LIMIT: usize = 4096;
+        let keep: HashSet<_> = keep.iter().copied().collect();
+        let mut others = 0;
+        for (id, state) in self.states.iter_mut().enumerate() {
+            if state.get().is_some() && !keep.contains(&id) {
+                others += 1;
+                if others > LIMIT {
+                    state.take();
+                }
+            }
+        }
+    }
+
+    pub fn illegal_nodes(&self) -> &[NodeId] {
+        &self.illegal_nodes
+    }
+
     pub fn has_illegal(&self) -> bool {
-        (0..self.nodes.len()).any(|n| self.illegal(n).is_some())
+        !self.illegal_nodes.is_empty()
     }
 
     /// The position KataGo analyses at `node`; `None` on an illegal node. After setup stones or
@@ -445,7 +564,7 @@ impl Game {
     /// The game as an SGF tree to write. `CA` becomes `UTF-8`, `FF` and `GM` are added when
     /// missing, and with `rules` (the user changed them) `RU` and `KM` are replaced.
     pub fn to_sgf(&self, rules: Option<&AnalysisRules>) -> SgfTree {
-        let mut root = self.nodes[0].sgf.clone();
+        let mut root = self.sgf(self.root).clone();
         set_prop(&mut root, "CA", "UTF-8");
         if root.get("FF").is_none() {
             root.push("FF", ["4".to_owned()]);
@@ -472,40 +591,49 @@ impl Game {
             set_prop(&mut root, "KM", &format_komi(rules.komi().points()));
         }
 
-        // Sequence heads are the root and every child of a node with several children. Each
-        // head's id is larger than its parent's, so building from the highest id down finds
-        // every variation already built.
-        let mut heads = vec![0];
-        for node in &self.nodes {
-            if node.children.len() > 1 {
-                heads.extend(&node.children);
-            }
+        // Each sequence is completed after its variations. The stack also handles deep trees.
+        enum Visit {
+            Head(NodeId),
+            Finish(SgfTree, usize),
         }
-        heads.sort_unstable();
-        let mut built: HashMap<NodeId, SgfTree> = HashMap::new();
-        for &head in heads.iter().rev() {
-            let mut tree = SgfTree::default();
-            let mut at = head;
-            loop {
-                tree.nodes.push(if at == 0 {
-                    root.clone()
-                } else {
-                    self.nodes[at].sgf.clone()
-                });
-                match self.nodes[at].children.as_slice() {
-                    [only] => at = *only,
-                    children => {
-                        tree.variations = children
+        let mut visits = vec![Visit::Head(self.root)];
+        let mut completed = Vec::new();
+        let mut root = Some(root);
+        while let Some(visit) = visits.pop() {
+            match visit {
+                Visit::Head(mut at) => {
+                    let mut tree = SgfTree::default();
+                    loop {
+                        tree.nodes
+                            .push(root.take().unwrap_or_else(|| self.sgf(at).clone()));
+                        let mut children = self
+                            .children(at)
                             .iter()
-                            .map(|c| built.remove(c).expect("built before its parent"))
-                            .collect();
-                        break;
+                            .copied()
+                            .filter(|&c| self.is_attached(c) && !self.is_tryout(c));
+                        match (children.next(), children.next()) {
+                            (Some(only), None) => at = only,
+                            (Some(first), Some(second)) => {
+                                let fork: Vec<_> =
+                                    [first, second].into_iter().chain(children).collect();
+                                visits.push(Visit::Finish(tree, fork.len()));
+                                visits.extend(fork.into_iter().rev().map(Visit::Head));
+                                break;
+                            }
+                            _ => {
+                                completed.push(tree);
+                                break;
+                            }
+                        }
                     }
                 }
+                Visit::Finish(mut tree, children) => {
+                    tree.variations = completed.split_off(completed.len() - children);
+                    completed.push(tree);
+                }
             }
-            built.insert(head, tree);
         }
-        built.remove(&0).expect("the root is a head")
+        completed.pop().expect("the root sequence was visited")
     }
 }
 
@@ -553,6 +681,116 @@ mod tests {
 
     fn last(g: &Game) -> NodeId {
         *g.main_line().last().unwrap()
+    }
+
+    #[test]
+    fn line_through_follows_first_children_after_the_tip() {
+        let mut g = game("(;PB[old](;B[aa])(;B[bb](;W[cc])(;W[dd])))");
+        assert_eq!(g.path_to(2), [0, 2]);
+        assert_eq!(g.line_through(2), [0, 2, 3]);
+        g.nodes[0].children.reverse();
+        set_prop(&mut g.nodes[0].sgf, "PB", "new");
+        g.invalidate(0);
+        assert_eq!(g.main_line(), [0, 2, 3]);
+        assert_eq!(g.info().black.as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn to_sgf_does_not_rely_on_id_order() {
+        let mut g = game("(;C[root](;B[aa](;W[bb])(;W[cc]))(;B[dd]))");
+        let original = g.to_sgf(None);
+        let last = g.nodes.len() - 1;
+        g.nodes.reverse();
+        for node in &mut g.nodes {
+            node.parent = node.parent.map(|p| last - p);
+            for child in &mut node.children {
+                *child = last - *child;
+            }
+        }
+        g.root = last;
+        g.invalidate(last);
+        assert_eq!(g.root(), last);
+        assert_eq!(g.main_line(), [4, 3, 2]);
+        assert_eq!(g.to_sgf(None), original);
+    }
+
+    #[test]
+    fn invalidate_recomputes_the_subtree_only() {
+        let mut g = game("(;AB[aa](;B[aa];W[bb])(;B[aa]))");
+        g.board_at(2);
+        g.board_at(3);
+        assert_eq!(g.illegal_nodes(), [1, 3]);
+        set_prop(&mut g.nodes[1].sgf, "B", "bb");
+        g.invalidate(1);
+        assert!(g.states[0].get().is_some() && g.states[3].get().is_some());
+        assert!(g.states[1].get().is_none() && g.states[2].get().is_none());
+        assert_eq!(g.illegal_nodes(), [2, 3]);
+        assert_eq!(g.illegal(2), Some(Illegal::Occupied));
+        g.nodes[0].children.remove(0);
+        g.nodes[1].attached = false;
+        g.nodes[2].attached = false;
+        g.invalidate(1);
+        assert_eq!(g.illegal_nodes(), [3]);
+    }
+
+    #[test]
+    fn invalidating_a_cold_leaf_keeps_ancestors_uncached() {
+        let mut g = game(&format!("(;AB[aa]{};W[bb])", ";B[]".repeat(9999)));
+        let tip = last(&g);
+        set_prop(&mut g.nodes[tip].sgf, "W", "aa");
+        g.invalidate(tip);
+        assert_eq!(g.illegal_nodes(), [tip]);
+        assert_eq!(g.states.iter().filter(|s| s.get().is_some()).count(), 0);
+    }
+
+    #[test]
+    fn illegal_scan_keeps_no_boards() {
+        let comment = "x".repeat(2_000);
+        let variation = format!("({};W[aa])", format!(";B[]C[{comment}]").repeat(19));
+        let text = format!(
+            "(;AB[aa]C[{}]{})",
+            "x".repeat(1_000_000),
+            variation.repeat(500)
+        );
+        assert!(text.len() >= 20_000_000);
+        let mut g = game(&text);
+        assert_eq!(g.nodes.len(), 10_001);
+        assert!(g.has_illegal());
+        assert_eq!(g.illegal_nodes().len(), 500);
+        assert!(g.states.iter().all(|s| s.get().is_none()));
+        for id in 0..g.nodes.len() {
+            g.board_at(id);
+        }
+        let path = g.path_to(10_000);
+        g.trim(&path);
+        assert_eq!(
+            g.states.iter().filter(|s| s.get().is_some()).count(),
+            4096 + path.len()
+        );
+        assert!(path.iter().all(|&id| g.states[id].get().is_some()));
+    }
+
+    #[test]
+    fn trim_keeps_the_path() {
+        let mut g = game(&format!("(;({})(;B[bb]))", ";W[]".repeat(4100)));
+        g.board_at(4100);
+        g.board_at(4101);
+        let path = g.path_to(4101);
+        g.trim(&path);
+        assert!(path.iter().all(|&id| g.states[id].get().is_some()));
+        assert_eq!(g.states.iter().filter(|s| s.get().is_some()).count(), 4098);
+        assert_eq!(g.move_number(4100), 4100);
+    }
+
+    #[test]
+    fn to_sgf_skips_tryout_and_detached_nodes() {
+        let mut g = game("(;C[root](;B[aa];W[dd])(;B[bb])(;B[cc]))");
+        g.nodes[1].tryout = true;
+        g.nodes[3].attached = false;
+        assert!(g.is_tryout(1));
+        assert!(!g.is_attached(3));
+        assert_eq!(g.children(0), [1, 3, 4]);
+        assert_eq!(g.to_sgf(None), game("(;C[root];B[cc])").to_sgf(None));
     }
 
     fn fox_zero_komi_round_trip(kata: crate::KataRules) {
