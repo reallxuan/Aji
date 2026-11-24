@@ -16,6 +16,7 @@ const initial: UiSettings = {
   cacheCapMb: 1024,
   saveAnalysis: false,
   jobOptions: {
+    scope: 'line',
     range: { kind: 'whole' },
     side: 'both',
     visits: 500,

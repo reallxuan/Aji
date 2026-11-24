@@ -15,6 +15,16 @@ use ts_rs::TS;
 
 use crate::game::LineNode;
 
+/// Which kept positions a job considers.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum JobScope {
+    #[default]
+    Line,
+    AllBranches,
+}
+
 /// Which moves a job covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -53,6 +63,8 @@ pub struct BoostOptions {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct JobOptions {
+    #[serde(default)]
+    pub scope: JobScope,
     pub range: JobRange,
     pub side: JobSide,
     /// Visits per position.
@@ -78,6 +90,7 @@ impl JobOptions {
 impl Default for JobOptions {
     fn default() -> Self {
         JobOptions {
+            scope: JobScope::Line,
             range: JobRange::Whole,
             side: JobSide::Both,
             visits: 500,
@@ -113,24 +126,11 @@ pub struct JobProgress {
     pub total: u32,
     pub boost_done: u32,
     pub boost_total: u32,
-    /// The main-line index being searched.
-    pub working: Option<u32>,
-    /// The main-line indexes still to search.
-    pub queued: Vec<u32>,
+    /// The position being searched.
+    pub working: Option<PositionKey>,
+    /// The other positions still to search.
+    pub queued: Vec<PositionKey>,
     pub eta_seconds: Option<u32>,
-}
-
-/// The side to move in a node's position; `None` on an illegal node.
-pub(crate) fn to_move(node: &LineNode) -> Option<Color> {
-    let position = node.position.as_ref()?;
-    Some(
-        position
-            .moves
-            .last()
-            .map(|&(c, _)| c.opponent())
-            .or(position.initial_player)
-            .unwrap_or(Color::Black),
-    )
 }
 
 fn side_is(side: JobSide, color: Color) -> bool {
@@ -157,26 +157,47 @@ fn move_in_range(node: &LineNode, range: JobRange) -> bool {
     }
 }
 
-/// The first pass: every distinct position in range (for one side, those it moves in), the
-/// current position first, then in line order. Illegal nodes are skipped.
+/// Every eligible distinct position on a line, with the current position first.
 pub fn plan_first_pass(line: &[LineNode], options: &JobOptions, current: usize) -> Vec<JobItem> {
+    plan_positions(line, options, line.get(current).and_then(|node| node.key))
+}
+
+/// The first pass over a depth-first snapshot of the kept record.
+pub fn plan_tree_pass(
+    session_nodes: &[LineNode],
+    options: &JobOptions,
+    current: PositionKey,
+) -> Vec<JobItem> {
+    plan_positions(session_nodes, options, Some(current))
+}
+
+fn plan_positions(
+    line: &[LineNode],
+    options: &JobOptions,
+    current: Option<PositionKey>,
+) -> Vec<JobItem> {
     let mut seen = HashSet::new();
     let mut items: Vec<JobItem> = line
         .iter()
         .enumerate()
         .filter(|(_, node)| position_in_range(node, options.range))
-        .filter(|(_, node)| to_move(node).is_some_and(|c| side_is(options.side, c)))
+        .filter(|(_, node)| node.to_play.is_some_and(|c| side_is(options.side, c)))
         .filter_map(|(i, node)| {
-            let position = node.position.clone()?;
-            seen.insert(position.key()).then_some(JobItem {
-                position,
+            let key = node.key?;
+            if !seen.insert(key) {
+                return None;
+            }
+            Some(JobItem {
+                position: node.position.clone()?,
                 line_index: i as u32,
                 visits: options.visits,
             })
         })
         .collect();
-    if let Some(key) = line.get(current).and_then(|n| n.key)
-        && let Some(at) = items.iter().position(|i| i.position.key() == key)
+    if let Some(key) = current
+        && let Some(at) = items
+            .iter()
+            .position(|item| line[item.line_index as usize].key == Some(key))
     {
         let item = items.remove(at);
         items.insert(0, item);
@@ -193,8 +214,9 @@ pub fn plan_fill_pass(
 ) -> Vec<JobItem> {
     let mut seen = HashSet::new();
     let mut items = Vec::new();
-    for (i, pair) in line.windows(2).enumerate() {
-        let (prev, node) = (&pair[0], &pair[1]);
+    for (i, node) in line.iter().enumerate() {
+        let Some(parent) = node.parent else { continue };
+        let prev = &line[parent];
         let (Some(mover), Some(mv), Some(position)) = (node.mover, node.mv, &node.position) else {
             continue;
         };
@@ -208,7 +230,7 @@ pub fn plan_fill_pass(
         if !listed && seen.insert(position.key()) {
             items.push(JobItem {
                 position: position.clone(),
-                line_index: i as u32 + 1,
+                line_index: i as u32,
                 visits: options.visits,
             });
         }
@@ -234,7 +256,7 @@ pub fn plan_boost(
             && node.mover.is_some_and(|c| side_is(options.side, c))
             && move_in_range(node, options.range)
         {
-            wanted.extend([i - 1, i]);
+            wanted.extend([node.parent.expect("non-root node"), i]);
         }
     }
     wanted.sort_unstable();
@@ -255,8 +277,8 @@ pub fn plan_boost(
 
 /// Each node's move loss (design 5.1): from the two positions' results, else from the position
 /// before's candidate list. A node without a move has none.
-pub fn line_losses(
-    line: &[LineNode],
+pub fn line_losses<P>(
+    line: &[LineNode<P>],
     stats: &[Option<TrendStats>],
     before: &dyn Fn(PositionKey) -> Option<AnalysisUpdate>,
 ) -> Vec<Option<Loss>> {
@@ -267,7 +289,7 @@ pub fn line_losses(
             let (Some(mover), Some(mv)) = (node.mover, node.mv) else {
                 return None;
             };
-            let prev = i.checked_sub(1)?;
+            let prev = node.parent?;
             if let (Some(b), Some(a)) = (stat(prev), stat(i)) {
                 return Some(move_loss(&b, &a, mover));
             }
@@ -325,8 +347,16 @@ pub struct JobFlow {
 
 impl JobFlow {
     /// Starts a job on `line` with the user at `current`; returns the first pass's plan.
-    pub fn start(&mut self, line: Vec<LineNode>, current: usize, options: JobOptions) -> JobPlan {
-        let items = plan_first_pass(&line, &options, current);
+    pub fn start(
+        &mut self,
+        line: Vec<LineNode>,
+        current: Option<PositionKey>,
+        options: JobOptions,
+    ) -> JobPlan {
+        let items = match current {
+            Some(key) => plan_tree_pass(&line, &options, key),
+            None => plan_positions(&line, &options, None),
+        };
         let total = items.len() as u32;
         let id = self.new_id();
         self.run = Some(Run {
@@ -374,7 +404,7 @@ impl JobFlow {
         self.run.as_ref().map(|r| r.options)
     }
 
-    /// The main line the job runs on.
+    /// The original nodes of this job, including their positions and parent slots.
     pub fn line(&self) -> Option<&[LineNode]> {
         self.run.as_ref().map(|r| r.line.as_slice())
     }
@@ -392,8 +422,9 @@ impl JobFlow {
             Phase::Fill => p.done = run.first_total + status.done,
             Phase::Boost => p.boost_done = status.done,
         }
-        p.working = status.working;
-        p.queued = status.queued.clone();
+        let key = |slot: u32| run.line.get(slot as usize).and_then(|node| node.key);
+        p.working = status.working.and_then(key);
+        p.queued = status.queued.iter().copied().filter_map(key).collect();
         p.state = match (status.run, run.phase) {
             (JobRun::Waiting, _) => JobState::Waiting,
             (JobRun::Paused, _) => JobState::Paused,
@@ -506,7 +537,7 @@ mod tests {
     fn line(sgf: &str) -> Vec<LineNode> {
         GameSession::open("t.sgf", sgf.as_bytes(), AnalysisRules::Chinese)
             .unwrap()
-            .line()
+            .job_nodes(JobScope::Line)
     }
 
     /// Eight moves on 9×9.
@@ -555,6 +586,101 @@ mod tests {
 
     fn at(x: u8, y: u8) -> Move {
         Move::Play(Point { x, y })
+    }
+
+    fn branch_nodes() -> Vec<LineNode> {
+        GameSession::open(
+            "b.sgf",
+            b"(;SZ[9];B[aa](;W[bb];C[note];B[cc])(;W[dd];B[ee]))",
+            AnalysisRules::Chinese,
+        )
+        .unwrap()
+        .tree_line_nodes()
+    }
+
+    #[test]
+    fn all_branches_plans_every_kept_node_once() {
+        let nodes = branch_nodes();
+        assert_eq!(
+            indexes(&plan_tree_pass(
+                &nodes,
+                &JobOptions::default(),
+                nodes[5].key.unwrap()
+            )),
+            [5, 0, 1, 2, 4, 6]
+        );
+    }
+
+    #[test]
+    fn range_and_side_apply_to_branches() {
+        let nodes = branch_nodes();
+        let options = JobOptions {
+            range: JobRange::Moves { from: 2, to: 2 },
+            side: JobSide::Black,
+            ..JobOptions::default()
+        };
+        assert_eq!(
+            indexes(&plan_tree_pass(&nodes, &options, nodes[0].key.unwrap())),
+            [2, 5]
+        );
+        // Every branch uses its actual parent for Swing and Fill, including a fork after a comment.
+        let before = |key| (Some(key) == nodes[1].key).then(|| update(key, &[at(3, 3)]));
+        let white = JobOptions {
+            side: JobSide::White,
+            ..options
+        };
+        assert_eq!(indexes(&plan_fill_pass(&nodes, &white, &before)), [2]);
+        let stats = [0.5, 0.5, 0.5, 0.5, 0.7, 0.8, 0.8].map(stats);
+        let losses = line_losses(&nodes, &stats, &|_| None);
+        assert!((losses[5].unwrap().winrate.abs() - 30.0).abs() < 0.001);
+        assert_eq!(indexes(&plan_boost(&nodes, &losses, &white)), [1, 5]);
+    }
+
+    #[test]
+    fn tryout_nodes_are_never_planned() {
+        use crate::game::SessionEdit;
+        let mut game = GameSession::open("g.sgf", GAME.as_bytes(), AnalysisRules::Chinese).unwrap();
+        game.edit(SessionEdit::TryoutStart).unwrap();
+        game.edit(SessionEdit::Play { mv: at(0, 0) }).unwrap();
+        for scope in [JobScope::Line, JobScope::AllBranches] {
+            let scratch = game.current_node();
+            assert!(game.line().iter().any(|n| n.node == scratch));
+            assert!(game.job_nodes(scope).iter().all(|n| n.node != scratch));
+        }
+    }
+
+    #[test]
+    fn progress_names_keys() {
+        let mut flow = JobFlow::default();
+        let nodes = branch_nodes();
+        let first = flow.start(
+            nodes.clone(),
+            nodes[5].key,
+            JobOptions {
+                scope: JobScope::AllBranches,
+                ..JobOptions::default()
+            },
+        );
+        let mut status = status(first.id, JobRun::Running, 0, 6);
+        status.working = Some(5);
+        status.queued = vec![0, 6];
+        let Step::Progress(progress) = flow.on_status(&status) else {
+            panic!("expected progress")
+        };
+        let json = serde_json::to_value(progress).unwrap();
+        assert_eq!(json["working"], nodes[5].key.unwrap().to_string());
+        assert_eq!(
+            json["queued"],
+            serde_json::json!([nodes[0].key, nodes[6].key])
+        );
+    }
+
+    #[test]
+    fn old_job_options_read_with_line_scope() {
+        let mut old = serde_json::to_value(JobOptions::default()).unwrap();
+        old.as_object_mut().unwrap().remove("scope");
+        let options: JobOptions = serde_json::from_value(old).unwrap();
+        assert_eq!(serde_json::to_value(options).unwrap()["scope"], "line");
     }
 
     #[test]
@@ -705,7 +831,7 @@ mod tests {
         // Final review #4: a job resumed over a half-cached game skips 126 positions at once;
         // its rate comes from the one it has searched, not from all 127 counted done.
         let mut flow = JobFlow::default();
-        let first = flow.start(line(GAME), 0, JobOptions::default());
+        let first = flow.start(line(GAME), None, JobOptions::default());
         std::thread::sleep(std::time::Duration::from_millis(50));
         let resumed = JobStatus {
             skipped: 126,
@@ -731,7 +857,7 @@ mod tests {
     fn job_flow_runs_first_then_boost_then_done() {
         let l = line(GAME);
         let mut flow = JobFlow::default();
-        let first = flow.start(l.clone(), 0, JobOptions::default());
+        let first = flow.start(l.clone(), l[0].key, JobOptions::default());
         assert_eq!((first.items.len(), first.budget), (9, 500));
         assert_eq!(
             flow.on_status(&status(first.id + 7, JobRun::Done, 9, 9)),
@@ -780,7 +906,7 @@ mod tests {
             side: JobSide::White,
             ..JobOptions::default()
         };
-        let first = flow.start(l.clone(), 0, options);
+        let first = flow.start(l.clone(), l[0].key, options);
         assert_eq!(indexes(&first.items), vec![1, 3, 5, 7]);
         assert_eq!(
             flow.on_status(&status(first.id, JobRun::Done, 4, 4)),
@@ -809,10 +935,10 @@ mod tests {
         let l = line(GAME);
         let mut flow = JobFlow::default();
         assert_eq!(flow.stop(), None);
-        flow.start(l.clone(), 0, JobOptions::default());
+        flow.start(l.clone(), l[0].key, JobOptions::default());
         assert_eq!(flow.stop().map(|p| p.state), Some(JobState::Stopped));
         assert!(!flow.is_running());
-        let plan = flow.start(l, 0, JobOptions::default());
+        let plan = flow.start(l, None, JobOptions::default());
         let Step::Progress(p) = flow.on_status(&status(plan.id, JobRun::Stopped, 3, 9)) else {
             panic!()
         };

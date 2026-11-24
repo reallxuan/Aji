@@ -1,6 +1,8 @@
+import type { Orientation } from './orientation';
+import type { MarkAt } from '../transport/generated/MarkAt';
+import { drawMarks } from './marks';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sameMove, type ShownCandidate } from '../analysis/candidates';
-import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import type { BoardId, StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
@@ -9,8 +11,9 @@ import type { Point } from '../transport/generated/Point';
 import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
+import { badgeAt, drawEditOverlay, type Badge, type StoneNumber } from './badges';
 import { drawBoard } from './drawBoard';
-import { boardGeometry, pointAt } from './geometry';
+import { boardGeometry, pointAt, STONE_RADIUS_SHARE } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
@@ -18,6 +21,9 @@ import { useDevicePixelRatio } from './useDevicePixelRatio';
 export interface BoardCanvasProps {
   /** The board's side in CSS pixels. */
   cssSize: number;
+  orientation?: Orientation;
+  /** A pending replay step can invalidate the visit between pointer down and release. */
+  isGestureCurrent?(): boolean;
   /** Lines per side. */
   boardSize: number;
   /** Every point, row by row (`y * boardSize + x`). */
@@ -29,8 +35,6 @@ export interface BoardCanvasProps {
   discLines?: [DiscField, DiscField];
   /** The interface language, for the discs' numbers. */
   lang?: string;
-  /** A new search is still below the cached depth: the discs are faded (design 5.2). */
-  catchingUp?: boolean;
   /** The pointer entered a disc (its move) or left every disc (`null`). */
   onHoverCandidate?(move: Move | null): void;
   /**
@@ -58,11 +62,22 @@ export interface BoardCanvasProps {
    * design 5.8); a tap then goes here and never to a candidate.
    */
   onTapPoint?(point: Point): void;
+  onDragStone?(from: Point, to: Point): void;
+  onClickPoint?(point: Point): void;
+  onClickCandidate?(move: Move): void;
+  onContextPoint?(point: Point, at: Point): void;
+  onClickBadge?(badge: Badge, at: Point): void;
+  onContextBadge?(badge: Badge, at: Point): void;
+  marks?: readonly MarkAt[];
+  badges?: readonly Badge[];
+  tryoutNumbers?: readonly StoneNumber[];
+  numbers?: readonly StoneNumber[];
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
 }
 
+const NONE: never[] = [];
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
 /** The Inter faces the layers draw with: coordinates 400, disc lines 500 to 700. */
 const FONT_FACES = ['400 12px Inter', '500 12px Inter', '600 12px Inter', '700 12px Inter'];
@@ -81,11 +96,12 @@ export function BoardCanvas({
   candidates = NO_CANDIDATES,
   discLines = DEFAULT_LINES,
   lang = 'en',
-  catchingUp = false,
   onHoverCandidate,
   hoveredCandidate,
   variation = null,
   coordinates = true,
+  orientation = 0,
+  isGestureCurrent,
   boardStyle = 'honey',
   stoneStyle = 'slate',
   onTapCandidate,
@@ -93,7 +109,19 @@ export function BoardCanvas({
   nextRing = null,
   ownership = null,
   onTapPoint,
+  onClickPoint,
+  onDragStone,
+  onClickCandidate,
+  onClickBadge,
+  onContextPoint,
+  onContextBadge,
+  marks = NONE,
+  badges = NONE,
+  tryoutNumbers = NONE,
+  numbers = NONE,
 }: BoardCanvasProps) {
+  const markLayer = useRef<HTMLCanvasElement>(null);
+  const editLayer = useRef<HTMLCanvasElement>(null);
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
   const ownershipLayer = useRef<HTMLCanvasElement>(null);
@@ -121,8 +149,9 @@ export function BoardCanvas({
 
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
-    if (ctx) drawBoard(ctx, { cssSize, dpr, boardSize, coordinates, style: boardStyle });
-  }, [cssSize, dpr, boardSize, coordinates, boardStyle, fontsLoaded]);
+    if (ctx)
+      drawBoard(ctx, { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle });
+  }, [cssSize, dpr, boardSize, orientation, coordinates, boardStyle, fontsLoaded]);
 
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
@@ -132,33 +161,62 @@ export function BoardCanvas({
     [spacing, dpr, stoneStyle],
   );
 
+  const marked = useMemo(
+    () => new Set(marks.map(({ point }) => point.y * boardSize + point.x)),
+    [marks, boardSize],
+  );
+  const visibleLastMove =
+    lastMove?.type === 'play' && marked.has(lastMove.y * boardSize + lastMove.x) ? null : lastMove;
+
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
     if (ctx && cssSize > 0) {
       drawStones(
         ctx,
-        { cssSize, dpr, boardSize, coordinates },
+        { cssSize, dpr, boardSize, orientation, coordinates },
         stones,
-        lastMove,
+        visibleLastMove,
         sprites,
         ownership?.dead,
       );
     }
-  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites, ownership]);
+  }, [
+    cssSize,
+    dpr,
+    boardSize,
+    orientation,
+    coordinates,
+    stones,
+    visibleLastMove,
+    sprites,
+    ownership,
+  ]);
 
   useEffect(() => {
     const ctx = ownershipLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates };
+    const view = { cssSize, dpr, boardSize, orientation, coordinates };
     drawOwnership(ctx, view, ownership?.owners ?? []);
-  }, [cssSize, dpr, boardSize, coordinates, ownership]);
+  }, [cssSize, dpr, boardSize, orientation, coordinates, ownership]);
+
+  useEffect(() => {
+    const ctx = markLayer.current?.getContext('2d');
+    if (ctx)
+      drawMarks(
+        ctx,
+        marks,
+        { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle },
+        stones,
+      );
+  }, [cssSize, dpr, boardSize, orientation, coordinates, boardStyle, stones, marks, fontsLoaded]);
 
   const [first, second] = discLines;
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
-    const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
-    if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
+    const view = { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle };
+    if (variation)
+      drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones, marked);
     else {
       drawCandidates(ctx, view, candidates, [first, second], lang);
       if (nextRing) drawNextRing(ctx, view, nextRing);
@@ -168,6 +226,7 @@ export function BoardCanvas({
     cssSize,
     dpr,
     boardSize,
+    orientation,
     coordinates,
     boardStyle,
     candidates,
@@ -176,6 +235,7 @@ export function BoardCanvas({
     lang,
     fontsLoaded,
     variation,
+    marked,
     stones,
   ]);
 
@@ -188,22 +248,96 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
-  const tapPoint = (x: number, y: number) => {
-    const point = pointAt(x, y, { cssSize, boardSize, coordinates });
-    if (point) onTapPoint?.(point);
+  const showEdits = !variation && !!(badges.length || tryoutNumbers.length || numbers.length);
+  useEffect(() => {
+    const ctx = editLayer.current?.getContext('2d');
+    if (ctx)
+      drawEditOverlay(
+        ctx,
+        { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle },
+        stones,
+        badges,
+        tryoutNumbers,
+        numbers,
+        marked,
+      );
+  }, [
+    showEdits,
+    cssSize,
+    dpr,
+    boardSize,
+    orientation,
+    coordinates,
+    boardStyle,
+    stones,
+    badges,
+    tryoutNumbers,
+    numbers,
+    marked,
+    fontsLoaded,
+  ]);
+  const view = { cssSize, boardSize, orientation, coordinates };
+  const hitBadge = (x: number, y: number) =>
+    badges.length && !variation
+      ? badgeAt(boardGeometry(cssSize, boardSize, coordinates, orientation), badges, x, y)
+      : undefined;
+  const choose = (x: number, y: number, touch: boolean) => {
+    if (isGestureCurrent?.() === false) return;
+    const point = pointAt(x, y, view);
+    if (onTapPoint) {
+      if (point) onTapPoint(point);
+      return;
+    }
+    const badge = hitBadge(x, y);
+    if (badge && onClickBadge) {
+      const box = board.current!.getBoundingClientRect();
+      onClickBadge(badge, { x: x + box.left, y: y + box.top });
+      return;
+    }
+    const disc = candidateAt(x, y, view, candidates);
+    if (touch) onTapCandidate?.(disc);
+    else if (disc) onClickCandidate?.(disc);
+    if (!disc && point) onClickPoint?.(point);
   };
-  const gestures = useBoardGestures({
-    tap: (x, y) =>
-      onTapPoint
-        ? tapPoint(x, y)
-        : onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
-    step: (forward) => onSwipeStep?.(forward),
-  });
+  const context = (x: number, y: number) => {
+    if (isGestureCurrent?.() === false) return;
+    const box = board.current?.getBoundingClientRect();
+    if (!box) return;
+    const at = { x: x + box.left, y: y + box.top };
+    const badge = hitBadge(x, y);
+    if (badge && onContextBadge) {
+      onContextBadge(badge, at);
+      return;
+    }
+    const point = pointAt(x, y, view);
+    if (point) onContextPoint?.(point, at);
+  };
+  const gestures = useBoardGestures(
+    {
+      tap: (x, y) => choose(x, y, true),
+      longPress: context,
+      drag: onDragStone && {
+        stones,
+        stoneAt: (x, y) => {
+          const p = pointAt(x, y, view);
+          return p && stones[p.y * boardSize + p.x] ? p : null;
+        },
+        drop: (from, x, y) => {
+          if (isGestureCurrent?.() === false) return;
+          const to = pointAt(x, y, view);
+          if (to && (to.x !== from.x || to.y !== from.y)) onDragStone(from, to);
+        },
+      },
+      step: (forward) => {
+        if (isGestureCurrent?.() !== false) onSwipeStep?.(forward);
+      },
+    },
+    orientation,
+  );
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    // A tap has already been handled; the click a browser sends after it is its echo.
-    if (!onTapPoint || gestures.afterTouch()) return;
+    if (event.button !== 0 || gestures.consumeClick()) return;
     const box = event.currentTarget.getBoundingClientRect();
-    tapPoint(event.clientX - box.left, event.clientY - box.top);
+    choose(event.clientX - box.left, event.clientY - box.top, false);
   };
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     // A browser follows a tap with mouse events; the hover is the mouse's alone.
@@ -211,7 +345,7 @@ export function BoardCanvas({
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
-    hover(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates));
+    hover(hitBadge(x, y) ? null : candidateAt(x, y, view, candidates));
   };
 
   const backing = Math.max(0, Math.round(cssSize * dpr));
@@ -220,10 +354,17 @@ export function BoardCanvas({
     <div
       className="relative"
       // Sideways swipes are the board's; the page may still scroll up and down.
-      style={{ width: cssSize, height: cssSize, touchAction: 'pan-y' }}
+      style={{ width: cssSize, height: cssSize, touchAction: onDragStone ? 'none' : 'pan-y' }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => !gestures.afterTouch() && hover(null)}
       onClick={onClick}
+      onContextMenu={(event) => {
+        if (!onContextPoint && !onContextBadge) return;
+        event.preventDefault();
+        if (gestures.afterTouch()) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        context(event.clientX - box.left, event.clientY - box.top);
+      }}
       {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
@@ -244,19 +385,56 @@ export function BoardCanvas({
         style={style}
         aria-hidden
       />
+      {marks.length > 0 && (
+        <canvas
+          ref={markLayer}
+          data-layer="marks"
+          width={backing}
+          height={backing}
+          className="absolute inset-0 pointer-events-none"
+          style={style}
+          aria-hidden
+        />
+      )}
       <canvas
         ref={candidateLayer}
         data-layer="candidates"
         width={backing}
         height={backing}
         className="absolute inset-0"
-        style={{
-          ...style,
-          opacity: catchingUp && !variation ? CATCHING_UP_OPACITY : 1,
-          transition: `opacity ${CATCHING_UP_FADE_MS}ms`,
-        }}
+        style={style}
         aria-hidden
       />
+      {gestures.ghost && onDragStone && (
+        <span
+          aria-hidden
+          data-layer="drag-ghost"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed opacity-75"
+          style={{
+            left: gestures.ghost.x,
+            top: gestures.ghost.y,
+            width: spacing * 2 * STONE_RADIUS_SHARE,
+            height: spacing * 2 * STONE_RADIUS_SHARE,
+            backgroundColor:
+              stones[gestures.ghost.from.y * boardSize + gestures.ghost.from.x] ?? undefined,
+            borderColor:
+              stones[gestures.ghost.from.y * boardSize + gestures.ghost.from.x] === 'black'
+                ? 'white'
+                : 'black',
+          }}
+        />
+      )}
+      {showEdits && (
+        <canvas
+          ref={editLayer}
+          data-layer="editing"
+          width={backing}
+          height={backing}
+          className="absolute inset-0 pointer-events-none"
+          style={style}
+          aria-hidden
+        />
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { makeSnapshot } from './testing';
 
 const zh = createI18n('zh-CN').t;
 const en = createI18n('en').t;
-const at183 = makeSnapshot({ mainLineLength: 183 });
+const at183 = makeSnapshot({ lineLength: 183 });
 
 describe('error notices', () => {
   it('name the board size that cannot be opened', () => {
@@ -64,13 +64,30 @@ describe('warning notices', () => {
     });
   });
 
-  it('name a guessed encoding', () => {
+  it('encoding title covers a failed CA', () => {
     expect(one({ code: 'encodingGuessed', encoding: 'GBK' })).toMatchObject({
-      title: '棋谱未注明编码，已按 GBK 读取',
+      title: '已推测棋谱编码并按 GBK 读取',
       detail: '如果名字显示不对，请告诉我们。',
     });
     expect(one({ code: 'encodingGuessed', encoding: 'GBK' }, en)?.title).toBe(
-      'The record names no encoding: read as GBK',
+      'The record was read as GBK based on its contents',
+    );
+  });
+
+  it('komi unreadable names the rules used', () => {
+    const snapshot = makeSnapshot({
+      rules: {
+        current: { kind: 'japaneseKorean' },
+        fromFile: { kind: 'japaneseKorean' },
+        changed: false,
+        ru: 'Japanese',
+        km: 'abc',
+      },
+    });
+    const warnings: GameWarning[] = [{ code: 'komiUnreadable' }];
+    expect(warningNotice(warnings, snapshot, zh)?.detail).toContain('按日韩规则分析');
+    expect(warningNotice(warnings, snapshot, en)?.detail).toContain(
+      'Analysing with Japanese/Korean rules',
     );
   });
 
@@ -99,7 +116,7 @@ describe('warning notices', () => {
     expect(notice).toEqual({
       kind: 'warning',
       title: '这个文件里有 3 局棋，只打开了第一局',
-      detail: '另存为时其余各局会原样保留。\n棋谱未注明编码，已按 GBK 读取',
+      detail: '另存为时其余各局会原样保留。\n已推测棋谱编码并按 GBK 读取',
     });
   });
 

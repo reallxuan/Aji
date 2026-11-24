@@ -9,7 +9,7 @@ use aji_core::{Position, PositionKey};
 /// Job queries report this often, for the watchdog only: nothing shows these reports.
 pub const JOB_REPORT_EVERY: Duration = Duration::from_secs(1);
 
-/// One position to search to `visits`. `line_index` is its node on the main line.
+/// One position to search to `visits`. `line_index` is its slot in the service's immutable job snapshot.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JobItem {
     pub position: Position,
@@ -47,9 +47,9 @@ pub struct JobStatus {
     pub total: u32,
     /// Of `done`, those found already in the cache and not searched: the rate leaves them out.
     pub skipped: u32,
-    /// The line index being searched.
+    /// The snapshot slot being searched.
     pub working: Option<u32>,
-    /// The line indexes still to search, in order.
+    /// The snapshot slots still to search, in order.
     pub queued: Vec<u32>,
 }
 
@@ -170,8 +170,11 @@ mod tests {
     use aji_core::{BoardSize, Color, Komi, Move, Point, Rules};
 
     fn item(n: u8, visits: u32) -> JobItem {
-        let mut position =
-            Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+        let mut position = Position::empty(
+            BoardSize::NINETEEN,
+            Rules::Chinese.into(),
+            Komi::new(7.5).unwrap(),
+        );
         position.moves = (0..n)
             .map(|i| {
                 (

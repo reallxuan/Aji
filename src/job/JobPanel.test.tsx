@@ -28,7 +28,11 @@ const settings = (jobOptions: JobOptions): UiSettings => ({
 });
 
 const nodes = Array.from({ length: 41 }, (_, i): TrendNode => ({
+  node: i,
+  key: i.toString(16).padStart(16, '0'),
   moveNumber: i,
+  tryout: false,
+  toPlay: i % 2 ? 'white' : 'black',
   mover: i === 0 ? null : i % 2 ? 'black' : 'white',
   move: null,
   stats: null,
@@ -47,7 +51,7 @@ function mount(saved: JobOptions = DEFAULT_JOB_OPTIONS, language?: 'en') {
   let closed = 0;
   const harness = renderWithGame(<JobPanelContent onDone={() => closed++} />, {
     language,
-    snapshot: makeSnapshot({ mainLineLength: 40, hasMoves: true }),
+    snapshot: makeSnapshot({ lineLength: 40, hasMoves: true }),
     answer: (request: Request) =>
       request.type === 'settingsSet'
         ? { type: 'settings', settings: request.settings }
@@ -63,6 +67,7 @@ const started = (requests: Request[]) =>
 
 it('job panel starts with the saved options', async () => {
   const saved: JobOptions = {
+    scope: 'line',
     range: { kind: 'whole' },
     side: 'white',
     visits: 800,
@@ -153,4 +158,20 @@ it('return starts the job', async () => {
   });
   expect(started(requests)).toEqual([{ ...DEFAULT_JOB_OPTIONS, visits: 1200 }]);
   expect(within(document.body).queryByText('开始')).not.toBeNull();
+});
+
+it('job panel sends the chosen scope and remembers the range across longer variations', async () => {
+  const { requests } = mount();
+  fireEvent.click(screen.getByRole('radio', { name: '所有分支' }));
+  fireEvent.click(screen.getByRole('radio', { name: '一段' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '结束手数' }), { target: { value: '70' } });
+  expect(screen.getByTestId('job-estimate')).not.toHaveTextContent('41 个局面');
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: '开始' }));
+  });
+  expect(started(requests)[0]).toMatchObject({
+    scope: 'allBranches',
+    range: { kind: 'moves', from: 1, to: 70 },
+  });
+  expect(useSettingsStore.getState().settings?.jobOptions).toEqual(started(requests)[0]);
 });

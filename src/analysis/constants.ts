@@ -17,10 +17,6 @@ export const SCORE_RANGES = [10, 20, 40, 80, 160] as const;
 /** A variation shows at most this many moves. */
 export const MAX_VARIATION = 20;
 
-/** A search catching up on a deeper cached one is shown at this opacity. */
-export const CATCHING_UP_OPACITY = 0.6;
-/** How long the catching-up fade back takes. */
-export const CATCHING_UP_FADE_MS = 200;
 /** Speed is measured over this window of updates. */
 export const SPEED_WINDOW_MS = 1000;
 /** The engine hover card opens after this delay. */

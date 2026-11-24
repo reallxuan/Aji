@@ -1,5 +1,6 @@
 import { cn } from 'cn';
 import { useTranslation } from 'react-i18next';
+import { FillScoreButton } from '../panel/ResultField';
 import { Button } from '@/components/ui/button';
 import { formatPoints } from '../analysis/format';
 import { scoringOf } from '../game/komi';
@@ -158,7 +159,8 @@ export function ScoringCard() {
             t('scoring.fromKataGo')
           )}
         </p>
-        <div className="mt-3.5 flex justify-end">
+        <div className="mt-3.5 flex flex-wrap justify-end gap-3">
+          <FillScoreButton />
           <Button
             size="sm"
             variant="outline"

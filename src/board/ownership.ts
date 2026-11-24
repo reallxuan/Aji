@@ -1,7 +1,7 @@
 import type { Color } from '../transport/generated/Color';
 import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
-import { boardGeometry } from './geometry';
+import { gridPosition, boardGeometry } from './geometry';
 
 /**
  * A point is settled when KataGo's ownership is at least 0.6 for one side, on its −1 to 1 scale
@@ -72,7 +72,7 @@ export function scoredOwnership(
  */
 export function drawOwnership(
   ctx: CanvasRenderingContext2D,
-  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates'>,
+  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates' | 'orientation'>,
   owners: readonly (Color | null)[],
 ): void {
   const { cssSize, dpr, boardSize } = view;
@@ -80,13 +80,14 @@ export function drawOwnership(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
   const side = OWNER_SQUARE * geometry.spacing * dpr;
   ctx.lineWidth = 0.8 * dpr;
   owners.forEach((owner, i) => {
     if (!owner) return;
-    const x = geometry.lines[i % boardSize] * dpr - side / 2;
-    const y = geometry.lines[Math.floor(i / boardSize)] * dpr - side / 2;
+    const at = gridPosition(geometry, { x: i % boardSize, y: Math.floor(i / boardSize) });
+    const x = at.x * dpr - side / 2;
+    const y = at.y * dpr - side / 2;
     ctx.fillStyle = OWNER_FILL[owner];
     ctx.fillRect(x, y, side, side);
     ctx.strokeStyle = OWNER_EDGE[owner];

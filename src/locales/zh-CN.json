@@ -1,4 +1,10 @@
 {
+  "comments": {
+    "beforeFirst": "开局前",
+    "add": "添加评论",
+    "click": "点击编辑",
+    "finish": "Esc 完成"
+  },
   "about": {
     "versionLine": "Aji 版本 {{version}}（{{os}} {{arch}}）",
     "title": "关于 Aji",
@@ -37,6 +43,10 @@
     "sgfNotGo": "这不是围棋棋谱。",
     "sgfUnsupportedSize": "不支持 {{size}} 的棋盘。Aji 支持 5 到 19 路的方形棋盘。",
     "sgfTooLarge": "文件超过 20 MB。",
+    "gameIllegalMove": "此手不合法。",
+    "gameEndTryoutFirst": "请先结束试下，再进行此编辑。",
+    "gameNoSuchNode": "此节点已不存在。",
+    "gameChanged": "操作期间棋局已更改。",
     "gameEmpty": "棋局里还没有着手，无可保存。",
     "fileReadFailed": "无法读取文件。",
     "fileWriteFailed": "无法保存文件。",
@@ -313,7 +323,9 @@
     "last": "最后一手",
     "settings": "设置",
     "jumpFrom": "第 {{current}} 手，点击跳到其他手数",
-    "jumpTo": "跳到第几手"
+    "jumpTo": "跳到第几手",
+    "startReplay": "自动播放",
+    "pauseReplay": "暂停自动播放"
   },
   "noEngine": {
     "title": "尚未设置引擎",
@@ -418,12 +430,22 @@
       "confirmBody": "所有棋局的分析结果都会删除，无法恢复。",
       "confirm": "清除",
       "failed": "无法清除分析结果"
-    }
+    },
+    "recentMoves": "最近显示手数",
+    "replaySeconds": "自动播放间隔（秒）",
+    "openAt": "打开棋谱时显示",
+    "gameStart": "棋局开始"
   },
   "game": {
     "players": "{{black}} 对 {{white}}"
   },
+  "unsaved": {
+    "title": "要保存这局棋的更改吗？",
+    "discard": "不保存"
+  },
   "notice": {
+    "saveTooLarge": "编辑后的棋谱超过了 Aji 可打开的 20 MB 上限。可用“另存为”保存副本。",
+    "savedAsUtf8": "原编码无法表示部分字符，已保存为 UTF-8。",
     "openFailed": "无法打开 {{name}}",
     "saveFailed": "无法保存棋谱",
     "gameFailed": "棋局未能更改",
@@ -438,7 +460,7 @@
         "detail": "另存为时其余各局会原样保留。"
       },
       "encodingGuessed": {
-        "title": "棋谱未注明编码，已按 {{encoding}} 读取",
+        "title": "已推测棋谱编码并按 {{encoding}} 读取",
         "detail": "如果名字显示不对，请告诉我们。"
       },
       "repaired": {
@@ -451,7 +473,7 @@
       },
       "komiUnreadable": {
         "title": "棋谱中的贴目无法读取",
-        "detail": "已按新棋局默认规则分析，可点击规则标签更改。"
+        "detail": "已按{{rules}}分析，可点击规则标签更改。"
       }
     },
     "dropHere": "松开以打开棋谱",
@@ -460,6 +482,14 @@
     "cacheMemoryOnly": {
       "title": "分析结果不会保留",
       "detail": "缓存文件无法使用，结果只保留到 Aji 退出。"
+    },
+    "endTryoutFirst": "先结束试下",
+    "noSuchNode": "这一步已不在棋谱中。",
+    "illegalMove": {
+      "occupied": "这里已经有棋子。",
+      "suicide": "这一步会自杀。",
+      "ko": "不能立即回提。",
+      "offBoard": "落点在棋盘之外。"
     }
   },
   "rules": {
@@ -497,6 +527,38 @@
       "none": "棋谱没有写规则或贴目，使用默认设置。",
       "changedNone": "已改动。棋谱没有写规则或贴目，原按默认设置读取。",
       "restore": "恢复棋谱设定"
+    },
+    "fields": {
+      "ko": "打劫",
+      "suicide": "自杀",
+      "tax": "双活计税",
+      "whiteHandicapBonus": "让子补偿",
+      "hasButton": "按钮"
+    },
+    "options": {
+      "ko": {
+        "simple": "简单劫",
+        "positional": "局面同形",
+        "situational": "情境同形"
+      },
+      "suicide": {
+        "off": "禁止",
+        "on": "允许"
+      },
+      "tax": {
+        "none": "不计",
+        "seki": "双活",
+        "all": "全部"
+      },
+      "whiteHandicapBonus": {
+        "zero": "0",
+        "nMinusOne": "N-1",
+        "n": "N"
+      },
+      "hasButton": {
+        "off": "无",
+        "on": "有"
+      }
     }
   },
   "gameInfo": {
@@ -508,7 +570,27 @@
     "handicap": "让子",
     "empty": "棋谱没有记录对局信息",
     "black": "黑方",
-    "white": "白方"
+    "white": "白方",
+    "blackRank": "黑方段位",
+    "whiteRank": "白方段位",
+    "round": "轮次",
+    "gameName": "棋局名称",
+    "unfilled": "未填",
+    "method": "胜法",
+    "margin": "胜目",
+    "fillScore": "填入点目结果：{{verdict}}",
+    "winners": {
+      "black": "黑胜",
+      "white": "白胜",
+      "draw": "和棋",
+      "none": "无结果"
+    },
+    "methods": {
+      "points": "目数",
+      "resign": "中盘",
+      "time": "超时",
+      "forfeit": "弃权"
+    }
   },
   "menu": {
     "newGame": "新建棋局",
@@ -529,7 +611,20 @@
     "clearPosition": "本局面",
     "clearGame": "整局",
     "finalScoring": "终局点目",
-    "estimate": "形势判断"
+    "estimate": "形势判断",
+    "otherSizes": "其他路数",
+    "size5": "5 路",
+    "size6": "6 路",
+    "size7": "7 路",
+    "size8": "8 路",
+    "size10": "10 路",
+    "size11": "11 路",
+    "size12": "12 路",
+    "size14": "14 路",
+    "size15": "15 路",
+    "size16": "16 路",
+    "size17": "17 路",
+    "size18": "18 路"
   },
   "layout": {
     "panels": {
@@ -538,7 +633,9 @@
       "trend": "走势",
       "candidates": "候选",
       "swings": "波动",
-      "subboard": "副盘"
+      "subboard": "副盘",
+      "tree": "分支",
+      "comments": "评论"
     },
     "noCandidate": "无候选",
     "move": "移动{{panel}}",
@@ -569,12 +666,19 @@
       "first": "第一手",
       "last": "最后一手",
       "pageBack": "后退十手",
-      "pageForward": "前进十手"
+      "pageForward": "前进十手",
+      "previousSibling": "上一个分支",
+      "nextSibling": "下一个分支",
+      "mainLine": "回到主线",
+      "escape": "退出当前模式或回到分支点"
     },
     "file": {
       "open": "打开棋谱…",
       "saveAs": "另存为…",
-      "new19": "新建 19 路棋局"
+      "new19": "新建 19 路棋局",
+      "save": "保存",
+      "saveBranch": "另存当前分支…",
+      "saveClean": "另存为纯净棋谱…"
     },
     "analysis": {
       "toggle": "暂停或继续分析",
@@ -592,6 +696,23 @@
     },
     "estimate": {
       "toggle": "显示或隐藏形势判断"
+    },
+    "edit": {
+      "undo": "撤销",
+      "redo": "重做",
+      "tryout": "试下",
+      "deleteFrom": "删除这一手及之后"
+    },
+    "view": {
+      "rotateCw": "顺时针 90°",
+      "rotateCcw": "逆时针 90°",
+      "flipH": "水平翻转",
+      "flipV": "垂直翻转",
+      "resetOrientation": "还原",
+      "moveNumbers": "显示或隐藏手数"
+    },
+    "replay": {
+      "toggle": "开始或暂停自动播放"
     }
   },
   "screenshot": {
@@ -638,7 +759,8 @@
       "minutes": "，约需 {{count}} 分钟",
       "underMinute": "，不到 1 分钟",
       "boost": "，加强另计",
-      "end": "。"
+      "end": "。",
+      "branches": "分析所有分支中符合条件的局面，跳过试下。"
     },
     "browse": "分析时可以照常浏览，当前局面总是先算。",
     "cancel": "取消",
@@ -656,7 +778,10 @@
       "stop": "停止全局分析"
     },
     "rangeLine": "第 <from/> 到 <to/> 手",
-    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
+    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>",
+    "scope": "分析路线",
+    "line": "当前路线",
+    "allBranches": "所有分支"
   },
   "swings": {
     "by": "按",
@@ -733,5 +858,64 @@
     "failed": "无法点目。",
     "openByOwnership": "棋局未下完，未封闭的区域按 KataGo 判断。"
   },
-  "separator": "，"
+  "separator": "，",
+  "title": {
+    "changed": "已修改"
+  },
+  "edit": {
+    "tools": "编辑工具",
+    "trying": "试下中",
+    "markup": "标记",
+    "setup": "摆子",
+    "goToStone": "回到这一手 (第 {{n}} 手)",
+    "showNumbers": "显示手数",
+    "tryHere": "在这里试下",
+    "end": "结束试下",
+    "backTo": "回到第 {{n}} 手",
+    "keep": "保留为分支",
+    "freehand": "涂鸦",
+    "clearMarks": "清除标记",
+    "clearFreehand": "清除涂鸦",
+    "triangle": "三角",
+    "square": "方形",
+    "circle": "圆形",
+    "cross": "叉号",
+    "letter": "字母",
+    "number": "数字",
+    "empty": "空点 {{point}}",
+    "black": "黑子 {{point}}",
+    "white": "白子 {{point}}",
+    "promote": "设为主分支",
+    "moveUp": "上移一位",
+    "deleteBranch": "删除这个分支",
+    "tryout": "试下",
+    "branch": "分支 {{letter}}",
+    "tryBranch": "试下 {{letter}}",
+    "placeBlack": "放黑子",
+    "placeWhite": "放白子",
+    "alternate": "交替",
+    "toPlay": "轮到 {{symbol}} {{color}}",
+    "insert": "插入一手",
+    "flatten": "折叠为新局面",
+    "removeStone": "删除这颗子",
+    "changeBlack": "改为黑子",
+    "changeWhite": "改为白子",
+    "dragHint": "拖动棋子以移动",
+    "editComment": "编辑评论"
+  },
+  "tree": {
+    "empty": "还没有分支",
+    "continuations": "{{count}} 个后续",
+    "mainLine": "主分支 {{n}} 手",
+    "position": "第 {{n}} 手，{{next}}",
+    "continuations_one": "{{count}} 个后续"
+  },
+  "boardView": {
+    "rotate": "旋转",
+    "numbers": "手数",
+    "off": "不显示",
+    "all": "全部",
+    "last": "最近 {{n}} 手",
+    "restart": "分支内从 1 开始"
+  }
 }

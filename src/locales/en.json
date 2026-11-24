@@ -1,4 +1,10 @@
 {
+  "comments": {
+    "beforeFirst": "Before the first move",
+    "add": "Add a comment",
+    "click": "Click to edit",
+    "finish": "Esc to finish"
+  },
   "about": {
     "versionLine": "Aji version {{version}} ({{os}} {{arch}})",
     "title": "About Aji",
@@ -37,6 +43,10 @@
     "sgfNotGo": "The file records a game other than Go.",
     "sgfUnsupportedSize": "A {{size}} board is not supported. Aji opens square boards from 5×5 to 19×19.",
     "sgfTooLarge": "The file is over 20 MB.",
+    "gameIllegalMove": "This move is illegal.",
+    "gameEndTryoutFirst": "End try-out before making this edit.",
+    "gameNoSuchNode": "This node no longer exists.",
+    "gameChanged": "The game changed while this request was in progress.",
     "gameEmpty": "The game has no moves to save.",
     "fileReadFailed": "The file could not be read.",
     "fileWriteFailed": "The file could not be saved.",
@@ -313,7 +323,9 @@
     "last": "Last move",
     "settings": "Settings",
     "jumpFrom": "Move {{current}}; click to go to another move",
-    "jumpTo": "Go to move"
+    "jumpTo": "Go to move",
+    "startReplay": "Play replay",
+    "pauseReplay": "Pause replay"
   },
   "noEngine": {
     "title": "No engine is set up",
@@ -418,12 +430,22 @@
       "confirmBody": "Every game's results are deleted. This can't be undone.",
       "confirm": "Clear",
       "failed": "Couldn't clear the analysis results"
-    }
+    },
+    "recentMoves": "Recent moves to number",
+    "replaySeconds": "Replay interval (seconds)",
+    "openAt": "Open records at",
+    "gameStart": "Start of game"
   },
   "game": {
     "players": "{{black}} vs {{white}}"
   },
+  "unsaved": {
+    "title": "Save changes to this game?",
+    "discard": "Don’t Save"
+  },
   "notice": {
+    "saveTooLarge": "The edited record exceeds Aji’s 20 MB opening limit. Use Save As to keep a separate copy.",
+    "savedAsUtf8": "Saved in UTF-8 because the original encoding cannot represent all characters.",
     "openFailed": "Couldn't open {{name}}",
     "saveFailed": "Couldn't save the game",
     "gameFailed": "The game could not be changed",
@@ -438,7 +460,7 @@
         "detail": "Save as keeps the others as they are."
       },
       "encodingGuessed": {
-        "title": "The record names no encoding: read as {{encoding}}",
+        "title": "The record was read as {{encoding}} based on its contents",
         "detail": "If names look wrong, please let us know."
       },
       "repaired": {
@@ -451,7 +473,7 @@
       },
       "komiUnreadable": {
         "title": "The record's komi could not be read",
-        "detail": "Analysing with the default rules for new games; change them from the rules chip."
+        "detail": "Analysing with {{rules}}. You can change them from the rules chip."
       }
     },
     "dropHere": "Release to open the record",
@@ -460,6 +482,14 @@
     "cacheMemoryOnly": {
       "title": "Analysis results aren't being kept",
       "detail": "The cache file can't be used, so results last only until Aji quits."
+    },
+    "endTryoutFirst": "End try-out first",
+    "noSuchNode": "This node is no longer in the game.",
+    "illegalMove": {
+      "occupied": "A stone already occupies that point.",
+      "suicide": "That move is suicide.",
+      "ko": "You cannot retake the ko yet.",
+      "offBoard": "That point is outside the board."
     }
   },
   "rules": {
@@ -497,10 +527,42 @@
       "none": "The file names no rules or komi, so the default is used.",
       "changedNone": "Changed. The file names no rules or komi; the default was used.",
       "restore": "Restore the file's setting"
+    },
+    "fields": {
+      "ko": "Ko rule",
+      "suicide": "Suicide",
+      "tax": "Group tax",
+      "whiteHandicapBonus": "Handicap bonus",
+      "hasButton": "Button"
+    },
+    "options": {
+      "ko": {
+        "simple": "Simple",
+        "positional": "Positional",
+        "situational": "Situational"
+      },
+      "suicide": {
+        "off": "Forbidden",
+        "on": "Allowed"
+      },
+      "tax": {
+        "none": "None",
+        "seki": "Seki",
+        "all": "All"
+      },
+      "whiteHandicapBonus": {
+        "zero": "0",
+        "nMinusOne": "N-1",
+        "n": "N"
+      },
+      "hasButton": {
+        "off": "Off",
+        "on": "On"
+      }
     }
   },
   "gameInfo": {
-    "title": "Game",
+    "title": "Game information",
     "result": "Result",
     "date": "Date",
     "event": "Event",
@@ -508,7 +570,27 @@
     "handicap": "Handicap",
     "empty": "The record names no players or event",
     "black": "Black",
-    "white": "White"
+    "white": "White",
+    "blackRank": "Black rank",
+    "whiteRank": "White rank",
+    "round": "Round",
+    "gameName": "Game name",
+    "unfilled": "Empty",
+    "method": "Win by",
+    "margin": "Winning margin",
+    "fillScore": "Use final count: {{verdict}}",
+    "winners": {
+      "black": "Black wins",
+      "white": "White wins",
+      "draw": "Draw",
+      "none": "No result"
+    },
+    "methods": {
+      "points": "Points",
+      "resign": "Resignation",
+      "time": "Time",
+      "forfeit": "Forfeit"
+    }
   },
   "menu": {
     "newGame": "New Game",
@@ -529,7 +611,20 @@
     "clearPosition": "This Position",
     "clearGame": "Whole Game",
     "finalScoring": "Final Scoring",
-    "estimate": "Position Estimate"
+    "estimate": "Position Estimate",
+    "otherSizes": "Other Sizes",
+    "size5": "5×5",
+    "size6": "6×6",
+    "size7": "7×7",
+    "size8": "8×8",
+    "size10": "10×10",
+    "size11": "11×11",
+    "size12": "12×12",
+    "size14": "14×14",
+    "size15": "15×15",
+    "size16": "16×16",
+    "size17": "17×17",
+    "size18": "18×18"
   },
   "layout": {
     "panels": {
@@ -538,7 +633,9 @@
       "trend": "Trend",
       "candidates": "Candidates",
       "swings": "Swings",
-      "subboard": "Sub-board"
+      "subboard": "Sub-board",
+      "tree": "Variations",
+      "comments": "Comments"
     },
     "noCandidate": "No candidate",
     "move": "Move {{panel}}",
@@ -569,12 +666,19 @@
       "first": "First move",
       "last": "Last move",
       "pageBack": "Back ten moves",
-      "pageForward": "Forward ten moves"
+      "pageForward": "Forward ten moves",
+      "previousSibling": "Previous continuation",
+      "nextSibling": "Next continuation",
+      "mainLine": "Return to the main line",
+      "escape": "Leave mode or return to the branch point"
     },
     "file": {
       "open": "Open…",
       "saveAs": "Save As…",
-      "new19": "New 19×19 game"
+      "new19": "New 19×19 game",
+      "save": "Save",
+      "saveBranch": "Save Current Branch As…",
+      "saveClean": "Save Clean Copy As…"
     },
     "analysis": {
       "toggle": "Pause or resume analysis",
@@ -592,6 +696,23 @@
     },
     "estimate": {
       "toggle": "Show or hide the position estimate"
+    },
+    "edit": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "tryout": "Toggle try-out",
+      "deleteFrom": "Delete this move and the following moves"
+    },
+    "view": {
+      "rotateCw": "Rotate clockwise 90°",
+      "rotateCcw": "Rotate counterclockwise 90°",
+      "flipH": "Flip horizontally",
+      "flipV": "Flip vertically",
+      "resetOrientation": "Reset orientation",
+      "moveNumbers": "Show or hide move numbers"
+    },
+    "replay": {
+      "toggle": "Play or pause replay"
     }
   },
   "screenshot": {
@@ -638,7 +759,8 @@
       "minutes": " in about {{count}} min",
       "underMinute": " in under a minute",
       "boost": ", plus boosting",
-      "end": "."
+      "end": ".",
+      "branches": "Analyses matching positions across all branches. Try-out moves are excluded."
     },
     "browse": "You can browse while it runs; the position on the board always goes first.",
     "cancel": "Cancel",
@@ -656,7 +778,10 @@
       "stop": "Stop game analysis"
     },
     "rangeLine": "From <from/> to <to/>",
-    "boostLine": "Swings over <threshold/>% get <visits/> visits"
+    "boostLine": "Swings over <threshold/>% get <visits/> visits",
+    "scope": "Scope",
+    "line": "Current line",
+    "allBranches": "All branches"
   },
   "swings": {
     "by": "By",
@@ -733,5 +858,64 @@
     "failed": "Could not count this position.",
     "openByOwnership": "The game was not played out, so open areas follow KataGo's judgement."
   },
-  "separator": ", "
+  "separator": ", ",
+  "title": {
+    "changed": "Modified"
+  },
+  "edit": {
+    "tools": "Editing tools",
+    "trying": "Trying moves",
+    "markup": "Markup",
+    "setup": "Setup",
+    "goToStone": "Go to this move (move {{n}})",
+    "showNumbers": "Show move numbers",
+    "tryHere": "Try a move here",
+    "end": "End try-out",
+    "backTo": "Return to move {{n}}",
+    "keep": "Keep as a variation",
+    "freehand": "Freehand",
+    "clearMarks": "Clear marks",
+    "clearFreehand": "Clear drawing",
+    "triangle": "Triangle",
+    "square": "Square",
+    "circle": "Circle",
+    "cross": "Cross",
+    "letter": "Letter",
+    "number": "Number",
+    "empty": "Empty point {{point}}",
+    "black": "Black stone {{point}}",
+    "white": "White stone {{point}}",
+    "promote": "Make main line",
+    "moveUp": "Move up one place",
+    "deleteBranch": "Delete this variation",
+    "tryout": "Try out",
+    "branch": "Variation {{letter}}",
+    "tryBranch": "Try-out {{letter}}",
+    "placeBlack": "Place black",
+    "placeWhite": "Place white",
+    "alternate": "Alternate",
+    "toPlay": "To play: {{symbol}} {{color}}",
+    "insert": "Insert move",
+    "flatten": "Flatten position",
+    "removeStone": "Remove this stone",
+    "changeBlack": "Change to black",
+    "changeWhite": "Change to white",
+    "dragHint": "Drag a stone to move it.",
+    "editComment": "Edit comment"
+  },
+  "tree": {
+    "empty": "No variations yet",
+    "continuations": "{{count}} continuations",
+    "mainLine": "Main line: {{n}} moves",
+    "continuations_one": "{{count}} continuation",
+    "position": "Move {{n}}, {{next}}"
+  },
+  "boardView": {
+    "rotate": "Rotate",
+    "numbers": "Move Numbers",
+    "off": "Off",
+    "all": "All",
+    "last": "Last {{n}} moves",
+    "restart": "Restart at 1 in a branch"
+  }
 }

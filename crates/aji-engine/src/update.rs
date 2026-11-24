@@ -187,7 +187,7 @@ mod tests {
         };
         let position = Position::empty(
             aji_core::BoardSize::NINETEEN,
-            aji_core::Rules::Chinese,
+            aji_core::Rules::Chinese.into(),
             aji_core::Komi::new(7.5).unwrap(),
         );
         assert_eq!(to_update(&raw, &position, 10).previous_visits, 0);
@@ -223,7 +223,11 @@ mod tests {
     }
 
     fn pos() -> Position {
-        Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap())
+        Position::empty(
+            BoardSize::NINETEEN,
+            Rules::Chinese.into(),
+            Komi::new(7.5).unwrap(),
+        )
     }
 
     #[test]

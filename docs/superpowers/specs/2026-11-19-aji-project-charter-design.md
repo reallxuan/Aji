@@ -246,11 +246,11 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Markup tools (triangle, square, letters and so on) and freehand drawing | 2 |
 | Setup mode: add black or white stones, alternate, pass, insert a move, drag stones, change the side to move | 2 |
 | Try-out mode (试下) | 2 |
-| Board transforms: rotate, flip, swap colours | 2 |
+| Board view: rotate and flip | 2 |
 | Game information editing (players, ranks, rules, result) | 2 |
 | Option to keep or drop comments on save; save a single branch; save with analysis (see 6.7) | 2 |
 | Save or copy screenshots of the board, sub-board and winrate graph | 2 |
-| Click a stone to jump to its move, double-click to find a stone, find a move | 2 |
+| Go back to a stone's move from its menu | 2 |
 | Auto-replay of a game | 2 |
 | Save and restore a working session with all analysis data (存档与读档) | 2 |
 | Auto-complete a ladder | 5 |
@@ -261,7 +261,7 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 | Feature | Phase |
 |---|---|
 | Candidate moves with winrate, score lead and visits; order and fields configurable | 1 |
-| Hover a candidate to show its variation, with replay | 1 |
+| Hover a candidate to show its variation, stepped with the wheel | 1 |
 | Start and pause analysis | 1 |
 | Hide the candidates while analysis keeps running (F; hold Z) | 1 |
 | Candidate list panel (sortable table) | 2 (done in P2 M2: Phase 1 shipped the table; P2 M1 docked it; M2 added sorting, columns and the share of visits) |
@@ -348,6 +348,7 @@ The source is LizzieYzy's Chinese language resource file, about 390 menu and too
 - The policy heatmap (first instinct) and the post-search heatmap; raw network mode (no search); pasting a game from the clipboard and copying a game to the clipboard. Reason: the maintainer's decision, 2026-11-21. Copying a screenshot image (7.2) is not affected.
 - Rectangular boards and boards larger than 19×19; Aji opens square boards from 5×5 to 19×19. Reason: KataGo's standard builds stop at 19×19, and rectangular boards are rare in review (Phase 2 menu check, P2-X4).
 - Gomoku. Reason: it is not Go (Phase 2 menu check, P2-X5).
+- Swapping board colours, timed replay of a hovered line, storing the engine's line as a variation, double-clicking to find a stone, and finding a move. Reason: the maintainer's decision, 2026-11-23.
 
 ## 8. Roadmap
 

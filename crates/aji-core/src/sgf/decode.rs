@@ -31,6 +31,23 @@ pub struct Decoded {
     pub replaced: bool,
 }
 
+impl Decoded {
+    /// GBK's decoder accepts GB18030 extensions. Use the superset on save only
+    /// when the source actually contains one of its four-byte characters.
+    pub fn source_encoding(&self, bytes: &[u8]) -> &'static str {
+        if self.encoding == GBK.name() {
+            let mut input = bytes.iter().copied();
+            while let Some(byte) = input.next() {
+                if (0x81..=0xfe).contains(&byte) && input.next().is_some_and(|b| b.is_ascii_digit())
+                {
+                    return GB18030.name();
+                }
+            }
+        }
+        self.encoding
+    }
+}
+
 /// Decodes an SGF file: a BOM, else valid UTF-8, else a declared multi-byte `CA` that decodes
 /// cleanly, else a guess. A declared single-byte charset is used only when the guess is
 /// single-byte too, since single-byte charsets never fail to decode.

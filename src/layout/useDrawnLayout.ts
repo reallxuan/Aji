@@ -1,3 +1,4 @@
+import { useHasVariations } from '../game/treeStore';
 import { SIDE_MIN_WIDTH } from './constants';
 import { layoutFrame } from './frameGeometry';
 import type { Layout, PanelRef } from './model';
@@ -23,7 +24,11 @@ export function useDrawnLayout(sideOpen: boolean): {
   drawn: Layout;
   setLayout(next: Layout): void;
 } {
+  const branches = useHasVariations();
   const { width, height } = useWindowSize();
   const { layout, setLayout } = useLayout();
-  return { drawn: layoutFrame(layout, width, height, frameMinSize(sideOpen)).layout, setLayout };
+  return {
+    drawn: layoutFrame(layout, width, height, frameMinSize(sideOpen), branches).layout,
+    setLayout,
+  };
 }

@@ -14,6 +14,7 @@ export interface FakeFilesOptions {
 }
 
 export interface FakeFiles extends PlatformFiles {
+  emitQuitRequested(): void;
   remembered: Array<{ path: string; title: string }>;
   written: Map<string, string>;
   /** Screenshots saved, by path. */
@@ -31,7 +32,7 @@ export interface FakeFiles extends PlatformFiles {
 
 const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
-function base64(text: string): string {
+export function utf8Base64(text: string): string {
   let binary = '';
   for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
   return btoa(binary);
@@ -39,20 +40,23 @@ function base64(text: string): string {
 
 /** In-memory files for tests and the development scenarios. A token is the file's path. */
 export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
-  const disk = new Map(Object.entries(options.files ?? {}));
+  const disk = new Map(
+    Object.entries(options.files ?? {}).map(([path, text]) => [path, utf8Base64(text)]),
+  );
   const recent: Array<{ path: string; title: string }> = (options.recent ?? []).map((path) => ({
     path,
     title: baseName(path),
   }));
+  const quitRequests = new Set<() => void>();
   const drags = new Set<(event: DragEvent) => void>();
   const menus = new Set<(command: MenuCommand) => void>();
 
   async function open(path: string) {
     const name = baseName(path);
     if (!/\.sgf$/i.test(name)) throw new TransportError('fileNotSgf', `${name} is not .sgf`);
-    const text = disk.get(path);
-    if (text === undefined) throw new TransportError('fileMissing', `${path} is gone`);
-    return { token: path, name, bytes: base64(text) };
+    const bytes = disk.get(path);
+    if (bytes === undefined) throw new TransportError('fileMissing', `${path} is gone`);
+    return { token: path, name, bytes };
   }
 
   const fake: FakeFiles = {
@@ -67,6 +71,7 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
       return options.pick ? open(options.pick) : null;
     },
     openPath: open,
+    reread: async (token) => (await open(token)).bytes,
     async openRecent(index) {
       const entry = recent[index];
       if (!entry) throw new TransportError('internal', `no recent file ${index}`);
@@ -97,12 +102,31 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
     async clearRecent() {
       recent.length = 0;
     },
+    async confirmDiscard() {
+      const { browserConfirmDiscard } = await import('./browserConfirmDiscard');
+      return browserConfirmDiscard();
+    },
+    onQuitRequested(handler) {
+      quitRequests.add(handler);
+      return () => quitRequests.delete(handler);
+    },
+    emitQuitRequested() {
+      for (const handler of quitRequests) handler();
+    },
+    async quit() {},
+    async save(token, bytes) {
+      if (!disk.has(token)) return false;
+      const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+      disk.set(token, bytes);
+      fake.written.set(token, new TextDecoder().decode(data));
+      return true;
+    },
     async saveAs(suggestedName, text) {
       fake.saveRequests.push(suggestedName);
       const path = options.savePath === undefined ? `/fake/${suggestedName}` : options.savePath;
       if (path === null) return null;
       fake.written.set(path, text);
-      disk.set(path, text);
+      disk.set(path, utf8Base64(text));
       return path;
     },
     async saveImage(suggestedName, bytes) {
@@ -131,7 +155,7 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
       return () => menus.delete(handler);
     },
     put(path, text) {
-      disk.set(path, text);
+      disk.set(path, utf8Base64(text));
     },
     emitDrag(event) {
       for (const handler of [...drags]) handler(event);

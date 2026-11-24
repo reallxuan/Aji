@@ -8,8 +8,8 @@ const job = (state: JobProgress['state']): JobProgress => ({
   total: 10,
   boostDone: 0,
   boostTotal: 0,
-  working: 3,
-  queued: [4, 5],
+  working: '0000000000000003',
+  queued: ['0000000000000004', '0000000000000005'],
   etaSeconds: null,
 });
 

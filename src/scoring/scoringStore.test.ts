@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { createI18n } from '../i18n/createI18n';
 import { createEngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { makeSnapshot } from '../game/testing';
@@ -41,12 +42,13 @@ function setUp(
   const engine = createEngineStore();
   engine.setState({ engine: { state, version: '1.16' } as EngineState });
   useGameStore.setState({ snapshot: makeSnapshot({ size: 9, stones: finishedStones() }) });
+  const t = createI18n('en').t;
   const types = () => sent.map((r) => r.type);
   const scored = () =>
     sent
       .filter((r) => r.type === 'gameScore')
       .map((r) => (r as Extract<Request, { type: 'gameScore' }>).mode);
-  return { transport, engine, ctx: { transport, engine }, types, scored };
+  return { transport, engine, ctx: { transport, engine, t }, types, scored };
 }
 
 const sorted = (points: Point[]) =>
@@ -69,6 +71,80 @@ describe('useScoringStore', () => {
     expect(state.suggested).toEqual([C5, H4]);
     expect(state.dead).toEqual([C5, H4]);
     expect(state.score?.margin).toBe(2 - 8.5);
+  });
+
+  it.each(['ends', 'refused', 'superseded'] as const)(
+    'starts only after the current try-out ends (%s)',
+    async (result) => {
+      const { ctx, engine } = setUp('ready');
+      const requests: Request[] = [];
+      let finish!: () => void;
+      const pending = new Promise<void>((r) => {
+        finish = r;
+      });
+      useGameStore.getState().apply(makeSnapshot({ revision: 2, tryout: 0 }));
+      const transport = createFakeTransport(async (request) => {
+        requests.push(request);
+        if (request.type === 'gameEdit') {
+          await pending;
+          if (result === 'refused') throw new Error('refused');
+          return { type: 'game', warnings: [], snapshot: makeSnapshot({ revision: 3 }) };
+        }
+        return { type: 'score', ...view([]) };
+      });
+      const scoring = useScoringStore.getState();
+      const first = scoring.start({ transport, engine, t: ctx.t });
+      const second = scoring.start({ transport, engine, t: ctx.t });
+      expect(requests).toEqual([{ type: 'gameEdit', edit: { kind: 'tryoutEnd' } }]);
+      expect(useScoringStore.getState().active).toBe(false);
+      if (result === 'superseded')
+        useGameStore.getState().apply(makeSnapshot({ revision: 4, tryout: 7 }));
+      finish();
+      await Promise.all([first, second]);
+      expect(useScoringStore.getState().active).toBe(result === 'ends');
+      expect(requests.filter((r) => r.type === 'gameScore')).toHaveLength(
+        result === 'ends' ? 2 : 0,
+      );
+    },
+  );
+
+  it('leaving while the pause is pending cannot start a late count', async () => {
+    const { ctx, engine } = setUp();
+    const requests: Request[] = [];
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const transport = createFakeTransport(async (request) => {
+      requests.push(request);
+      if (request.type === 'analysisPause') await pending;
+      return { type: 'ok' };
+    });
+    const first = useScoringStore.getState().start({ transport, engine, t: ctx.t });
+    await useScoringStore.getState().exit(transport);
+    finish();
+    await first;
+    expect(requests.map((r) => r.type)).toEqual(['analysisPause', 'analysisResume']);
+  });
+
+  it('a pushed try-out cancels an in-flight scoring session and drops its answer', async () => {
+    const { ctx, engine } = setUp('ready');
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const requests: Request[] = [];
+    const transport = createFakeTransport(async (request) => {
+      requests.push(request);
+      await pending;
+      return { type: 'score', ...view([]) };
+    });
+    const start = useScoringStore.getState().start({ transport, engine, t: ctx.t });
+    useGameStore.getState().apply(makeSnapshot({ revision: 2, tryout: 0 }));
+    finish();
+    await start;
+    expect(requests).toHaveLength(1);
+    expect(useScoringStore.getState()).toMatchObject({ active: false, score: null });
   });
 
   it('tapping_a_stone_toggles_its_group_and_rescores', async () => {
@@ -141,4 +217,19 @@ describe('useScoringStore', () => {
     expect(useScoringStore.getState()).toMatchObject({ failed: false });
     expect(useScoringStore.getState().score?.margin).toBe(2 - 8.5);
   });
+});
+
+it('removes the prior count from the result field during a pending or failed recount', async () => {
+  try {
+    const fail = setUp('ready', (dead) => (dead.length === 1 ? -1 : 0));
+    await useScoringStore.getState().start(fail.ctx);
+    expect(useScoringStore.getState().lastCount?.margin).toBe(-6.5);
+    const failing = useScoringStore.getState().toggle(fail.transport, H4);
+    expect(useScoringStore.getState().lastCount).toBeNull();
+    await failing;
+    expect(useScoringStore.getState().lastCount).toBeNull();
+  } finally {
+    resetScoringStore();
+    resetGameStore();
+  }
 });

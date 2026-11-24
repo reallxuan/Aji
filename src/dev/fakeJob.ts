@@ -1,13 +1,8 @@
 import type { AppEvent } from '../transport/generated/AppEvent';
 import type { JobOptions } from '../transport/generated/JobOptions';
 import type { JobProgress } from '../transport/generated/JobProgress';
-import type { Loss } from '../transport/generated/Loss';
+import type { TrendNode } from '../transport/generated/TrendNode';
 import type { TrendStats } from '../transport/generated/TrendStats';
-
-export interface FakeResult {
-  stats: TrendStats;
-  loss: Loss | null;
-}
 
 /** Black's made-up win rate at line index `i`: a slow wave, with a collapse and a comeback. */
 function winrate(i: number): number {
@@ -17,17 +12,10 @@ function winrate(i: number): number {
 
 const lead = (w: number) => Math.round((w - 0.5) * 400) / 10;
 
-/** The made-up result at line index `i`, and its move's loss for the mover (odd: Black). */
-export function fakeResult(i: number, visits: number): FakeResult {
+/** The made-up result at one main-line index. Losses are derived from available results. */
+export function fakeResult(i: number, visits: number): TrendStats {
   const w = winrate(i);
-  const stats = { winrate: w, scoreLead: lead(w), visits };
-  if (i === 0) return { stats, loss: null };
-  const sign = i % 2 ? 1 : -1;
-  const before = winrate(i - 1);
-  return {
-    stats,
-    loss: { winrate: sign * (before - w) * 100, score: sign * (lead(before) - lead(w)) },
-  };
+  return { winrate: w, scoreLead: lead(w), visits };
 }
 
 export interface FakeJob {
@@ -40,27 +28,30 @@ export interface FakeJob {
  * `onResult` hears every result, for the scenario's trend.
  */
 export function playFakeJob({
-  count,
+  nodes,
   options,
-  revision,
   stepMs,
   emit,
   onResult,
 }: {
-  count: number;
+  nodes: TrendNode[];
   options: JobOptions;
-  revision: number;
   stepMs: number;
   emit: (event: AppEvent) => void;
-  onResult: (lineIndex: number, result: FakeResult) => void;
+  onResult: (lineIndex: number, result: TrendStats) => void;
 }): FakeJob {
+  const keys = nodes.map((n) => n.key);
+  const count = keys.length;
   const [from, to] =
     options.range.kind === 'whole' ? [0, count - 1] : [options.range.from - 1, options.range.to];
-  const inRange = (i: number) => i >= from && i <= Math.min(to, count - 1);
-  // Black is to move at even indexes.
-  const sideOk = (i: number) =>
-    options.side === 'both' || (options.side === 'black') === (i % 2 === 0);
-  const first = [...Array(count).keys()].filter((i) => inRange(i) && sideOk(i));
+  const inRange = (i: number) => nodes[i].moveNumber >= from && nodes[i].moveNumber <= to;
+  const sideOk = (i: number) => options.side === 'both' || options.side === nodes[i].toPlay;
+  const seen = new Set<string>();
+  const first = nodes.flatMap((node, i) => {
+    if (!node.key || node.tryout || !inRange(i) || !sideOk(i) || seen.has(node.key)) return [];
+    seen.add(node.key);
+    return [i];
+  });
   let boost: number[] = [];
   let pass: 'first' | 'boost' = 'first';
   let at = 0;
@@ -75,8 +66,8 @@ export function playFakeJob({
       total: first.length,
       boostDone: pass === 'boost' ? at : 0,
       boostTotal: boost.length,
-      working: queue[at] ?? null,
-      queued: queue.slice(at + 1),
+      working: keys[queue[at]] ?? null,
+      queued: queue.slice(at + 1).flatMap((i) => keys[i] ?? []),
       etaSeconds: state === 'done' ? null : Math.round((left * stepMs) / 1000),
     };
   };
@@ -87,7 +78,6 @@ export function playFakeJob({
     const i = queue[at];
     const result = fakeResult(i, visits);
     onResult(i, result);
-    emit({ type: 'trendNodes', revision, nodes: [{ lineIndex: i, ...result }] });
     at++;
     if (at < queue.length) {
       emit({ type: 'jobProgress', progress: progress(pass === 'first' ? 'running' : 'boosting') });
@@ -96,9 +86,14 @@ export function playFakeJob({
     }
     if (pass === 'first' && options.boost.on) {
       const swings = first.filter(
-        (i) => i > 0 && Math.abs(fakeResult(i, 0).loss!.winrate) >= options.boost.threshold,
+        (i) =>
+          i > 0 &&
+          nodes[i].mover !== null &&
+          Math.abs(winrate(i) - winrate(i - 1)) * 100 >= options.boost.threshold,
       );
-      boost = [...new Set(swings.flatMap((i) => [i - 1, i]))].sort((a, b) => a - b);
+      boost = [...new Set(swings.flatMap((i) => [i - 1, i]))]
+        .filter((i) => keys[i] !== null && !nodes[i].tryout)
+        .sort((a, b) => a - b);
       if (boost.length > 0) {
         pass = 'boost';
         at = 0;

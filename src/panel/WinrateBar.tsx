@@ -1,6 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import { formatPercent, formatPoints } from '../analysis/format';
 import { boardLead, useBoardKomi } from '../analysis/lead';
 import { barTexts } from '../analysis/trend';
@@ -60,14 +59,10 @@ export function WinrateBar({
   const lang = i18n.language;
   const panelWidth = usePanelWidth();
   const fontMeasure = useMeasure();
-  const { current, fading } = useShownCandidates();
+  const { current } = useShownCandidates();
   const boardKomi = useBoardKomi();
   const barWidth = width ?? panelWidth - 2 * PANEL_PADDING;
 
-  const fade: CSSProperties = {
-    opacity: fading ? CATCHING_UP_OPACITY : 1,
-    transition: `opacity ${CATCHING_UP_FADE_MS}ms`,
-  };
   let segments = null;
   if (current) {
     const black = current.winrate;
@@ -87,7 +82,6 @@ export function WinrateBar({
       list.map((text, i) => (
         <span
           key={i}
-          style={fade}
           className={list.length === 2 && i === leadAt ? `font-normal ${leadClass}` : ''}
         >
           {text}

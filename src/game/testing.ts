@@ -19,6 +19,19 @@ export const noInfo: GameInfo = {
 export function makeSnapshot(over: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
     revision: 1,
+    gameRevision: 0,
+    node: 0,
+    lineRevision: 0,
+    treeRevision: 0,
+    comment: null,
+    marks: [],
+    continuations: [],
+    tryout: null,
+    changed: false,
+    canUndo: false,
+    canRedo: false,
+    saveAsFirst: false,
+    placed: [],
     name: null,
     info: noInfo,
     rules: {
@@ -35,7 +48,7 @@ export function makeSnapshot(over: Partial<GameSnapshot> = {}): GameSnapshot {
     moveNumber: 0,
     lineIndex: 0,
     nextMove: null,
-    mainLineLength: 0,
+    lineLength: 0,
     atStart: true,
     atEnd: true,
     illegal: null,

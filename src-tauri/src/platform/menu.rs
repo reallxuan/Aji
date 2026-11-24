@@ -6,7 +6,8 @@
 //! the only interface text on the Rust side.
 
 use tauri::menu::{
-    Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu, SubmenuBuilder,
+    CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu,
+    SubmenuBuilder,
 };
 use tauri::{AppHandle, Runtime};
 
@@ -30,6 +31,33 @@ impl MenuLanguage {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NumberMode {
+    #[default]
+    Off,
+    All,
+    Last,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NumberDisplay {
+    mode: NumberMode,
+    last: u64,
+    restart_in_branch: bool,
+}
+
+impl Default for NumberDisplay {
+    fn default() -> Self {
+        Self {
+            mode: NumberMode::Off,
+            last: 10,
+            restart_in_branch: false,
+        }
+    }
+}
+
 /// Every label the menu shows.
 pub struct Labels {
     pub about: &'static str,
@@ -40,6 +68,8 @@ pub struct Labels {
     pub quit: &'static str,
     pub file: &'static str,
     pub new_game: &'static str,
+    pub other_sizes: &'static str,
+    pub size_label: &'static str,
     pub size19: &'static str,
     pub size13: &'static str,
     pub size9: &'static str,
@@ -47,6 +77,11 @@ pub struct Labels {
     pub open_recent: &'static str,
     pub no_recent: &'static str,
     pub clear_recent: &'static str,
+    pub save: &'static str,
+    pub save_branch: &'static str,
+    pub save_clean: &'static str,
+    pub unsaved: &'static str,
+    pub discard: &'static str,
     pub save_as: &'static str,
     pub export_image: &'static str,
     /// Save and copy, in the order of [`SHOT_TARGETS`].
@@ -60,6 +95,10 @@ pub struct Labels {
     pub paste: &'static str,
     pub select_all: &'static str,
     pub view: &'static str,
+    pub rotate: &'static str,
+    pub rotations: [&'static str; 5],
+    pub numbers: &'static str,
+    pub number_options: [&'static str; 4],
     pub layout: &'static str,
     /// The presets' names, in the order of [`LAYOUT_PRESETS`].
     pub presets: [&'static str; 5],
@@ -93,6 +132,8 @@ pub fn labels(language: MenuLanguage) -> Labels {
             quit: "退出 Aji",
             file: "文件",
             new_game: "新建棋局",
+            other_sizes: "其他路数",
+            size_label: "{n} 路",
             size19: "19 路",
             size13: "13 路",
             size9: "9 路",
@@ -100,6 +141,11 @@ pub fn labels(language: MenuLanguage) -> Labels {
             open_recent: "打开最近",
             no_recent: "暂无最近打开的棋谱",
             clear_recent: "清除最近记录",
+            save: "保存",
+            save_branch: "另存当前分支…",
+            save_clean: "另存为纯净棋谱…",
+            unsaved: "要保存这局棋的更改吗？",
+            discard: "不保存",
             save_as: "另存为…",
             export_image: "导出图片",
             save_image: ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"],
@@ -112,6 +158,10 @@ pub fn labels(language: MenuLanguage) -> Labels {
             paste: "粘贴",
             select_all: "全选",
             view: "显示",
+            rotate: "旋转",
+            rotations: ["顺时针 90°", "逆时针 90°", "水平翻转", "垂直翻转", "还原"],
+            numbers: "手数",
+            number_options: ["不显示", "全部", "最近 {n} 手", "分支内从 1 开始"],
             layout: "布局",
             presets: ["默认", "经典", "极简", "思考", "四盘"],
             window: "窗口",
@@ -140,6 +190,8 @@ pub fn labels(language: MenuLanguage) -> Labels {
             quit: "Quit Aji",
             file: "File",
             new_game: "New Game",
+            other_sizes: "Other Sizes",
+            size_label: "{n}×{n}",
             size19: "19×19",
             size13: "13×13",
             size9: "9×9",
@@ -147,6 +199,11 @@ pub fn labels(language: MenuLanguage) -> Labels {
             open_recent: "Open Recent",
             no_recent: "No recent games",
             clear_recent: "Clear Menu",
+            save: "Save",
+            save_branch: "Save Current Branch As…",
+            save_clean: "Save Clean Copy As…",
+            unsaved: "Save changes to this game?",
+            discard: "Don’t Save",
             save_as: "Save As…",
             export_image: "Export Image",
             save_image: [
@@ -167,6 +224,16 @@ pub fn labels(language: MenuLanguage) -> Labels {
             paste: "Paste",
             select_all: "Select All",
             view: "View",
+            rotate: "Rotate",
+            rotations: [
+                "Rotate clockwise 90°",
+                "Rotate counterclockwise 90°",
+                "Flip horizontally",
+                "Flip vertically",
+                "Reset orientation",
+            ],
+            numbers: "Move Numbers",
+            number_options: ["Off", "All", "Last {n} moves", "Restart at 1 in a branch"],
             layout: "Layout",
             presets: ["Default", "Classic", "Minimal", "Thinking", "Four Boards"],
             window: "Window",
@@ -211,16 +278,7 @@ fn recent_menu<R: Runtime>(
         );
     }
     for (i, entry) in recent.iter().enumerate() {
-        let index = u32::try_from(i).unwrap_or(u32::MAX);
-        let label = match entry.title.is_empty() {
-            true => entry.name.as_str(),
-            false => entry.title.as_str(),
-        };
-        menu = menu.item(
-            &MenuItemBuilder::with_id(MenuAction::Recent(index).id(), label)
-                .enabled(!entry.missing)
-                .build(app)?,
-        );
+        menu = menu.item(&recent_menu_item(app, i, entry)?);
     }
     menu.separator()
         .item(
@@ -229,6 +287,20 @@ fn recent_menu<R: Runtime>(
                 .build(app)?,
         )
         .build()
+}
+
+fn recent_menu_item<R: Runtime>(
+    app: &AppHandle<R>,
+    index: usize,
+    entry: &RecentEntry,
+) -> tauri::Result<tauri::menu::MenuItem<R>> {
+    let index = u32::try_from(index).unwrap_or(u32::MAX);
+    let label = match entry.title.is_empty() {
+        true => entry.name.as_str(),
+        false => entry.title.as_str(),
+    };
+    // A click on a missing file removes the entry and reports what happened.
+    item(app, MenuAction::Recent(index), label)
 }
 
 /// 文件 → 导出图片 (owner, 2026-11-22): save, then copy, each of the board, the sub-board and the
@@ -250,6 +322,7 @@ pub fn build<R: Runtime>(
     app: &AppHandle<R>,
     language: MenuLanguage,
     recent: &[RecentEntry],
+    numbers: NumberDisplay,
 ) -> tauri::Result<Menu<R>> {
     let l = labels(language);
     let app_menu = SubmenuBuilder::new(app, "Aji")
@@ -261,16 +334,26 @@ pub fn build<R: Runtime>(
         .item(&PredefinedMenuItem::hide_others(app, Some(l.hide_others))?)
         .item(&PredefinedMenuItem::show_all(app, Some(l.show_all))?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, Some(l.quit))?)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Quit.id(), l.quit)
+                .accelerator("CmdOrCtrl+Q")
+                .build(app)?,
+        )
         .build()?;
+    let mut other_sizes = SubmenuBuilder::new(app, l.other_sizes);
+    for n in 5..=18 {
+        let label = l.size_label.replace("{n}", &n.to_string());
+        other_sizes = other_sizes.item(&item(app, MenuAction::New(n), &label)?);
+    }
     let new_game = SubmenuBuilder::new(app, l.new_game)
         .item(
-            &MenuItemBuilder::with_id(MenuAction::New19.id(), l.size19)
+            &MenuItemBuilder::with_id(MenuAction::New(19).id(), l.size19)
                 .accelerator("CmdOrCtrl+N")
                 .build(app)?,
         )
-        .item(&item(app, MenuAction::New13, l.size13)?)
-        .item(&item(app, MenuAction::New9, l.size9)?)
+        .item(&item(app, MenuAction::New(13), l.size13)?)
+        .item(&item(app, MenuAction::New(9), l.size9)?)
+        .item(&other_sizes.build()?)
         .build()?;
     let file = SubmenuBuilder::new(app, l.file)
         .item(&new_game)
@@ -282,15 +365,30 @@ pub fn build<R: Runtime>(
         .item(&recent_menu(app, &l, recent)?)
         .separator()
         .item(
+            &MenuItemBuilder::with_id(MenuAction::Save.id(), l.save)
+                .accelerator("CmdOrCtrl+S")
+                .build(app)?,
+        )
+        .item(
             &MenuItemBuilder::with_id(MenuAction::SaveAs.id(), l.save_as)
                 .accelerator("CmdOrCtrl+Shift+S")
                 .build(app)?,
         )
+        .item(&item(app, MenuAction::SaveBranch, l.save_branch)?)
+        .item(&item(app, MenuAction::SaveClean, l.save_clean)?)
         .item(&export_menu(app, &l)?)
         .build()?;
     let edit = SubmenuBuilder::new(app, l.edit)
-        .item(&PredefinedMenuItem::undo(app, Some(l.undo))?)
-        .item(&PredefinedMenuItem::redo(app, Some(l.redo))?)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Undo.id(), l.undo)
+                .accelerator("CmdOrCtrl+Z")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Redo.id(), l.redo)
+                .accelerator("CmdOrCtrl+Shift+Z")
+                .build(app)?,
+        )
         .separator()
         .item(&PredefinedMenuItem::cut(app, Some(l.cut))?)
         .item(&PredefinedMenuItem::copy(app, Some(l.copy))?)
@@ -301,9 +399,50 @@ pub fn build<R: Runtime>(
     for (preset, label) in LAYOUT_PRESETS.into_iter().zip(l.presets) {
         layout = layout.item(&item(app, MenuAction::Layout(preset.to_owned()), label)?);
     }
+    let mut rotate = SubmenuBuilder::new(app, l.rotate);
+    for (action, label) in [
+        MenuAction::RotateCw,
+        MenuAction::RotateCcw,
+        MenuAction::FlipH,
+        MenuAction::FlipV,
+        MenuAction::ResetOrientation,
+    ]
+    .into_iter()
+    .zip(l.rotations)
+    {
+        rotate = rotate.item(&item(app, action, label)?);
+    }
+    let mut numbering = SubmenuBuilder::new(app, l.numbers);
+    for ((action, mode), label) in [
+        (MenuAction::NumbersOff, NumberMode::Off),
+        (MenuAction::NumbersAll, NumberMode::All),
+        (MenuAction::NumbersLast, NumberMode::Last),
+    ]
+    .into_iter()
+    .zip(l.number_options)
+    {
+        let selected = numbers.mode == mode;
+        let label = label.replace("{n}", &numbers.last.to_string());
+        numbering = numbering.item(
+            &CheckMenuItemBuilder::with_id(action.id(), label)
+                .checked(selected)
+                .enabled(!selected)
+                .build(app)?,
+        );
+    }
+    let numbering = numbering
+        .separator()
+        .item(
+            &CheckMenuItemBuilder::with_id(MenuAction::NumbersRestart.id(), l.number_options[3])
+                .checked(numbers.restart_in_branch)
+                .build(app)?,
+        )
+        .build()?;
     // The estimate's key, T, is the interface's: a one-letter accelerator would fire while typing.
     let view = SubmenuBuilder::new(app, l.view)
         .item(&layout.build()?)
+        .item(&rotate.build()?)
+        .item(&numbering)
         .separator()
         .item(&item(app, MenuAction::Estimate, l.estimate)?)
         .build()?;
@@ -353,8 +492,42 @@ mod tests {
     fn both_languages_label_the_file_menu() {
         let zh = labels(MenuLanguage::ZhCn);
         let en = labels(MenuLanguage::En);
+        assert_eq!(zh.other_sizes, "其他路数");
+        assert_eq!(en.other_sizes, "Other Sizes");
         assert_eq!((zh.file, zh.save_as), ("文件", "另存为…"));
         assert_eq!((en.file, en.save_as), ("File", "Save As…"));
+    }
+
+    #[test]
+    fn board_view_ids_round_trip() {
+        for id in [
+            "rotateCw",
+            "rotateCcw",
+            "flipH",
+            "flipV",
+            "resetOrientation",
+            "numbersOff",
+            "numbersAll",
+            "numbersLast",
+            "numbersRestart",
+        ] {
+            assert_eq!(
+                MenuAction::from_id(id).map(|action| action.id()).as_deref(),
+                Some(id)
+            );
+        }
+    }
+
+    #[test]
+    fn new_size_ids_round_trip() {
+        for n in 5..=19 {
+            let action = MenuAction::New(n);
+            assert_eq!(action.id(), format!("new:{n}"));
+            assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+        }
+        for invalid in ["new:4", "new:20", "new:-1", "new:huge", "new:09"] {
+            assert_eq!(MenuAction::from_id(invalid), None);
+        }
     }
 
     #[test]
@@ -424,6 +597,8 @@ mod tests {
             l.quit,
             l.file,
             l.new_game,
+            l.other_sizes,
+            l.size_label,
             l.size19,
             l.size13,
             l.size9,
@@ -431,6 +606,11 @@ mod tests {
             l.open_recent,
             l.no_recent,
             l.clear_recent,
+            l.save,
+            l.save_branch,
+            l.save_clean,
+            l.unsaved,
+            l.discard,
             l.save_as,
             l.export_image,
             l.edit,
@@ -442,6 +622,8 @@ mod tests {
             l.select_all,
             l.view,
             l.layout,
+            l.rotate,
+            l.numbers,
             l.window,
             l.minimize,
             l.zoom,
@@ -462,7 +644,26 @@ mod tests {
         all.extend(l.save_image);
         all.extend(l.copy_image);
         all.extend(l.presets);
+        all.extend(l.rotations);
+        all.extend(l.number_options);
         all
+    }
+
+    #[test]
+    fn missing_recent_entries_are_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recent = super::super::recent::RecentList::default();
+        recent.push(&dir.path().join("gone.sgf"), "", 1);
+        let entries = recent.entries();
+        assert!(entries[0].missing);
+        let app = tauri::test::mock_app();
+        let item = recent_menu_item(app.handle(), 0, &entries[0]).unwrap();
+        assert_eq!(
+            MenuAction::from_id(item.id().as_ref()),
+            Some(MenuAction::Recent(0))
+        );
+        assert_eq!(item.text().unwrap(), "gone.sgf");
+        assert!(item.is_enabled().unwrap());
     }
 
     #[test]

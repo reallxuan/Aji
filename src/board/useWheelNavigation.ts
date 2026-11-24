@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import { useEffect, type RefObject } from 'react';
 import { shownLength } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
@@ -55,6 +56,7 @@ export function useRowLineWheel(ref: RefObject<HTMLElement | null>): void {
  * the game.
  */
 export function stepLineOrGame(forward: boolean, go: (to: NavTarget) => void): void {
+  stopReplay();
   const view = useViewStore.getState();
   if (view.hover) {
     if (view.variation && view.step !== null) {

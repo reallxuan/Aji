@@ -1,6 +1,11 @@
+import { orient, ROTATIONS, setNumberMode } from '../board/viewActions';
+import { toggleReplay } from '../game/replayStore';
+import { useDeviceStore } from '../device/deviceStore';
 import { useEstimateStore } from '../analysis/estimateStore';
 import { useViewStore } from '../analysis/viewStore';
-import { openFromPicker, saveAs, startNewGame } from '../game/actions';
+import { openFromPicker, save, saveAs, saveBranch, saveClean, startNewGame } from '../game/actions';
+import { edit, undo, redo } from '../game/editActions';
+import { useModeStore } from '../edit/modeStore';
 import { useGameStore } from '../game/gameStore';
 import { clearAnalysis, openJobPanel, stopGameJob } from '../job/actions';
 import { useJobStore } from '../job/jobStore';
@@ -33,16 +38,52 @@ const step = (id: CommandId, to: NavTarget) => press(id, (ctx) => ctx.go(to), { 
 const page = (id: CommandId, by: number) =>
   press(
     id,
-    (ctx) => {
+    ({ go }) => {
       const snapshot = useGameStore.getState().snapshot;
       if (!snapshot) return;
-      ctx.go({ move: Math.max(0, Math.min(snapshot.mainLineLength, snapshot.moveNumber + by)) });
+      const move = snapshot.moveNumber + by;
+      // Last includes trailing nodes without a move on the selected line.
+      const to = by > 0 && move >= snapshot.lineLength ? 'last' : { move: Math.max(0, move) };
+      go(to, { waitForReply: true });
     },
     { repeats: true },
   );
 
 /** Today's commands: the board's keys (design 5.7, M7 design 5.10) and the file chords. */
 export const BUILTINS: Command[] = [
+  ...ROTATIONS.map((action) => press(`view.${action}`, () => orient(action))),
+  press('replay.toggle', toggleReplay),
+  press('view.moveNumbers', () => {
+    const { mode, lastOn } = useDeviceStore.getState().settings.moveNumbers;
+    setNumberMode(mode === 'off' ? lastOn : 'off');
+  }),
+  step('nav.previousSibling', 'previousSibling'),
+  step('nav.nextSibling', 'nextSibling'),
+  press('nav.mainLine', (ctx) => ctx.go('mainLine')),
+  press('nav.escape', (ctx) => {
+    const modes = useModeStore.getState();
+    if (modes.mode !== 'normal') modes.setMode('normal');
+    else if (useGameStore.getState().snapshot?.tryout != null)
+      void edit(ctx.actions, { kind: 'tryoutEnd' });
+    else ctx.go('branchPoint');
+  }),
+  press('edit.undo', (ctx) => {
+    if (useGameStore.getState().snapshot?.canUndo) void undo(ctx.actions);
+  }),
+  press('edit.redo', (ctx) => {
+    if (useGameStore.getState().snapshot?.canRedo) void redo(ctx.actions);
+  }),
+  press('edit.tryout', (ctx) => {
+    const snapshot = useGameStore.getState().snapshot;
+    const { active, starting } = useScoringStore.getState();
+    if (snapshot && !active && !starting)
+      void edit(ctx.actions, { kind: snapshot.tryout === null ? 'tryoutStart' : 'tryoutEnd' });
+  }),
+  press('edit.deleteFrom', (ctx) => {
+    const snapshot = useGameStore.getState().snapshot;
+    if (snapshot && !snapshot.atStart)
+      void edit(ctx.actions, { kind: 'deleteFrom', node: snapshot.node });
+  }),
   step('nav.previous', 'previous'),
   step('nav.next', 'next'),
   step('nav.first', 'first'),
@@ -50,6 +91,9 @@ export const BUILTINS: Command[] = [
   page('nav.pageBack', -PAGE),
   page('nav.pageForward', PAGE),
   press('file.open', (ctx) => void openFromPicker(ctx.actions)),
+  press('file.save', (ctx) => void save(ctx.actions)),
+  press('file.saveBranch', (ctx) => void saveBranch(ctx.actions)),
+  press('file.saveClean', (ctx) => void saveClean(ctx.actions)),
   press('file.saveAs', (ctx) => void saveAs(ctx.actions)),
   press('file.new19', (ctx) => void startNewGame(ctx.actions, 19)),
   // What a click on the engine indicator does, except opening the wizard.
@@ -71,7 +115,7 @@ export const BUILTINS: Command[] = [
     (ctx) =>
       void useScoringStore
         .getState()
-        .start({ transport: ctx.actions.transport, engine: ctx.engine }),
+        .start({ transport: ctx.actions.transport, engine: ctx.engine, t: ctx.actions.t }),
   ),
   press('estimate.toggle', () => useEstimateStore.getState().toggle()),
   press('candidates.toggleHidden', () => useViewStore.getState().toggleHidden(), {

@@ -14,6 +14,13 @@ The CWI Go games archive states: "The games here are in the public domain." Thes
 
 The archive's statement is on https://homepages.cwi.nl/~aeb/go/games/.
 
+The three `translated-*.sgf` encoding regression fixtures use public-domain CWI
+tournament records from [Fujitsu 2008](https://homepages.cwi.nl/~aeb/go/games/games/Fujitsu/21/23.sgf),
+[Samsung 2009 final 1](https://homepages.cwi.nl/~aeb/go/games/games/Samsung/14/F1.sgf)
+and [final 2](https://homepages.cwi.nl/~aeb/go/games/games/Samsung/14/F2.sgf).
+Their romanized player names were replaced with their Chinese names and the
+records were encoded in GBK. The moves and other properties are original.
+
 ## Derived by `make.py`
 
 Every other file is written by `make.py` (run `python3 -I crates/aji-core/tests/fixtures/sgf/make.py` from the repository root). The moves come from `samsung-2025-final-2.sgf`; names, comments and headers are made up:

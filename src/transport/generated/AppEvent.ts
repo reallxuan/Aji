@@ -3,9 +3,11 @@ import type { AnalysisUpdate } from "./AnalysisUpdate";
 import type { CacheStats } from "./CacheStats";
 import type { EngineState } from "./EngineState";
 import type { GameSnapshot } from "./GameSnapshot";
+import type { GameTree } from "./GameTree";
 import type { JobProgress } from "./JobProgress";
 import type { JobSnapshot } from "./JobSnapshot";
 import type { Rejection } from "./Rejection";
+import type { TrendChange } from "./TrendChange";
 import type { TrendNode } from "./TrendNode";
 import type { TrendNodeUpdate } from "./TrendNodeUpdate";
 import type { UiSettings } from "./UiSettings";
@@ -13,4 +15,4 @@ import type { UiSettings } from "./UiSettings";
 /**
  * A message the engine side pushes to the UI without being asked, tagged the same way.
  */
-export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "analysisRejected", rejection: Rejection, } | { "type": "setupProgress", job: JobSnapshot, } | { "type": "settingsChanged", settings: UiSettings, } | { "type": "gameSnapshot", snapshot: GameSnapshot, } | { "type": "gameTrend", revision: number, nodes: Array<TrendNode>, } | { "type": "trendNodes", revision: number, nodes: Array<TrendNodeUpdate>, } | { "type": "jobProgress", progress: JobProgress, } | { "type": "cacheStatus", status: CacheStats, };
+export type AppEvent = { "type": "engineState", engine: EngineState, } | { "type": "analysisUpdate", analysis: AnalysisUpdate, } | { "type": "analysisRejected", rejection: Rejection, } | { "type": "setupProgress", job: JobSnapshot, } | { "type": "settingsChanged", settings: UiSettings, } | { "type": "gameSnapshot", snapshot: GameSnapshot, } | { "type": "gameTree", tree: GameTree, } | { "type": "gameTrend", reason: TrendChange, revision: number, nodes: Array<TrendNode>, } | { "type": "trendNodes", revision: number, nodes: Array<TrendNodeUpdate>, } | { "type": "jobProgress", progress: JobProgress, } | { "type": "cacheStatus", status: CacheStats, };

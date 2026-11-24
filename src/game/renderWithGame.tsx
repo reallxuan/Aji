@@ -32,7 +32,7 @@ export function renderWithGame(
     language?: Language;
     os?: OsKind;
     files?: FakeFilesOptions;
-    answer?: (request: Request) => Response | undefined;
+    answer?: (request: Request) => Response | Promise<Response> | undefined;
   } = {},
 ) {
   const requests: Request[] = [];

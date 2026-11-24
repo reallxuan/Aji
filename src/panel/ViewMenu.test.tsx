@@ -1,3 +1,4 @@
+import { useViewStore } from '../analysis/viewStore';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
@@ -57,4 +58,18 @@ it('the game menu keeps to the game: no 截图 and no 布局', async () => {
     expect(within(menu).queryByRole('menuitem', { name: '布局' })).toBeNull();
     unmount();
   }
+});
+
+it('phone header rotates the board and sets the remembered numbering mode', async () => {
+  renderWithGame(<PanelHeader compact touch />, { os: 'macos' });
+  await act(async () => {});
+  const rotation = await openSub(await open('视图'), '旋转');
+  fireEvent.click(within(rotation).getByRole('menuitem', { name: '顺时针 90°' }));
+  expect(useViewStore.getState().orientation).toBe(1);
+  const numbers = await openSub(await open('视图'), '手数');
+  fireEvent.click(within(numbers).getByRole('menuitemradio', { name: '最近 10 手' }));
+  expect(useDeviceStore.getState().settings.moveNumbers).toMatchObject({
+    mode: 'last',
+    lastOn: 'last',
+  });
 });

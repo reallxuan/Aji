@@ -1,10 +1,11 @@
 import { cn } from 'cn';
 import { type ReactNode, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useHasVariations } from '../game/treeStore';
 import { TabRow } from '../panel/TabRow';
 import { scoringLayout } from '../scoring/scoringLayout';
 import { useScoringStore } from '../scoring/scoringStore';
-import { FIXED_HEIGHT, HAIRLINE_HIT, HAIRLINE_HIT_COARSE } from './constants';
+import { FIXED_HEIGHT, folded, HAIRLINE_HIT, HAIRLINE_HIT_COARSE } from './constants';
 import { layoutFrame, minWidth } from './frameGeometry';
 import { Hairline } from './Hairline';
 import { MainBoard } from './MainBoard';
@@ -25,15 +26,18 @@ function NodeView({
   node,
   path,
   actions,
+  branches,
 }: {
   node: Node;
   path: number[];
   actions: Actions;
+  branches: boolean;
 }): ReactNode {
   switch (node.type) {
     case 'board':
       return null;
     case 'panel':
+      if (folded(node, branches)) return null;
       return <PanelView panel={node.panel} actions={actions} />;
     case 'tabs':
       return (
@@ -44,21 +48,28 @@ function NodeView({
       );
     case 'split': {
       const column = node.dir === 'column';
+      const visible = node.children
+        .map((child, i) => ({ child, i }))
+        .filter(({ child }) => !folded(child, branches));
       return (
         <div className={cn('flex min-h-0 min-w-0 flex-1', column ? 'flex-col' : 'flex-row')}>
-          {node.children.map((child, i) => {
-            const prev = node.children[i - 1];
+          {visible.map(({ child, i }, position) => {
+            const previous = visible[position - 1];
+            const prev = previous?.child;
             // A line beside a panel of fixed height would have nothing to move.
-            const resizable = i > 0 && !(column && (fixedHeight(prev) || fixedHeight(child)));
+            const resizable = previous && !(column && (fixedHeight(prev) || fixedHeight(child)));
             const mins: [number, number] = column
               ? [minHeightOf(prev) ?? 0, minHeightOf(child) ?? 0]
-              : [minWidth(prev ?? child, panelMinSize), minWidth(child, panelMinSize)];
+              : [
+                  minWidth(prev ?? child, panelMinSize, branches),
+                  minWidth(child, panelMinSize, branches),
+                ];
             return (
               <div
                 key={child.type === 'panel' ? refId(child.panel) : i}
                 className={cn(
                   'relative flex min-h-0 min-w-0',
-                  i > 0 && (column ? 'border-t border-hairline' : 'border-l border-hairline'),
+                  previous && (column ? 'border-t border-hairline' : 'border-l border-hairline'),
                 )}
                 style={
                   column && fixedHeight(child)
@@ -73,11 +84,11 @@ function NodeView({
                   <Hairline
                     dir={node.dir}
                     coarse={actions.coarse}
-                    begin={actions.beginResize(path, i - 1, mins)}
-                    onEven={() => actions.even(path, i - 1)}
+                    begin={actions.beginResize(path, previous.i, i, mins)}
+                    onEven={() => actions.even(path, previous.i, i)}
                   />
                 )}
-                <NodeView node={child} path={[...path, i]} actions={actions} />
+                <NodeView node={child} path={[...path, i]} actions={actions} branches={branches} />
               </div>
             );
           })}
@@ -113,6 +124,7 @@ export function LayoutFrame({
   sideLocked?: boolean;
 }) {
   const { t } = useTranslation();
+  const branches = useHasVariations();
   const { width, height } = useWindowSize();
   const { layout: stored, setLayout } = useLayout();
   // While scoring the count takes the bar's place and the graph's (design 5.8), drawn only.
@@ -123,8 +135,8 @@ export function LayoutFrame({
   );
   // Narrow or wide is decided without the side's wider column, so opening settings never flips
   // the window into the phone arrangement; a side that does not fit takes the header's width.
-  const plain = layoutFrame(layout, width, height, frameMinSize(false));
-  const withSide = side ? layoutFrame(layout, width, height, frameMinSize(true)) : plain;
+  const plain = layoutFrame(layout, width, height, frameMinSize(false), branches);
+  const withSide = side ? layoutFrame(layout, width, height, frameMinSize(true), branches) : plain;
   const minSize = frameMinSize(Boolean(side) && !withSide.narrow);
   const frame = withSide.narrow ? plain : withSide;
   const container = useRef<HTMLDivElement>(null);
@@ -138,15 +150,15 @@ export function LayoutFrame({
     coarse,
     dragging: drag?.ref ?? null,
     startDrag,
-    selectTab: (ref) => setLayout(selectTab(drawn, ref)),
-    beginResize: (path, index, mins) => () => {
+    selectTab: (ref) => setLayout(selectTab(stored, ref)),
+    beginResize: (path, first, second, mins) => () => {
       const base = drawn;
       return {
-        move: (delta, sizes) => setLayout(resize(base, path, index, delta, sizes, mins)),
+        move: (delta, sizes) => setLayout(resize(base, path, first, delta, sizes, mins, second)),
         cancel: layoutCheckpoint(),
       };
     },
-    even: (path, index) => setLayout(evenSplit(drawn, path, index)),
+    even: (path, first, second) => setLayout(evenSplit(drawn, path, first, second)),
   };
   if (frame.narrow)
     return (
@@ -178,30 +190,32 @@ export function LayoutFrame({
             {side && column.index === headerColumn ? (
               side
             ) : (
-              <NodeView node={node} path={[column.index]} actions={scoring ? STILL : actions} />
+              <NodeView
+                node={node}
+                path={[column.index]}
+                branches={branches}
+                actions={scoring ? STILL : actions}
+              />
             )}
           </aside>
         );
       })}
       {!side &&
         !scoring &&
-        frame.hairlines.map((line) => {
-          const [a, b] = [line.index, line.index + 1].map((index) =>
-            frame.columns.find((c) => c.index === index)!,
-          );
+        frame.hairlines.map(({ left, right }) => {
           const mins: [number, number] = [
-            minWidth(drawn.root.children[a.index], minSize),
-            minWidth(drawn.root.children[b.index], minSize),
+            minWidth(drawn.root.children[left.index], minSize, branches),
+            minWidth(drawn.root.children[right.index], minSize, branches),
           ];
           return (
             <Hairline
-              key={line.index}
+              key={`${left.index}-${right.index}`}
               dir="row"
               coarse={coarse}
-              sizes={[a.width, b.width]}
-              begin={actions.beginResize([], line.index, mins)}
-              onEven={() => actions.even([], line.index)}
-              style={{ left: line.x - hit / 2 }}
+              sizes={[left.width, right.width]}
+              begin={actions.beginResize([], left.index, right.index, mins)}
+              onEven={() => actions.even([], left.index, right.index)}
+              style={{ left: right.x - hit / 2 }}
             />
           );
         })}

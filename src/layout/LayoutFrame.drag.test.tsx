@@ -1,3 +1,7 @@
+import { currentLayout } from './useLayout';
+import { useTreeStore } from '../game/treeStore';
+import { record } from '../tree/testing';
+
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
@@ -214,4 +218,77 @@ describe('LayoutFrame rearranging', () => {
     expect(grip('candidates')).not.toBeNull();
     expect(grip('header')).not.toBeNull();
   });
+});
+
+it('resizes and evens the visible root columns across a folded tree, then restores its width', () => {
+  Object.assign(window, { innerWidth: 1600, innerHeight: 600 });
+  const layout = validateLayout({
+    version: 1,
+    root: {
+      type: 'split',
+      dir: 'row',
+      children: [
+        { type: 'board' },
+        ...['candidates', 'tree', 'header'].map((kind) => ({ type: 'panel', panel: { kind } })),
+      ],
+      weights: [0.1, 0.288, 0.18, 0.432],
+    },
+  });
+  useDeviceStore.getState().update({ layout });
+  useTreeStore.setState({ tree: record([null, 0]) });
+  renderWithGame(<LayoutFrame />);
+  const lines = () => [...document.querySelectorAll('[data-hairline]')];
+  const widths = () =>
+    [...document.querySelectorAll('aside')].map((el) => parseFloat(el.style.width));
+  expect(widths()).toEqual([400, 600]);
+  expect(lines()).toHaveLength(1);
+  fireEvent.pointerDown(lines()[0], { button: 0, pointerId: 1, clientX: 1000, clientY: 200 });
+  move(1050, 200);
+  up(1050, 200);
+  expect(widths()).toEqual([450, 550]);
+  expect(currentLayout().root.weights[2]).toBe(0.18);
+  fireEvent.doubleClick(lines()[0]);
+  expect(widths()).toEqual([500, 500]);
+  expect(currentLayout().root.weights[2]).toBe(0.18);
+  act(() => useTreeStore.setState({ tree: record([null, 0, 0]) }));
+  expect(widths()).toEqual([400, 200, 400]);
+  expect(lines()).toHaveLength(2);
+  expect(document.querySelectorAll('aside')[1]).toContainElement(panel('tree'));
+});
+
+it('evening a nested split skips the folded child in the saved weights', () => {
+  const layout = validateLayout({
+    version: 1,
+    root: {
+      type: 'split',
+      dir: 'row',
+      children: [
+        { type: 'board' },
+        {
+          type: 'split',
+          dir: 'column',
+          children: [
+            { type: 'panel', panel: { kind: 'header' } },
+            {
+              type: 'split',
+              dir: 'row',
+              children: ['candidates', 'tree', 'swings'].map((kind) => ({
+                type: 'panel',
+                panel: { kind },
+              })),
+              weights: [0.3, 0.2, 0.5],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  useDeviceStore.getState().update({ layout });
+  useTreeStore.setState({ tree: record([null]) });
+  renderWithGame(<LayoutFrame />);
+  const line = slotOf(panel('swings')).querySelector('[data-hairline]');
+  expect(line).toBeInTheDocument();
+  fireEvent.doubleClick(line!);
+  const side = currentLayout().root.children[1] as SplitNode;
+  expect((side.children[1] as SplitNode).weights).toEqual([0.4, 0.2, 0.4]);
 });

@@ -90,6 +90,7 @@ describe('M5 helpers', () => {
     cacheCapMb: 1024,
     saveAnalysis: false,
     jobOptions: {
+      scope: 'line',
       range: { kind: 'whole' },
       side: 'both',
       visits: 500,
@@ -224,8 +225,22 @@ describe('M5 helpers', () => {
 
 it('asks for the trend and unwraps its nodes', async () => {
   const nodes = [
-    { moveNumber: 0, mover: null, move: null, stats: null, loss: null },
     {
+      node: 0,
+      key: '0000000000000000',
+      toPlay: 'black' as const,
+      tryout: false,
+      moveNumber: 0,
+      mover: null,
+      move: null,
+      stats: null,
+      loss: null,
+    },
+    {
+      node: 1,
+      key: '0000000000000001',
+      toPlay: 'white' as const,
+      tryout: false,
       moveNumber: 1,
       mover: 'black' as const,
       move: { type: 'pass' as const },
@@ -261,6 +276,7 @@ it('api shapes match the protocol', async () => {
     return { type: 'ok' };
   });
   const options = {
+    scope: 'allBranches' as const,
     range: { kind: 'moves' as const, from: 3, to: 40 },
     side: 'black' as const,
     visits: 500,

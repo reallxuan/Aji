@@ -8,7 +8,7 @@
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
 import { finalCount } from './finalCount';
 import { createFakeGame, fakeAnalysis } from './fakeGame';
-import { fakeResult, playFakeJob, type FakeJob, type FakeResult } from './fakeJob';
+import { fakeResult, playFakeJob, type FakeJob } from './fakeJob';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
 import type { Backend } from '../transport/generated/Backend';
 import type { BackendRecommendation } from '../transport/generated/BackendRecommendation';
@@ -25,6 +25,8 @@ import type { NetworkList } from '../transport/generated/NetworkList';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
 import type { TaskKind } from '../transport/generated/TaskKind';
+import type { TrendNode } from '../transport/generated/TrendNode';
+import type { TrendStats } from '../transport/generated/TrendStats';
 import type { UiSettings } from '../transport/generated/UiSettings';
 import { TransportError } from '../transport/transport';
 
@@ -429,6 +431,7 @@ export function scenarioTransport(
     cacheCapMb: 1024,
     saveAnalysis: false,
     jobOptions: {
+      scope: 'line',
       range: { kind: 'whole' },
       side: 'both',
       visits: 500,
@@ -444,39 +447,97 @@ export function scenarioTransport(
 
   const transport = createFakeTransport((request) => handle(request)) as ScenarioTransport;
   transport.unhandled = unhandled;
-  const game = createFakeGame((event) => transport.emit(event));
+  const game = createFakeGame((event) => {
+    if (event.type === 'gameTrend') {
+      if (event.reason === 'reset') {
+        stopFakeJob();
+        results.clear();
+        feed?.clear();
+      }
+      transport.emit({ ...event, nodes: withResults(event.nodes) });
+    } else {
+      transport.emit(event);
+      if (event.type === 'gameSnapshot') feed?.updateAvailability(event.snapshot);
+    }
+  });
 
-  // The scripted whole-game job and the results it left, by line index.
-  const results = new Map<number, FakeResult>();
+  const results = new Map<string, TrendStats>();
   let fakeJob: FakeJob | null = null;
+  let jobSearching = false;
   const trendOf = () => {
     const reply = game({ type: 'gameTrend' });
     if (reply?.type !== 'trend') throw new Error('the fake game has no trend');
     return reply;
   };
+  function withResults(nodes: TrendNode[]): TrendNode[] {
+    let parent: TrendStats | null = null;
+    return nodes.map((node) => {
+      const stats = node.key ? (results.get(node.key) ?? null) : null;
+      const sign = node.mover === 'black' ? 1 : -1;
+      const loss =
+        stats && parent && node.mover
+          ? {
+              winrate: sign * (parent.winrate - stats.winrate) * 100,
+              score: sign * (parent.scoreLead - stats.scoreLead),
+            }
+          : null;
+      parent = stats;
+      return { ...node, stats, loss };
+    });
+  }
+  const analysedTrend = () => {
+    const trend = trendOf();
+    return { ...trend, nodes: withResults(trend.nodes) };
+  };
   const startFakeJob = (options: UiSettings['jobOptions']) => {
     fakeJob?.stop();
-    const { revision, nodes } = trendOf();
+    const main = game.mainLine();
+    const selected = options.scope === 'line' ? new Set(trendOf().nodes.map((n) => n.node)) : null;
+    const eligible = selected ? main.filter((n) => selected.has(n.node)) : main;
     fakeJob = playFakeJob({
-      count: nodes.length,
+      nodes: eligible,
       options,
-      revision,
       stepMs: Math.max(10, tick / 5),
-      emit: (event) => transport.emit(event),
-      onResult: (i, result) => results.set(i, result),
+      emit: (event) => {
+        transport.emit(event);
+        if (event.type === 'jobProgress') {
+          const searching =
+            event.progress.state === 'running' || event.progress.state === 'boosting';
+          if (jobSearching !== searching) {
+            jobSearching = searching;
+            feed?.updateAvailability();
+          }
+        }
+      },
+      onResult: (i, result) => {
+        const key = eligible[i].key;
+        if (!key) return;
+        results.set(key, result);
+        const { revision, nodes } = analysedTrend();
+        const patches = nodes.flatMap((node, lineIndex) =>
+          node.key === key || nodes[lineIndex - 1]?.key === key
+            ? [{ lineIndex, stats: node.stats, loss: node.loss }]
+            : [],
+        );
+        if (patches.length) transport.emit({ type: 'trendNodes', revision, nodes: patches });
+      },
     });
   };
   const stopFakeJob = () => {
     fakeJob?.stop();
     fakeJob = null;
   };
+  const feed = name === 'analysing' ? startFeed() : null;
   if (name === 'job-running' || name === 'job-done') {
-    game({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    game({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '', atEnd: false });
     if (name === 'job-running') {
       setTimeout(() => startFakeJob(settings.jobOptions), tick);
     } else {
-      const count = trendOf().nodes.length;
-      for (let i = 0; i < count; i++) results.set(i, fakeResult(i, 500));
+      const nodes = game.mainLine();
+      const count = nodes.length;
+      nodes.forEach((node, i) => {
+        if (node.key) results.set(node.key, fakeResult(i, 500));
+      });
       const done = {
         state: 'done' as const,
         done: count,
@@ -503,7 +564,6 @@ export function scenarioTransport(
       tick * 2,
     );
   };
-  const feed = name === 'analysing' ? startFeed() : null;
 
   /** The analysing scenario's engine: one search at a time, on the position on the board. */
   function startFeed() {
@@ -520,18 +580,30 @@ export function scenarioTransport(
       const reply = game({ type: 'gameSnapshot' });
       return reply?.type === 'game' ? reply.snapshot : null;
     };
+    // Off the main line (or on an illegal node), only a running job can keep the engine busy.
+    function updateAvailability(snapshot = current()): boolean {
+      if (snapshot?.positionKey && game.onMainLine()) return true;
+      key = null;
+      if (paused) return false;
+      if (jobSearching) {
+        if (engine.state !== 'analysing') setEngine({ state: 'analysing', version });
+      } else if (
+        engine.state === 'analysing' ||
+        (engine.state === 'ready' && engine.limitReached) ||
+        engine.state === 'paused'
+      ) {
+        setEngine({ state: 'ready', version, limitReached: false });
+      }
+      return false;
+    }
     const atLimit = () => {
       if (engine.state !== 'ready' || !engine.limitReached)
         setEngine({ state: 'ready', version, limitReached: true });
     };
     setInterval(() => {
       const snapshot = current();
-      if (paused || !snapshot) return;
+      if (paused || !snapshot?.positionKey || !updateAvailability(snapshot)) return;
       const k = snapshot.positionKey;
-      if (k === null) {
-        key = null;
-        return;
-      }
       if (k !== key) {
         key = k;
         previous = reached.get(k) ?? 0;
@@ -559,13 +631,24 @@ export function scenarioTransport(
       if (visits >= target(k)) atLimit();
     }, FEED_MS);
     return {
+      updateAvailability,
+      clear(position?: string) {
+        if (position === undefined) {
+          reached.clear();
+          targets.clear();
+        } else {
+          reached.delete(position);
+          targets.delete(position);
+        }
+        if (position === undefined || position === key) key = null;
+      },
       pause() {
         paused = true;
         setEngine({ state: 'paused', version });
       },
       resume() {
         paused = false;
-        setEngine({ state: 'analysing', version });
+        if (updateAvailability()) setEngine({ state: 'analysing', version });
       },
       continue() {
         if (key === null || settings.visitLimit === null) return;
@@ -792,12 +875,21 @@ export function scenarioTransport(
       case 'jobStop':
         stopFakeJob();
         return { type: 'ok' };
-      case 'cacheClear':
-        if (request.scope !== 'position') {
+      case 'cacheClear': {
+        if (request.scope === 'position') {
+          const reply = game({ type: 'gameSnapshot' });
+          if (reply?.type !== 'game' || reply.snapshot.positionKey === null) return { type: 'ok' };
+          results.delete(reply.snapshot.positionKey);
+          feed?.clear(reply.snapshot.positionKey);
+        } else {
           stopFakeJob();
           results.clear();
+          feed?.clear();
         }
+        const { revision, nodes } = analysedTrend();
+        transport.emit({ type: 'gameTrend', reason: 'reset', revision, nodes });
         return { type: 'ok' };
+      }
       case 'cacheStats':
         return {
           type: 'cacheStats',
@@ -812,19 +904,8 @@ export function scenarioTransport(
           throw new TransportError('scoreUnavailable', 'the scenarios have no ownership');
         return { type: 'score', ...finalCount(reply.snapshot, request.mode.dead) };
       }
-      case 'gameTrend': {
-        const trend = trendOf();
-        return {
-          ...trend,
-          nodes: trend.nodes.map((node, i) => ({ ...node, ...results.get(i) })),
-        };
-      }
-      case 'gameNew':
-      case 'gameOpen':
-      case 'gameSetRules':
-        stopFakeJob();
-        results.clear();
-        return game(request)!;
+      case 'gameTrend':
+        return analysedTrend();
       default: {
         const answer = game(request);
         if (answer) return answer;

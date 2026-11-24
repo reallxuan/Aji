@@ -1,3 +1,4 @@
+import { stopReplay } from '../game/replayStore';
 import { type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { moveKey, sameMove } from '../analysis/candidates';
@@ -35,6 +36,7 @@ function useLineWheel(
     latest.current = { step, length, setStep };
   });
   const stepLine = useCallback((forward: boolean) => {
+    stopReplay();
     const { step: now, length: end, setStep: set } = latest.current;
     if (now === null) return;
     const next = Math.min(end, Math.max(1, now + (forward ? 1 : -1)));
@@ -75,6 +77,7 @@ function useLineWheel(
  */
 export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
   const { t, i18n } = useTranslation();
+  const orientation = useViewStore((s) => s.orientation);
   const snapshot = useGameStore((s) => s.snapshot);
   const { shown } = useShownCandidates();
   const own = useSubBoardLine(rank);
@@ -142,10 +145,14 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
       <div
         ref={boardArea}
         data-subboard-board
+        onPointerDownCapture={stopReplay}
+        onClickCapture={stopReplay}
+        onContextMenuCapture={stopReplay}
         className="flex min-h-0 flex-1 items-start justify-center"
       >
         {side > 0 && (
           <BoardCanvas
+            orientation={orientation}
             onSwipeStep={stepLine}
             cssSize={side}
             boardSize={size}

@@ -1,12 +1,11 @@
 //! The dispatcher behind every transport. It knows nothing about Tauri, so the WebSocket server of
 //! Phase 3 can call the same [`handle`] with the same messages.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use aji_core::PositionKey;
-use aji_core::game::{AnalysisRules, estimate, final_score, suggested_dead};
+use aji_core::game::{AnalysisRules, PositionScope, estimate, final_score, suggested_dead};
 use aji_core::{Move, ScoringRule};
 use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles, Row};
 use aji_manager::Setup;
@@ -17,16 +16,16 @@ use aji_manager::install::{
 use base64::Engine as _;
 use tokio::sync::{Mutex, mpsc, watch};
 
-use crate::game::{GameSession, NavTarget, OpenError};
+use crate::game::{GameSession, OpenError, Refusal};
 use crate::protocol::{
-    AppEvent, AppInfo, CacheScope, ErrorCode, OsKind, ProtocolError, Request, Response,
-    RunningEngine, ScoreMode, ScoreView,
+    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, OsKind, ProtocolError, Request,
+    Response, RunningEngine, ScoreMode, ScoreView, TrendChange,
 };
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
     update_settings,
 };
-use crate::{follow, job, lizzie};
+use crate::{follow, lizzie};
 
 /// Facts about this installation, and the services, that requests may need.
 #[derive(Clone)]
@@ -86,8 +85,8 @@ pub fn running_engine(settings: &Settings, installed: &Installed) -> Option<Runn
 }
 
 /// Pushes the session's trend to every client. Called with the session locked.
-async fn push_trend(ctx: &AppContext, session: &GameSession) {
-    follow::trend_of(ctx, session, true).await;
+async fn push_trend(ctx: &AppContext, session: &GameSession, reason: TrendChange) {
+    follow::trend_of(ctx, session, Some(reason)).await;
 }
 
 /// Where pushed events go: the Tauri webview now, a WebSocket in Phase 3.
@@ -215,16 +214,37 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 .unwrap_or_default(),
         }),
         Request::SettingsSet { settings } => return set_settings(ctx, settings).await,
-        Request::GameNew { size } => return game_new(ctx, size).await,
-        Request::GameOpen { name, bytes } => return game_open(ctx, name, bytes).await,
-        Request::GameNavigate { to } => return game_navigate(ctx, to).await,
+        Request::GameNew {
+            size,
+            expected_revision,
+        } => return game_new(ctx, size, expected_revision).await,
+        Request::GameOpen {
+            expected_revision,
+            name,
+            bytes,
+            at_end,
+        } => return game_open(ctx, name, bytes, at_end, expected_revision).await,
+        Request::GameNavigate { to } => return update_game(ctx, |s| Ok(s.navigate(to))).await,
+        Request::GameEdit { edit } => return update_game(ctx, |s| s.edit(edit)).await,
+        Request::GameUndo => return update_game(ctx, |s| Ok(s.undo())).await,
+        Request::GameRedo => return update_game(ctx, |s| Ok(s.redo())).await,
+        Request::GameSaved {
+            game_revision,
+            edit_id,
+            utf8,
+        } => {
+            return update_game(ctx, |s| {
+                Ok(s.game_revision == game_revision && s.mark_saved(edit_id, utf8))
+            })
+            .await;
+        }
+        Request::GameTree => return Ok(Response::GameTree(ctx.game.lock().await.tree())),
         Request::GameTrend => {
             let session = ctx.game.lock().await;
-            let (revision, nodes) = follow::trend_of(ctx, &session, false).await;
+            let (revision, nodes) = follow::trend_of(ctx, &session, None).await;
             return Ok(Response::Trend { revision, nodes });
         }
         Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
-        Request::GameSetRules { rules } => return game_set_rules(ctx, rules).await,
         Request::GameSnapshot => {
             let session = ctx.game.lock().await;
             Ok(Response::Game {
@@ -232,9 +252,10 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 warnings: session.warnings().to_vec(),
             })
         }
-        Request::GameExport => return game_export(ctx).await,
+        Request::GameExport { options } => return game_export(ctx, options).await,
         Request::JobStart { options } => return follow::job_start(ctx, options).await,
         Request::JobStop => {
+            let _session = ctx.game.lock().await;
             follow::stop_job(ctx).await;
             Ok(Response::Ok)
         }
@@ -301,6 +322,29 @@ pub(crate) fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolErro
     }
 }
 
+impl From<Refusal> for ProtocolError {
+    fn from(refusal: Refusal) -> Self {
+        match refusal {
+            Refusal::Illegal(reason) => {
+                let detail = match reason {
+                    aji_core::game::Illegal::Occupied => "occupied",
+                    aji_core::game::Illegal::Suicide => "suicide",
+                    aji_core::game::Illegal::Ko => "ko",
+                    aji_core::game::Illegal::OffBoard => "offBoard",
+                };
+                ProtocolError {
+                    code: ErrorCode::GameIllegalMove,
+                    message: format!("illegal move: {detail}"),
+                    detail: Some(detail.into()),
+                }
+            }
+            Refusal::EndTryoutFirst => error(ErrorCode::GameEndTryoutFirst, "end try-out first"),
+            Refusal::NoSuchNode => error(ErrorCode::GameNoSuchNode, "no such node"),
+            Refusal::InvalidRules => error(ErrorCode::Internal, "komi out of range"),
+        }
+    }
+}
+
 impl From<OpenError> for ProtocolError {
     fn from(e: OpenError) -> Self {
         match e {
@@ -330,43 +374,29 @@ fn default_rules(ctx: &AppContext) -> AnalysisRules {
     ui_settings(ctx).default_rules
 }
 
-/// The file's LizzieYzy analysis as imported rows for the main line's positions (design 5.11).
-/// Values that do not read are skipped.
-fn lizzie_rows(session: &GameSession) -> Vec<Row> {
-    let size = session.size();
-    let points = usize::from(size.get()) * usize::from(size.get());
-    session
-        .line()
-        .iter()
-        .zip(session.lizzie())
-        .filter_map(|(node, text)| {
-            let data = aji_core::sgf::parse_lz(&text?, points)?;
-            let update = lizzie::update_from_lz(&data, node.key?, size, job::to_move(node)?);
-            Some(Row {
-                update,
-                imported: true,
-                katago_version: String::new(),
-            })
-        })
-        .collect()
-}
-
 /// Tells every client of the current node, then hands its position to the engine (or idles it
 /// on an illegal node). Called with the session locked, so engines and clients see nodes in the
 /// same order. The snapshot goes first: an engine that has analysed the position answers at once
 /// from its cache, and a client drops analysis for a position it has not been told of. An engine
 /// that cannot take the position (shut down) is logged: the board still moves.
-async fn publish(ctx: &AppContext, session: &GameSession, warnings: bool) -> Response {
+async fn publish(
+    ctx: &AppContext,
+    session: &GameSession,
+    warnings: bool,
+    send_position: bool,
+) -> Response {
     let snapshot = session.snapshot();
     ctx.events.emit(AppEvent::GameSnapshot {
-        snapshot: snapshot.clone(),
+        snapshot: Box::new(snapshot.clone()),
     });
-    let sent = match session.position() {
-        Some(position) => ctx.engine.set_position_next(position, session.next()).await,
-        None => ctx.engine.clear_position().await,
-    };
-    if let Err(e) = sent {
-        eprintln!("aji: the engine did not take the position: {e}");
+    if send_position {
+        let sent = match session.position() {
+            Some(position) => ctx.engine.set_position_next(position, session.next()).await,
+            None => ctx.engine.clear_position().await,
+        };
+        if let Err(e) = sent {
+            eprintln!("aji: the engine did not take the position: {e}");
+        }
     }
     Response::Game {
         snapshot: Box::new(snapshot),
@@ -384,13 +414,34 @@ fn unchanged(session: &GameSession) -> Response {
     }
 }
 
-async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError> {
+pub(crate) fn check_revision(
+    session: &GameSession,
+    expected: Option<u64>,
+) -> Result<(), ProtocolError> {
+    if expected.is_some_and(|revision| revision != session.revision()) {
+        return Err(error(
+            ErrorCode::GameChanged,
+            "the game changed after confirmation",
+        ));
+    }
+    Ok(())
+}
+
+async fn game_new(
+    ctx: &AppContext,
+    size: u8,
+    expected_revision: Option<u64>,
+) -> Result<Response, ProtocolError> {
     let next = GameSession::new(size, default_rules(ctx))?;
     let mut session = ctx.game.lock().await;
+    check_revision(&session, expected_revision)?;
     follow::stop_job(ctx).await;
     session.replace(next);
-    let reply = publish(ctx, &session, false).await;
-    push_trend(ctx, &session).await;
+    let reply = publish(ctx, &session, false, true).await;
+    ctx.events.emit(AppEvent::GameTree {
+        tree: session.tree(),
+    });
+    push_trend(ctx, &session, TrendChange::Reset).await;
     Ok(reply)
 }
 
@@ -400,32 +451,55 @@ async fn game_open(
     ctx: &AppContext,
     name: String,
     bytes: String,
+    at_end: bool,
+    expected_revision: Option<u64>,
 ) -> Result<Response, ProtocolError> {
     // Base64 is 4 bytes per 3; anything longer than this decodes to more than the limit.
     if bytes.len() > (crate::game::MAX_SGF_BYTES / 3 + 1) * 4 {
         return Err(OpenError::TooLarge.into());
     }
+    // Older clients can omit an approval revision. Their parse must still lose
+    // to an edit committed while the blocking task is running.
+    let expected_revision = match expected_revision {
+        Some(revision) => revision,
+        None => ctx.game.lock().await.revision(),
+    };
     let ui = ui_settings(ctx);
     let defaults = ui.default_rules;
     let (next, rows) = tokio::task::spawn_blocking(move || {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(bytes.as_bytes())
             .map_err(|e| error(ErrorCode::Internal, format!("bytes are not base64: {e}")))?;
-        let session = GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)?;
-        let rows = lizzie_rows(&session);
+        let mut rows = Vec::new();
+        let mut session =
+            GameSession::open_with_analysis(&name, &bytes, defaults, |data, key, size, player| {
+                rows.push(Row {
+                    update: lizzie::update_from_lz(data, key, size, player),
+                    imported: true,
+                    katago_version: String::new(),
+                });
+            })
+            .map_err(ProtocolError::from)?;
+        if at_end {
+            session.open_at_end();
+        }
         Ok::<_, ProtocolError>((session, rows))
     })
     .await
     .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
     let mut session = ctx.game.lock().await;
+    check_revision(&session, Some(expected_revision))?;
     follow::stop_job(ctx).await;
     session.replace(next);
     // Before the position goes out, so a stored row shows at once.
     if !rows.is_empty() {
         ctx.engine.import(rows).await;
     }
-    let reply = publish(ctx, &session, true).await;
-    push_trend(ctx, &session).await;
+    let reply = publish(ctx, &session, true, true).await;
+    ctx.events.emit(AppEvent::GameTree {
+        tree: session.tree(),
+    });
+    push_trend(ctx, &session, TrendChange::Reset).await;
     if ui.analyse_on_open
         && let Err(e) = follow::start_on(ctx, &session, ui.job_options).await
     {
@@ -434,32 +508,43 @@ async fn game_open(
     Ok(reply)
 }
 
-async fn game_navigate(ctx: &AppContext, to: NavTarget) -> Result<Response, ProtocolError> {
-    let mut session = ctx.game.lock().await;
-    Ok(match session.navigate(to) {
-        true => publish(ctx, &session, false).await,
-        false => unchanged(&session),
-    })
-}
-
-async fn game_set_rules(
+async fn update_game(
     ctx: &AppContext,
-    rules: Option<AnalysisRules>,
+    update: impl FnOnce(&mut GameSession) -> Result<bool, Refusal>,
 ) -> Result<Response, ProtocolError> {
     let mut session = ctx.game.lock().await;
-    match session.set_rules(rules) {
-        Ok(true) => {
-            follow::stop_job(ctx).await;
-            let reply = publish(ctx, &session, false).await;
-            push_trend(ctx, &session).await;
-            Ok(reply)
-        }
-        Ok(false) => Ok(unchanged(&session)),
-        Err(rules) => Err(error(
-            ErrorCode::Internal,
-            format!("komi out of range: {rules:?}"),
-        )),
+    let (line, tree) = (session.line_revision, session.tree_revision);
+    let current = session.current_node();
+    let rules = session.rules();
+    if !update(&mut session)? {
+        return Ok(unchanged(&session));
     }
+    let rules_changed = !rules.same_effect(&session.rules());
+    if rules_changed {
+        follow::stop_job(ctx).await;
+    }
+    let line_changed = session.line_revision != line;
+    let reply = publish(
+        ctx,
+        &session,
+        false,
+        current != session.current_node() || line_changed,
+    )
+    .await;
+    if session.tree_revision != tree {
+        ctx.events.emit(AppEvent::GameTree {
+            tree: session.tree(),
+        });
+    }
+    if line_changed {
+        let reason = if rules_changed {
+            TrendChange::Reset
+        } else {
+            TrendChange::LineChanged
+        };
+        push_trend(ctx, &session, reason).await;
+    }
+    Ok(reply)
 }
 
 /// Forgets results. `game` and `all` stop the job: its passes would only search them again.
@@ -472,7 +557,13 @@ async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, Pr
         },
         CacheScope::Game => {
             follow::stop_job(ctx).await;
-            ClearScope::Keys(session.line().iter().filter_map(|n| n.key).collect())
+            ClearScope::Keys(
+                session
+                    .analysis_keys(PositionScope::All)
+                    .into_iter()
+                    .map(|(_, key, _)| key)
+                    .collect(),
+            )
         }
         CacheScope::All => {
             follow::stop_job(ctx).await;
@@ -480,7 +571,7 @@ async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, Pr
         }
     };
     ctx.engine.clear(cleared).await;
-    push_trend(ctx, &session).await;
+    push_trend(ctx, &session, TrendChange::Reset).await;
     ctx.events.emit(AppEvent::CacheStatus {
         status: ctx.engine.cache_stats().await,
     });
@@ -547,34 +638,46 @@ async fn game_preview(ctx: &AppContext, moves: &[Move]) -> Response {
     }
 }
 
-/// With `saveAnalysis` on, every main-line node with a kept result carries it as LizzieYzy's
-/// `LZ` (design 5.11).
-async fn game_export(ctx: &AppContext) -> Result<Response, ProtocolError> {
+/// A save acknowledgement refers to exactly the edits in this export.
+async fn game_export(ctx: &AppContext, options: ExportOptions) -> Result<Response, ProtocolError> {
     let session = ctx.game.lock().await;
-    let lz = match ui_settings(ctx).save_analysis {
-        true => {
-            let line = session.line();
-            let keys = line
-                .iter()
-                .map(|n| n.key.unwrap_or(PositionKey(0)))
-                .collect();
-            let updates = ctx.engine.updates(keys).await;
-            line.iter()
-                .zip(updates)
-                .map(|(node, update)| {
-                    node.key?;
-                    let data =
-                        lizzie::lz_from_update(&update?, session.size(), job::to_move(node)?);
-                    Some(aji_core::sgf::write_lz(&data))
-                })
-                .collect()
+    let mut lz = HashMap::new();
+    if !options.clean && ui_settings(ctx).save_analysis {
+        let nodes = session.analysis_keys(session.export_scope(options.scope));
+        let keys = nodes.iter().map(|(_, key, _)| *key).collect();
+        let updates = ctx.engine.updates(keys).await;
+        for ((id, _, player), update) in nodes.into_iter().zip(updates) {
+            if let Some(update) = update {
+                let data = lizzie::lz_from_update(&update, session.size(), player);
+                lz.insert(id, aji_core::sgf::write_lz(&data));
+            }
         }
-        false => Vec::new(),
+    }
+    let (name, encoded) = session
+        .export_with(options, &lz)
+        .ok_or_else(|| error(ErrorCode::GameEmpty, "the record is empty"))?;
+    let (text, bytes) = if options.in_place {
+        if encoded.bytes.len() > crate::game::MAX_SGF_BYTES {
+            return Err(OpenError::TooLarge.into());
+        }
+        (
+            None,
+            Some(base64::engine::general_purpose::STANDARD.encode(encoded.bytes)),
+        )
+    } else {
+        (
+            Some(String::from_utf8(encoded.bytes).expect("Save As always encodes UTF-8")),
+            None,
+        )
     };
-    let (name, text) = session
-        .export_with(&lz)
-        .ok_or_else(|| error(ErrorCode::GameEmpty, "the game holds no move"))?;
-    Ok(Response::GameExport { name, text })
+    Ok(Response::GameExport {
+        name,
+        text,
+        bytes,
+        fell_back: encoded.fell_back,
+        edit_id: session.last_kept(),
+        game_revision: session.game_revision,
+    })
 }
 
 fn unknown_engine(engine: &str) -> ProtocolError {
@@ -1466,7 +1569,7 @@ mod tests {
     use aji_core::sgf::parse_sgf;
     use aji_core::{BoardSize, Komi, Move, Point};
 
-    use crate::game::{GameWarning, NavTarget};
+    use crate::game::{GameWarning, NavTarget, SessionEdit};
     use crate::protocol::GameSnapshot;
 
     const SAMSUNG: &[u8] =
@@ -1485,6 +1588,8 @@ mod tests {
         handle(
             ctx,
             Request::GameOpen {
+                expected_revision: None,
+                at_end: false,
                 name: name.into(),
                 bytes: b64(bytes),
             },
@@ -1501,6 +1606,706 @@ mod tests {
 
     async fn navigate(ctx: &AppContext, to: NavTarget) -> GameSnapshot {
         snap(handle(ctx, Request::GameNavigate { to }).await).0
+    }
+
+    async fn wire(ctx: &AppContext, request: serde_json::Value) -> Result<Response, ProtocolError> {
+        handle(ctx, serde_json::from_value(request).unwrap()).await
+    }
+
+    async fn exported(
+        ctx: &AppContext,
+        scope: &str,
+        clean: bool,
+        in_place: bool,
+    ) -> serde_json::Value {
+        let request = serde_json::json!({"type":"gameExport","options":{
+            "scope":scope,"clean":clean,"inPlace":in_place
+        }});
+        serde_json::to_value(wire(ctx, request).await.unwrap()).unwrap()
+    }
+
+    fn exported_bytes(reply: &serde_json::Value) -> Vec<u8> {
+        assert!(reply["text"].is_null());
+        base64::engine::general_purpose::STANDARD
+            .decode(reply["bytes"].as_str().unwrap())
+            .unwrap()
+    }
+
+    // Map each byte to one code point so equality compares the original value bytes.
+    // These fixtures have no multibyte character ending in an SGF delimiter.
+    async fn assert_in_place_values(bytes: &[u8], encoding: &str) {
+        let decoded = aji_core::sgf::decode(bytes);
+        assert_eq!(decoded.encoding, encoding);
+        assert!(!decoded.replaced);
+        let ctx = ctx();
+        assert!(
+            !snap(open(&ctx, "roundtrip.sgf", bytes).await)
+                .0
+                .save_as_first
+        );
+        let reply = exported(&ctx, "game", false, true).await;
+        assert_eq!(reply["fellBack"], false);
+        let parsed = |raw: &[u8]| {
+            let text: String = raw.iter().copied().map(char::from).collect();
+            parse_sgf(&text).unwrap().games
+        };
+        let mut original = parsed(bytes);
+        let root = &mut original[0].nodes[0];
+        for (id, value) in [("FF", "4"), ("GM", "1")] {
+            if root.get(id).is_none() {
+                root.push(id, [value.to_owned()]);
+            }
+        }
+        assert_eq!(original, parsed(&exported_bytes(&reply)));
+    }
+
+    #[tokio::test]
+    async fn in_place_export_checks_encoded_length_including_the_exact_limit() {
+        let ctx = ctx();
+        open(&ctx, "size.sgf", b"(;CA[UTF-8]C[x])").await.unwrap();
+        let initial = exported_bytes(&exported(&ctx, "game", false, true).await).len();
+        let limit = crate::game::MAX_SGF_BYTES;
+        // SGF escaping doubles each closing bracket in the comment.
+        for extra in [0, 1] {
+            let needed = limit - initial + 1 + extra;
+            let comment = "]".repeat(needed / 2) + &"x".repeat(needed % 2);
+            let edited = snap(
+                handle(
+                    &ctx,
+                    Request::GameEdit {
+                        edit: SessionEdit::SetComment {
+                            node: 0,
+                            text: Some(comment),
+                        },
+                    },
+                )
+                .await,
+            )
+            .0;
+            assert!(edited.changed);
+            let result = handle(
+                &ctx,
+                Request::GameExport {
+                    options: ExportOptions {
+                        in_place: true,
+                        ..Default::default()
+                    },
+                },
+            )
+            .await;
+            if extra == 0 {
+                let Ok(Response::GameExport {
+                    bytes: Some(bytes), ..
+                }) = result
+                else {
+                    panic!("the exact limit should be writable");
+                };
+                assert_eq!(
+                    base64::engine::general_purpose::STANDARD
+                        .decode(bytes)
+                        .unwrap()
+                        .len(),
+                    limit
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(ProtocolError {
+                        code: ErrorCode::SgfTooLarge,
+                        ..
+                    })
+                ));
+                assert!(ctx.game.lock().await.changed());
+                assert!(export_text(&ctx).await.len() > limit);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn gbk_values_round_trip_in_place() {
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/fox-chinese.sgf"),
+            "GBK",
+        )
+        .await;
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/gbk-ca-gb2312.sgf"),
+            "GBK",
+        )
+        .await;
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/gb18030-rare.sgf"),
+            "GBK",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_wrong_guess_still_round_trips_values() {
+        for bytes in [
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/translated-fujitsu-2008.sgf")
+                .as_slice(),
+            include_bytes!(
+                "../../crates/aji-core/tests/fixtures/sgf/translated-samsung-2009-1.sgf"
+            )
+            .as_slice(),
+            include_bytes!(
+                "../../crates/aji-core/tests/fixtures/sgf/translated-samsung-2009-2.sgf"
+            )
+            .as_slice(),
+        ] {
+            assert_in_place_values(bytes, "EUC-KR").await;
+        }
+    }
+
+    #[tokio::test]
+    async fn a_shift_jis_yen_sign_cannot_escape_the_following_node() {
+        let ctx = ctx();
+        // The original comment is the single Shift_JIS character U+65E5.
+        let original = b"(;CA[Shift_JIS]C[\x93\xfa];B[aa])";
+        open(&ctx, "japanese.sgf", original).await.unwrap();
+        wire(
+            &ctx,
+            serde_json::json!({
+                "type":"gameEdit", "edit":{"kind":"setComment","node":0,"text":"100¥"}
+            }),
+        )
+        .await
+        .unwrap();
+        let reply = exported(&ctx, "game", false, true).await;
+        let bytes = exported_bytes(&reply);
+        let decoded = aji_core::sgf::decode(&bytes);
+        let game = parse_sgf(&decoded.text).unwrap().games.remove(0);
+        assert_eq!(game.nodes[0].first("C"), Some("100¥"));
+        assert_eq!(game.nodes[1].first("B"), Some("aa"));
+        assert_eq!(game.nodes[0].first("CA"), Some("UTF-8"));
+        assert_eq!(reply["fellBack"], true);
+    }
+
+    #[tokio::test]
+    async fn the_source_is_utf8_after_save_as_or_a_fallback() {
+        for in_place in [true, false] {
+            let ctx = ctx();
+            open(&ctx, "gbk.sgf", GBK_NO_CA).await.unwrap();
+            if in_place {
+                wire(&ctx, serde_json::json!({"type":"gameEdit","edit":{"kind":"setComment","node":0,"text":"🎲"}})).await.unwrap();
+            }
+            let reply = exported(&ctx, "game", false, in_place).await;
+            assert_eq!(reply["fellBack"], in_place);
+            let text = if in_place {
+                String::from_utf8(exported_bytes(&reply)).unwrap()
+            } else {
+                reply["text"].as_str().unwrap().to_owned()
+            };
+            assert!(text.contains("CA[UTF-8]"));
+            wire(
+                &ctx,
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"gameRevision":reply["gameRevision"],"utf8":true}),
+            )
+            .await
+            .unwrap();
+            let again = exported(&ctx, "game", false, true).await;
+            assert_eq!(again["fellBack"], false);
+            assert_eq!(exported_bytes(&again), text.as_bytes());
+        }
+    }
+
+    #[tokio::test]
+    async fn branch_export_writes_the_path_and_the_line() {
+        let ctx = ctx();
+        open(
+            &ctx,
+            "branches.sgf",
+            b"(;SZ[9];B[aa](;W[bb])(;W[dd];B[ee]))(;GN[other])",
+        )
+        .await
+        .unwrap();
+        navigate(&ctx, NavTarget::Node(3)).await;
+        let reply = exported(&ctx, "branch", false, false).await;
+        let games = parse_sgf(reply["text"].as_str().unwrap()).unwrap().games;
+        assert_eq!(games.len(), 1);
+        assert!(games[0].variations.is_empty());
+        assert_eq!(
+            games[0].nodes[1..]
+                .iter()
+                .map(|n| &n.props[0].values[0][..])
+                .collect::<Vec<_>>(),
+            ["aa", "dd", "ee"]
+        );
+    }
+
+    #[tokio::test]
+    async fn clean_export_has_no_comments_or_analysis() {
+        let ctx = ctx();
+        open(
+            &ctx,
+            "branches.sgf",
+            b"(;SZ[9]LZOP[root]LZOP2[opaque root]C[root];B[aa](;W[bb]LZ[x]LZ2[opaque move])(;W[dd]C[y]XX[z]))(;GN[other]C[other]LZ2[opaque other])",
+        )
+        .await
+        .unwrap();
+        let reply = exported(&ctx, "game", true, false).await;
+        let text = reply["text"].as_str().unwrap();
+        assert!(!text.contains("C[") && !text.contains("LZ"), "{text}");
+        assert!(text.contains("XX[z]"));
+        let normal = export_text(&ctx).await;
+        for original in [
+            "LZOP2[opaque root]",
+            "LZ2[opaque move]",
+            "LZ2[opaque other]",
+            "C[other]",
+        ] {
+            assert!(normal.contains(original));
+        }
+        let branch = exported(&ctx, "branch", false, false).await;
+        let branch = branch["text"].as_str().unwrap();
+        assert!(branch.contains("LZOP2[opaque root]") && branch.contains("LZ2[opaque move]"));
+    }
+
+    #[tokio::test]
+    async fn an_edit_after_export_stays_unsaved() {
+        let ctx = ctx();
+        for i in 1..=7 {
+            wire(&ctx, serde_json::json!({"type":"gameEdit","edit":{"kind":"setComment","node":0,"text":i.to_string()}})).await.unwrap();
+        }
+        let reply = exported(&ctx, "game", false, false).await;
+        assert_eq!(reply["editId"], 7);
+        wire(
+            &ctx,
+            serde_json::json!({"type":"gameEdit","edit":{"kind":"pass"}}),
+        )
+        .await
+        .unwrap();
+        let s = snap(
+            wire(
+                &ctx,
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"gameRevision":reply["gameRevision"],"utf8":true}),
+            )
+            .await,
+        )
+        .0;
+        assert!(s.changed);
+    }
+
+    #[tokio::test]
+    async fn a_header_only_game_saves() {
+        let ctx = ctx();
+        open(&ctx, "header.sgf", b"(;GN[final])").await.unwrap();
+        assert!(export_text(&ctx).await.contains("GN[final]"));
+    }
+
+    #[tokio::test]
+    async fn flatten_checks_the_source_roots_analysis_before_export_and_reopen() {
+        let lz = "KataGo 51.3 800 -0.5 15.0\nmove D4 visits 700 winrate 4870 prior 2010 scoreMean -0.5 pv D4";
+        let input = format!("(;SZ[9]AB[aa]PL[W]LZOP[{lz}]LZOP2[opaque];W[bb])");
+        for write_analysis in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = ctx_in(dir.path(), None);
+            open(&ctx, "flatten.sgf", input.as_bytes()).await.unwrap();
+            save_analysis(&ctx, write_analysis).await;
+            let flatten = Request::GameEdit {
+                edit: SessionEdit::Flatten,
+            };
+            // Rebuilding an identical setup root preserves its analysis.
+            let unchanged = snap(handle(&ctx, flatten.clone()).await).0;
+            assert!(export_text(&ctx).await.contains("LZOP[KataGo "));
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            navigate(&ctx, NavTarget::Last).await;
+            let changed = snap(handle(&ctx, flatten).await).0;
+            assert_ne!(changed.position_key, unchanged.position_key);
+            let text = export_text(&ctx).await;
+            assert!(text.contains("LZOP2[opaque]"));
+            let again = ctx_in(&dir.path().join("reopen"), None);
+            let reopened = snap(open(&again, "copy.sgf", text.as_bytes()).await).0;
+            assert!(
+                again
+                    .engine
+                    .updates(vec![reopened.position_key.unwrap()])
+                    .await[0]
+                    .is_none()
+            );
+            assert!(!text.contains("LZOP["));
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            save_analysis(&ctx, false).await;
+            assert!(export_text(&ctx).await.contains(lz));
+        }
+    }
+
+    #[tokio::test]
+    async fn clearing_the_game_also_clears_attached_tryout_positions() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        for edit in [
+            SessionEdit::TryoutStart,
+            SessionEdit::Play { mv: Move::Pass },
+        ] {
+            handle(&ctx, Request::GameEdit { edit }).await.unwrap();
+        }
+        let scratch = ctx.game.lock().await.position().unwrap().key();
+        ctx.engine.import(vec![kept(scratch, 0.61, None)]).await;
+        assert!(ctx.engine.summaries(vec![scratch]).await[0].is_some());
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(ctx.engine.summaries(vec![scratch]).await[0].is_none());
+    }
+
+    #[tokio::test]
+    async fn edited_positions_do_not_reimport_stale_analysis_and_undo_restores_it() {
+        let lz = "KataGo 51.3 800 -0.5 15.0\nmove D4 visits 700 winrate 4870 prior 2010 scoreMean -0.5 pv D4";
+        let original = format!("(;SZ[9]RU[Chinese]LZOP[{lz}](;B[bb]LZ[opaque])(;B[dd]LZ[{lz}]))");
+        for write_analysis in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = ctx_in(dir.path(), None);
+            open(&ctx, "analysis.sgf", original.as_bytes())
+                .await
+                .unwrap();
+            let original_branch = navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap();
+            let mut replacement = ctx
+                .engine
+                .updates(vec![original_branch])
+                .await
+                .remove(0)
+                .unwrap();
+            navigate(&ctx, NavTarget::First).await;
+            save_analysis(&ctx, write_analysis).await;
+            let edited = snap(
+                handle(
+                    &ctx,
+                    Request::GameEdit {
+                        edit: SessionEdit::SetRules {
+                            rules: Some(AnalysisRules::JapaneseKorean),
+                        },
+                    },
+                )
+                .await,
+            )
+            .0;
+            let edited_root = edited.position_key.unwrap();
+            let edited_branch = navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap();
+            let text = export_text(&ctx).await;
+            let again = ctx_in(&dir.path().join("reopen"), None);
+            open(&again, "export.sgf", text.as_bytes()).await.unwrap();
+            assert!(
+                again
+                    .engine
+                    .updates(vec![edited_root, edited_branch])
+                    .await
+                    .iter()
+                    .all(Option::is_none)
+            );
+            assert!(text.contains("LZ[opaque]"));
+            assert!(!text.contains("LZOP[") && !text.contains(lz));
+
+            // A fresh cached result for the edited key takes precedence on an analysis export.
+            replacement.position = edited_branch;
+            replacement.winrate = 0.75;
+            replacement.root_visits = 600;
+            ctx.engine
+                .import(vec![Row {
+                    update: replacement,
+                    imported: false,
+                    katago_version: "test".into(),
+                }])
+                .await;
+            let text = export_text(&ctx).await;
+            let game = parse_sgf(&text).unwrap().games.remove(0);
+            let written = game.variations[1].nodes[0].first("LZ");
+            assert_eq!(written.is_some(), write_analysis);
+            if let Some(written) = written {
+                assert!(written.starts_with("KataGo 75.0 600"));
+            }
+
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            save_analysis(&ctx, false).await;
+            let text = export_text(&ctx).await;
+            let restored = parse_sgf(&text).unwrap().games.remove(0);
+            assert_eq!(restored.nodes[0].first("LZOP"), Some(lz));
+            assert_eq!(restored.variations[1].nodes[0].first("LZ"), Some(lz));
+
+            // Inserting above the branches changes their positions while the root still matches.
+            navigate(&ctx, NavTarget::First).await;
+            handle(
+                &ctx,
+                Request::GameEdit {
+                    edit: SessionEdit::InsertMove {
+                        color: aji_core::Color::Black,
+                        mv: Move::Pass,
+                    },
+                },
+            )
+            .await
+            .unwrap();
+            let text = export_text(&ctx).await;
+            let inserted = parse_sgf(&text).unwrap().games.remove(0);
+            assert_eq!(inserted.nodes[0].first("LZOP"), Some(lz));
+            assert_eq!(inserted.variations[1].nodes[0].first("LZ"), None);
+        }
+    }
+
+    #[tokio::test]
+    async fn lz_on_branch_nodes_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[bb])(;B[dd]))")
+            .await
+            .unwrap();
+        let key = navigate(&ctx, NavTarget::Node(2))
+            .await
+            .position_key
+            .unwrap();
+        let mut row = kept(key, 0.42, None);
+        row.update.candidates.push(aji_engine::Candidate {
+            mv: Move::Pass,
+            order: 0,
+            visits: 600,
+            winrate: 0.42,
+            score_lead: 0.0,
+            prior: 0.1,
+            pv: vec![Move::Pass],
+        });
+        ctx.engine.import(vec![row]).await;
+        save_analysis(&ctx, true).await;
+        let text = export_text(&ctx).await;
+        let game = parse_sgf(&text).unwrap().games.remove(0);
+        assert!(game.variations[0].nodes[0].get("LZ").is_none());
+        assert!(game.variations[1].nodes[0].get("LZ").is_some());
+        let other = ctx_in(&dir.path().join("again"), None);
+        open(&other, "again.sgf", text.as_bytes()).await.unwrap();
+        assert_eq!(
+            other.engine.updates(vec![key]).await[0]
+                .as_ref()
+                .unwrap()
+                .root_visits,
+            600
+        );
+    }
+
+    #[tokio::test]
+    async fn edit_undo_redo_answer_with_snapshots() {
+        use serde_json::json;
+        let ctx = ctx();
+        let run = |request| wire(&ctx, request);
+        let play = snap(run(json!({"type":"gameEdit","edit":{"kind":"pass"}})).await).0;
+        assert_eq!((play.move_number, play.last_move), (1, Some(Move::Pass)));
+        assert!(play.can_undo);
+        let undone = snap(run(json!({"type":"gameUndo"})).await).0;
+        assert_eq!(undone.move_number, 0);
+        assert!(undone.can_redo);
+        let redone = snap(run(json!({"type":"gameRedo"})).await).0;
+        assert_eq!(redone.move_number, 1);
+        assert!(redone.changed);
+    }
+
+    #[tokio::test]
+    async fn tree_event_only_on_structure_changes() {
+        use serde_json::json;
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "branches.sgf", b"(;SZ[9];B[aa](;W[bb])(;W[cc]))")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Node(3)).await;
+        let edit = |text| {
+            wire(
+                &ctx,
+                json!({"type":"gameEdit","edit":{"kind":"setComment","node":3,"text":text}}),
+            )
+        };
+        edit("one").await.unwrap();
+        edit("two").await.unwrap();
+        wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
+        wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
+        wire(&ctx, json!({"type":"gameRedo"})).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
+        let events: Vec<_> = recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .collect();
+        let trees: Vec<_> = events
+            .iter()
+            .filter(|e| e["type"] == "gameTree")
+            .map(|e| &e["tree"])
+            .collect();
+        assert_eq!(
+            trees
+                .iter()
+                .map(|t| t["revision"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            [1, 2, 3, 4, 5]
+        );
+        assert_eq!(trees[1]["nodes"][3]["flags"], 1);
+        let lines: Vec<_> = events
+            .iter()
+            .filter(|e| e["type"] == "gameTrend")
+            .map(|e| e["revision"].as_u64().unwrap())
+            .collect();
+        assert_eq!(lines, [1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn rules_edit_stops_the_job() {
+        use serde_json::json;
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        for request in [
+            json!({"type":"gameEdit","edit":{"kind":"setRules","rules":{"kind":"japaneseKorean"}}}),
+            json!({"type":"gameUndo"}),
+            json!({"type":"gameRedo"}),
+        ] {
+            started(&ctx).await;
+            wire(&ctx, request).await.unwrap();
+            assert!(!ctx.follow.lock().unwrap().flow.is_running());
+        }
+    }
+
+    #[tokio::test]
+    async fn an_illegal_move_is_refused_with_its_reason() {
+        use serde_json::json;
+        let ctx = ctx();
+        open(&ctx, "occupied.sgf", b"(;SZ[9]AB[aa])").await.unwrap();
+        let request =
+            json!({"type":"gameEdit","edit":{"kind":"play","mv":{"type":"play","x":0,"y":0}}});
+        let error = serde_json::to_value(wire(&ctx, request).await.unwrap_err()).unwrap();
+        assert_eq!(error["code"], "gameIllegalMove");
+        assert_eq!(error["detail"], "occupied");
+    }
+
+    #[tokio::test]
+    async fn an_edit_while_the_open_request_is_pending_wins_before_replacement() {
+        let ctx = ctx();
+        let mut game = ctx.game.lock().await;
+        let old_revision = game.revision();
+        let opening = game_open(
+            &ctx,
+            "later.sgf".into(),
+            b64(SMALL.as_bytes()),
+            false,
+            Some(old_revision),
+        );
+        tokio::pin!(opening);
+        // Poll the real open future into the parser while we hold the commit lock.
+        tokio::select! {
+            biased;
+            result = &mut opening => panic!("open completed with the old session locked: {result:?}"),
+            () = tokio::task::yield_now() => {}
+        }
+        game.edit(SessionEdit::Pass).unwrap();
+        drop(game);
+        assert_eq!(opening.await.unwrap_err().code, ErrorCode::GameChanged);
+        let snapshot = ctx.game.lock().await.snapshot();
+        assert_eq!(snapshot.move_number, 1);
+        assert!(snapshot.changed);
+        assert!(snapshot.name.is_none());
+    }
+
+    #[tokio::test]
+    async fn open_at_end_lands_on_the_last_move() {
+        use serde_json::json;
+        let ctx = ctx();
+        let request = json!({"type":"gameOpen","name":"end.sgf","bytes":b64(b"(;SZ[9];B[aa];W[];C[end]"),"atEnd":true});
+        let s = snap(wire(&ctx, request).await).0;
+        assert_eq!((s.line_index, s.last_move), (2, Some(Move::Pass)));
+        assert!(s.save_as_first);
+        let s = snap(
+            wire(
+                &ctx,
+                json!({"type":"gameSaved","editId":0,"gameRevision":s.game_revision,"utf8":true}),
+            )
+            .await,
+        )
+        .0;
+        assert!(!s.save_as_first);
+    }
+
+    #[tokio::test]
+    #[ignore = "release performance budget"]
+    async fn tree_payload_for_ten_thousand_nodes_is_fast() {
+        use serde_json::json;
+        let ctx = ctx();
+        let branch = format!("({})", ";B[];W[]".repeat(10));
+        let text = format!("(;SZ[19]{})", branch.repeat(500));
+        open(&ctx, "tree.sgf", text.as_bytes()).await.unwrap();
+        let now = std::time::Instant::now();
+        let tree = wire(&ctx, json!({"type":"gameTree"})).await.unwrap();
+        let elapsed = now.elapsed();
+        let value = serde_json::to_value(tree).unwrap();
+        assert_eq!(value["nodes"].as_array().unwrap().len(), 10001);
+        eprintln!("10,001-node tree payload: {elapsed:?}");
+        assert!(elapsed < std::time::Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    #[ignore = "release performance budget"]
+    async fn edit_undo_redo_on_three_hundred_moves() {
+        let ctx = ctx();
+        let source = parse_sgf(std::str::from_utf8(SAMSUNG).unwrap()).unwrap();
+        let moves = &source.games[0].nodes[1..];
+        let mut fixture = String::from("(;SZ[19]");
+        for i in 0..300 {
+            if i % 6 == 0 {
+                fixture.push('(');
+            }
+            let color = if i % 2 == 0 { "B" } else { "W" };
+            let point = moves
+                .get(i)
+                .and_then(|node| node.first(color))
+                .unwrap_or("");
+            fixture.push_str(&format!(";{color}[{point}]"));
+        }
+        fixture.push_str(&")(;B[])".repeat(50));
+        fixture.push(')');
+        open(&ctx, "performance.sgf", fixture.as_bytes())
+            .await
+            .unwrap();
+        let last = navigate(&ctx, NavTarget::Last).await;
+        assert_eq!(last.line_length, 300);
+        let tree = ctx.game.lock().await.tree();
+        assert_eq!(tree.nodes.len(), 351);
+        for request in [
+            Request::GameEdit {
+                edit: SessionEdit::Pass,
+            },
+            Request::GameUndo,
+            Request::GameRedo,
+        ] {
+            let now = std::time::Instant::now();
+            let s = snap(handle(&ctx, request.clone()).await).0;
+            let elapsed = now.elapsed();
+            assert_eq!(
+                s.move_number,
+                if request == Request::GameUndo {
+                    300
+                } else {
+                    301
+                }
+            );
+            eprintln!("{request:?} on 300 moves / 50 variations: {elapsed:?}");
+            assert!(elapsed < std::time::Duration::from_millis(50));
+        }
     }
 
     /// The game the tests opened, built again, to compute the positions the engine should get.
@@ -1536,10 +2341,11 @@ mod tests {
         let (s, warnings) = snap(open(&ctx, "small.sgf", SMALL.as_bytes()).await);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(s.name.as_deref(), Some("small"));
-        assert_eq!((s.size, s.move_number, s.main_line_length), (9, 0, 4));
+        assert_eq!((s.size, s.move_number, s.line_length), (9, 0, 4));
         assert!(s.at_start && !s.at_end && s.has_moves);
         let game = reference(SMALL.as_bytes());
         let rules = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(7.0).unwrap(),
             scoring: Scoring::Area,
         };
@@ -1568,7 +2374,17 @@ mod tests {
         let s = navigate(&ctx, NavTarget::Next).await;
         assert_eq!(s.move_number, 2);
 
-        let Ok(Response::GameExport { name, text }) = handle(&ctx, Request::GameExport).await
+        let Ok(Response::GameExport {
+            name,
+            text: Some(text),
+            ..
+        }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
         else {
             panic!("expected an export");
         };
@@ -1612,6 +2428,59 @@ mod tests {
         assert!(nodes.iter().all(|n| n.stats.is_none()), "no engine ran");
     }
 
+    #[tokio::test]
+    async fn trend_includes_replayed_side_and_job_eligibility() {
+        use serde_json::json;
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "setup.sgf", b"(;SZ[9]AB[aa]PL[W];W[bb];C[note])")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Last).await;
+        wire(
+            &ctx,
+            json!({"type":"gameEdit","edit":{"kind":"tryoutStart"}}),
+        )
+        .await
+        .unwrap();
+        wire(
+            &ctx,
+            json!({"type":"gameEdit","edit":{"kind":"play","mv":{"type":"play","x":3,"y":3}}}),
+        )
+        .await
+        .unwrap();
+        let reply = wire(&ctx, json!({"type":"gameTrend"})).await.unwrap();
+        let value = serde_json::to_value(reply).unwrap();
+        let nodes = value["nodes"].as_array().unwrap();
+        let sides: Vec<_> = nodes.iter().map(|n| (&n["toPlay"], &n["tryout"])).collect();
+        assert_eq!(
+            serde_json::to_value(sides).unwrap(),
+            json!([
+                ["white", false],
+                ["black", false],
+                ["black", false],
+                ["white", true]
+            ])
+        );
+        let scratch = nodes[3]["node"].clone();
+        for (request, expected_tryout) in [
+            (
+                json!({"type":"gameEdit","edit":{"kind":"tryoutKeep","node":scratch}}),
+                false,
+            ),
+            (json!({"type":"gameUndo"}), true),
+            (json!({"type":"gameRedo"}), false),
+        ] {
+            recorded.0.lock().unwrap().clear();
+            wire(&ctx, request).await.unwrap();
+            let events = recorded.0.lock().unwrap();
+            assert!(events.iter().any(|event| matches!(event,
+                AppEvent::GameTrend{nodes,..} if nodes[3].tryout == expected_tryout
+            )));
+        }
+    }
+
     fn trend_events(recorded: &Recorded) -> usize {
         recorded
             .0
@@ -1634,17 +2503,28 @@ mod tests {
         assert_eq!(trend_events(&recorded), 1);
         handle(
             &ctx,
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::Custom {
-                    komi: Komi::new(0.5).unwrap(),
-                    scoring: Scoring::Area,
-                }),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::Custom {
+                        details: None,
+                        komi: Komi::new(0.5).unwrap(),
+                        scoring: Scoring::Area,
+                    }),
+                },
             },
         )
         .await
         .unwrap();
         assert_eq!(trend_events(&recorded), 2);
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(trend_events(&recorded), 3);
     }
 
@@ -1699,14 +2579,17 @@ mod tests {
         open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
         navigate(&ctx, NavTarget::Next).await;
         let custom = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(7.0).unwrap(),
             scoring: Scoring::Territory,
         };
         let s = snap(
             handle(
                 &ctx,
-                Request::GameSetRules {
-                    rules: Some(custom),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules {
+                        rules: Some(custom),
+                    },
                 },
             )
             .await,
@@ -1719,9 +2602,18 @@ mod tests {
         let game = reference(SMALL.as_bytes());
         let expected = game.position_at(game.main_line()[1], &custom).unwrap();
         assert_eq!(expected.komi, Komi::new(7.0).unwrap());
-        assert_eq!(expected.rules, aji_core::Rules::Japanese);
+        assert_eq!(expected.rules, aji_core::Rules::Japanese.into());
         assert_eq!(ctx.engine.status().position, Some(expected.key()));
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert!(
@@ -1729,10 +2621,28 @@ mod tests {
             "{text}"
         );
 
-        let s = snap(handle(&ctx, Request::GameSetRules { rules: None }).await).0;
+        let s = snap(
+            handle(
+                &ctx,
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules { rules: None },
+                },
+            )
+            .await,
+        )
+        .0;
         assert!(!s.rules.changed);
         assert_eq!(s.rules.current, s.rules.from_file);
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert!(
@@ -1741,12 +2651,18 @@ mod tests {
         );
 
         let wild = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(151.0).unwrap(),
             scoring: Scoring::Area,
         };
-        let error = handle(&ctx, Request::GameSetRules { rules: Some(wild) })
-            .await
-            .unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules { rules: Some(wild) },
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::Internal);
     }
 
@@ -1760,23 +2676,46 @@ mod tests {
             r#"{"defaultRules":{"kind":"japaneseKorean"}}"#,
         )
         .unwrap();
-        let s = snap(handle(&ctx, Request::GameNew { size: 13 }).await).0;
+        let s = snap(
+            handle(
+                &ctx,
+                Request::GameNew {
+                    size: 13,
+                    expected_revision: None,
+                },
+            )
+            .await,
+        )
+        .0;
         assert_eq!(s.size, 13);
         assert_eq!(s.rules.current, AnalysisRules::JapaneseKorean);
         assert!(!s.has_moves && s.at_start && s.at_end);
         assert_eq!(s.name, None);
         let position = aji_core::Position::empty(
             BoardSize::new(13).unwrap(),
-            aji_core::Rules::Japanese,
+            aji_core::Rules::Japanese.into(),
             Komi::new(6.5).unwrap(),
         );
         assert_eq!(ctx.engine.status().position, Some(position.key()));
-        let error = handle(&ctx, Request::GameNew { size: 4 })
-            .await
-            .unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameNew {
+                size: 4,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::SgfUnsupportedSize);
         assert_eq!(snap(handle(&ctx, Request::GameSnapshot).await).0.size, 13);
-        let error = handle(&ctx, Request::GameExport).await.unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::GameEmpty);
     }
 
@@ -1806,6 +2745,8 @@ mod tests {
         let error = handle(
             &ctx,
             Request::GameOpen {
+                expected_revision: None,
+                at_end: false,
                 name: "bad.sgf".into(),
                 bytes: "not base64!".into(),
             },
@@ -1831,7 +2772,16 @@ mod tests {
         let (s, warnings) = snap(open(&ctx, "two.sgf", COLLECTION).await);
         assert_eq!(warnings, [GameWarning::ExtraGames { count: 1 }]);
         assert_eq!(s.info.game_name.as_deref(), Some("first"));
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert_eq!(parse_sgf(&text).unwrap().games.len(), 2, "{text}");
@@ -1870,13 +2820,23 @@ mod tests {
         navigate(&ctx, NavTarget::Previous).await;
         handle(
             &ctx,
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::Chinese),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::Chinese),
+                },
             },
         )
         .await
         .unwrap();
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         handle(&ctx, Request::GameSnapshot).await.unwrap();
         let revisions = game_events(&ctx, &recorded);
         assert_eq!(revisions.len(), 5, "{revisions:?}");
@@ -1954,7 +2914,10 @@ mod tests {
         for (value, request) in [
             (
                 json!({"type": "gameNew", "size": 9}),
-                Request::GameNew { size: 9 },
+                Request::GameNew {
+                    size: 9,
+                    expected_revision: None,
+                },
             ),
             (
                 json!({"type": "gameNavigate", "to": "previous"}),
@@ -1969,16 +2932,21 @@ mod tests {
                 },
             ),
             (
-                json!({"type": "gameSetRules", "rules": null}),
-                Request::GameSetRules { rules: None },
+                json!({"type":"gameEdit","edit":{"kind":"setRules","rules":null}}),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules { rules: None },
+                },
             ),
             (
-                json!({"type": "gameSetRules", "rules": {"kind": "custom", "komi": 7, "scoring": "area"}}),
-                Request::GameSetRules {
-                    rules: Some(AnalysisRules::Custom {
-                        komi: Komi::new(7.0).unwrap(),
-                        scoring: Scoring::Area,
-                    }),
+                json!({"type":"gameEdit","edit":{"kind":"setRules","rules":{"kind":"custom","komi":7,"scoring":"area"}}}),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules {
+                        rules: Some(AnalysisRules::Custom {
+                            details: None,
+                            komi: Komi::new(7.0).unwrap(),
+                            scoring: Scoring::Area,
+                        }),
+                    },
                 },
             ),
             (
@@ -2085,8 +3053,8 @@ mod tests {
     async fn started(ctx: &AppContext) -> u64 {
         let session = ctx.game.lock().await;
         let plan = ctx.follow.lock().unwrap().flow.start(
-            session.line(),
-            session.index(),
+            session.job_nodes(crate::job::JobScope::Line),
+            session.position().map(|p| p.key()),
             JobOptions::default(),
         );
         plan.id
@@ -2102,6 +3070,279 @@ mod tests {
             working: None,
             queued: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn trend_follows_the_new_line_after_entering_a_variation() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "fork.sgf", b"(;SZ[9];B[aa](;W[bb];B[cc])(;W[dd]))")
+            .await
+            .unwrap();
+        let old = line_keys(&ctx).await;
+        let switched = navigate(&ctx, NavTarget::Node(4)).await;
+        let key = switched.position_key.unwrap();
+        assert!(follow::stored(&ctx, key, trend_stats(0.7)));
+        assert!(follow::stored(&ctx, old[1], trend_stats(0.5)));
+        assert!(!follow::stored(&ctx, old[2], trend_stats(0.1)));
+        follow::flush(&ctx).await;
+        let (revision, changed) = trend_node_events(&recorded).pop().unwrap();
+        assert_eq!(revision, switched.line_revision);
+        assert!((changed.last().unwrap().loss.unwrap().winrate.abs() - 20.0).abs() < 0.001);
+        let events = recorded.0.lock().unwrap();
+        let nodes = events
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                AppEvent::GameTrend { nodes, .. } => Some(nodes),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(serde_json::to_value(nodes).unwrap()[2]["node"], 4);
+        assert_eq!(
+            serde_json::to_value(nodes).unwrap()[2]["key"],
+            key.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn streamed_result_during_line_rebuild_reaches_the_new_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "fork.sgf", b"(;SZ[9];B[aa](;W[bb])(;W[dd]))")
+            .await
+            .unwrap();
+        let mut session = ctx.game.lock().await;
+        assert!(session.navigate(NavTarget::Node(3)));
+        let key = session.position().unwrap().key();
+        ctx.engine.import(vec![kept(key, 0.7, None)]).await;
+        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
+        send.send(aji_engine::EngineEvent::Stored {
+            key,
+            stats: trend_stats(0.7),
+        })
+        .unwrap();
+        drop(send);
+        let mut receiver = Box::pin(follow::follow_engine(ctx.clone(), recv));
+        // Poll the real event handler while the session is switching lines.
+        let finished = tokio::time::timeout(std::time::Duration::from_millis(1), &mut receiver)
+            .await
+            .is_ok();
+        let revision = session.line_revision;
+        push_trend(&ctx, &session, TrendChange::LineChanged).await;
+        drop(session);
+        if !finished {
+            receiver.await;
+        }
+        follow::flush(&ctx).await;
+        let (at, updates) = trend_node_events(&recorded).pop().unwrap();
+        assert_eq!(at, revision);
+        assert_eq!(updates.last().unwrap().stats, Some(trend_stats(0.7)));
+    }
+
+    #[tokio::test]
+    async fn delayed_stored_events_do_not_restore_cleared_stats_or_losses() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut ctx, recorded) = nine(dir.path()).await;
+        let keys = line_keys(&ctx).await;
+        let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
+        let position = ctx.game.lock().await.position().unwrap();
+        ctx.engine = Engine::spawn(
+            None,
+            position,
+            aji_engine::EngineOptions::default(),
+            forward_engine_events(ctx.events.clone(), send),
+        );
+        ctx.engine
+            .import(vec![kept(keys[0], 0.5, None), kept(keys[1], 0.7, None)])
+            .await;
+        recv.close();
+        assert_eq!(recv.len(), 2);
+
+        // The engine's two stored notifications are already queued when the clear runs.
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(ctx.engine.summaries(keys[..2].to_vec()).await, [None, None]);
+        follow::follow_engine(ctx.clone(), recv).await;
+        follow::flush(&ctx).await;
+        assert!(
+            trend_node_events(&recorded)
+                .iter()
+                .flat_map(|(_, nodes)| nodes)
+                .all(|node| node.stats.is_none() && node.loss.is_none())
+        );
+    }
+
+    #[tokio::test]
+    async fn private_trend_read_preserves_other_clients_pending_updates() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let key = line_keys(&ctx).await[1];
+        ctx.engine.import(vec![kept(key, 0.7, None)]).await;
+        assert!(follow::stored(&ctx, key, trend_stats(0.7)));
+        let Ok(Response::Trend { revision, nodes }) = handle(&ctx, Request::GameTrend).await else {
+            panic!("expected trend")
+        };
+        assert_eq!(nodes[1].stats, Some(trend_stats(0.7)));
+        follow::flush(&ctx).await;
+        assert!(trend_node_events(&recorded).iter().any(|(at, nodes)| {
+            *at == revision
+                && nodes
+                    .iter()
+                    .any(|node| node.line_index == 1 && node.stats == Some(trend_stats(0.7)))
+        }));
+    }
+
+    #[tokio::test]
+    async fn trend_reason_distinguishes_navigation_from_resets() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[aa])(;B[bb]))")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Node(2)).await;
+        handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::All,
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
+        let reasons: Vec<_> = recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|event| {
+                let value = serde_json::to_value(event).unwrap();
+                (value["type"] == "gameTrend").then(|| value["reason"].clone())
+            })
+            .collect();
+        assert_eq!(
+            reasons,
+            ["reset", "reset", "lineChanged", "reset", "reset", "reset"]
+        );
+    }
+
+    #[tokio::test]
+    async fn edits_do_not_stop_the_job_but_rules_do() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        let id = started(&ctx).await;
+        let original = line_keys(&ctx).await;
+        for edit in [
+            SessionEdit::DeleteFrom { node: 2 },
+            SessionEdit::Play { mv: Move::Pass },
+        ] {
+            handle(&ctx, Request::GameEdit { edit }).await.unwrap();
+            let follow = follow::lock(&ctx);
+            assert_eq!(follow.flow.plan_id(), Some(id));
+            assert_eq!(
+                follow
+                    .flow
+                    .line()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|n| n.key)
+                    .collect::<Vec<_>>(),
+                original
+            );
+        }
+        handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!follow::lock(&ctx).flow.is_running());
+    }
+
+    #[tokio::test]
+    async fn a_rules_change_wins_over_a_finishing_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let id = started(&ctx).await;
+        let mut session = ctx.game.lock().await;
+        session
+            .edit(SessionEdit::SetRules {
+                rules: Some(AnalysisRules::JapaneseKorean),
+            })
+            .unwrap();
+        let mut finishing = Box::pin(follow::on_job(&ctx, status(id, JobRun::Done, 5, 5)));
+        // Deliver the final status in the interval between applying the edit and stopping its job.
+        let finished = tokio::time::timeout(std::time::Duration::from_millis(10), &mut finishing)
+            .await
+            .is_ok();
+        follow::stop_job(&ctx).await;
+        drop(session);
+        if !finished {
+            finishing.await;
+        }
+        let states: Vec<_> = progress_events(&recorded)
+            .into_iter()
+            .map(|progress| progress.state)
+            .collect();
+        assert_eq!(states, [JobState::Stopped]);
+    }
+
+    #[tokio::test]
+    async fn long_line_service_open_keeps_trend_and_boards_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        // A real 20 MiB record with a long selected line at the root and 500 variations.
+        let mut sgf = String::from("(;SZ[19]");
+        let comment = "x".repeat(2080);
+        for _ in 0..5000 {
+            for color in ["B", "W"] {
+                sgf.push(';');
+                sgf.push_str(color);
+                sgf.push_str("[]C[");
+                sgf.push_str(&comment);
+                sgf.push(']');
+            }
+        }
+        sgf.push_str(&"(;B[aa])".repeat(499));
+        sgf.push_str("(;B[bb]C[");
+        sgf.extend(std::iter::repeat_n(
+            'y',
+            crate::game::MAX_SGF_BYTES - sgf.len() - 3,
+        ));
+        sgf.push_str("]))");
+        assert_eq!(sgf.len(), 20 * 1024 * 1024);
+        let reply = open(&ctx, "long.sgf", sgf.as_bytes()).await.unwrap();
+        assert!(matches!(reply, Response::Game { snapshot, .. } if snapshot.at_start));
+        assert_eq!(follow::trend_length(&ctx), 10_002);
+        assert!(ctx.game.lock().await.cached_states() <= 1 + 4096);
     }
 
     #[tokio::test]
@@ -2170,13 +3411,20 @@ mod tests {
         let (ctx, recorded) = nine(dir.path()).await;
         let stoppers = [
             Request::JobStop,
-            Request::GameNew { size: 9 },
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
             Request::GameOpen {
+                expected_revision: None,
+                at_end: false,
                 name: "nine.sgf".into(),
                 bytes: b64(NINE.as_bytes()),
             },
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::JapaneseKorean),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
             },
             Request::CacheClear {
                 scope: CacheScope::Game,
@@ -2338,10 +3586,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cache_clear_game_clears_the_main_line_keys() {
+    async fn clear_game_clears_every_node() {
         let dir = tempfile::tempdir().unwrap();
         let (ctx, recorded) = nine(dir.path()).await;
-        let keys = line_keys(&ctx).await;
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[bb])(;B[dd]))")
+            .await
+            .unwrap();
+        let mut keys = line_keys(&ctx).await;
+        keys.push(
+            navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap(),
+        );
+        navigate(&ctx, NavTarget::MainLine).await;
         let elsewhere = PositionKey(0x1234);
         let mut rows: Vec<Row> = keys.iter().map(|&k| kept(k, 0.5, None)).collect();
         rows.push(kept(elsewhere, 0.5, None));
@@ -2439,6 +3697,7 @@ mod tests {
             |_| {},
         );
         let options = JobOptions {
+            scope: crate::job::JobScope::AllBranches,
             side: crate::job::JobSide::Black,
             visits: 200,
             ..JobOptions::default()
@@ -2457,8 +3716,18 @@ mod tests {
             .await
             .unwrap();
         open(&ctx, "nine.sgf", NINE.as_bytes()).await.unwrap();
-        let running = ctx.follow.lock().unwrap().flow.options();
-        assert_eq!(running, Some(options));
+        assert_eq!(follow::lock(&ctx).flow.options(), Some(options));
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[aa])(;B[bb]))")
+            .await
+            .unwrap();
+        let ids: Vec<_> = follow::lock(&ctx)
+            .flow
+            .line()
+            .unwrap()
+            .iter()
+            .map(|node| node.node)
+            .collect();
+        assert_eq!(ids, [0, 1, 2]);
         ctx.engine.shutdown().await;
     }
 
@@ -2489,7 +3758,16 @@ mod tests {
     }
 
     async fn export_text(ctx: &AppContext) -> String {
-        let Ok(Response::GameExport { text, .. }) = handle(ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
+            ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!()
         };
         text

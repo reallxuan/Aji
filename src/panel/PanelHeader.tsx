@@ -1,3 +1,7 @@
+import { usePlatformFiles } from '../platform/PlatformProvider';
+import { usePanelWidth } from '../layout/usePanelWidth';
+import { PHONE_STATUS_HEIGHT } from '../layout/constants';
+import { useGameStore } from '../game/gameStore';
 import { SettingsIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePanelStore } from '../app/panelStore';
@@ -21,33 +25,63 @@ const openSettings = () => usePanelStore.getState().show('settings');
 export function PanelHeader({
   compact = false,
   touch = false,
+  narrow = false,
 }: {
   /** The phone header (P2 M1 design 5.5): title, move counter, engine dot and gear. */
   compact?: boolean;
   /** Touch targets of at least 44 px. */
   touch?: boolean;
+  narrow?: boolean;
 } = {}) {
   const { t } = useTranslation();
+  const tryout = useGameStore((s) => s.snapshot?.tryout != null);
+  const changed = useGameStore((s) => !!s.snapshot?.changed);
+  const panelWidth = usePanelWidth();
+  const separateStatus = compact || (panelWidth > 0 && panelWidth < 680);
   const os = useOs();
-  return (
-    <header
-      className={cn('@container flex-none border-b border-hairline', compact ? 'h-[52px]' : 'h-14')}
+  const { browserMenus } = usePlatformFiles();
+  const status = (tryout || changed) && (
+    <div
+      role="status"
+      className={cn('flex shrink-0 items-center gap-1.5', separateStatus && 'px-3')}
+      style={separateStatus ? { height: PHONE_STATUS_HEIGHT } : undefined}
     >
-      <div className="flex h-full items-center gap-2.5 pr-[18px] pl-6 @max-[500px]:gap-1.5">
+      {tryout && (
+        <span className="flex-none whitespace-nowrap rounded-full border border-amber-600/50 px-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+          {t('edit.trying')}
+        </span>
+      )}
+      {changed && (
+        <span className="flex-none whitespace-nowrap rounded-full border border-hairline px-1.5 text-[11px] text-text-muted">
+          {t('title.changed')}
+        </span>
+      )}
+    </div>
+  );
+  return (
+    <header className="@container flex-none border-b border-hairline">
+      <div
+        className={cn(
+          'flex items-center gap-2.5 @max-[500px]:gap-1.5',
+          compact ? 'h-[51px] px-3' : 'h-[55px] pr-[18px] pl-6',
+          !narrow && !compact && 'pl-[30px] pointer-coarse:pl-[50px]',
+        )}
+      >
         <div className="flex min-w-0 flex-1 items-center">
-          <GameMenu />
+          <GameMenu touch={touch || compact} narrow={narrow} />
         </div>
+        {!separateStatus && status}
         {compact ? (
           <MoveCounter />
         ) : (
           <>
-            <RulesChip />
+            <RulesChip narrow={narrow} />
             <NavButtons touch={touch} />
           </>
         )}
         <EngineIndicator touch={touch} />
         {/* On the Mac, 布局 and 截图 are in the menu bar's 显示 and 文件 menus. */}
-        {os !== null && os !== 'macos' && <ViewMenu touch={touch} />}
+        {(compact || browserMenus || (os !== null && os !== 'macos')) && <ViewMenu touch={touch} />}
         <button
           type="button"
           className={cn(
@@ -60,6 +94,7 @@ export function PanelHeader({
           <SettingsIcon className="size-4" aria-hidden />
         </button>
       </div>
+      {separateStatus && status}
     </header>
   );
 }

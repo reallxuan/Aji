@@ -33,6 +33,7 @@ async function chooseBackend(): Promise<{ transport: Transport; files: PlatformF
       const transport = scenarioTransport(name);
       if (transport) {
         const files = createFakeFiles(SAMPLE_FILES);
+        files.browserMenus = true;
         forwardBrowserDrops(files);
         return { transport, files };
       }

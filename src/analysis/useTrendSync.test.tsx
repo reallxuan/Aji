@@ -28,7 +28,11 @@ const key = (i: number) => (0x1000 + i).toString(16).padStart(16, '0');
 
 const line = (length: number, stats: (i: number) => TrendStats | null = () => null) =>
   Array.from({ length }, (_, i): TrendNode => ({
+    node: i,
+    key: key(i),
     moveNumber: i,
+    tryout: false,
+    toPlay: i % 2 ? 'white' : 'black',
     mover: i === 0 ? null : i % 2 ? 'black' : 'white',
     move: null,
     stats: stats(i),
@@ -55,11 +59,12 @@ const update = (i: number, visits = 100): AnalysisUpdate => ({
   next: null,
 });
 
-function mount(trend: () => TrendNode[]) {
+function mount(trend: () => TrendNode[], read?: () => Promise<Response>) {
   const requests: Request[] = [];
-  const transport = createFakeTransport((request): Response => {
+  const transport = createFakeTransport((request): Response | Promise<Response> => {
     requests.push(request);
-    if (request.type === 'gameTrend') return { type: 'trend', revision: 0, nodes: trend() };
+    if (request.type === 'gameTrend')
+      return read?.() ?? { type: 'trend', revision: 0, nodes: trend() };
     if (request.type === 'gameSnapshot')
       return { type: 'game', snapshot: makeSnapshot({ revision: 0 }), warnings: [] };
     return {
@@ -102,7 +107,7 @@ it('fetches on mount and replaces on event', async () => {
   expect(trendRequests()).toBe(1);
   expect(useTrendStore.getState().nodes).toHaveLength(3);
   expect(useTrendStore.getState().nodes[1].stats).toEqual(statsOf(1));
-  act(() => transport.emit({ type: 'gameTrend', revision: 1, nodes: line(5) }));
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 1, nodes: line(5) }));
   expect(useTrendStore.getState().nodes).toHaveLength(5);
   expect(useTrendStore.getState().nodes[1].stats).toBeNull();
 });
@@ -157,7 +162,9 @@ it('a held arrow never shows another position’s analysis', async () => {
 });
 
 it('a comment-only node shares its parent’s analysis, cached and live', async () => {
-  const { transport } = mount(() => line(6));
+  const selected = line(6);
+  selected[4] = { ...selected[3], node: 4, mover: null, move: null };
+  const { transport } = mount(() => selected);
   await act(async () => {});
   const nodes = () => useTrendStore.getState().nodes;
   act(() => transport.emit({ type: 'gameSnapshot', snapshot: snapshotAt(3) }));
@@ -181,10 +188,14 @@ it('a new game starts the shared-key group afresh', async () => {
     revision: 10,
     positionKey: key(5),
     lineIndex: 2,
+    lineRevision: 2,
     moveNumber: 2,
   });
   act(() => transport.emit({ type: 'gameSnapshot', snapshot: elsewhere }));
-  act(() => transport.emit({ type: 'gameTrend', revision: 2, nodes: line(6) }));
+  const selected = line(6);
+  selected[2].key = key(5);
+  selected[5].key = key(9);
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 2, nodes: selected }));
   act(() => transport.emit({ type: 'analysisUpdate', analysis: update(5, 200) }));
   expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(5, 200));
   expect(useTrendStore.getState().nodes[5].stats).toBeNull();
@@ -193,7 +204,7 @@ it('a new game starts the shared-key group afresh', async () => {
 it('applies trend nodes for the line it holds', async () => {
   const { transport } = mount(() => line(3));
   await act(async () => {});
-  expect(useTrendStore.getState().revision).toBe(0);
+  expect(useTrendStore.getState().lineRevision).toBe(0);
   const loss = { winrate: 12, score: 3 };
   act(() =>
     transport.emit({
@@ -204,7 +215,7 @@ it('applies trend nodes for the line it holds', async () => {
   );
   expect(useTrendStore.getState().nodes[2]).toMatchObject({ stats: statsOf(2), loss });
   // A line pushed later: nodes for the old one no longer apply.
-  act(() => transport.emit({ type: 'gameTrend', revision: 3, nodes: line(3) }));
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 3, nodes: line(3) }));
   act(() =>
     transport.emit({
       type: 'trendNodes',
@@ -213,4 +224,63 @@ it('applies trend nodes for the line it holds', async () => {
     }),
   );
   expect(useTrendStore.getState().nodes[1].stats).toBeNull();
+});
+
+it('stale_trend_updates_are_dropped', async () => {
+  const { transport } = mount(() => line(3));
+  await act(async () => {});
+  act(() => {
+    transport.emit({
+      type: 'gameSnapshot',
+      snapshot: makeSnapshot({ revision: 5, lineRevision: 4, positionKey: key(1), lineIndex: 1 }),
+    });
+    transport.emit({ type: 'gameTrend', reason: 'lineChanged', revision: 4, nodes: line(3) });
+    transport.emit({ type: 'gameTrend', reason: 'lineChanged', revision: 2, nodes: line(2) });
+    transport.emit({
+      type: 'trendNodes',
+      revision: 2,
+      nodes: [{ lineIndex: 1, stats: statsOf(2), loss: null }],
+    });
+  });
+  expect(useTrendStore.getState().lineRevision).toBe(4);
+  expect(useTrendStore.getState().nodes).toHaveLength(3);
+  expect(useTrendStore.getState().nodes[1].stats).toBeNull();
+});
+
+it('a live result follows the position key across every matching slot, including unvisited comments', async () => {
+  const selected = line(4);
+  selected[2] = { ...selected[1], node: 9, move: null, mover: null };
+  const { transport } = mount(() => selected);
+  await act(async () => {});
+  act(() => {
+    transport.emit({ type: 'gameSnapshot', snapshot: snapshotAt(1) });
+    transport.emit({ type: 'analysisUpdate', analysis: update(1, 150) });
+  });
+  expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(1, 150));
+});
+
+it('a delayed same-line trend read cannot erase a newer streamed result', async () => {
+  let finish!: (response: Response) => void;
+  const pending = new Promise<Response>((resolve) => {
+    finish = resolve;
+  });
+  const { transport } = mount(
+    () => line(3),
+    () => pending,
+  );
+  await act(async () => {});
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 0, nodes: line(3) }));
+  act(() => transport.emit({ type: 'engineState', engine: { state: 'starting' } }));
+  act(() =>
+    transport.emit({
+      type: 'trendNodes',
+      revision: 0,
+      nodes: [{ lineIndex: 1, stats: statsOf(1, 500), loss: null }],
+    }),
+  );
+  await act(async () =>
+    finish({ type: 'trend', revision: 0, nodes: line(3, (i) => (i === 2 ? statsOf(2) : null)) }),
+  );
+  expect(useTrendStore.getState().nodes[1].stats).toEqual(statsOf(1, 500));
+  expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(2));
 });

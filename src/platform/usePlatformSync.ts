@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDeviceStore } from '../device/deviceStore';
 import { useTranslation } from 'react-i18next';
-import { runMenuCommand } from '../game/actions';
+import { requestQuit, runMenuCommand } from '../game/actions';
 import { useEngineStoreApi } from '../engine/engineStore';
 import { useTransport } from '../transport/TransportProvider';
 import { usePlatformFiles } from './PlatformProvider';
@@ -17,9 +17,10 @@ export function usePlatformSync(): void {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'zh-CN' ? 'zh-CN' : 'en';
 
+  const numbers = useDeviceStore((s) => s.settings.moveNumbers);
   useEffect(() => {
-    files.setMenuLanguage(language).catch(() => {});
-  }, [files, language]);
+    files.setMenuLanguage(language, numbers).catch(() => {});
+  }, [files, language, numbers]);
   // Always on top is the device's (P2 M1 design 5.9): applied once the device store has loaded,
   // and whenever it changes.
   const loaded = useDeviceStore((s) => s.loaded);
@@ -28,6 +29,10 @@ export function usePlatformSync(): void {
     if (loaded) files.setAlwaysOnTop(alwaysOnTop).catch(() => {});
   }, [files, loaded, alwaysOnTop]);
 
+  useEffect(
+    () => files.onQuitRequested(() => void requestQuit({ transport, files, t })),
+    [files, transport, t],
+  );
   useEffect(
     () => files.onMenu((command) => void runMenuCommand({ transport, files, t }, command, engine)),
     [files, transport, t, engine],

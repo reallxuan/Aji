@@ -4,6 +4,7 @@ import type { AppInfo } from './generated/AppInfo';
 import type { Backend } from './generated/Backend';
 import type { BackendRecommendation } from './generated/BackendRecommendation';
 import type { CacheScope } from './generated/CacheScope';
+import type { ExportOptions } from './generated/ExportOptions';
 import type { CacheStats } from './generated/CacheStats';
 import type { EngineVersionChoice } from './generated/EngineVersionChoice';
 import type { HardwareReport } from './generated/HardwareReport';
@@ -16,6 +17,8 @@ import type { EngineState } from './generated/EngineState';
 import type { PositionKey } from './generated/PositionKey';
 import type { AnalysisRules } from './generated/AnalysisRules';
 import type { GameSnapshot } from './generated/GameSnapshot';
+import type { GameTree } from './generated/GameTree';
+import type { SessionEdit } from './generated/SessionEdit';
 import type { GameWarning } from './generated/GameWarning';
 import type { Move } from './generated/Move';
 import type { NavTarget } from './generated/NavTarget';
@@ -178,19 +181,35 @@ async function gameReply(transport: Transport, request: Request): Promise<GameRe
   return { snapshot, warnings };
 }
 
-export const newGame = (transport: Transport, size: number) =>
-  gameReply(transport, { type: 'gameNew', size });
+export const newGame = (transport: Transport, size: number, expectedRevision: number) =>
+  gameReply(transport, { type: 'gameNew', size, expectedRevision });
 
 /** `bytes` is the file, base64-encoded. */
-export const openGame = (transport: Transport, name: string, bytes: string) =>
-  gameReply(transport, { type: 'gameOpen', name, bytes });
+export const openGame = (
+  transport: Transport,
+  name: string,
+  bytes: string,
+  expectedRevision: number,
+  atEnd = false,
+) => gameReply(transport, { type: 'gameOpen', name, bytes, atEnd, expectedRevision });
 
 export const navigateGame = (transport: Transport, to: NavTarget) =>
   gameReply(transport, { type: 'gameNavigate', to });
 
+export const editGame = (transport: Transport, edit: SessionEdit) =>
+  gameReply(transport, { type: 'gameEdit', edit });
+
+export const undoGame = (transport: Transport) => gameReply(transport, { type: 'gameUndo' });
+export const redoGame = (transport: Transport) => gameReply(transport, { type: 'gameRedo' });
+
+export async function getGameTree(transport: Transport): Promise<GameTree> {
+  const { revision, nodes } = await expectType(transport, { type: 'gameTree' }, 'gameTree');
+  return { revision, nodes };
+}
+
 /** `null` goes back to the file's reading. */
 export const setGameRules = (transport: Transport, rules: AnalysisRules | null) =>
-  gameReply(transport, { type: 'gameSetRules', rules });
+  editGame(transport, { kind: 'setRules', rules });
 
 export const getGameSnapshot = (transport: Transport) =>
   gameReply(transport, { type: 'gameSnapshot' });
@@ -199,10 +218,15 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
   return (await expectType(transport, { type: 'gamePreview', moves }, 'gamePreview')).preview;
 }
 
-export async function exportGame(transport: Transport): Promise<{ name: string; text: string }> {
-  const { name, text } = await expectType(transport, { type: 'gameExport' }, 'gameExport');
-  return { name, text };
-}
+export const exportGame = (transport: Transport, options: ExportOptions) =>
+  expectType(transport, { type: 'gameExport', options }, 'gameExport');
+
+export const markSaved = (
+  transport: Transport,
+  gameRevision: number,
+  editId: number,
+  utf8: boolean,
+) => gameReply(transport, { type: 'gameSaved', gameRevision, editId, utf8 });
 
 /** One entry per main-line node, with the engine's cached result where it has one. */
 export async function getTrend(

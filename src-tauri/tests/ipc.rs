@@ -24,7 +24,11 @@ use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop
 use tauri::webview::InvokeRequest;
 
 fn unconfigured_engine() -> Engine {
-    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let position = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    );
     tauri::async_runtime::block_on(async {
         Engine::spawn(None, position, EngineOptions::default(), |_| {})
     })
@@ -123,15 +127,23 @@ fn invoke_rpc(body: Value) -> Result<Value, Value> {
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .expect("mock webview");
+    invoke(&webview, "rpc", body)
+}
+
+fn invoke(
+    webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+    command: &str,
+    body: Value,
+) -> Result<Value, Value> {
     let url = if cfg!(windows) {
         "http://tauri.localhost"
     } else {
         "tauri://localhost"
     };
     get_ipc_response(
-        &webview,
+        webview,
         InvokeRequest {
-            cmd: "rpc".into(),
+            cmd: command.into(),
             callback: CallbackFn(0),
             error: CallbackFn(1),
             url: url.parse().unwrap(),
@@ -173,7 +185,7 @@ fn rpc_opens_a_game_from_base64() {
     .unwrap();
     assert_eq!(response["type"], "game");
     assert_eq!(response["snapshot"]["size"], 9);
-    assert_eq!(response["snapshot"]["mainLineLength"], 1);
+    assert_eq!(response["snapshot"]["lineLength"], 1);
     assert_eq!(
         response["snapshot"]["rules"]["current"],
         json!({"kind": "chinese"})
@@ -261,4 +273,130 @@ fn setup_progress_events_reach_the_webview_channel() {
     let payload: Value = serde_json::from_str(&payloads[0]).unwrap();
     assert_eq!(payload["type"], "setupProgress");
     assert_eq!(payload["job"]["id"], 3);
+}
+
+#[test]
+fn platform_files_save_writes_atomically() {
+    use aji_lib::platform::{DesktopFiles, menu::MenuLanguage};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("game.sgf");
+    std::fs::write(&path, b"(;)").unwrap();
+    let app = configure(mock_builder())
+        .manage(DesktopFiles::new(dir.path(), MenuLanguage::En))
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    let opened = invoke(&window, "files_open_path", json!({"path":path})).unwrap();
+    let token = &opened["token"];
+    assert_eq!(
+        invoke(&window, "files_save", json!({"token":token,"bytes":"AP+A"})),
+        Ok(json!(true))
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), &[0, 255, 128]);
+    for (bad_token, bytes) in [(token.clone(), "!"), (json!("unknown"), "WA==")] {
+        assert!(
+            invoke(
+                &window,
+                "files_save",
+                json!({"token":bad_token,"bytes":bytes})
+            )
+            .is_err()
+        );
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), &[0, 255, 128]);
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn platform_stale_save_acknowledgement_leaves_the_replacement_dirty() {
+    let app = configure(mock_builder())
+        .manage(context())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    let rpc = |request| invoke(&window, "rpc", json!({"request":request})).unwrap();
+    let edit = || rpc(json!({"type":"gameEdit","edit":{"kind":"pass"}}));
+    edit();
+    let old =
+        rpc(json!({"type":"gameExport","options":{"scope":"game","clean":false,"inPlace":false}}));
+    rpc(json!({"type":"gameNew","size":9}));
+    edit();
+    let reply = rpc(
+        json!({"type":"gameSaved","editId":old["editId"],"gameRevision":old["gameRevision"],"utf8":true}),
+    );
+    assert_eq!(reply["snapshot"]["changed"], true);
+}
+
+#[test]
+fn platform_replacement_requires_the_approved_revision() {
+    let app = configure(mock_builder())
+        .manage(context())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    let rpc = |request| invoke(&window, "rpc", json!({"request":request}));
+    rpc(json!({"type":"gameEdit","edit":{"kind":"pass"}})).unwrap();
+    assert_eq!(
+        invoke(&window, "app_quit", json!({"expectedRevision":0})).unwrap_err()["code"],
+        "gameChanged"
+    );
+    for request in [
+        json!({"type":"gameNew","size":9,"expectedRevision":0}),
+        json!({"type":"gameOpen","name":"other.sgf","bytes":"KDstQlthYV0p","expectedRevision":0}),
+    ] {
+        assert_eq!(rpc(request).unwrap_err()["code"], "gameChanged");
+        assert_eq!(
+            rpc(json!({"type":"gameSnapshot"})).unwrap()["snapshot"]["changed"],
+            true
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn platform_save_through_an_opened_symlink_preserves_target_mode_and_link() {
+    use aji_lib::platform::{DesktopFiles, menu::MenuLanguage};
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("record.data");
+    let alias = dir.path().join("game.sgf");
+    let other = dir.path().join("another.sgf");
+    std::fs::write(&path, b"(;)").unwrap();
+    std::fs::write(&other, b"leave this alone").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    symlink(&path, &alias).unwrap();
+    let app = configure(mock_builder())
+        .manage(DesktopFiles::new(dir.path(), MenuLanguage::En))
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    let opened = invoke(&window, "files_open_path", json!({"path":alias})).unwrap();
+    assert_eq!(opened["name"], "game.sgf");
+    std::fs::remove_file(&alias).unwrap();
+    symlink(&other, &alias).unwrap();
+    invoke(
+        &window,
+        "files_save",
+        json!({"token":opened["token"],"bytes":"WA=="}),
+    )
+    .unwrap();
+    assert_eq!(
+        invoke(&window, "files_reread", json!({"token":opened["token"]})).unwrap(),
+        "WA=="
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"X");
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(alias.is_symlink());
+    assert_eq!(std::fs::read(&alias).unwrap(), b"leave this alone");
 }

@@ -21,6 +21,9 @@ import { type BoardView, drawBoard } from './drawBoard';
 import { drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { drawOwnership, scoredOwnership, type Settled, settledOwnership } from './ownership';
 import { C5, finishedStones, H4 } from '../scoring/testing';
+import { drawMarks } from './marks';
+import type { Mark } from '../transport/generated/Mark';
+import { drawEditOverlay } from './badges';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
@@ -351,6 +354,47 @@ describe('board screenshots', () => {
     );
   });
 
+  it('rotated_board_with_numbers', () => {
+    const view: BoardView = { cssSize: CSS_SIZE, dpr: 1, boardSize: 9, orientation: 1 };
+    const stones = empty(9);
+    const numbers = [
+      { point: { x: 1, y: 2 }, n: 1 },
+      { point: { x: 5, y: 7 }, n: 2 },
+    ];
+    stones[19] = 'black';
+    stones[68] = 'white';
+    compare(
+      'rotated_board_with_numbers',
+      render(view, stones, null, null, (ctx) =>
+        drawEditOverlay(ctx, view, stones, [], [], numbers),
+      ),
+    );
+  });
+
+  it('badges_and_tryout_numbers', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19 };
+    const stones = parse(SAMSUNG_58);
+    const draws = {
+      candidates: mockupDiscs(),
+      lines: ['winrate', 'scoreLead'] as [DiscField, DiscField],
+    };
+    const badges = [
+      { point: { x: 2, y: 8 }, letter: 'A', outlined: true, tryout: false },
+      { point: { x: 10, y: 5 }, letter: 'B', outlined: false, tryout: false },
+      { point: { x: 14, y: 7 }, letter: 'C', outlined: true, tryout: true },
+    ];
+    const numbers = [
+      { point: { x: 3, y: 15 }, n: 57 },
+      { point: { x: 7, y: 1 }, n: 58 },
+    ];
+    compare(
+      'badges_and_tryout_numbers',
+      render(view, stones, null, draws, (ctx) =>
+        drawEditOverlay(ctx, view, stones, badges, numbers),
+      ),
+    );
+  });
+
   const SMALL: Record<number, Array<[number, number]>> = {
     9: [
       [2, 2],
@@ -507,5 +551,29 @@ describe('board screenshots', () => {
     const inside = (x: number, y: number) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= reach;
     const R = Math.ceil(g.stoneRadius * 2);
     expect(changed(bare, withStone, [c - R, c - R, c + R, c + R], inside)).toBe(0);
+  });
+
+  it('marks_on_stones_and_empty_points', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 1, boardSize: 9 };
+    const stones = empty(9);
+    const kinds: Mark[] = [
+      { kind: 'triangle' },
+      { kind: 'square' },
+      { kind: 'circle' },
+      { kind: 'cross' },
+      { kind: 'label', text: 'A' },
+      { kind: 'label', text: '1' },
+    ];
+    const marks = [2, 4, 6].flatMap((y, row) =>
+      kinds.map((mark, index) => {
+        const x = index + 1;
+        stones[y * 9 + x] = row === 0 ? 'black' : row === 1 ? 'white' : null;
+        return { point: { x, y }, mark };
+      }),
+    );
+    compare(
+      'marks_on_stones_and_empty_points',
+      render(view, stones, null, null, (ctx) => drawMarks(ctx, marks, view, stones)),
+    );
   });
 });

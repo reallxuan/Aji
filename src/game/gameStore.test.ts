@@ -1,3 +1,4 @@
+import { useViewStore } from '../analysis/viewStore';
 import { afterEach, expect, it } from 'vitest';
 import { createEngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from './gameStore';
@@ -30,4 +31,13 @@ it('is loaded once the first snapshot arrives', () => {
   expect(useGameStore.getState().loaded).toBe(false);
   useGameStore.getState().apply(makeSnapshot());
   expect(useGameStore.getState().loaded).toBe(true);
+});
+
+it('preserves orientation through a move and resets it on a replacement record', () => {
+  useGameStore.getState().apply(makeSnapshot({ revision: 10, gameRevision: 4 }));
+  useViewStore.setState({ orientation: 5 });
+  useGameStore.getState().apply(makeSnapshot({ revision: 11, gameRevision: 4, node: 2 }));
+  expect(useViewStore.getState().orientation).toBe(5);
+  useGameStore.getState().apply(makeSnapshot({ revision: 12, gameRevision: 5 }));
+  expect(useViewStore.getState().orientation).toBe(0);
 });

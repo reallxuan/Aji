@@ -1,19 +1,33 @@
+import { orient, setNumberMode, toggleBranchNumbers } from '../board/viewActions';
+import { afterReplay, bindReplay, stopReplay } from './replayStore';
+import { useDeviceStore } from '../device/deviceStore';
 import type { TFunction } from 'i18next';
 import type { EngineStore } from '../engine/engineStore';
 import type { MenuCommand, OpenedFile, PlatformFiles } from '../platform/files';
 import {
   exportGame,
+  getGameSnapshot,
+  markSaved,
   navigateGame,
   newGame,
   openGame,
-  setGameRules,
   type GameReply,
 } from '../transport/api';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import type { NavTarget } from '../transport/generated/NavTarget';
-import type { Transport } from '../transport/transport';
+import { TransportError, toTransportError, type Transport } from '../transport/transport';
+import { discardFailedRecordFields, flushRecordFields, recordFieldVersion } from './fieldWrites';
+import { busy, isTextEditor } from './busy';
+import {
+  commitRecord,
+  drainMutations,
+  mutationsPending,
+  recordLocked,
+  trackMutation,
+} from './recordMutations';
+import { edit, undo, redo } from './editActions';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
 import { errorNotice, warningNotice } from './notices';
@@ -47,39 +61,50 @@ function apply(reply: GameReply): GameSnapshot {
   return reply.snapshot;
 }
 
-/** Sends a read file to `gameOpen`; only an opened game enters the recent list. */
-async function openFile(ctx: ActionContext, file: OpenedFile): Promise<void> {
-  let reply: GameReply;
+type Commit = (revision: number) => Promise<void>;
+const diskVersions = new WeakMap<Transport, number>();
+const diskVersion = (ctx: ActionContext) => diskVersions.get(ctx.transport) ?? 0;
+
+async function openSelected(ctx: ActionContext, read: () => Promise<OpenedFile | null>, name = '') {
+  let selected = name;
   try {
-    reply = await openGame(ctx.transport, file.name, file.bytes);
+    await beforeLeaving(ctx, 'open', async () => {
+      const before = diskVersion(ctx);
+      const file = await read();
+      if (!file) return null;
+      selected = file.name;
+      return async (revision) => {
+        // A finished write can supersede the bytes read by the picker or drop,
+        // even when it exported a copy without changing the record revision.
+        const bytes = diskVersion(ctx) === before ? file.bytes : await ctx.files.reread(file.token);
+        const reply = await openGame(
+          ctx.transport,
+          file.name,
+          bytes,
+          revision,
+          useDeviceStore.getState().settings.openAt === 'last',
+        );
+        const snapshot = apply(reply);
+        if (currentGame() !== snapshot.gameRevision) return;
+        useGameStore.setState({ fileToken: file.token });
+        showWarnings(reply.warnings, snapshot, ctx.t);
+        await ctx.files.remember(file.token, gameTitle(snapshot, ctx.t)).catch(() => {});
+      };
+    });
   } catch (error) {
-    fail(ctx.t, ctx.t('notice.openFailed', { name: file.name }), error);
-    return;
+    fail(ctx.t, ctx.t('notice.openFailed', { name: selected }).trim(), error);
   }
-  const snapshot = apply(reply);
-  showWarnings(reply.warnings, snapshot, ctx.t);
-  await ctx.files.remember(file.token, gameTitle(snapshot, ctx.t)).catch(() => {
-    // The game is open; only the recent list missed it.
-  });
 }
 
-export async function openFromPicker(ctx: ActionContext): Promise<void> {
-  let file: OpenedFile | null;
-  try {
-    file = await ctx.files.pickOpen();
-  } catch (error) {
-    fail(ctx.t, ctx.t('notice.openFailed', { name: '' }).trim(), error);
-    return;
-  }
-  if (file) await openFile(ctx, file);
-}
+export const openFromPicker = (ctx: ActionContext) => openSelected(ctx, () => ctx.files.pickOpen());
 
-/** Opens the first of the dropped files. */
+/** Opens the first SGF, or reports the first dropped path if there is no SGF. */
 export async function openDropped(ctx: ActionContext, paths: string[]): Promise<void> {
-  const path = paths[0];
+  const sgf = paths.find((path) => /\.sgf$/i.test(path));
+  const path = sgf ?? paths[0];
   if (!path) return;
   const name = baseName(path);
-  if (!/\.sgf$/i.test(name)) {
+  if (!sgf) {
     useNoticeStore.getState().show({
       kind: 'error',
       title: ctx.t('notice.openFailed', { name }),
@@ -87,70 +112,250 @@ export async function openDropped(ctx: ActionContext, paths: string[]): Promise<
     });
     return;
   }
-  try {
-    await openFile(ctx, await ctx.files.openPath(path));
-  } catch (error) {
-    fail(ctx.t, ctx.t('notice.openFailed', { name }), error);
-  }
+  await openSelected(ctx, () => ctx.files.openPath(path), name);
 }
 
 export async function openRecent(ctx: ActionContext, index: number): Promise<void> {
-  const entries = await ctx.files.recent().catch(() => []);
-  const name = entries[index]?.name ?? '';
-  let file: OpenedFile;
-  try {
-    file = await ctx.files.openRecent(index);
-  } catch (error) {
-    fail(ctx.t, ctx.t('notice.openFailed', { name }), error);
-    return;
-  }
-  await openFile(ctx, file);
+  stopReplay();
+  // Saving from the prompt can move the current record to the top of the list.
+  const entry = (await ctx.files.recent().catch(() => []))[index];
+  if (!entry) return;
+  await openSelected(
+    ctx,
+    async () => {
+      const entries = await ctx.files.recent();
+      const at = entries.findIndex((e) => e.path === entry.path);
+      return at < 0 ? ctx.files.openPath(entry.path) : ctx.files.openRecent(at);
+    },
+    entry.name,
+  );
 }
 
-/** Exports the game, asks where to save it under its title, writes it and remembers it. */
-export async function saveAs(ctx: ActionContext): Promise<void> {
-  const failed = (error: unknown) => fail(ctx.t, ctx.t('notice.saveFailed'), error);
-  let text: string;
+const currentGame = () => useGameStore.getState().snapshot?.gameRevision;
+type SaveKind = 'save' | 'saveAs' | 'branch' | 'clean';
+
+async function writeRecord(
+  ctx: ActionContext,
+  kind: SaveKind,
+  game: number | undefined,
+): Promise<boolean> {
   try {
-    ({ text } = await exportGame(ctx.transport));
+    if (game === undefined || currentGame() !== game || !(await settleRecord(ctx)).flushed)
+      return false;
+    const { snapshot, fileToken } = useGameStore.getState();
+    if (snapshot?.gameRevision !== game) return false;
+    const inPlace = kind === 'save' && fileToken !== null && !snapshot.saveAsFirst;
+    const title = gameTitle(snapshot, ctx.t);
+    const out = await exportGame(ctx.transport, {
+      scope: kind === 'branch' ? 'branch' : 'game',
+      clean: kind === 'clean',
+      inPlace,
+    });
+    if (out.gameRevision !== game || currentGame() !== game) return false;
+    let token = fileToken;
+    if (inPlace) {
+      if (out.bytes === null || !(await ctx.files.save(fileToken, out.bytes)))
+        throw new TransportError('fileWriteFailed', 'Could not write the exported bytes');
+    } else {
+      if (out.text === null) throw new TransportError('internal', 'Save As export is missing text');
+      token = await ctx.files.saveAs(fileNameFor(title), out.text);
+      if (!token) return false;
+    }
+    diskVersions.set(ctx.transport, diskVersion(ctx) + 1);
+    if (currentGame() !== game) return false;
+    if (kind === 'branch' || kind === 'clean') return true;
+    apply(await markSaved(ctx.transport, game, out.editId, !inPlace || out.fellBack));
+    if (currentGame() !== game) return false;
+    if (!inPlace && token) {
+      useGameStore.setState({ fileToken: token });
+      await ctx.files.remember(token, title).catch(() => {});
+    }
+    if (out.fellBack)
+      useNoticeStore.getState().show({ kind: 'warning', title: ctx.t('notice.savedAsUtf8') });
+    return true;
   } catch (error) {
-    failed(error);
-    return;
+    const notice = errorNotice(ctx.t('notice.saveFailed'), error, ctx.t);
+    if (toTransportError(error).code === 'sgfTooLarge')
+      notice.detail = ctx.t('notice.saveTooLarge');
+    useNoticeStore.getState().show(notice);
+    return false;
   }
-  const title = gameTitle(useGameStore.getState().snapshot, ctx.t);
-  let token: string | null;
-  try {
-    token = await ctx.files.saveAs(fileNameFor(title), text);
-  } catch (error) {
-    failed(error);
-    return;
-  }
-  if (token) await ctx.files.remember(token, title).catch(() => {});
 }
 
-async function change(ctx: ActionContext, request: () => Promise<GameReply>): Promise<void> {
+// Two writes to the same destination must reach disk and acknowledge their edits in order.
+const saves = new WeakMap<Transport, Promise<boolean>>();
+function saveRecord(ctx: ActionContext, kind: SaveKind): Promise<boolean> {
+  if (recordLocked(ctx.transport)) return Promise.resolve(false);
+  const game = currentGame();
+  const run = () => writeRecord(ctx, kind, game);
+  const pending = saves.get(ctx.transport);
+  const write = pending ? pending.then(run) : run();
+  saves.set(ctx.transport, write);
+  return write.finally(() => {
+    if (saves.get(ctx.transport) === write) saves.delete(ctx.transport);
+  });
+}
+
+export const save = (ctx: ActionContext) => saveRecord(ctx, 'save');
+export const saveAs = (ctx: ActionContext) => saveRecord(ctx, 'saveAs');
+export const saveBranch = (ctx: ActionContext) => saveRecord(ctx, 'branch');
+export const saveClean = (ctx: ActionContext) => saveRecord(ctx, 'clean');
+
+function recordState(ctx: ActionContext) {
+  const fields = recordFieldVersion(ctx.transport);
+  return { snapshot: useGameStore.getState().snapshot, fields };
+}
+type Approval = ReturnType<typeof recordState>;
+const sameState = (a: Approval, b: Approval) => a.snapshot === b.snapshot && a.fields === b.fields;
+
+/** A queued setup/mark or delayed undo can make a previously clean record dirty.
+ * Wait through application of the snapshot as well as commits of mounted editors. */
+async function settleRecord(ctx: ActionContext) {
+  for (;;) {
+    await drainMutations(ctx.transport);
+    const flushed = await flushRecordFields(ctx.transport);
+    const state = recordState(ctx);
+    if (!mutationsPending(ctx.transport)) return { state, flushed };
+  }
+}
+
+async function approve(ctx: ActionContext, prior?: Approval): Promise<Approval | null> {
+  const game = currentGame();
+  const { state, flushed } = await settleRecord(ctx);
+  if (currentGame() !== game) return null;
+  if ((prior && sameState(state, prior)) || (flushed && !state.snapshot?.changed)) return state;
+  const answer = await ctx.files.confirmDiscard();
+  if (currentGame() !== game || answer === 'cancel') return null;
+  if (answer === 'discard') {
+    // This decision covers the edits the prompt was opened for.
+    if (sameState(recordState(ctx), state) && !mutationsPending(ctx.transport)) return state;
+    return approve(ctx);
+  }
+  if (!(await save(ctx))) return null;
+  const after = await settleRecord(ctx);
+  return after.flushed && currentGame() === game && !after.state.snapshot?.changed
+    ? after.state
+    : null;
+}
+
+export const confirmDiscard = async (ctx: ActionContext) => (await approve(ctx)) !== null;
+
+// One pending decision belongs to one operation. File picking and saving leave the
+// board interactive. The final RPC checks the approved revision under the service lock.
+const leaving = new WeakSet<Transport>();
+async function beforeLeaving(
+  ctx: ActionContext,
+  action: 'open' | 'new' | 'quit',
+  prepare: () => Promise<Commit | null>,
+) {
+  stopReplay();
+  if (leaving.has(ctx.transport)) return;
+  leaving.add(ctx.transport);
   try {
-    apply(await request());
+    let approved = await approve(ctx);
+    if (!approved) return;
+    const original = approved.snapshot?.gameRevision;
+    const commit = await prepare();
+    if (!commit) return;
+    for (;;) {
+      if (original !== undefined && currentGame() !== original) return;
+      if (!sameState(approved, recordState(ctx)) || mutationsPending(ctx.transport)) {
+        approved = await approve(ctx, approved);
+        if (!approved) return;
+        continue;
+      }
+      // Any previously requested Save As or copy might target the selected file.
+      // Wait outside the commit lock so queued writes and a prompt's own Save can finish.
+      const writing = action === 'open' && saves.get(ctx.transport);
+      if (writing) {
+        await writing;
+        continue;
+      }
+      try {
+        const revision = approved.snapshot?.revision ?? 0;
+        await commitRecord(ctx.transport, () => commit(revision));
+        return;
+      } catch (cause) {
+        if (toTransportError(cause).code !== 'gameChanged') throw cause;
+        const latest = apply(await getGameSnapshot(ctx.transport));
+        if (latest.revision === approved.snapshot?.revision) throw cause;
+      }
+    }
+  } finally {
+    leaving.delete(ctx.transport);
+  }
+}
+
+export async function requestQuit(ctx: ActionContext) {
+  try {
+    await beforeLeaving(ctx, 'quit', async () => async (revision) => {
+      const game = currentGame();
+      await ctx.files.quit(revision);
+      if (game !== undefined) discardFailedRecordFields(ctx.transport, game);
+    });
   } catch (error) {
     fail(ctx.t, ctx.t('notice.gameFailed'), error);
   }
 }
 
-export const startNewGame = (ctx: ActionContext, size: number) =>
-  change(ctx, () => newGame(ctx.transport, size));
+async function change(
+  ctx: ActionContext,
+  request: () => Promise<GameReply>,
+): Promise<GameSnapshot | null> {
+  try {
+    return apply(await request());
+  } catch (error) {
+    fail(ctx.t, ctx.t('notice.gameFailed'), error);
+    return null;
+  }
+}
 
-export const navigate = (ctx: ActionContext, to: NavTarget) =>
-  change(ctx, () => navigateGame(ctx.transport, to));
+export async function startNewGame(ctx: ActionContext, size: number): Promise<void> {
+  try {
+    await beforeLeaving(ctx, 'new', async () => async (revision) => {
+      apply(await newGame(ctx.transport, size, revision));
+    });
+  } catch (error) {
+    fail(ctx.t, ctx.t('notice.gameFailed'), error);
+  }
+}
+
+function changePosition(ctx: ActionContext, to: NavTarget) {
+  if (recordLocked(ctx.transport)) return Promise.resolve(null);
+  return change(ctx, () => navigateGame(ctx.transport, to));
+}
+
+export function navigate(ctx: ActionContext, to: NavTarget) {
+  return trackMutation(
+    ctx.transport,
+    afterReplay(ctx.transport, () => changePosition(ctx, to)),
+  );
+}
+
+/** A replay step uses the same tracked navigation as a user gesture. A departure first
+ * cancels the timer, then waits for any request already sent to apply its snapshot. */
+export function connectReplay(ctx: ActionContext) {
+  bindReplay({
+    transport: ctx.transport,
+    canStep: () =>
+      !leaving.has(ctx.transport) &&
+      !recordLocked(ctx.transport) &&
+      !mutationsPending(ctx.transport),
+    next: () => trackMutation(ctx.transport, changePosition(ctx, 'next')),
+  });
+  return () => bindReplay(null);
+}
 
 /** `null` goes back to the file's reading. */
-export const setRules = (ctx: ActionContext, rules: AnalysisRules | null) =>
-  change(ctx, () => setGameRules(ctx.transport, rules));
+export async function setRules(ctx: ActionContext, rules: AnalysisRules | null): Promise<void> {
+  await edit(ctx, { kind: 'setRules', rules });
+}
 
 /**
  * What a menu bar item does: the same actions as the title menu, and the 布局 presets. `engine`
  * tells final scoring whether analysis runs, to pause it.
  */
-export function runMenuCommand(
+export async function runMenuCommand(
   ctx: ActionContext,
   command: MenuCommand,
   engine: EngineStore,
@@ -170,18 +375,46 @@ export function runMenuCommand(
       options ? ctx.t(key, options) : ctx.t(key);
     return shotFromMenu(kind, target, ctx.files, title, t);
   }
-  if (typeof command === 'object') return openRecent(ctx, command.recent);
+  if (typeof command === 'object')
+    return 'new' in command ? startNewGame(ctx, command.new) : openRecent(ctx, command.recent);
   switch (command) {
-    case 'new19':
-      return startNewGame(ctx, 19);
-    case 'new13':
-      return startNewGame(ctx, 13);
-    case 'new9':
-      return startNewGame(ctx, 9);
+    case 'rotateCw':
+    case 'rotateCcw':
+    case 'flipH':
+    case 'flipV':
+    case 'resetOrientation':
+      return orient(command);
+    case 'numbersOff':
+      return setNumberMode('off');
+    case 'numbersAll':
+      return setNumberMode('all');
+    case 'numbersLast':
+      return setNumberMode('last');
+    case 'numbersRestart':
+      return toggleBranchNumbers();
     case 'open':
       return openFromPicker(ctx);
+    case 'save':
     case 'saveAs':
-      return saveAs(ctx);
+    case 'saveBranch':
+    case 'saveClean':
+      await { save, saveAs, saveBranch, saveClean }[command](ctx);
+      return;
+    case 'quit':
+      return requestQuit(ctx);
+    case 'undo':
+    case 'redo': {
+      if (recordLocked(ctx.transport)) return;
+      const target = document.activeElement;
+      if (isTextEditor(target)) {
+        document.execCommand(command);
+        return Promise.resolve();
+      }
+      const snapshot = useGameStore.getState().snapshot;
+      if (!busy(target) && (command === 'undo' ? snapshot?.canUndo : snapshot?.canRedo))
+        await (command === 'undo' ? undo(ctx) : redo(ctx));
+      return Promise.resolve();
+    }
     case 'clearRecent':
       return ctx.files.clearRecent().catch(() => {});
     case 'analyseGame':
@@ -194,7 +427,7 @@ export function runMenuCommand(
     case 'clearGame':
       return clearAnalysis(ctx, 'game');
     case 'finalScoring':
-      return useScoringStore.getState().start({ transport: ctx.transport, engine });
+      return useScoringStore.getState().start({ transport: ctx.transport, engine, t: ctx.t });
     case 'estimate':
       useEstimateStore.getState().toggle();
       return Promise.resolve();

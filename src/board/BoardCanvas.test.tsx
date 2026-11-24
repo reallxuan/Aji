@@ -146,19 +146,6 @@ describe('BoardCanvas candidates', () => {
     expect(cleared).toBeGreaterThanOrEqual(2);
   });
 
-  it('fades the candidate layer while a new search catches up', () => {
-    stubRatio(1);
-    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
-    const { container, rerender } = render(
-      <BoardCanvas {...props} candidates={[best]} catchingUp />,
-    );
-    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="candidates"]')!;
-    expect(layer).toHaveStyle({ opacity: '0.6' });
-    expect(layer.style.transition).toBe('opacity 200ms');
-    rerender(<BoardCanvas {...props} candidates={[best]} catchingUp={false} />);
-    expect(layer).toHaveStyle({ opacity: '1' });
-  });
-
   it('reports the hovered candidate when the pointer enters and leaves its disc', () => {
     stubRatio(1);
     const onHover = vi.fn();
@@ -273,4 +260,155 @@ it('discs_wait_for_all_fonts', async () => {
     expect(faces.some((f) => f.startsWith(`${weight} `) && f.endsWith('Inter'))).toBe(true);
   delete (document as { fonts?: unknown }).fonts;
   vi.unstubAllGlobals();
+});
+
+it('marked stones retain their labels and trial ring without overlapping move numbers', () => {
+  const a = { x: 2, y: 2 },
+    b = { x: 3, y: 3 },
+    c = { x: 4, y: 4 };
+  const status = empty(9);
+  status[20] = 'black';
+  status[30] = 'white';
+  status[40] = 'black';
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      stones={status}
+      lastMove={null}
+      marks={[
+        { point: a, mark: { kind: 'label', text: 'A' } },
+        { point: b, mark: { kind: 'label', text: 'B' } },
+      ]}
+      numbers={[
+        { point: a, n: 12 },
+        { point: c, n: 13 },
+      ]}
+      tryoutNumbers={[{ point: b, n: 1 }]}
+    />,
+  );
+  const calls = (layer: string) =>
+    (
+      container
+        .querySelector<HTMLCanvasElement>(`[data-layer="${layer}"]`)!
+        .getContext('2d') as unknown as {
+        __getDrawCalls(): { type: string; props: { text?: string } }[];
+      }
+    ).__getDrawCalls();
+  const labels = (layer: string) =>
+    calls(layer)
+      .filter((c) => c.type === 'fillText')
+      .map((c) => c.props.text);
+  expect(labels('marks')).toEqual(['A', 'B']);
+  expect(labels('editing')).toEqual(['13']);
+  expect(calls('editing').filter((c) => c.type === 'stroke')).toHaveLength(1);
+});
+
+it('a variation number leaves the saved label visible on a preview stone', () => {
+  const saved = { x: 1, y: 1 },
+    next = { x: 2, y: 2 };
+  const status = empty(9);
+  status[10] = 'black';
+  status[20] = 'white';
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      stones={status}
+      lastMove={null}
+      marks={[{ point: saved, mark: { kind: 'label', text: 'A' } }]}
+      variation={{
+        numbers: [
+          { point: saved, n: 1 },
+          { point: next, n: 2 },
+        ],
+        newest: next,
+      }}
+    />,
+  );
+  const labels = (layer: string) =>
+    (
+      container
+        .querySelector<HTMLCanvasElement>(`[data-layer="${layer}"]`)!
+        .getContext('2d') as unknown as {
+        __getDrawCalls(): { type: string; props: { text?: string } }[];
+      }
+    )
+      .__getDrawCalls()
+      .filter((c) => c.type === 'fillText')
+      .map((c) => c.props.text);
+  expect(labels('marks')).toEqual(['A']);
+  expect(labels('candidates')).toEqual(['2']);
+});
+
+it('the last-move dot gives way to a mark on its stone and returns when the mark clears', () => {
+  const point = { x: 1, y: 1 };
+  const status = empty(9);
+  status[10] = 'black';
+  const props = {
+    cssSize: 400,
+    boardSize: 9,
+    stones: status,
+    lastMove: { type: 'play' as const, ...point },
+  };
+  const { container, rerender } = render(
+    <BoardCanvas {...props} marks={[{ point, mark: { kind: 'cross' } }]} />,
+  );
+  const stoneLayer = container.querySelectorAll('canvas')[1];
+  expect(drawCalls(stoneLayer).filter((c) => c.type === 'fill')).toHaveLength(0);
+  rerender(<BoardCanvas {...props} />);
+  expect(drawCalls(stoneLayer).filter((c) => c.type === 'fill')).toHaveLength(1);
+});
+
+it('rotated clicks resolve the logical intersection and offset badge', () => {
+  const point = { x: 1, y: 2 };
+  const onClickPoint = vi.fn(),
+    onContextBadge = vi.fn();
+  const badge = { point, letter: 'A', outlined: true, tryout: false };
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      orientation={1}
+      stones={empty(9)}
+      lastMove={null}
+      badges={[badge]}
+      onClickPoint={onClickPoint}
+      onContextBadge={onContextBadge}
+    />,
+  );
+  const { lines, spacing } = boardGeometry(400, 9);
+  const surface = container.firstElementChild!;
+  fireEvent.click(surface, { clientX: lines[6], clientY: lines[1] });
+  expect(onClickPoint).toHaveBeenCalledWith(point);
+  fireEvent.contextMenu(surface, {
+    clientX: lines[6] + spacing * 0.42,
+    clientY: lines[1] - spacing * 0.42,
+  });
+  expect(onContextBadge).toHaveBeenCalledWith(badge, expect.anything());
+});
+
+it('drags from and to logical points and abandons a drag when the view changes', () => {
+  const status = empty(9);
+  status[19] = 'black';
+  const onDragStone = vi.fn();
+  const props = { cssSize: 400, boardSize: 9, stones: status, lastMove: null, onDragStone };
+  const { container, rerender } = render(<BoardCanvas {...props} orientation={1} />);
+  const surface = container.firstElementChild!;
+  const { lines } = boardGeometry(400, 9);
+  const pointer = { pointerId: 1, pointerType: 'mouse', button: 0 };
+  const start = { ...pointer, clientX: lines[6], clientY: lines[1] };
+  const end = { ...pointer, clientX: lines[5], clientY: lines[4] };
+  for (const turn of [false, true]) {
+    fireEvent.pointerDown(surface, start);
+    fireEvent.pointerMove(surface, end);
+    if (turn) rerender(<BoardCanvas {...props} orientation={2} />);
+    fireEvent.pointerUp(surface, end);
+  }
+  expect(onDragStone.mock.calls).toEqual([
+    [
+      { x: 1, y: 2 },
+      { x: 4, y: 3 },
+    ],
+  ]);
 });

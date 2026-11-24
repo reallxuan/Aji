@@ -648,6 +648,16 @@ mod tests {
     }
 
     #[test]
+    fn old_custom_settings_load_with_default_details() {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{"defaultRules":{"kind":"custom","komi":7,"scoring":"area"}}"#;
+        let rules = load_settings(&write(&dir, json)).unwrap().ui.default_rules;
+        assert!(matches!(rules, AnalysisRules::Custom { details: None, .. }));
+        assert_eq!(rules.komi().points(), 7.0);
+        assert_eq!(rules.kata_rules(), aji_core::Rules::Chinese.into());
+    }
+
+    #[test]
     fn ui_settings_json_shape() {
         let ui = UiSettings {
             language: LanguagePreference::ZhCn,
@@ -655,6 +665,7 @@ mod tests {
             disc_lines: [DiscField::Winrate, DiscField::Visits],
             visit_limit: Some(5000),
             default_rules: AnalysisRules::Custom {
+                details: None,
                 komi: aji_core::Komi::new(7.0).unwrap(),
                 scoring: aji_core::game::Scoring::Territory,
             },
@@ -666,10 +677,10 @@ mod tests {
             serde_json::to_value(&ui).unwrap(),
             serde_json::json!({"language":"zh-CN","theme":"dark",
                 "discLines":["winrate","visits"],"visitLimit":5000,
-                "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory"},
+                "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory","details":null},
                 "showCoordinates":false,"perspective":"white","showNextMove":true,
                 "analyseOnOpen":false,"cacheCapMb":1024,"saveAnalysis":false,
-                "jobOptions":{"range":{"kind":"whole"},"side":"both","visits":500,
+                "jobOptions":{"scope":"line","range":{"kind":"whole"},"side":"both","visits":500,
                     "boost":{"on":true,"threshold":10.0,"visits":3000}}})
         );
         assert_eq!(

@@ -3,6 +3,7 @@ import type { TrendNode } from '../transport/generated/TrendNode';
 
 /** The panel's choices before any are remembered (P2 M2 design 5.3). */
 export const DEFAULT_JOB_OPTIONS: JobOptions = {
+  scope: 'line',
   range: { kind: 'whole' },
   side: 'both',
   visits: 500,
@@ -19,27 +20,25 @@ export interface JobEstimate {
 }
 
 /**
- * What a job with `options` would do over the trend's main line, as the backend plans it: one
+ * What a job with `options` would do over the selected line, as the backend plans it: one
  * search per position (a comment node repeats its parent's), between the positions before move
- * `from` and after move `to`, where the chosen side is to move. A setup stone or a handicap is not
- * known here, so Black is taken to move first.
+ * `from` and after move `to`, where the chosen side is to move. The service supplies the replayed side even on setup nodes and comments.
  */
 export function jobEstimate(
   nodes: TrendNode[],
   options: JobOptions,
   speed: number | null,
 ): JobEstimate {
-  const seen = new Set<number>();
+  const seen = new Set<string>();
   let positions = 0;
   let cached = 0;
   for (const node of nodes) {
-    if (seen.has(node.moveNumber)) continue;
-    seen.add(node.moveNumber);
     const { range } = options;
     if (range.kind === 'moves' && (node.moveNumber < range.from - 1 || node.moveNumber > range.to))
       continue;
-    const toMove = node.mover === 'black' ? 'white' : 'black';
-    if (options.side !== 'both' && options.side !== toMove) continue;
+    if (node.tryout || (options.side !== 'both' && options.side !== node.toPlay)) continue;
+    if (node.key === null || seen.has(node.key)) continue;
+    seen.add(node.key);
     if (node.stats && node.stats.visits >= options.visits) cached++;
     else positions++;
   }

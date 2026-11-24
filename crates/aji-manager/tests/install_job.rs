@@ -284,7 +284,7 @@ fn world(spec: Spec) -> World {
         spec.report.clone(),
     ));
     let komi = Komi::new(7.5).unwrap();
-    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
+    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese.into(), komi);
     let engine = aji_engine::Engine::spawn(None, position, EngineOptions::default(), |_| {});
     let client = http_client(
         "Aji/test",

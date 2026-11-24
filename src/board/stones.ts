@@ -5,7 +5,7 @@ import { DEAD_ALPHA } from './ownership';
 import type { Point } from '../transport/generated/Point';
 import { asImage, type CanvasFactory, type OffscreenCanvasLike } from './canvasFactory';
 import type { BoardView } from './drawBoard';
-import { boardGeometry, STONE_RADIUS_SHARE } from './geometry';
+import { gridPosition, boardGeometry, STONE_RADIUS_SHARE } from './geometry';
 /** The last-move dot is 0.22 of the spacing across. */
 const DOT_SHARE = 0.11;
 /** Each white stone takes one of this many grain rotations, by point. */
@@ -224,7 +224,7 @@ export function drawStones(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   if (size <= 0) return;
-  const geometry = boardGeometry(cssSize, boardSize, view.coordinates);
+  const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
   const half = sprites.black.width / 2;
   for (let y = 0; y < boardSize; y++) {
     for (let x = 0; x < boardSize; x++) {
@@ -237,22 +237,20 @@ export function drawStones(
         ctx.save();
         ctx.globalAlpha = DEAD_ALPHA;
       }
-      ctx.drawImage(
-        asImage(image),
-        Math.round(geometry.lines[x] * dpr - half),
-        Math.round(geometry.lines[y] * dpr - half),
-      );
+      const at = gridPosition(geometry, { x, y });
+      ctx.drawImage(asImage(image), Math.round(at.x * dpr - half), Math.round(at.y * dpr - half));
       if (dim) ctx.restore();
     }
   }
   if (lastMove?.type !== 'play') return;
   const under = stones[lastMove.y * boardSize + lastMove.x];
   if (!under) return;
+  const at = gridPosition(geometry, lastMove);
   ctx.fillStyle = under === 'black' ? '#f2efe8' : '#1a1a1a';
   ctx.beginPath();
   ctx.arc(
-    Math.round(geometry.lines[lastMove.x] * dpr - half) + half,
-    Math.round(geometry.lines[lastMove.y] * dpr - half) + half,
+    Math.round(at.x * dpr - half) + half,
+    Math.round(at.y * dpr - half) + half,
     geometry.spacing * DOT_SHARE * dpr,
     0,
     Math.PI * 2,

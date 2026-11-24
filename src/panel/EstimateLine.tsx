@@ -59,7 +59,7 @@ function ShownLine() {
         <button
           type="button"
           className="rounded-[5px] border border-hairline px-2 py-px text-xs text-text hover:bg-divider-soft"
-          onClick={() => void useScoringStore.getState().start({ transport, engine })}
+          onClick={() => void useScoringStore.getState().start({ transport, engine, t })}
         >
           {t('estimate.score')}
         </button>

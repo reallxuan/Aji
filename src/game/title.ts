@@ -24,7 +24,8 @@ export function windowTitle(snapshot: GameSnapshot | null, t: TFunction): string
   const title = gameTitle(snapshot, t);
   const blank =
     !snapshot || (!snapshot.hasMoves && snapshot.name === null && title === t('panel.untitled'));
-  return blank ? 'Aji' : `Aji — ${title}`;
+  const base = blank ? 'Aji' : `Aji — ${title}`;
+  return snapshot?.changed ? `${base} (${t('title.changed')})` : base;
 }
 
 /** A file name for saving under `title`: characters no file system allows become `_`. */

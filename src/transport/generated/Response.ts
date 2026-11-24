@@ -7,6 +7,7 @@ import type { CacheStats } from "./CacheStats";
 import type { EngineState } from "./EngineState";
 import type { EngineVersionChoice } from "./EngineVersionChoice";
 import type { GameSnapshot } from "./GameSnapshot";
+import type { GameTree } from "./GameTree";
 import type { GameWarning } from "./GameWarning";
 import type { HardwareReport } from "./HardwareReport";
 import type { ImportedNetwork } from "./ImportedNetwork";
@@ -52,7 +53,7 @@ network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveS
 /**
  * Boxed: a snapshot is far larger than any other reply.
  */
-snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string, } | { "type": "trend", 
+snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gameTree" } & GameTree | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string | null, bytes: string | null, fellBack: boolean, editId: number, gameRevision: number, } | { "type": "trend", 
 /**
  * The session revision the line was read at; `trendNodes` with another are stale.
  */

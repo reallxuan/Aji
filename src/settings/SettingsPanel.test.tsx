@@ -95,6 +95,25 @@ describe('SettingsPanel', () => {
     }));
   });
 
+  it('sets the replay interval, numbering window and opening position on this device', async () => {
+    mount();
+    await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
+    for (const [name, value] of [
+      ['自动播放间隔（秒）', '0.75'],
+      ['最近显示手数', '7'],
+    ]) {
+      const field = screen.getByRole('spinbutton', { name });
+      fireEvent.change(field, { target: { value } });
+      fireEvent.blur(field);
+    }
+    fireEvent.click(screen.getByRole('radio', { name: '最后一手' }));
+    expect(useDeviceStore.getState().settings).toMatchObject({
+      autoReplaySeconds: 0.75,
+      moveNumbers: { last: 7 },
+      openAt: 'last',
+    });
+  });
+
   it('saves the default rules for new games, and leaves the open game alone', async () => {
     const transport = mount();
     await waitFor(() => expect(useSettingsStore.getState().settings).not.toBeNull());
@@ -109,12 +128,22 @@ describe('SettingsPanel', () => {
     await act(async () => fireEvent.click(within(rules).getByRole('radio', { name: '自定义' })));
     expect(sets(transport.requests).at(-1)?.defaultRules).toEqual({
       kind: 'custom',
+      details: {
+        ko: 'simple',
+        tax: 'none',
+        suicide: false,
+        hasButton: false,
+        whiteHandicapBonus: 'n',
+        friendlyPassOk: true,
+      },
       komi: 7.5,
       scoring: 'area',
     });
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '增加贴目' })));
     expect(sets(transport.requests).at(-1)?.defaultRules).toMatchObject({ komi: 8 });
-    expect(transport.requests.some((r) => r.type === 'gameSetRules')).toBe(false);
+    expect(
+      transport.requests.some((r) => r.type === 'gameEdit' && r.edit.kind === 'setRules'),
+    ).toBe(false);
   });
 
   it('switches language and theme at once', async () => {

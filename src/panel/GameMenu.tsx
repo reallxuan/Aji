@@ -4,10 +4,12 @@ import {
   EraserIcon,
   FolderOpenIcon,
   HistoryIcon,
+  InfoIcon,
   PlusIcon,
   SaveIcon,
   ScanSearchIcon,
 } from 'lucide-react';
+import { cn } from 'cn';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,8 +24,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { GameInfoSurface } from './GameInfoPopover';
 import { shortcut, useOs } from '../app/useOs';
-import { openFromPicker, openRecent, saveAs, startNewGame } from '../game/actions';
+import {
+  openFromPicker,
+  openRecent,
+  save,
+  saveAs,
+  saveBranch,
+  saveClean,
+  startNewGame,
+} from '../game/actions';
 import { useGameStore } from '../game/gameStore';
 import { gameTitle } from '../game/title';
 import { useEngineStoreApi } from '../engine/engineStore';
@@ -36,6 +47,12 @@ import type { RecentEntry } from '../platform/files';
 import type { CacheScope } from '../transport/generated/CacheScope';
 
 const DAY = 24 * 60 * 60 * 1000;
+const SAVE_ACTIONS = [
+  ['save', save],
+  ['saveAs', saveAs],
+  ['saveBranch', saveBranch],
+  ['saveClean', saveClean],
+] as const;
 const SIZES = [19, 13, 9] as const;
 /** The job panel's 开始, which takes the focus so Return starts. */
 const START_BUTTON = '[data-start]';
@@ -94,12 +111,16 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
  * and 截图 are in the menu bar or the 视图 button (owner, 2026-11-22). 分析全局… drops its panel
  * from the title, as the rules chip drops its own.
  */
-export function GameMenu() {
+export function GameMenu({
+  touch = false,
+  narrow = false,
+}: { touch?: boolean; narrow?: boolean } = {}) {
   const { t } = useTranslation();
   const ctx = useActionContext();
   const engine = useEngineStoreApi();
   const os = useOs();
   const snapshot = useGameStore((s) => s.snapshot);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const panelOpen = useJobPanelStore((s) => s.open);
   const setPanelOpen = useJobPanelStore((s) => s.setOpen);
@@ -110,7 +131,13 @@ export function GameMenu() {
   const icon = 'size-4 text-text-muted';
 
   return (
-    <Popover open={panelOpen} onOpenChange={setPanelOpen}>
+    <Popover
+      open={panelOpen || (infoOpen && !narrow)}
+      onOpenChange={(open) => {
+        if (infoOpen) setInfoOpen(open);
+        else setPanelOpen(open);
+      }}
+    >
       <DropdownMenu
         onOpenChange={(open) => {
           if (!open) return;
@@ -119,7 +146,14 @@ export function GameMenu() {
         }}
       >
         <PopoverAnchor asChild>
-          <DropdownMenuTrigger className="group -ml-1.5 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft">
+          <DropdownMenuTrigger
+            className={cn(
+              'group -ml-1.5 flex items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft',
+              touch
+                ? 'min-h-11 min-w-11'
+                : 'min-w-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11',
+            )}
+          >
             <span className="truncate">{title}</span>
             <ChevronDownIcon
               className="size-3.5 flex-none text-text-muted group-data-[state=open]:text-text"
@@ -152,6 +186,16 @@ export function GameMenu() {
                   {size === 19 && <DropdownMenuShortcut>{shortcut(os, N)}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>{t('menu.otherSizes')}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto">
+                  {Array.from({ length: 14 }, (_, i) => i + 5).map((n) => (
+                    <DropdownMenuItem key={n} onSelect={() => void startNewGame(ctx, n)}>
+                      {t(`menu.size${n}`)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuItem className="gap-2.5" onSelect={() => void openFromPicker(ctx)}>
@@ -180,16 +224,25 @@ export function GameMenu() {
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2.5"
-            disabled={!snapshot?.hasMoves}
-            onSelect={() => void saveAs(ctx)}
-          >
-            <SaveIcon className={icon} aria-hidden />
-            {t('menu.saveAs')}
-            <DropdownMenuShortcut>{shortcut(os, S, true)}</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {SAVE_ACTIONS.map(([id, action]) => (
+            <DropdownMenuItem
+              key={id}
+              className="gap-2.5"
+              disabled={!snapshot}
+              onSelect={() => void action(ctx)}
+            >
+              <SaveIcon className={icon} aria-hidden />
+              {t(`commands.file.${id}`)}
+              {(id === 'save' || id === 'saveAs') && (
+                <DropdownMenuShortcut>{shortcut(os, S, id === 'saveAs')}</DropdownMenuShortcut>
+              )}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
+          <DropdownMenuItem className="gap-2.5" onSelect={() => setInfoOpen(true)}>
+            <InfoIcon className={icon} aria-hidden />
+            {t('gameInfo.title')}
+          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2.5" onSelect={openJobPanel}>
             <ScanSearchIcon className={icon} aria-hidden />
             {t('menu.analyseGame')}
@@ -211,7 +264,7 @@ export function GameMenu() {
             className="gap-2.5"
             disabled={!snapshot?.hasMoves}
             onSelect={() =>
-              void useScoringStore.getState().start({ transport: ctx.transport, engine })
+              void useScoringStore.getState().start({ transport: ctx.transport, engine, t: ctx.t })
             }
           >
             <CalculatorIcon className={icon} aria-hidden />
@@ -219,20 +272,24 @@ export function GameMenu() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent
-        align="start"
-        sideOffset={6}
-        collisionPadding={12}
-        className="w-auto p-0"
-        onOpenAutoFocus={(event) => {
-          // Return starts: 开始 has the focus.
-          event.preventDefault();
-          const start = (event.currentTarget as HTMLElement).querySelector(START_BUTTON);
-          if (start instanceof HTMLElement) start.focus();
-        }}
-      >
-        <JobPanelContent onDone={() => setPanelOpen(false)} />
-      </PopoverContent>
+      {infoOpen ? (
+        <GameInfoSurface open={infoOpen} narrow={narrow} onClose={() => setInfoOpen(false)} />
+      ) : (
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          collisionPadding={12}
+          className="w-auto p-0"
+          onOpenAutoFocus={(event) => {
+            // Return starts: 开始 has the focus.
+            event.preventDefault();
+            const start = (event.currentTarget as HTMLElement).querySelector(START_BUTTON);
+            if (start instanceof HTMLElement) start.focus();
+          }}
+        >
+          <JobPanelContent onDone={() => setPanelOpen(false)} />
+        </PopoverContent>
+      )}
     </Popover>
   );
 }

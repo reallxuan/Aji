@@ -14,8 +14,8 @@ const withRules = (current: AnalysisRules, changed = false) =>
 it.each([
   [{ kind: 'chinese' } as AnalysisRules, '中国 7.5'],
   [{ kind: 'japaneseKorean' } as AnalysisRules, '日韩 6.5'],
-  [{ kind: 'custom', komi: 7, scoring: 'territory' } as AnalysisRules, '自定义 7'],
-  [{ kind: 'custom', komi: -0.5, scoring: 'area' } as AnalysisRules, '自定义 -0.5'],
+  [{ kind: 'custom', details: null, komi: 7, scoring: 'territory' } as AnalysisRules, '自定义 7'],
+  [{ kind: 'custom', details: null, komi: -0.5, scoring: 'area' } as AnalysisRules, '自定义 -0.5'],
 ])('labels %j as %s', (rules, label) => {
   renderWithGame(<RulesChip />, { snapshot: withRules(rules) });
   expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
@@ -39,7 +39,7 @@ it('opens the game information popover', () => {
 
 it('keeps a komi-only form for a narrow panel, under the full name', () => {
   renderWithGame(<RulesChip />, {
-    snapshot: withRules({ kind: 'custom', komi: 7, scoring: 'area' }),
+    snapshot: withRules({ kind: 'custom', details: null, komi: 7, scoring: 'area' }),
   });
   // The header's container query shows one or the other; both carry the komi.
   expect(document.querySelector('[data-compact]')).toHaveTextContent(/^7$/);

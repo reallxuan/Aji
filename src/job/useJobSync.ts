@@ -1,10 +1,11 @@
+import { useGameStore } from '../game/gameStore';
+import { useTrendStore } from '../analysis/trendStore';
 import { useEffect } from 'react';
 import { useTransport } from '../transport/TransportProvider';
 import { useJobStore } from './jobStore';
 
 /**
- * Keeps the job store on the backend's `jobProgress` events. A whole-trend push comes only with
- * another game, new rules or a cleared game, so it hides the strip.
+ * Keeps job progress and coverage across line changes until the service resets analysis.
  */
 export function useJobSync(): void {
   const transport = useTransport();
@@ -12,7 +13,16 @@ export function useJobSync(): void {
     () =>
       transport.subscribe((event) => {
         if (event.type === 'jobProgress') useJobStore.getState().apply(event.progress);
-        else if (event.type === 'gameTrend') useJobStore.getState().hideStrip();
+        else if (
+          event.type === 'gameTrend' &&
+          event.reason === 'reset' &&
+          event.revision >=
+            Math.max(
+              useGameStore.getState().snapshot?.lineRevision ?? -1,
+              useTrendStore.getState().lineRevision ?? -1,
+            )
+        )
+          useJobStore.getState().hideStrip();
       }),
     [transport],
   );

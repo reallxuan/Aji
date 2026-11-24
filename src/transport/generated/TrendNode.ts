@@ -2,13 +2,14 @@
 import type { Color } from "./Color";
 import type { Loss } from "./Loss";
 import type { Move } from "./Move";
+import type { PositionKey } from "./PositionKey";
 import type { TrendStats } from "./TrendStats";
 
 /**
- * One main-line node in the trend graph (design 5.3). Several nodes can share a move number:
+ * One selected-line node in the trend graph (design 5.3). Several nodes can share a move number:
  * setup and comment-only nodes carry no move.
  */
-export type TrendNode = { moveNumber: number, 
+export type TrendNode = { node: number, key: PositionKey | null, moveNumber: number, 
 /**
  * Who played the node's move; `null` on a node without one.
  */
@@ -20,4 +21,4 @@ stats: TrendStats | null,
 /**
  * The node's move's loss (design 5.1); `null` without a move or results.
  */
-loss: Loss | null, };
+loss: Loss | null, toPlay: Color | null, tryout: boolean, };

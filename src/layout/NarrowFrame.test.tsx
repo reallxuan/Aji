@@ -7,6 +7,7 @@ import { candidate, play, subBoardHarness } from '../analysis/subBoardTesting';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { useDeviceStore } from '../device/deviceStore';
 import { createEngineStore, EngineStoreProvider } from '../engine/engineStore';
+import { makeSnapshot } from '../game/testing';
 import { resetGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { createI18n } from '../i18n/createI18n';
@@ -59,6 +60,7 @@ function renderApp(engine: EngineState) {
 describe('the narrow arrangement', () => {
   beforeEach(() => {
     setWindow(375, 812);
+    resetGameStore();
     useWizardStore.setState({ open: false, dismissed: false, rerun: false });
     usePanelStore.setState({ view: 'main' });
     resetScoringStore();
@@ -67,9 +69,10 @@ describe('the narrow arrangement', () => {
   it('375×812 shows tabs and the bottom navigation', () => {
     renderWithGame(<LayoutFrame />);
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
-    expect(tabs()).toEqual(['走势', '候选', '波动']);
+    expect(tabs()).toEqual(['走势', '候选', '波动', '评论', '分支']);
     expect(shown()).toEqual(['trend']);
-    expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(4);
+    expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(5);
+    expect(within(bottomNav()!).getByRole('button', { name: '自动播放' })).toBeInTheDocument();
     // The board takes the width, less 4 px each side.
     expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('367px');
   });
@@ -85,6 +88,35 @@ describe('the narrow arrangement', () => {
     expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('668px');
   });
 
+  it.each([320, 375])(
+    'the %ipx Windows header keeps game and settings reachable beside a three-digit counter',
+    async (width) => {
+      setWindow(width, 420);
+      renderWithGame(<LayoutFrame />, {
+        os: 'windows',
+        language: 'en',
+        snapshot: makeSnapshot({
+          name: 'Samsung Cup final, game two',
+          tryout: 0,
+          changed: true,
+          moveNumber: 123,
+          lineLength: 247,
+        }),
+      });
+      const header = within(screen.getByRole('banner'));
+      const statuses = header.getByRole('status');
+      expect(within(statuses).getByText('Trying moves')).toBeVisible();
+      expect(within(statuses).getByText('Modified')).toBeVisible();
+      const game = header.getByRole('button', { name: 'Samsung Cup final, game two' });
+      expect(game).toHaveClass('min-h-11', 'min-w-11');
+      expect(header.getByText('123')).toBeVisible();
+      expect(await header.findByRole('button', { name: 'View' })).toBeEnabled();
+      expect(header.getByRole('button', { name: 'Settings' })).toBeEnabled();
+      // A 24 px status row joins the 52 px controls above the board.
+      expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('160px');
+    },
+  );
+
   it('the phone shows the capture counts under the bar', () => {
     renderWithGame(<LayoutFrame />);
     fireEvent.click(screen.getByRole('tab', { name: '候选' }));
@@ -96,8 +128,8 @@ describe('the narrow arrangement', () => {
     setWindow(560, 420);
     renderWithGame(<LayoutFrame />);
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
-    // 420 − 52 (header) − 68 (bar and captures) − 72 (navigation): the board takes it all.
-    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('228px');
+    // 420 − 52 (header) − 68 (bar and captures) − 72 (navigation) − 44 (edit row): the board takes it all.
+    expect((document.querySelector('[data-board]') as HTMLElement).style.width).toBe('184px');
     // A phone tall enough keeps 160 px for the panels while the board stays at 320 px or more.
     setWindow(375, 667);
     act(() => void window.dispatchEvent(new Event('resize')));
@@ -106,8 +138,6 @@ describe('the narrow arrangement', () => {
 
   it('Thinking draws a line on the board unless sub-board 1 is on screen', async () => {
     useDeviceStore.getState().update({ layout: presetLayout('thinking') });
-    // Earlier tests leave a newer snapshot; the harness starts its own game.
-    resetGameStore();
     resetViewStore();
     const h = subBoardHarness();
     render(
@@ -134,7 +164,7 @@ describe('the narrow arrangement', () => {
     renderWithGame(<LayoutFrame />);
     expect(bottomNav()).toBeNull();
     // The first panel always shows; a strip chooses the second among the rest (候选, 波动).
-    expect(tabs()).toEqual(['候选', '波动']);
+    expect(tabs()).toEqual(['候选', '波动', '评论', '分支']);
     expect(shown()).toEqual(['trend', 'candidates']);
     // The header keeps the full navigation there.
     expect(screen.getByRole('button', { name: '下一手' })).toBeInTheDocument();
@@ -143,13 +173,13 @@ describe('the narrow arrangement', () => {
   it('tabs follow the layout order and skip hidden panels', () => {
     useDeviceStore.getState().update({ layout: presetLayout('classic') });
     const first = renderWithGame(<LayoutFrame />);
-    expect(tabs()).toEqual(['走势', '候选', '副盘']);
+    expect(tabs()).toEqual(['走势', '分支', '评论', '候选', '副盘']);
     first.unmount();
     useDeviceStore
       .getState()
       .update({ layout: hidePanel(presetLayout('default'), { kind: 'trend' }) });
     renderWithGame(<LayoutFrame />);
-    expect(tabs()).toEqual(['候选', '波动']);
+    expect(tabs()).toEqual(['候选', '波动', '评论', '分支']);
   });
 
   it('the active tab is remembered', () => {
@@ -167,6 +197,9 @@ describe('the narrow arrangement', () => {
     const targets = [
       ...within(bottomNav()!).getAllByRole('button'),
       ...screen.getAllByRole('tab'),
+      ...['试下', '标记', '摆子', '撤销', '重做'].map((name) =>
+        screen.getByRole('button', { name }),
+      ),
       screen.getByRole('button', { name: '设置' }),
     ];
     for (const target of targets) expect(target).toHaveClass('min-h-11', 'min-w-11');

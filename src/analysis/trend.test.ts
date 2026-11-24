@@ -9,7 +9,11 @@ function nodes(
   movers: Array<Color | null> = stats.map((_, i) => (i === 0 ? null : i % 2 ? 'black' : 'white')),
 ): TrendNode[] {
   return stats.map((s, i) => ({
+    node: i,
+    key: i.toString(16).padStart(16, '0'),
     moveNumber: i,
+    tryout: false,
+    toPlay: i % 2 ? 'white' : 'black',
     mover: movers[i],
     move: movers[i] ? { type: 'play', x: i % 19, y: 0 } : null,
     stats: s && { winrate: s[0], scoreLead: s[1], visits: s[2] },

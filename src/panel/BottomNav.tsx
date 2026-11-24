@@ -1,3 +1,7 @@
+import { useRef } from 'react';
+import { captureReplayVisit, stopReplay } from '../game/replayStore';
+import { useTransport } from '../transport/TransportProvider';
+import { ReplayButton } from './ReplayButton';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -24,6 +28,8 @@ const BUTTONS: Array<[CommandId, string, LucideIcon, 'start' | 'end']> = [
 export function BottomNav() {
   const { t } = useTranslation();
   const run = useRunCommand();
+  const transport = useTransport();
+  const press = useRef<{ id: CommandId; pointer: number; stillHere?: () => boolean } | null>(null);
   const atStart = useGameStore((s) => s.snapshot?.atStart ?? true);
   const atEnd = useGameStore((s) => s.snapshot?.atEnd ?? true);
   return (
@@ -38,11 +44,30 @@ export function BottomNav() {
           aria-label={t(label)}
           disabled={end === 'start' ? atStart : atEnd}
           className="flex min-h-11 min-w-11 flex-1 items-center justify-center rounded-md text-text hover:bg-divider-soft disabled:opacity-35"
-          onClick={() => run(id)}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !event.isPrimary) return;
+            press.current = {
+              id,
+              pointer: event.pointerId,
+              stillHere: captureReplayVisit(transport),
+            };
+            stopReplay();
+          }}
+          onPointerCancel={(event) => {
+            if (event.pointerId === press.current?.pointer) press.current = null;
+          }}
+          onClick={(event) => {
+            const origin = press.current;
+            press.current = null;
+            // Keyboard and assistive activation have no pointer press.
+            if (event.detail === 0 || (origin?.id === id && origin.stillHere?.() !== false))
+              run(id);
+          }}
         >
           <Icon className="size-6" aria-hidden />
         </button>
       ))}
+      <ReplayButton bottom />
     </nav>
   );
 }

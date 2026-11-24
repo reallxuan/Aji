@@ -130,7 +130,11 @@ it('reads 白领先 when White leads', async () => {
 });
 
 const PASS_NODES: TrendNode[] = [0, 1, 2].map((i) => ({
+  node: i,
+  key: i.toString(16).padStart(16, '0'),
   moveNumber: i,
+  tryout: false,
+  toPlay: i % 2 ? 'white' : 'black',
   mover: i === 0 ? null : i % 2 ? 'black' : 'white',
   move: i === 0 ? null : { type: 'pass' },
   stats: null,

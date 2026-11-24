@@ -17,6 +17,9 @@ describe('parseDeviceSettings', () => {
   it('keeps every valid field', () => {
     const raw = {
       version: 1,
+      autoReplaySeconds: 0.75,
+      openAt: 'last',
+      moveNumbers: { mode: 'last', last: 15, restartInBranch: true, lastOn: 'last' },
       layout: { anything: true },
       narrowTab: 'candidates',
       keymap: { ArrowLeft: 'nav.next' },
@@ -104,4 +107,22 @@ describe('parseDeviceSettings', () => {
     expect(d.swingThreshold).toEqual({ winrate: 5, score: 2 });
     expect(d.swingAfterOnly).toBe(false);
   });
+});
+
+it('old device settings migrate with replay and opening defaults', () => {
+  expect(parseDeviceSettings({ version: 1, migrated: true })).toMatchObject({
+    autoReplaySeconds: 1.5,
+    openAt: 'first',
+  });
+  expect(
+    parseDeviceSettings({ version: 1, autoReplaySeconds: 0.75, openAt: 'last' }),
+  ).toMatchObject({ autoReplaySeconds: 0.75, openAt: 'last' });
+  expect(parseDeviceSettings({ version: 1, autoReplaySeconds: -1, openAt: 'bad' })).toMatchObject({
+    autoReplaySeconds: 1.5,
+    openAt: 'first',
+  });
+});
+
+it('rejects replay intervals too large for a browser timer', () => {
+  expect(parseDeviceSettings({ version: 1, autoReplaySeconds: 1e10 }).autoReplaySeconds).toBe(1.5);
 });

@@ -27,3 +27,25 @@ it('t toggles the estimate', async () => {
   expect(useEstimateStore.getState().on).toBe(false);
   setCommandContext(null);
 });
+
+it('recognises editing, export and view commands in a device keymap', async () => {
+  const { resolveKeymap } = await import('./keymap');
+  const ids = [
+    'edit.tryout',
+    'file.save',
+    'file.saveBranch',
+    'file.saveClean',
+    'view.moveNumbers',
+    'view.rotateCw',
+    'view.rotateCcw',
+    'view.flipH',
+    'view.flipV',
+    'view.resetOrientation',
+    'replay.toggle',
+  ];
+  for (const id of ids) {
+    expect(resolveKeymap('windows', { J: id }).get('J')).toBe(id);
+    for (const lang of ['en', 'zh-CN'] as const)
+      expect(createI18n(lang).exists(`commands.${id}`)).toBe(true);
+  }
+});

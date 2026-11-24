@@ -1,4 +1,6 @@
+import { useDeviceStore } from '../device/deviceStore';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEngineStore } from '../engine/engineStore';
 import { createI18n } from '../i18n/createI18n';
 import { createFakeFiles } from '../platform/fakeFiles';
 import { createFakeTransport } from '../transport/fake';
@@ -6,7 +8,14 @@ import type { GameWarning } from '../transport/generated/GameWarning';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
 import { TransportError } from '../transport/transport';
-import { navigate, openDropped, openFromPicker, openRecent, saveAs, startNewGame } from './actions';
+import {
+  navigate,
+  openDropped,
+  openFromPicker,
+  runMenuCommand,
+  saveAs,
+  startNewGame,
+} from './actions';
 import { resetGameStore, useGameStore } from './gameStore';
 import { resetNotices, useNoticeStore } from './noticeStore';
 import { makeSnapshot, noInfo } from './testing';
@@ -17,7 +26,7 @@ const samsung = makeSnapshot({
   name: 'samsung',
   info: { ...noInfo, black: '丁浩', white: '廖元赫' },
   hasMoves: true,
-  mainLineLength: 183,
+  lineLength: 183,
 });
 
 function setup(
@@ -124,9 +133,9 @@ describe('opening', () => {
     expect(useNoticeStore.getState().notice?.title).toBe('这个文件里有 3 局棋，只打开了第一局');
   });
 
-  it('refuses a dropped file that is not .sgf without reading it', async () => {
+  it('reports the first dropped path when none are .sgf without reading it', async () => {
     const { ctx, requests } = setup(() => opened(), { files: { '/notes/a.txt': 'x' } });
-    await openDropped(ctx, ['/notes/a.txt']);
+    await openDropped(ctx, ['/notes/a.txt', '/notes/b.txt']);
     expect(requests).toEqual([]);
     expect(useNoticeStore.getState().notice).toMatchObject({
       kind: 'error',
@@ -135,36 +144,53 @@ describe('opening', () => {
     });
   });
 
-  it('opens the first dropped file', async () => {
+  it('drop opens the first sgf', async () => {
     const { ctx, files } = setup(() => opened(), {
-      files: { '/a.sgf': '(;)', '/b.sgf': '(;)' },
+      files: { '/notes.txt': 'x', '/a.SgF': '(;)', '/b.sgf': '(;)' },
     });
-    await openDropped(ctx, ['/a.sgf', '/b.sgf']);
-    expect(files.remembered.map((r) => r.path)).toEqual(['/a.sgf']);
+    await openDropped(ctx, ['/notes.txt', '/a.SgF', '/b.sgf']);
+    expect(files.remembered.map((r) => r.path)).toEqual(['/a.SgF']);
   });
 
-  it('shows a missing recent file', async () => {
-    const { ctx, files } = setup(() => opened(), { recent: ['/gone.sgf'] });
-    await openRecent(ctx, 0);
+  it('a native Recent command removes a missing file and shows the notice', async () => {
+    const { ctx, files, requests } = setup(() => opened(), {
+      files: { '/here.sgf': '(;)' },
+      recent: ['/gone.sgf', '/here.sgf'],
+    });
+    await runMenuCommand(ctx, { recent: 0 }, createEngineStore());
+    expect(requests).toEqual([]);
     expect(useNoticeStore.getState().notice).toMatchObject({
       kind: 'error',
+      title: '无法打开 gone.sgf',
       detail: '文件已移动或删除。',
     });
-    expect(await files.recent()).toEqual([]);
+    expect((await files.recent()).map((entry) => entry.path)).toEqual(['/here.sgf']);
   });
 });
 
 describe('saving', () => {
   it('exports, writes under the title and remembers the saved file', async () => {
     useGameStore.getState().apply(samsung);
-    const { ctx, files } = setup(
+    const { ctx, files, requests } = setup(
       (request) =>
         request.type === 'gameExport'
-          ? { type: 'gameExport', name: 'samsung.sgf', text: '(;GM[1])\n' }
+          ? {
+              type: 'gameExport',
+              gameRevision: 0,
+              name: 'samsung.sgf',
+              text: '(;GM[1])\n',
+              bytes: null,
+              editId: 7,
+              fellBack: false,
+            }
           : opened(),
       { savePath: '/out/丁浩 对 廖元赫.sgf' },
     );
     await saveAs(ctx);
+    expect(requests).toEqual([
+      { type: 'gameExport', options: { scope: 'game', clean: false, inPlace: false } },
+      { type: 'gameSaved', gameRevision: 0, editId: 7, utf8: true },
+    ]);
     expect(files.saveRequests).toEqual(['丁浩 对 廖元赫.sgf']);
     expect(files.written.get('/out/丁浩 对 廖元赫.sgf')).toBe('(;GM[1])\n');
     expect(files.remembered).toEqual([
@@ -174,16 +200,29 @@ describe('saving', () => {
 
   it('does nothing when the save dialog is cancelled', async () => {
     useGameStore.getState().apply(samsung);
-    const { ctx, files } = setup(() => ({ type: 'gameExport', name: 'a.sgf', text: '(;)' }), {
-      savePath: null,
-    });
+    const { ctx, files, requests } = setup(
+      () => ({
+        type: 'gameExport',
+        gameRevision: 0,
+        name: 'a.sgf',
+        text: '(;)',
+        bytes: null,
+        editId: 0,
+        fellBack: false,
+      }),
+      {
+        savePath: null,
+      },
+    );
     await saveAs(ctx);
+    expect(requests.map((request) => request.type)).toEqual(['gameExport']);
     expect(files.written.size).toBe(0);
     expect(files.remembered).toEqual([]);
     expect(useNoticeStore.getState().notice).toBeNull();
   });
 
-  it('shows why an empty game cannot be saved', async () => {
+  it('shows an export failure', async () => {
+    useGameStore.getState().apply(samsung);
     const { ctx } = setup(() => {
       throw new TransportError('gameEmpty', 'empty');
     });
@@ -200,9 +239,30 @@ describe('game requests', () => {
       warnings: [],
     }));
     await startNewGame(ctx, 9);
-    expect(requests[0]).toEqual({ type: 'gameNew', size: 9 });
+    expect(requests[0]).toEqual({ type: 'gameNew', size: 9, expectedRevision: 0 });
     await navigate(ctx, { move: 12 });
     expect(requests[1]).toEqual({ type: 'gameNavigate', to: { move: 12 } });
     expect(useGameStore.getState().snapshot?.revision).toBe(12);
   });
+});
+
+it('routes rules edits through the same refusal notice as the other edits', async () => {
+  const { setRules } = await import('./actions');
+  const { ctx } = setup(() => {
+    throw new TransportError('gameEndTryoutFirst', 'end try-out first');
+  });
+  await setRules(ctx, { kind: 'japaneseKorean' });
+  expect(useNoticeStore.getState().notice?.title).toBe('先结束试下');
+});
+
+it('open at last sends atEnd with the departure revision', async () => {
+  const { ctx, requests } = setup(() => opened(), {
+    files: { '/game.sgf': '(;)' },
+    pick: '/game.sgf',
+  });
+  useDeviceStore.getState().update({ openAt: 'last' });
+  await openFromPicker(ctx);
+  expect(requests).toContainEqual(
+    expect.objectContaining({ type: 'gameOpen', atEnd: true, expectedRevision: 0 }),
+  );
 });

@@ -68,7 +68,11 @@ fn gated(interval_ms: u64) -> EngineOptions {
 }
 
 fn position(moves: &[(Color, u8, u8)]) -> Position {
-    let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let mut p = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    );
     p.moves = moves
         .iter()
         .map(|&(c, x, y)| (c, Move::Play(Point { x, y })))
@@ -1555,7 +1559,7 @@ fn default_options_keep_every_candidate_katago_reports() {
 fn superko_repeat() -> Position {
     let mut p = Position::empty(
         BoardSize::NINETEEN,
-        Rules::TrompTaylor,
+        Rules::TrompTaylor.into(),
         Komi::new(7.5).unwrap(),
     );
     let at = |s: &str| aji_core::move_from_gtp(s, BoardSize::NINETEEN).unwrap();
@@ -1935,7 +1939,11 @@ async fn a_burst_of_30_positions_in_300ms_sends_at_most_4_queries() {
 
 /// The positions of a made-up game of `n` moves, from the empty board.
 fn game_line(n: u8) -> Vec<Position> {
-    let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let mut p = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    );
     let mut line = vec![p.clone()];
     for i in 0..n {
         let color = if i % 2 == 0 {

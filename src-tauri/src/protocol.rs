@@ -4,7 +4,7 @@
 //! `src/transport/generated/` from them. They cross a process or network boundary, so they never
 //! carry file paths, and errors carry a code rather than user-facing text.
 
-use aji_core::game::{AnalysisRules, GameInfo, Illegal, Preview, Score};
+use aji_core::game::{GameInfo, Illegal, Mark, Preview, Score};
 use aji_core::{Color, Move, Point, PositionKey};
 use aji_engine::{AnalysisUpdate, CacheStats, EngineState, Loss, Rejection, TrendStats};
 pub use aji_manager::OsKind;
@@ -17,7 +17,7 @@ use aji_manager::recommend::{BackendRecommendation, EngineVersionChoice, Network
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::game::{GameWarning, NavTarget, RulesState};
+use crate::game::{GameWarning, NavTarget, RulesState, SessionEdit};
 use crate::job::{JobOptions, JobProgress};
 use crate::settings::UiSettings;
 
@@ -85,12 +85,20 @@ pub enum Request {
     },
     /// Replaces the game with an empty board of `size` lines and the default rules.
     GameNew {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        expected_revision: Option<u64>,
         size: u8,
     },
     /// Opens a file's first game. `bytes` is the file, base64-encoded.
     GameOpen {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        expected_revision: Option<u64>,
         name: String,
         bytes: String,
+        #[serde(default)]
+        at_end: bool,
     },
     GameNavigate {
         to: NavTarget,
@@ -100,16 +108,26 @@ pub enum Request {
     GamePreview {
         moves: Vec<Move>,
     },
-    /// The rules KataGo analyses this game with; `null` goes back to the file's reading.
-    GameSetRules {
-        rules: Option<AnalysisRules>,
+    GameEdit {
+        edit: SessionEdit,
+    },
+    GameUndo,
+    GameRedo,
+    GameTree,
+    GameSaved {
+        #[ts(type = "number")]
+        edit_id: u64,
+        #[ts(type = "number")]
+        game_revision: u64,
+        utf8: bool,
     },
     GameSnapshot,
-    /// The game as UTF-8 SGF text, with a file name to suggest.
-    GameExport,
-    /// The cached result of every main-line node, for the trend graph.
+    GameExport {
+        options: ExportOptions,
+    },
+    /// The cached result of every selected-line node, for the trend graph.
     GameTrend,
-    /// Analyses the main line (P2 M2 design 5.3), replacing a running job.
+    /// Analyses the selected line or all kept branches, replacing a running job.
     JobStart {
         options: JobOptions,
     },
@@ -132,7 +150,7 @@ pub enum Request {
 pub enum CacheScope {
     /// The current position's.
     Position,
-    /// The main line's positions.
+    /// All kept positions in the record.
     Game,
     /// Every result, for every engine.
     All,
@@ -223,12 +241,19 @@ pub enum Response {
         snapshot: Box<GameSnapshot>,
         warnings: Vec<GameWarning>,
     },
+    GameTree(GameTree),
     GamePreview {
         preview: Preview,
     },
     GameExport {
         name: String,
-        text: String,
+        text: Option<String>,
+        bytes: Option<String>,
+        fell_back: bool,
+        #[ts(type = "number")]
+        edit_id: u64,
+        #[ts(type = "number")]
+        game_revision: u64,
     },
     Trend {
         /// The session revision the line was read at; `trendNodes` with another are stale.
@@ -241,12 +266,14 @@ pub enum Response {
     Ok,
 }
 
-/// One main-line node in the trend graph (design 5.3). Several nodes can share a move number:
+/// One selected-line node in the trend graph (design 5.3). Several nodes can share a move number:
 /// setup and comment-only nodes carry no move.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TrendNode {
+    pub node: u32,
+    pub key: Option<PositionKey>,
     pub move_number: u32,
     /// Who played the node's move; `null` on a node without one.
     pub mover: Option<Color>,
@@ -257,9 +284,13 @@ pub struct TrendNode {
     pub stats: Option<TrendStats>,
     /// The node's move's loss (design 5.1); `null` without a move or results.
     pub loss: Option<Loss>,
+    // The replayed side to move; absent where no engine position exists.
+    pub to_play: Option<Color>,
+    // A visible scratch node, excluded from whole-game jobs.
+    pub tryout: bool,
 }
 
-/// A trend node whose result changed, by its index on the main line.
+/// A trend node whose result changed, by its index on the selected line.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -277,6 +308,17 @@ pub struct RunningEngine {
     /// `null` for a development engine.
     pub backend: Option<Backend>,
     pub network_name: String,
+}
+
+/// Why every node in the selected trend is being published again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TrendChange {
+    /// Another line of the same game, including edits to that line.
+    LineChanged,
+    /// A replacement game, effective rules change, or cleared analysis.
+    Reset,
 }
 
 /// A message the engine side pushes to the UI without being asked, tagged the same way.
@@ -304,11 +346,14 @@ pub enum AppEvent {
     },
     /// The game changed, here or in another client.
     GameSnapshot {
-        snapshot: GameSnapshot,
+        snapshot: Box<GameSnapshot>,
     },
-    /// The main line's positions, or the engine's results, changed wholesale: a game was opened
-    /// or created, its rules changed, or the engine's files changed.
+    GameTree {
+        tree: GameTree,
+    },
+    /// The full trend for the selected line.
     GameTrend {
+        reason: TrendChange,
         #[ts(type = "number")]
         revision: u64,
         nodes: Vec<TrendNode>,
@@ -328,6 +373,76 @@ pub enum AppEvent {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ExportScope {
+    #[default]
+    Game,
+    Branch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ExportOptions {
+    pub scope: ExportScope,
+    pub clean: bool,
+    pub in_place: bool,
+}
+
+/// Attached nodes in depth-first preorder. Sibling order is record order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct GameTree {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub nodes: Vec<TreeNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct TreeNode {
+    pub id: u32,
+    pub parent: Option<u32>,
+    pub color: Option<Color>,
+    pub mv: Option<Move>,
+    /// Comment (1), try-out (2), no move (4), illegal (8).
+    pub flags: u8,
+}
+
+impl TreeNode {
+    pub const COMMENT: u8 = 1;
+    pub const TRYOUT: u8 = 2;
+    pub const NO_MOVE: u8 = 4;
+    pub const ILLEGAL: u8 = 8;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct MarkAt {
+    pub point: Point,
+    pub mark: Mark,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct Continuation {
+    pub node: u32,
+    pub mv: Option<Move>,
+    pub tryout: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Placed {
+    pub point: Point,
+    pub node: u32,
+    pub number: u32,
+    pub branch_number: Option<u32>,
+}
+
 /// Everything the UI shows about the open game at its current node (design 5.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -336,6 +451,20 @@ pub struct GameSnapshot {
     /// Increases on every change; a client ignores a snapshot older than the one it has.
     #[ts(type = "number")]
     pub revision: u64,
+    pub node: u32,
+    #[ts(type = "number")]
+    pub line_revision: u64,
+    #[ts(type = "number")]
+    pub tree_revision: u64,
+    pub comment: Option<String>,
+    pub marks: Vec<MarkAt>,
+    pub continuations: Vec<Continuation>,
+    pub tryout: Option<u32>,
+    pub changed: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub save_as_first: bool,
+    pub placed: Vec<Placed>,
     /// The file name without `.sgf`; `null` for a new game. The UI composes the title.
     pub name: Option<String>,
     pub info: GameInfo,
@@ -346,13 +475,13 @@ pub struct GameSnapshot {
     pub last_move: Option<Move>,
     pub next_color: Color,
     pub move_number: u32,
-    /// The current node's index in the main line: its slot in the trend graph.
+    /// The current node's index in the selected line: its slot in the trend graph.
     pub line_index: u32,
     /// The move actually played next in the record; `null` at the end, or when a node in
     /// between changes the board without a move.
     pub next_move: Option<Move>,
-    /// The move number at the end of the main line.
-    pub main_line_length: u32,
+    /// The move number at the end of the selected line.
+    pub line_length: u32,
     pub at_start: bool,
     pub at_end: bool,
     /// The current node's move breaks the rules; KataGo does not analyse it.
@@ -363,6 +492,9 @@ pub struct GameSnapshot {
     pub position_key: Option<PositionKey>,
     /// The game holds a move or a setup stone, so it can be saved.
     pub has_moves: bool,
+    // Revision at which this game replaced the previous one (node IDs are local to a game).
+    #[ts(type = "number")]
+    pub game_revision: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -379,7 +511,7 @@ pub struct AppInfo {
 pub struct ProtocolError {
     pub code: ErrorCode,
     pub message: String,
-    /// A value the UI puts in the text: only `sgfUnsupportedSize`'s size, as `19x13`.
+    /// An unsupported size (such as `19x13`), or the camelCase illegal move reason.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub detail: Option<String>,
@@ -413,6 +545,10 @@ pub enum ErrorCode {
     SgfTooLarge,
     /// The game holds nothing to save.
     GameEmpty,
+    GameIllegalMove,
+    GameEndTryoutFirst,
+    GameNoSuchNode,
+    GameChanged,
     FileReadFailed,
     FileWriteFailed,
     /// The file's name does not end in `.sgf`.
@@ -426,7 +562,99 @@ pub enum ErrorCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aji_core::game::AnalysisRules;
     use serde_json::json;
+
+    #[test]
+    fn api_shapes_match_the_protocol() {
+        use crate::game::GameSession;
+        let mut s = GameSession::new(9, AnalysisRules::Chinese).unwrap();
+        s.replace(
+            GameSession::open(
+                "shape.sgf",
+                b"(;SZ[9];B[bb]C[hi]TR[bc](;W[])(;W[bb]))",
+                AnalysisRules::Chinese,
+            )
+            .unwrap(),
+        );
+        s.navigate(NavTarget::Next);
+        let at = serde_json::to_value(s.snapshot()).unwrap();
+        for (key, expected) in json!({
+            "node":1,"lineIndex":1,"lineLength":2,"lineRevision":1,"treeRevision":1,
+            "comment":"hi","marks":[{"point":{"x":1,"y":2},"mark":{"kind":"triangle"}}],
+            "continuations":[{"node":2,"mv":{"type":"pass"},"tryout":false},
+                             {"node":3,"mv":{"type":"play","x":1,"y":1},"tryout":false}],
+            "tryout":null,"changed":false,"canUndo":false,"canRedo":false,"saveAsFirst":false,
+            "placed":[{"point":{"x":1,"y":1},"node":1,"number":1,"branchNumber":null}]
+        })
+        .as_object()
+        .unwrap()
+        {
+            assert_eq!(at.get(key), Some(expected), "{key}");
+        }
+        assert!(at.get("mainLineLength").is_none());
+        let tree = serde_json::to_value(Response::GameTree(s.tree())).unwrap();
+        assert_eq!(
+            tree,
+            json!({"type":"gameTree","revision":1,"nodes":[
+                {"id":0,"parent":null,"color":null,"mv":null,"flags":4},
+                {"id":1,"parent":0,"color":"black","mv":{"type":"play","x":1,"y":1},"flags":1},
+                {"id":2,"parent":1,"color":"white","mv":{"type":"pass"},"flags":0},
+                {"id":3,"parent":1,"color":"white","mv":{"type":"play","x":1,"y":1},"flags":8}
+            ]})
+        );
+
+        assert_eq!(
+            serde_json::to_value(AppEvent::GameTree { tree: s.tree() }).unwrap(),
+            json!({"type":"gameTree", "tree":{"revision":1, "nodes":tree["nodes"]}})
+        );
+        for (request, expected) in [
+            (
+                json!({"type":"gameEdit","edit":{"kind":"pass"}}),
+                Request::GameEdit {
+                    edit: SessionEdit::Pass,
+                },
+            ),
+            (json!({"type":"gameUndo"}), Request::GameUndo),
+            (json!({"type":"gameRedo"}), Request::GameRedo),
+            (json!({"type":"gameTree"}), Request::GameTree),
+            (
+                json!({"type":"gameSaved","editId":2,"gameRevision":0,"utf8":true}),
+                Request::GameSaved {
+                    edit_id: 2,
+                    game_revision: 0,
+                    utf8: true,
+                },
+            ),
+            (
+                json!({"type":"gameExport","options":{"scope":"branch","clean":true,"inPlace":false}}),
+                Request::GameExport {
+                    options: ExportOptions {
+                        scope: ExportScope::Branch,
+                        clean: true,
+                        in_place: false,
+                    },
+                },
+            ),
+            (
+                json!({"type":"gameOpen","name":"a","bytes":"","atEnd":true}),
+                Request::GameOpen {
+                    expected_revision: None,
+                    name: "a".into(),
+                    bytes: String::new(),
+                    at_end: true,
+                },
+            ),
+        ] {
+            assert_eq!(
+                serde_json::from_value::<Request>(request).unwrap(),
+                expected
+            );
+        }
+        assert!(
+            serde_json::from_value::<Request>(json!({"type":"gameSetRules","rules":null})).is_err()
+        );
+    }
 
     #[test]
     fn request_json_shape() {
@@ -489,6 +717,7 @@ mod tests {
     fn job_request_json_shapes() {
         use crate::job::{BoostOptions, JobOptions, JobRange, JobSide};
         let options = JobOptions {
+            scope: crate::job::JobScope::Line,
             range: JobRange::Moves { from: 3, to: 40 },
             side: JobSide::Black,
             visits: 500,
@@ -571,15 +800,15 @@ mod tests {
             total: 9,
             boost_done: 1,
             boost_total: 2,
-            working: Some(4),
-            queued: vec![5],
+            working: Some(PositionKey(4)),
+            queued: vec![PositionKey(5)],
             eta_seconds: Some(12),
         };
         assert_eq!(
             serde_json::to_value(AppEvent::JobProgress { progress }).unwrap(),
             json!({"type": "jobProgress", "progress": {"state": "boosting", "done": 9,
-                   "total": 9, "boostDone": 1, "boostTotal": 2, "working": 4,
-                   "queued": [5], "etaSeconds": 12}})
+                   "total": 9, "boostDone": 1, "boostTotal": 2, "working": "0000000000000004",
+                   "queued": ["0000000000000005"], "etaSeconds": 12}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::TrendNodes {
@@ -625,6 +854,10 @@ mod tests {
     #[test]
     fn trend_json_shapes() {
         let node = TrendNode {
+            node: 7,
+            key: Some(PositionKey(12)),
+            to_play: Some(Color::Black),
+            tryout: false,
             move_number: 3,
             mover: Some(Color::White),
             mv: Some(Move::Pass),
@@ -635,7 +868,7 @@ mod tests {
             }),
             loss: None,
         };
-        let want = json!({"moveNumber": 3, "mover": "white", "move": {"type": "pass"},
+        let want = json!({"node": 7, "key": "000000000000000c", "toPlay": "black", "tryout": false, "moveNumber": 3, "mover": "white", "move": {"type": "pass"},
                           "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80},
                           "loss": null});
         assert_eq!(
@@ -648,11 +881,12 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(AppEvent::GameTrend {
+                reason: TrendChange::Reset,
                 revision: 4,
                 nodes: vec![node]
             })
             .unwrap(),
-            json!({"type": "gameTrend", "revision": 4, "nodes": [want]})
+            json!({"type": "gameTrend", "reason": "reset", "revision": 4, "nodes": [want]})
         );
     }
 
@@ -775,7 +1009,7 @@ mod tests {
                        "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false,
                        "perspective": "white", "showNextMove": false, "analyseOnOpen": true,
                        "cacheCapMb": 2048, "saveAnalysis": true,
-                       "jobOptions": {"range": {"kind": "whole"}, "side": "both",
+                       "jobOptions": {"scope": "line", "range": {"kind": "whole"}, "side": "both",
                            "visits": 500, "boost": {"on": true, "threshold": 10.0,
                            "visits": 3000}}}}),
                 Request::SettingsSet {
@@ -993,7 +1227,7 @@ mod tests {
                    "defaultRules": {"kind": "chinese"}, "showCoordinates": true,
                    "perspective": "black", "showNextMove": true, "analyseOnOpen": false,
                    "cacheCapMb": 1024, "saveAnalysis": false,
-                   "jobOptions": {"range": {"kind": "whole"}, "side": "both", "visits": 500,
+                   "jobOptions": {"scope": "line", "range": {"kind": "whole"}, "side": "both", "visits": 500,
                        "boost": {"on": true, "threshold": 10.0, "visits": 3000}}}})
         );
         assert_eq!(

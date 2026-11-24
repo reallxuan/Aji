@@ -51,17 +51,7 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 
 ## Game records and board
 
-- **M6 minor 2:** the komiUnreadable detail says "default rules", but with `RU[Japanese]KM[abc]` the Japanese/Korean preset is used.
-- **M6 minor 3:** the encodingGuessed title says the file "names no encoding", but it also shows when a declared `CA` failed.
-- **M6 minor 4:** choosing Custom without editing marks the rules changed, and save rewrites `RU`/`KM` (Fox `KM[375]` becomes `KM[7.5]`). Compare effective komi and scoring instead.
-- **M6 minor 5:** missing recent files are disabled in the macOS menu, so they cannot be clicked to remove them.
-- **M6 minor 6:** a drop opens `paths[0]`, not the first `.sgf`.
-- **M6 minor 9:** a collection whose first game is header-only cannot be saved.
-- **M6 minor 10:** `has_illegal` stores a board for every node, so a pathological 20 MB file could use gigabytes.
 - **Short GBK records without Fox's `AP`** still read as EUC-KR about one time in twenty-five (M8 Task 1 hints only from `AP[foxwq]`).
-- **M7 minor 4:** the trend graph's click and drag navigate by move number, not by node.
-- **M7 minor 5:** PageDown on a trailing comment node, and PageUp/PageDown bursts while held.
-- **M7 minor 6:** `next_move` skips nodes that only set the player to move (`PL`).
 
 ## Analysis interface
 

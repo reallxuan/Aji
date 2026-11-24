@@ -30,7 +30,11 @@ function line(): TrendNode[] {
   return Array.from({ length: 101 }, (_, i) => {
     const plotted = i <= 40 || i === 42 || i >= 60;
     return {
+      node: i + 200,
+      key: i.toString(16).padStart(16, '0'),
       moveNumber: i,
+      tryout: false,
+      toPlay: i % 2 ? 'white' : 'black',
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move:
         i === 0
@@ -47,9 +51,9 @@ function line(): TrendNode[] {
 }
 
 function mount() {
-  useTrendStore.getState().setNodes(line());
+  useTrendStore.getState().setNodes(line(), 0);
   const result = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   return result;
 }
@@ -100,7 +104,7 @@ it('goes to a move on click', async () => {
   await act(async () => {
     vi.advanceTimersToNextFrame();
   });
-  expect(navigations(requests)).toEqual([{ move: 72 }]);
+  expect(navigations(requests)).toEqual([{ node: 272 }]);
 });
 
 it('scrubs while dragging, at most one navigation a frame', async () => {
@@ -111,13 +115,13 @@ it('scrubs while dragging, at most one navigation a frame', async () => {
   await act(async () => {
     vi.advanceTimersToNextFrame();
   });
-  expect(navigations(requests)).toEqual([{ move: 14 }]);
+  expect(navigations(requests)).toEqual([{ node: 214 }]);
   fireEvent.mouseUp(svg());
   fireEvent.mouseMove(svg(), { clientX: xOf(20), clientY: 40, buttons: 0 });
   await act(async () => {
     vi.advanceTimersToNextFrame();
   });
-  expect(navigations(requests)).toEqual([{ move: 14 }]);
+  expect(navigations(requests)).toEqual([{ node: 214 }]);
 });
 
 it('has a legend of 胜率 and 目差, without 失误, and no verdict', () => {
@@ -135,7 +139,7 @@ it('draws no mistake bars, however large a loss', () => {
   nodes[41] = { ...nodes[41], stats: { winrate: 0.5, scoreLead: 0, visits: 200 } };
   useTrendStore.getState().setNodes(nodes);
   renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   expect(svg().querySelectorAll('[data-mistake]')).toHaveLength(0);
 });
@@ -147,7 +151,7 @@ it('draws and names White’s numbers in White’s perspective', () => {
   useTrendStore.getState().setNodes(nodes);
   // A 154 px panel: 4 above the chart, which is 150 (jsdom measures the legend as 0).
   renderWithGame(<TrendGraph height={154} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   // The lone node at 42: Black's 80% is White's 20%, plotted from the top of a 116 px plot.
   const lone = svg().querySelector('circle[data-line="winrate"]')!;
@@ -161,7 +165,7 @@ it('switches the perspective from the legend, and remembers it', async () => {
   useSettingsStore.getState().apply(storedSettings);
   useTrendStore.getState().setNodes(line());
   const { requests } = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
     answer: (request) =>
       request.type === 'settingsSet' ? { type: 'settings', settings: request.settings } : undefined,
   });
@@ -180,7 +184,7 @@ it('the_graph_keeps_the_chosen_colour', () => {
       revision: 1,
       lineIndex: 30,
       moveNumber: 30,
-      mainLineLength: 100,
+      lineLength: 100,
       nextColor: 'white',
     }),
   });
@@ -238,8 +242,8 @@ const job = (
   total: 20,
   boostDone: 0,
   boostTotal: 3,
-  working,
-  queued,
+  working: working === null ? null : working.toString(16).padStart(16, '0'),
+  queued: queued.map((i) => i.toString(16).padStart(16, '0')),
   etaSeconds: 20,
 });
 
@@ -279,4 +283,44 @@ it('boost cells stand taller', () => {
   // Once done, they drop back: nothing stays behind to mark the swings.
   act(() => useJobStore.getState().apply(job('done', null, [])));
   expect(height(72)).toBe(3);
+});
+
+it('coverage strip maps progress keys to every matching slot on the selected line', () => {
+  mount();
+  const selected = line()
+    .slice(0, 4)
+    .map((n, i) => ({ ...n, stats: null, key: [null, 'working', 'queued', 'working'][i] }));
+  act(() => {
+    useTrendStore.getState().setNodes(selected);
+    useJobStore.getState().apply({
+      ...job('running', null, []),
+      working: 'working',
+      queued: ['another branch', 'queued'],
+    });
+  });
+  expect(cells().map((c) => [c.getAttribute('data-index'), c.getAttribute('data-cell')])).toEqual([
+    ['1', 'working'],
+    ['2', 'queued'],
+    ['3', 'working'],
+  ]);
+});
+
+it('a new line invalidates queued scrubs and old slots until the replacement trend arrives', async () => {
+  const { requests } = mount();
+  fireEvent.mouseDown(svg(), { clientX: xOf(10), buttons: 1 });
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, lineRevision: 1 })));
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  fireEvent.mouseDown(svg(), { clientX: xOf(11), buttons: 1 });
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  expect(navigations(requests)).toEqual([]);
+  act(() => useTrendStore.getState().setNodes(line(), 1));
+  fireEvent.mouseDown(svg(), { clientX: xOf(12), buttons: 1 });
+  await act(async () => {
+    vi.advanceTimersToNextFrame();
+  });
+  expect(navigations(requests)).toEqual([{ node: 212 }]);
 });

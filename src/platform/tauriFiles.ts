@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { toTransportError } from '../transport/transport';
-import type { MenuCommand, OpenedFile, PlatformFiles, RecentEntry } from './files';
+import type { DiscardChoice, MenuCommand, OpenedFile, PlatformFiles, RecentEntry } from './files';
 
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
@@ -45,6 +45,11 @@ export function createTauriFiles(): PlatformFiles {
     remember: (token, title) => call<void>('files_remember', { token, title }),
     recent: () => call<RecentEntry[]>('files_recent'),
     clearRecent: () => call<void>('files_clear_recent'),
+    save: (token, bytes) => call<boolean>('files_save', { token, bytes }),
+    confirmDiscard: () => call<DiscardChoice>('confirm_discard'),
+    onQuitRequested: (handler) => listening(() => listen('app-quit-requested', handler)),
+    quit: (expectedRevision) => call<void>('app_quit', { expectedRevision }),
+    reread: (token) => call<string>('files_reread', { token }),
     saveAs: (suggestedName, text) => call<string | null>('files_save_as', { suggestedName, text }),
     saveImage: (suggestedName, bytes) =>
       call<boolean>('files_save_image', { suggestedName, bytes: toBase64(bytes) }),
@@ -60,7 +65,7 @@ export function createTauriFiles(): PlatformFiles {
     },
     setAlwaysOnTop: (on) => getCurrentWindow().setAlwaysOnTop(on),
     setWindowTitle: (title) => getCurrentWindow().setTitle(title),
-    setMenuLanguage: (language) => call<void>('menu_set_language', { language }),
+    setMenuLanguage: (language, numbers) => call<void>('menu_set_language', { language, numbers }),
     onDrag: (handler) =>
       listening(() =>
         getCurrentWebview().onDragDropEvent(({ payload }) => {

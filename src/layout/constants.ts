@@ -1,5 +1,5 @@
 // Values fixed by the P2 M1 design (docs/superpowers/specs/2026-11-21-p2-m1-layout-design.md).
-import type { PanelKind } from './model';
+import type { Node, PanelKind } from './model';
 
 /** Margin around the board on every side, in CSS px (interface design 4). */
 export const BOARD_MARGIN = 16;
@@ -20,6 +20,8 @@ export const HAIRLINE_HIT = 8;
 export const HAIRLINE_HIT_COARSE = 20;
 /** Touch targets in the narrow arrangement. */
 export const TOUCH_TARGET = 44;
+/** Extra header row for editing status on a phone, in CSS px. */
+export const PHONE_STATUS_HEIGHT = 24;
 /** A swipe steps once per this many CSS px. */
 export const SWIPE_STEP = 40;
 /** Sub-boards follow a deepening line at most this often. */
@@ -31,14 +33,29 @@ export const LAYOUT_SAVE_MS = 500;
  * Each panel's minimum size. Header and win-rate bar keep their content's height; the others
  * share their column's height by weight, never below these.
  */
-export const MIN_SIZES: Record<PanelKind, { width: number; height: number }> = {
+export interface PanelSizeSpec {
+  width: number;
+  height: number;
+  foldWithoutVariations?: boolean;
+}
+
+export const MIN_SIZES: Record<PanelKind, PanelSizeSpec> = {
   header: { width: 280, height: 56 },
   winrate: { width: 200, height: 44 },
   trend: { width: 240, height: 120 },
   candidates: { width: 260, height: 160 },
   swings: { width: 260, height: 160 },
+  tree: { width: 200, height: 120, foldWithoutVariations: true },
+  comments: { width: 200, height: 120 },
   subboard: { width: 200, height: 220 },
 };
 
 /** Panels whose height is their content's, not a share of the column. */
 export const FIXED_HEIGHT: ReadonlySet<PanelKind> = new Set(['header', 'winrate']);
+
+/** An empty standalone tree has no slot. A tab group always keeps its dimensions. */
+export function folded(node: Node | undefined, branches: boolean) {
+  return (
+    !branches && node?.type === 'panel' && MIN_SIZES[node.panel.kind].foldWithoutVariations === true
+  );
+}

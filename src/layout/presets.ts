@@ -1,4 +1,11 @@
-import type { Layout, Node, PanelRef, PresetId, SplitNode } from './model';
+import {
+  panelsOf,
+  type Layout,
+  type Node,
+  type PanelRef,
+  type PresetId,
+  type SplitNode,
+} from './model';
 
 export const PRESET_IDS: readonly PresetId[] = [
   'default',
@@ -36,6 +43,19 @@ const split = (
   weights: normalise(weights),
   ...(cap === undefined ? {} : { cap }),
 });
+function tabs(kinds: PanelRef['kind'][], active?: PanelRef['kind']): Node {
+  return kinds.length === 1
+    ? p(kinds[0])
+    : {
+        type: 'tabs',
+        panels: kinds.map((kind) => ({ kind })),
+        active: Math.max(
+          0,
+          kinds.findIndex((kind) => kind === active),
+        ),
+      };
+}
+
 const BOARD: Node = { type: 'board' };
 const layout = (preset: PresetId, root: SplitNode, lines: Layout['lines'] = 'board'): Layout => ({
   version: 1,
@@ -45,7 +65,7 @@ const layout = (preset: PresetId, root: SplitNode, lines: Layout['lines'] = 'boa
   lines,
 });
 
-/** The five presets of design 5.2 (Classic as M1 builds it, until comments arrive in M3). */
+/** The five presets, including the M3 record panels. */
 export function presetLayout(id: PresetId): Layout {
   switch (id) {
     case 'default':
@@ -59,8 +79,7 @@ export function presetLayout(id: PresetId): Layout {
               p('header'),
               p('winrate'),
               p('trend'),
-              // 波动 is a tab beside 候选 (P2 M2 design 5.4).
-              { type: 'tabs', panels: [{ kind: 'candidates' }, { kind: 'swings' }], active: 0 },
+              tabs(['candidates', 'swings', 'comments', 'tree']),
             ],
             [1, 1, 1, 2],
           ),
@@ -70,9 +89,7 @@ export function presetLayout(id: PresetId): Layout {
       return layout(
         'classic',
         split('row', [
-          // The bar and the graph on the left, which leaves room for more later; the candidates
-          // above the sub-board on the right (owner, 2026-11-22).
-          split('column', [p('winrate'), p('trend')]),
+          split('column', [p('winrate'), p('trend'), tabs(['tree', 'comments'])]),
           BOARD,
           split('column', [p('header'), p('candidates'), p('subboard', { rank: 1 })]),
         ]),
@@ -120,9 +137,19 @@ export function presetLayout(id: PresetId): Layout {
 
 /**
  * The untouched default on a wide window (design 5.2): the header over two columns, the analysis
- * on the left and the record on the right. In M1 the record column holds the sub-board.
+ * on the left and the record on the right. Older saved layouts keep their panel membership.
  */
-export function wideDefaultLayout(): Layout {
+export function wideDefaultLayout(base: Layout = presetLayout('default')): Layout {
+  const shown = panelsOf(base.root).map((p) => p.kind);
+  const column = base.root.children[1];
+  const group = column?.type === 'split' && column.children.find((c) => c.type === 'tabs');
+  const active = group && group.type === 'tabs' ? group.panels[group.active]?.kind : undefined;
+  const analysis = tabs(
+    shown.includes('swings') ? ['candidates', 'swings'] : ['candidates'],
+    base.wideTabs?.analysis ?? active,
+  );
+  const record = (['tree', 'comments'] as const).filter((kind) => shown.includes(kind));
+  const subboard = p('subboard', { rank: 1 });
   return layout(
     'default',
     split('row', [
@@ -130,8 +157,10 @@ export function wideDefaultLayout(): Layout {
       split('column', [
         p('header'),
         split('row', [
-          split('column', [p('winrate'), p('trend'), p('candidates')], [1, 1, 2]),
-          split('column', [p('subboard', { rank: 1 })]),
+          split('column', [p('winrate'), p('trend'), analysis], [1, 1, 2]),
+          record.length
+            ? split('column', [tabs(record, base.wideTabs?.record ?? active), subboard], [2, 1])
+            : subboard,
         ]),
       ]),
     ]),

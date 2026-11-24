@@ -1,23 +1,22 @@
-import { makeSnapshot, noInfo } from '../game/testing';
+import { sameRulesEffect } from '../game/komi';
+import { noInfo } from '../game/testing';
+import { utf8Base64 } from '../platform/fakeFiles';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
 import type { Candidate } from '../transport/generated/Candidate';
 import type { AppEvent } from '../transport/generated/AppEvent';
-import type { Color } from '../transport/generated/Color';
 import type { GameInfo } from '../transport/generated/GameInfo';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
-import type { Illegal } from '../transport/generated/Illegal';
 import type { Move } from '../transport/generated/Move';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
-import type { TrendNode } from '../transport/generated/TrendNode';
 import { TransportError } from '../transport/transport';
+import { createFakeTree } from './fakeTree';
 
 /**
- * A stand-in for the backend's game session, for the development scenarios: it plays a game's
- * moves with captures and answers the `game*` requests. It knows nothing of SGF; "opening" a file
- * picks a canned game, or a canned failure, by the file's name.
+ * The scenario transport plays and exports editable fixtures. Opening a file selects a canned
+ * game or failure by its name. The native backend parses the supplied SGF bytes.
  */
 
 /** Samsung Cup 2025, final, game 2 (public domain, CWI Go games archive): 242 moves. */
@@ -40,62 +39,18 @@ interface Record {
   name: string | null;
   info: GameInfo;
   size: number;
-  moves: Array<{ x: number; y: number }>;
+  moves: Move[];
   fromFile: AnalysisRules;
   ru: string | null;
   km: string | null;
 }
 
-interface Node {
-  stones: (Color | null)[];
-  lastMove: Move | null;
-  illegal: Illegal | null;
-  captures: [number, number];
-}
-
 function moves(text: string) {
   return Array.from({ length: text.length / 2 }, (_, i) => ({
+    type: 'play' as const,
     x: text.charCodeAt(2 * i) - 97,
     y: text.charCodeAt(2 * i + 1) - 97,
   }));
-}
-
-/** The board after each move, with captures; an occupied point is flagged, as the backend does. */
-function play(record: Record): Node[] {
-  const n = record.size;
-  const nodes: Node[] = [
-    { stones: Array(n * n).fill(null), lastMove: null, illegal: null, captures: [0, 0] },
-  ];
-  const near = (i: number) =>
-    [i - n, i + n, i % n ? i - 1 : -1, (i + 1) % n ? i + 1 : -1].filter((j) => j >= 0 && j < n * n);
-  record.moves.forEach(({ x, y }, k) => {
-    const prev = nodes[nodes.length - 1];
-    const stones = [...prev.stones];
-    const captures: [number, number] = [...prev.captures];
-    const color: Color = k % 2 ? 'white' : 'black';
-    const at = y * n + x;
-    const illegal: Illegal | null = stones[at] ? 'occupied' : null;
-    stones[at] = color;
-    for (const start of near(at)) {
-      if (stones[start] !== (color === 'black' ? 'white' : 'black')) continue;
-      const group = [start];
-      const seen = new Set(group);
-      let free = false;
-      for (let g = 0; g < group.length; g++)
-        for (const j of near(group[g])) {
-          if (stones[j] === null) free = true;
-          else if (stones[j] === stones[start] && !seen.has(j)) {
-            seen.add(j);
-            group.push(j);
-          }
-        }
-      if (free) continue;
-      for (const j of group) stones[j] = null;
-      captures[color === 'black' ? 0 : 1] += group.length;
-    }
-    nodes.push({ stones, lastMove: { type: 'play', x, y }, illegal, captures });
-  });
-  return nodes;
 }
 
 const samsung = (name: string): Record => ({
@@ -188,9 +143,9 @@ export function fakeAnalysis(
 
   // The win rate wanders over the game, so the trend graph has a shape.
   const winrate =
-    0.5 + 0.38 * Math.sin(snapshot.lineIndex / 23) * Math.cos(snapshot.lineIndex / 61);
+    0.5 + 0.38 * Math.sin(snapshot.moveNumber / 23) * Math.cos(snapshot.moveNumber / 61);
   // Not proportional to the win rate, so the graph's two lines do not lie on top of each other.
-  const scoreLead = (winrate - 0.5) * 28 + 2.5 * Math.sin(snapshot.lineIndex / 7);
+  const scoreLead = (winrate - 0.5) * 28 + 2.5 * Math.sin(snapshot.moveNumber / 7);
   const sign = snapshot.nextColor === 'black' ? 1 : -1;
 
   const played =
@@ -241,149 +196,129 @@ export function fakeAnalysis(
 }
 
 export function createFakeGame(emit: (event: AppEvent) => void) {
-  let record: Record = {
-    name: null,
-    info: noInfo,
-    size: 19,
-    moves: [],
-    fromFile: { kind: 'chinese' },
-    ru: null,
-    km: null,
-  };
-  let nodes = play(record);
-  let index = 0;
-  let rules: AnalysisRules = record.fromFile;
-  let revision = 0;
+  let session = createFakeTree(19, []);
   let warnings: GameWarning[] = [];
 
-  function snapshot(): GameSnapshot {
-    const node = nodes[index];
-    const last = nodes.length - 1;
-    return makeSnapshot({
-      revision,
-      name: record.name,
-      info: record.info,
-      rules: {
-        current: rules,
-        fromFile: record.fromFile,
-        changed: JSON.stringify(rules) !== JSON.stringify(record.fromFile),
-        ru: record.ru,
-        km: record.km,
-      },
-      size: record.size,
-      stones: node.stones,
-      lastMove: node.lastMove,
-      nextColor: index % 2 ? 'white' : 'black',
-      moveNumber: index,
-      lineIndex: index,
-      nextMove: index < last ? nodes[index + 1].lastMove : null,
-      mainLineLength: last,
-      atStart: index === 0,
-      atEnd: index === last,
-      illegal: node.illegal,
-      captures: node.captures,
-      positionKey: node.illegal ? null : (0x1000 + index).toString(16).padStart(16, '0'),
-      hasMoves: last > 0,
+  function response(includeWarnings = false): Response {
+    return {
+      type: 'game',
+      snapshot: session.snapshot(),
+      warnings: includeWarnings ? warnings : [],
+    };
+  }
+  function publish(before: GameSnapshot, opened = false): Response {
+    const next = session.snapshot();
+    if (next.revision !== before.revision) emit({ type: 'gameSnapshot', snapshot: next });
+    if (next.treeRevision !== before.treeRevision) emit({ type: 'gameTree', tree: session.tree() });
+    if (next.lineRevision !== before.lineRevision)
+      emit({
+        type: 'gameTrend',
+        reason:
+          opened || !sameRulesEffect(before.rules.current, next.rules.current)
+            ? 'reset'
+            : 'lineChanged',
+        revision: next.lineRevision,
+        nodes: session.line(),
+      });
+    return { type: 'game', snapshot: next, warnings: opened ? warnings : [] };
+  }
+  function load(record: Record, found: GameWarning[], atEnd = false): Response {
+    const before = session.snapshot();
+    session = createFakeTree(record.size, record.moves, {
+      ...record,
+      revision: before.revision + 1,
+      treeRevision: before.treeRevision + 1,
+      lineRevision: before.lineRevision + 1,
+      saveAsFirst: found.some((w) => w.code === 'truncated' || w.code === 'repaired'),
     });
+    if (atEnd) session.navigate('last');
+    warnings = found;
+    return publish(before, true);
   }
 
-  /** One node per main-line node; the backend fills in its cached stats, the fake has none. */
-  function trend(): TrendNode[] {
-    return nodes.map((node, i) => ({
-      moveNumber: i,
-      mover: i === 0 ? null : i % 2 ? 'black' : 'white',
-      move: node.lastMove,
-      stats: null,
-      loss: null,
-    }));
-  }
-
-  function changed(withWarnings = false, withTrend = false): Response {
-    revision += 1;
-    const next = snapshot();
-    emit({ type: 'gameSnapshot', snapshot: next });
-    // As the backend does on open, new and a rules change.
-    if (withTrend) emit({ type: 'gameTrend', revision, nodes: trend() });
-    return { type: 'game', snapshot: next, warnings: withWarnings ? warnings : [] };
-  }
-
-  function load(next: Record, nextWarnings: GameWarning[]): Response {
-    record = next;
-    nodes = play(record);
-    index = 0;
-    rules = record.fromFile;
-    warnings = nextWarnings;
-    return changed(true, true);
-  }
-
-  /** The answer to a `game*` request, or `null` for any other request. */
-  return function handle(request: Request): Response | null {
+  function handle(request: Request): Response | null {
+    if (
+      (request.type === 'gameNew' || request.type === 'gameOpen') &&
+      request.expectedRevision !== undefined &&
+      request.expectedRevision !== session.snapshot().revision
+    )
+      throw new TransportError('gameChanged', 'the game changed after confirmation');
     switch (request.type) {
-      case 'gameSnapshot':
-        return { type: 'game', snapshot: snapshot(), warnings };
-      case 'gameNew':
-        if (request.size < 5 || request.size > 19) {
-          const size = `${request.size}x${request.size}`;
+      case 'gameNew': {
+        if (!Number.isInteger(request.size) || request.size < 5 || request.size > 19) {
+          const size = request.size + 'x' + request.size;
           throw new TransportError('sgfUnsupportedSize', size, size);
         }
         return load(
           {
-            name: null,
-            info: noInfo,
             size: request.size,
             moves: [],
+            info: noInfo,
+            name: null,
             fromFile: { kind: 'chinese' },
             ru: null,
             km: null,
           },
           [],
         );
+      }
       case 'gameOpen': {
-        const { record: next, warnings: found } = openByName(request.name);
-        return load(next, found);
+        const opened = openByName(request.name);
+        return load(opened.record, opened.warnings, request.atEnd);
       }
-      case 'gameNavigate': {
-        const last = nodes.length - 1;
-        const to = request.to;
-        const target =
-          to === 'first'
-            ? 0
-            : to === 'last'
-              ? last
-              : to === 'previous'
-                ? Math.max(0, index - 1)
-                : to === 'next'
-                  ? Math.min(last, index + 1)
-                  : Math.min(last, to.move);
-        if (target === index) return { type: 'game', snapshot: snapshot(), warnings: [] };
-        index = target;
-        return changed();
-      }
-      case 'gameSetRules': {
-        const next = request.rules ?? record.fromFile;
-        if (JSON.stringify(next) === JSON.stringify(rules))
-          return { type: 'game', snapshot: snapshot(), warnings: [] };
-        rules = next;
-        return changed(false, true);
-      }
-      case 'gamePreview':
-        return {
-          type: 'gamePreview',
-          preview: { stones: nodes[index].stones, captured: [], illegalAt: null },
-        };
+      case 'gameSnapshot':
+        return response(true);
+      case 'gameTree':
+        return { type: 'gameTree', ...session.tree() };
       case 'gameTrend':
-        return { type: 'trend', revision, nodes: trend() };
-      case 'gameExport':
-        if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
+        return { type: 'trend', revision: session.snapshot().lineRevision, nodes: session.line() };
+      case 'gamePreview':
+        return { type: 'gamePreview', preview: session.preview(request.moves) };
+      case 'gameExport': {
+        const text = session.exportText(request.options);
         return {
           type: 'gameExport',
-          name: `${record.name ?? 'game'}.sgf`,
-          text: '(;GM[1]FF[4])\n',
+          name: (session.snapshot().name ?? 'game') + '.sgf',
+          editId: session.editId(),
+          gameRevision: session.snapshot().gameRevision,
+          text: request.options.inPlace ? null : text,
+          bytes: request.options.inPlace ? utf8Base64(text) : null,
+          fellBack: false,
         };
+      }
+      case 'gameNavigate':
+      case 'gameEdit':
+      case 'gameUndo':
+      case 'gameRedo':
+      case 'gameSaved': {
+        const before = session.snapshot();
+        switch (request.type) {
+          case 'gameNavigate':
+            session.navigate(request.to);
+            break;
+          case 'gameEdit':
+            session.edit(request.edit);
+            break;
+          case 'gameUndo':
+            session.undo();
+            break;
+          case 'gameRedo':
+            session.redo();
+            break;
+          case 'gameSaved':
+            if (request.gameRevision === before.gameRevision) session.saved(request.editId);
+            break;
+        }
+        return publish(before);
+      }
       default:
         return null;
     }
-  };
+  }
+  return Object.assign(handle, {
+    mainLine: () => session.mainLine(),
+    onMainLine: () => session.onMainLine(),
+  });
 }
 
 /** Sample files the scenarios' open dialog, drops and recent list offer. */

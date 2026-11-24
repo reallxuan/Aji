@@ -4,13 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { useDeviceStore } from '../device/deviceStore';
 import { useEngineStoreApi } from '../engine/engineStore';
+import { connectReplay } from '../game/actions';
 import { resetGameStore, useGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
+import { useReplayStore } from '../game/replayStore';
 import { makeSnapshot } from '../game/testing';
+import { createI18n } from '../i18n/createI18n';
 import { NavButtons } from '../panel/NavButtons';
 import type { EngineState } from '../transport/generated/EngineState';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { OsKind } from '../transport/generated/OsKind';
+import type { Response } from '../transport/generated/Response';
 import { defaultKeymap } from './keymap';
 import { COMMANDS, runCommand } from './registry';
 import { useKeyDispatcher } from './useKeyDispatcher';
@@ -80,22 +84,154 @@ describe('navigation keys', () => {
   });
 
   it('moves ten with PageDown, clamped to the end of the line', async () => {
-    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 30, mainLineLength: 45 }) });
+    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 30, lineLength: 45 }) });
     fireEvent.keyDown(window, { key: 'PageDown' });
     await frame();
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 40 } });
     act(() =>
       useGameStore
         .getState()
-        .apply(makeSnapshot({ revision: 500, moveNumber: 40, mainLineLength: 45 })),
+        .apply(makeSnapshot({ revision: 500, moveNumber: 40, lineLength: 45 })),
     );
     fireEvent.keyDown(window, { key: 'PageDown' });
     await frame();
-    expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 45 } });
+    expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: 'last' });
+  });
+
+  it('page down reaches a trailing comment node', async () => {
+    const move = makeSnapshot({
+      revision: 2,
+      node: 1,
+      moveNumber: 1,
+      lineIndex: 1,
+      lineLength: 1,
+      atStart: false,
+      atEnd: false,
+    });
+    const comment = {
+      ...move,
+      revision: 3,
+      node: 2,
+      lineIndex: 2,
+      comment: 'End of the game',
+      atEnd: true,
+    };
+    renderWithGame(<Keys />, {
+      snapshot: move,
+      answer: (request) =>
+        request.type === 'gameNavigate'
+          ? { type: 'game', snapshot: request.to === 'last' ? comment : move, warnings: [] }
+          : undefined,
+    });
+    fireEvent.keyDown(window, { key: 'PageDown' });
+    await frame();
+    expect(useGameStore.getState().snapshot).toMatchObject({
+      node: 2,
+      moveNumber: 1,
+      comment: 'End of the game',
+      atEnd: true,
+    });
+  });
+
+  it('held page keys do not queue a burst', async () => {
+    let answer!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    const snapshot = makeSnapshot({
+      moveNumber: 20,
+      lineLength: 60,
+      atStart: false,
+      atEnd: false,
+    });
+    const { requests } = renderWithGame(<Keys />, {
+      snapshot,
+      answer: (request) => (request.type === 'gameNavigate' ? pending : undefined),
+    });
+    fireEvent.keyDown(window, { key: 'PageDown' });
+    await frame();
+    const first = { type: 'gameNavigate', to: { move: 30 } };
+    expect(navigations(requests)).toEqual([first]);
+    for (const key of ['PageDown', 'PageUp', 'PageDown']) {
+      fireEvent.keyDown(window, { key, repeat: true });
+      await frame();
+    }
+    expect(navigations(requests)).toEqual([first]);
+    await act(async () =>
+      answer({
+        type: 'game',
+        snapshot: { ...snapshot, revision: 2, moveNumber: 30 },
+        warnings: [],
+      }),
+    );
+    await frame();
+    expect(navigations(requests)).toEqual([first]);
+    fireEvent.keyDown(window, { key: 'PageUp', repeat: true });
+    await frame();
+    expect(navigations(requests)).toEqual([first, { type: 'gameNavigate', to: { move: 20 } }]);
+  });
+
+  it.each([
+    { keys: ['Home', 'PageDown'], to: { move: 30 } },
+    { keys: ['PageDown', 'Home'], to: 'first' },
+    { keys: ['PageDown', 'Home', 'PageUp'], to: { move: 10 } },
+  ])('uses only the last frame navigation after $keys', async ({ keys, to }) => {
+    const { requests } = mount({
+      snapshot: makeSnapshot({ moveNumber: 20, lineLength: 60, atStart: false, atEnd: false }),
+    });
+    for (const key of keys) fireEvent.keyDown(window, { key });
+    await frame();
+    expect(navigations(requests)).toEqual([{ type: 'gameNavigate', to }]);
+    fireEvent.keyDown(window, { key: 'PageDown' });
+    await frame();
+    expect(navigations(requests)).toHaveLength(2);
+  });
+
+  it('discards a page scheduled from a superseded replay visit', async () => {
+    let answer!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    const snapshot = makeSnapshot({
+      node: 20,
+      lineIndex: 20,
+      moveNumber: 20,
+      lineLength: 60,
+      atStart: false,
+      atEnd: false,
+    });
+    const { transport, files, requests } = renderWithGame(<Keys />, {
+      snapshot,
+      answer: (request) =>
+        request.type === 'gameNavigate' && request.to === 'next' ? pending : undefined,
+    });
+    const disconnect = connectReplay({ transport, files, t: createI18n('zh-CN').t });
+    try {
+      act(() => useReplayStore.getState().start());
+      await act(async () => vi.advanceTimersByTimeAsync(1500));
+      const next = { type: 'gameNavigate', to: 'next' };
+      expect(navigations(requests)).toEqual([next]);
+      fireEvent.keyDown(window, { key: 'PageDown' });
+      expect(useReplayStore.getState().playing).toBe(false);
+      await act(async () =>
+        answer({
+          type: 'game',
+          snapshot: { ...snapshot, revision: 2, node: 21, lineIndex: 21, moveNumber: 21 },
+          warnings: [],
+        }),
+      );
+      await frame();
+      expect(navigations(requests)).toEqual([next]);
+      fireEvent.keyDown(window, { key: 'PageDown' });
+      await frame();
+      expect(navigations(requests)).toEqual([next, { type: 'gameNavigate', to: { move: 31 } }]);
+    } finally {
+      disconnect();
+    }
   });
 
   it('moves ten back with PageUp, stopping at the start', async () => {
-    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 4, mainLineLength: 45 }) });
+    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 4, lineLength: 45 }) });
     fireEvent.keyDown(window, { key: 'PageUp' });
     await frame();
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 0 } });
@@ -259,4 +395,72 @@ describe('the dispatcher', () => {
     await frame();
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: 'last' });
   });
+});
+
+it.each(['windows', 'macos'] as const)(
+  'binds editing keys on %s and leaves text editing to the field',
+  async (os) => {
+    const { requests } = mount({
+      os,
+      snapshot: makeSnapshot({ node: 42, atStart: false, canUndo: true, canRedo: true }),
+    });
+    await act(async () => {});
+    const mod = os === 'macos' ? { metaKey: true } : { ctrlKey: true };
+    const other = os === 'macos' ? { ctrlKey: true } : { metaKey: true };
+    const field = screen.getByRole('textbox');
+    for (const key of ['v', 'b', '[', ']', 'n', 'Delete', 'Backspace', 'Escape']) {
+      expect(fireEvent.keyDown(field, { key })).toBe(true);
+    }
+    expect(fireEvent.keyDown(field, { key: 'z', ...mod })).toBe(true);
+    expect(fireEvent.keyDown(window, { key: 'z', ...other })).toBe(true);
+    expect(requests.filter((r) => r.type !== 'appInfo')).toEqual([]);
+    fireEvent.keyDown(window, { key: 'z', ...mod });
+    fireEvent.keyDown(window, { key: 'z', shiftKey: true, ...mod });
+    fireEvent.keyDown(window, { key: 'y', ...mod });
+    for (const key of ['Delete', 'Backspace', 'v']) fireEvent.keyDown(window, { key });
+    await frame();
+    expect(requests.filter((r) => r.type === 'gameUndo')).toHaveLength(1);
+    expect(requests.filter((r) => r.type === 'gameRedo')).toHaveLength(os === 'macos' ? 1 : 2);
+    expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([
+      { type: 'gameEdit', edit: { kind: 'deleteFrom', node: 42 } },
+      { type: 'gameEdit', edit: { kind: 'deleteFrom', node: 42 } },
+      { type: 'gameEdit', edit: { kind: 'tryoutStart' } },
+    ]);
+    for (const key of ['[', ']', 'b']) {
+      fireEvent.keyDown(window, { key });
+      await frame();
+    }
+    expect(navigations(requests)).toEqual(
+      ['previousSibling', 'nextSibling', 'mainLine'].map((to) => ({ type: 'gameNavigate', to })),
+    );
+    expect(defaultKeymap(os).get('N')).toBe('view.moveNumbers');
+    expect(defaultKeymap(os).get('Mod+S')).toBe(os === 'macos' ? undefined : 'file.save');
+  },
+);
+
+it('escape runs the chain in order', async () => {
+  const { useModeStore } = await import('../edit/modeStore');
+  const { requests } = mount();
+  useModeStore.getState().setMode('markup');
+  const popover = document.createElement('div');
+  popover.setAttribute('data-radix-popper-content-wrapper', '');
+  document.body.append(popover);
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('markup');
+  popover.remove();
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('markup');
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('normal');
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, tryout: 0 })));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  await frame();
+  expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([
+    { type: 'gameEdit', edit: { kind: 'tryoutEnd' } },
+  ]);
+  expect(navigations(requests)).toEqual([]);
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 200 })));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  await frame();
+  expect(navigations(requests)).toEqual([{ type: 'gameNavigate', to: 'branchPoint' }]);
 });

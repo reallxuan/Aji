@@ -134,7 +134,7 @@ function splitAt(root: SplitNode, path: number[]): SplitNode | null {
 }
 
 /**
- * Moves the hairline after child `index` of the split at `path` by `delta` px. `sizes` are the two
+ * Moves the hairline between two visible children of the split at `path` by `delta` px. `sizes` are the two
  * neighbours' sizes as measured when the drag began, `mins` their minimum sizes; neither goes
  * below its minimum. Starting from the measured sizes keeps the line under the pointer even where
  * a minimum had already bent the weights.
@@ -142,33 +142,39 @@ function splitAt(root: SplitNode, path: number[]): SplitNode | null {
 export function resize(
   layout: Layout,
   path: number[],
-  index: number,
+  firstIndex: number,
   delta: number,
   sizes: [number, number],
   mins: [number, number],
+  secondIndex = firstIndex + 1,
 ): Layout {
   const root = structuredClone(layout.root);
   const split = splitAt(root, path);
   const total = sizes[0] + sizes[1];
-  if (!split || index + 1 >= split.children.length || total <= 0) return layout;
-  const pair = split.weights[index] + split.weights[index + 1];
+  if (!split || secondIndex >= split.children.length || total <= 0) return layout;
+  const pair = split.weights[firstIndex] + split.weights[secondIndex];
   const first = sizes[0] + delta;
   const lo = Math.min(mins[0], total);
   const hi = Math.max(lo, total - mins[1]);
   const clamped = Math.min(Math.max(first, lo), hi);
-  split.weights[index] = (pair * clamped) / total;
-  split.weights[index + 1] = pair - split.weights[index];
+  split.weights[firstIndex] = (pair * clamped) / total;
+  split.weights[secondIndex] = pair - split.weights[firstIndex];
   return finish(layout, root);
 }
 
-/** Gives the two neighbours of the hairline after child `index` the same weight. */
-export function evenSplit(layout: Layout, path: number[], index: number): Layout {
+/** Gives the two visible neighbours of the hairline the same weight. */
+export function evenSplit(
+  layout: Layout,
+  path: number[],
+  firstIndex: number,
+  secondIndex = firstIndex + 1,
+): Layout {
   const root = structuredClone(layout.root);
   const split = splitAt(root, path);
-  if (!split || index + 1 >= split.children.length) return layout;
-  const half = (split.weights[index] + split.weights[index + 1]) / 2;
-  split.weights[index] = half;
-  split.weights[index + 1] = half;
+  if (!split || secondIndex >= split.children.length) return layout;
+  const half = (split.weights[firstIndex] + split.weights[secondIndex]) / 2;
+  split.weights[firstIndex] = half;
+  split.weights[secondIndex] = half;
   return finish(layout, root);
 }
 
@@ -251,5 +257,13 @@ export function selectTab(layout: Layout, ref: PanelRef): Layout {
     if (node.type === 'split') return { ...node, children: node.children.map(visit) };
     return node;
   };
-  return { ...layout, root: visit(layout.root) as SplitNode };
+  const next = { ...layout, root: visit(layout.root) as SplitNode };
+  if (layout.preset === 'default') {
+    const wideTabs = layout.wideTabs ?? { analysis: 'candidates', record: 'tree' };
+    if (ref.kind === 'swings' || ref.kind === 'candidates')
+      next.wideTabs = { ...wideTabs, analysis: ref.kind };
+    if (ref.kind === 'tree' || ref.kind === 'comments')
+      next.wideTabs = { ...wideTabs, record: ref.kind };
+  }
+  return next;
 }
