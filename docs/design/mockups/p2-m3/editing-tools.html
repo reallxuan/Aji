@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3 editing tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --ok:#1e8e5a; --pop:#2a2a2e; --btn:#2c2c31; --chg:#E2A33B; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1180px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1180px; margin:0 auto 48px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1060px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+
+  .shot { display:flex; background:#141416; border-radius:8px; outline:1px solid #2a2a2e; overflow:hidden; }
+  .boardwrap { padding:10px; background:#141416; position:relative; }
+  .boardwrap canvas { display:block; border-radius:3px; }
+
+  .panel { background:var(--panel); color:var(--text); width:420px; font-size:13px; position:relative; }
+  .hdr { display:flex; align-items:center; gap:9px; padding:12px 14px 12px 18px; border-bottom:1px solid var(--hairline); height:50px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:2px 8px; white-space:nowrap; }
+  .hdr .nav { color:var(--muted); display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#1e8e5a; flex:none; }
+  .tag { font-size:11px; color:var(--chg); border:1px solid color-mix(in srgb, var(--chg) 50%, transparent); border-radius:999px; padding:0 7px; white-space:nowrap; }
+
+  .editbar { display:flex; align-items:center; gap:6px; padding:7px 14px 7px 18px; border-bottom:1px solid var(--hairline); }
+  .tg { font-size:13px; padding:3px 10px; border-radius:6px; border:1px solid var(--hairline); background:var(--btn); color:var(--text); white-space:nowrap; cursor:pointer; user-select:none; }
+  .tg.on { background:var(--text); color:var(--panel); border-color:var(--text); }
+  .sp { flex:1; }
+  .ic { width:28px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted); font-size:15px; cursor:pointer; }
+  .ic:hover { background:var(--soft); color:var(--text); }
+  .ic.on { background:var(--soft); color:var(--text); outline:1px solid var(--line); }
+  .ic.dim { opacity:.35; }
+  .tools { display:flex; align-items:center; gap:2px; padding:5px 14px 5px 18px; border-bottom:1px solid var(--hairline); background:color-mix(in srgb, var(--soft) 45%, transparent); flex-wrap:wrap; }
+  .tools .sep { width:1px; height:18px; background:var(--hairline); margin:0 6px; }
+  .tools .txt { font-size:12px; color:var(--muted); padding:3px 8px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+  .tools .txt:hover { background:var(--soft); color:var(--text); }
+  .tools .txt.on { color:var(--text); background:var(--soft); outline:1px solid var(--line); }
+
+  .bar { display:flex; height:26px; margin:12px 18px 4px; border-radius:3px; overflow:hidden; font-size:12px; font-weight:600; }
+  .bar .b { background:#141414; color:#f2f0ea; display:flex; align-items:center; padding:0 8px; }
+  .bar .w { background:#f2f0ea; color:#141414; display:flex; align-items:center; justify-content:flex-end; padding:0 8px; flex:1; }
+  .trend { padding:4px 18px 10px; border-bottom:1px solid var(--hairline); }
+  .tabs { display:flex; gap:16px; padding:10px 18px 0; font-size:13px; color:var(--muted); }
+  .tabs span.on { color:var(--text); border-bottom:2px solid var(--text); padding-bottom:6px; }
+  .cands { padding:6px 18px 12px; }
+  .cands div { display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--soft); font-size:13px; }
+  .cands div span:first-child { width:46px; }
+  .cands div span { width:70px; text-align:right; }
+  .cands div span:first-child { text-align:left; }
+  .lead { color:#e2a33b; }
+
+  .rail { width:46px; background:var(--panel); border-right:1px solid var(--hairline); display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 0; color:var(--text); }
+  .rail .rb { width:36px; height:34px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); cursor:pointer; text-align:center; line-height:1.1; }
+  .rail .rb.on { background:var(--text); color:var(--panel); }
+  .rail .rb.t { color:var(--muted); font-size:15px; }
+  .rail .rs { width:24px; height:1px; background:var(--hairline); margin:4px 0; }
+
+  .comments { padding:12px 18px 16px; }
+  .comments .where { font-size:12px; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; }
+  .comments .box { min-height:120px; border:1px solid var(--hairline); border-radius:6px; padding:10px 12px; line-height:1.7; font-size:13px; background:color-mix(in srgb, var(--soft) 35%, transparent); }
+  .comments .box.empty { color:var(--muted); }
+  .comments .box.edit { outline:2px solid var(--line); background:var(--panel); }
+  .caret { display:inline-block; width:1px; height:15px; background:var(--text); vertical-align:-2px; animation:bl 1s steps(1) infinite; }
+  @keyframes bl { 50% { opacity:0; } }
+
+  .menu { position:absolute; width:210px; background:#2a2a2e; color:#eceae4; border:1px solid #3a3a40; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.4); padding:5px; font-size:13px; z-index:3; }
+  .menu div { padding:6px 10px; border-radius:5px; display:flex; justify-content:space-between; gap:12px; }
+  .menu div .m { color:#a3a19a; }
+  .menu div.sep { padding:0; height:1px; background:#3a3a40; margin:5px 4px; }
+  .menu div.hi { background:#3a3a40; }
+
+  .phone { width:330px; background:var(--panel); color:var(--text); border-radius:22px; outline:1px solid #2a2a2e; overflow:hidden; font-size:13px; }
+  .phone .ph { display:flex; align-items:center; gap:8px; padding:12px 14px; }
+  .phone .ph .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .phone canvas { display:block; margin:0 auto; }
+  .phone .editbar { border-top:1px solid var(--hairline); padding:7px 10px; }
+  .phone .editbar .tg { padding:7px 12px; font-size:14px; }
+  .phone .editbar .ic { width:40px; height:36px; font-size:17px; }
+  .phone .nav44 { display:flex; justify-content:space-around; padding:10px 0 14px; color:var(--muted); font-size:18px; border-top:1px solid var(--hairline); }
+
+  .note { font-size:12px; color:#9a988f; margin-top:8px; line-height:1.6; max-width:520px; }
+  .pick { display:inline-block; font-size:11px; color:#141416; background:#e8c27a; border-radius:999px; padding:1px 8px; margin-left:6px; font-weight:600; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M3 编辑工具 editing tools, round 1</h1>
+  <p><b>Approved by the owner on 2026-11-23</b>, option A and every call in this colour as drawn.</p>
+  Where the editing tools sit, and how markup, setup and comments look. A pro game at move 38, dark theme; the light theme follows once the shapes are agreed.
+  <ul>
+    <li><b>Four board modes.</b> Normal (a click plays and keeps the move), <b>试下</b> try-out (a click plays into a throwaway line), <b>标记</b> markup and <b>摆子</b> setup. At most one of 试下, 标记 and 摆子 is on; pressing the lit one again turns it off. Esc also turns it off. 标记 and 摆子 wait until try-out ends.</li>
+    <li><b>Undo and redo</b> get buttons too (the two arrows at the right of the row), so a phone can undo without a keyboard.</li>
+    <li>Text in <span class="call">this colour</span> is my call, open to change.</li>
+  </ul>
+</div>
+
+<!-- 1 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>1 Where the tools sit</h2>
+  <p class="cap">Both options keep the board's full height (principle 1). <b>A</b> adds one row to the panel, under the header. <b>B</b> adds a narrow rail between the board and the panel. In both, try-out is on here: the button is lit and the header carries <b>试下中</b>.</p>
+  <div class="row">
+    <div>
+      <p class="label"><b>A</b> a row under the header <span class="pick">my pick</span></p>
+      <div class="shot dark">
+        <div class="boardwrap"><canvas id="bA"></canvas></div>
+        <div class="panel">
+          <div class="hdr"><span class="t">三星杯决赛 第2局 <span style="color:var(--muted)">▾</span></span><span class="tag">试下中</span><span class="chip">中国 7.5</span><span class="nav">‹ <b>41</b> / 247 ›</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+          <div class="editbar"><span class="tg on">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="sp"></span><span class="ic" title="撤销 ⌘Z"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span class="ic dim" title="重做 ⇧⌘Z"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></span></div>
+          <div class="bar"><span class="b" style="width:43%">43.1%</span><span class="w">56.9%  白领先 2.4 目</span></div>
+          <div class="trend"><svg id="tA" width="384" height="92"></svg></div>
+          <div class="tabs"><span class="on">候选</span><span>波动</span><span>评论</span><span>分支</span></div>
+          <div class="cands" id="cA"></div>
+        </div>
+      </div>
+      <p class="note">The row is part of the header panel, so it moves with the header in every layout. <span class="call">The tools of 标记 and 摆子 open as a second row under it (sections 2 and 3), and close with the mode.</span></p>
+    </div>
+    <div>
+      <p class="label"><b>B</b> a rail beside the board</p>
+      <div class="shot dark">
+        <div class="boardwrap"><canvas id="bB"></canvas></div>
+        <div class="rail"><span class="rb on">试下</span><span class="rb">标记</span><span class="rb">摆子</span><span class="rs"></span><span class="rb t"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span class="rb t" style="opacity:.35"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></span></div>
+        <div class="panel" style="width:314px">
+          <div class="hdr"><span class="t">三星杯决赛 第2局</span><span class="tag">试下中</span><span class="nav">‹ <b>41</b> ›</span><span class="dot"></span></div>
+          <div class="bar"><span class="b" style="width:43%">43.1%</span><span class="w">56.9%</span></div>
+          <div class="trend"><svg id="tB" width="278" height="92"></svg></div>
+          <div class="tabs"><span class="on">候选</span><span>波动</span><span>评论</span></div>
+          <div class="cands" id="cB"></div>
+        </div>
+      </div>
+      <p class="note">Shorter mouse travel from the board, and it stays put whatever the layout. But it is a new strip outside the panel's one surface (principle 4), and the setup tools would make it long and crowded.</p>
+    </div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div>
+      <p class="label"><b>On a phone</b> (either option)</p>
+      <div class="phone dark">
+        <div class="ph"><span class="t">三星杯决赛 第2局</span><span class="tag">试下中</span><span style="color:var(--muted)">41</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+        <canvas id="bP"></canvas>
+        <div class="editbar"><span class="tg on">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="sp"></span><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span class="ic dim"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></span></div>
+        <div class="bar" style="margin:8px 10px"><span class="b" style="width:43%">43.1%</span><span class="w">56.9%</span></div>
+        <div class="tabs" style="padding:6px 12px 8px"><span class="on">候选</span><span>走势</span><span>评论</span><span>分支</span></div>
+        <div class="nav44"><span>⏮</span><span>‹</span><span>›</span><span>⏭</span></div>
+      </div>
+    </div>
+    <div style="max-width:520px">
+      <p class="cap" style="margin-top:22px"><b>The phone puts the row under the board,</b> with 44 px targets, whichever option the desktop uses. <span class="call">Leaving try-out (试下 again, 结束试下 in the right-click menu, or Esc) returns to move 38, where it started, and drops the three try-out moves in one undoable step.</span></p>
+      <p class="cap">Try-out stones carry their numbers in a muted ring, so a try-out position never passes for the record. The line is drawn dashed in the 分支 tree (next mockup).</p>
+    </div>
+  </div>
+</div>
+
+<!-- 2 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>2 标记 markup</h2>
+  <p class="cap">With 标记 on, a click puts the chosen mark on a point, and a second click with the same tool removes it. These marks are saved into the SGF (<b>TR</b>, <b>SQ</b>, <b>CR</b>, <b>MA</b>, <b>LB</b>). <b>A</b> places the next free letter: A, then B, then C. <b>1</b> places the next number. <b>✎</b> draws freehand: on screen only, never saved, <span class="call">and cleared when you move to another position or press 清除涂鸦.</span></p>
+  <div class="row">
+    <div>
+      <div class="shot dark">
+        <div class="boardwrap"><canvas id="bM"></canvas></div>
+        <div class="panel">
+          <div class="hdr"><span class="t">三星杯决赛 第2局 <span style="color:var(--muted)">▾</span></span><span class="chip">中国 7.5</span><span class="nav">‹ <b>38</b> / 247 ›</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+          <div class="editbar"><span class="tg">试下</span><span class="tg on">标记</span><span class="tg">摆子</span><span class="sp"></span><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span class="ic dim"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></span></div>
+          <div class="tools"><span class="ic on" title="三角">△</span><span class="ic" title="方块">□</span><span class="ic" title="圆圈">○</span><span class="ic" title="叉">✕</span><span class="ic" title="字母">A</span><span class="ic" title="数字">1</span><span class="sep"></span><span class="ic" title="涂鸦">✎</span><span class="sp"></span><span class="txt">清除标记</span></div>
+          <div class="bar"><span class="b" style="width:46%">46.0%</span><span class="w">54.0%  白领先 1.2 目</span></div>
+          <div class="trend"><svg id="tM" width="384" height="92"></svg></div>
+          <div class="tabs"><span class="on">候选</span><span>波动</span><span>评论</span><span>分支</span></div>
+          <div class="cands" style="color:var(--muted);font-size:12px;padding:14px 18px">候选点在标记时隐藏，分析继续。</div>
+        </div>
+      </div>
+    </div>
+    <div style="max-width:300px">
+      <p class="cap" style="margin-top:4px"><span class="call"><b>The candidate discs hide while 标记 is on,</b> so a mark is never covered; the table keeps updating.</span> Outside markup mode, marks from the file are always drawn, and a disc on a marked point draws over it.</p>
+      <p class="cap"><b>清除标记</b> removes every mark on this move, as one undoable step. Marks belong to a move: stepping away and back shows them again.</p>
+      <p class="cap"><b>On touch</b> the tools are the same row; freehand follows the finger, and a swipe does not navigate while ✎ is on.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 3 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>3 摆子 setup</h2>
+  <p class="cap"><b>●</b> adds black stones, <b>○</b> white, <b>◐</b> alternates. A click on a stone of the chosen colour removes it. <b>Drag</b> a stone to move it. <b>Right-click</b> a stone (long press on touch) to remove it or flip its colour. <b>轮到</b> sets the side to move (SGF <b>PL</b>). <b>停一手</b> passes. <b>插入一手</b> puts a move before the next recorded one and keeps the rest of the line after it. <b>折叠为新局面</b> turns this position into the start of a new record (LizzieYzy's 折叠已落棋子), and can be undone.</p>
+  <div class="row">
+    <div>
+      <div class="shot dark">
+        <div class="boardwrap"><canvas id="bS"></canvas>
+          <div class="menu" style="left:92px;top:352px"><div class="hi">删除这颗子</div><div>改为黑子</div><div class="sep"></div><div>移动 <span class="m">拖动棋子</span></div></div>
+        </div>
+        <div class="panel">
+          <div class="hdr"><span class="t">三星杯决赛 第2局 <span style="color:var(--muted)">▾</span></span><span class="tag">已修改</span><span class="nav">‹ <b>38</b> / 247 ›</span><span class="dot"></span><span style="color:var(--muted)">⚙</span></div>
+          <div class="editbar"><span class="tg">试下</span><span class="tg">标记</span><span class="tg on">摆子</span><span class="sp"></span><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span><span class="ic dim"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></span></div>
+          <div class="tools"><span class="ic on" title="放黑子">●</span><span class="ic" title="放白子">○</span><span class="ic" title="交替">◐</span><span class="sep"></span><span class="txt">轮到 ● 黑</span><span class="txt">停一手</span><span class="txt">插入一手</span><span class="txt">折叠为新局面</span></div>
+          <div class="bar"><span class="b" style="width:61%">61.2%  黑领先 3.0 目</span><span class="w">38.8%</span></div>
+          <div class="trend"><svg id="tS" width="384" height="92"></svg></div>
+          <div class="tabs"><span class="on">候选</span><span>波动</span><span>评论</span><span>分支</span></div>
+          <div class="cands" style="color:var(--muted);font-size:12px;padding:14px 18px">候选点在摆子时隐藏，分析继续。</div>
+        </div>
+      </div>
+    </div>
+    <div style="max-width:300px">
+      <p class="cap" style="margin-top:4px"><span class="call"><b>Where setup stones go.</b> At a move of the record, the first setup edit starts a new variation with a setup node, so the record's later moves are never changed under you. At a node that is already setup only (the root of a problem, say), edits change that node in place.</span></p>
+      <p class="cap"><b>已修改</b> in the header marks unsaved changes, in every mode. It clears on save, or when undo returns to the saved state.</p>
+      <p class="cap">The dashed ghost on R8 is the white stone from R9, being dragged. Q10 and P10 are black stones just added. The menu is a right-click on the white stone on C6.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 4 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>4 评论 comments</h2>
+  <p class="cap">A panel, <b>评论</b>. It shows the comment of the move on the board (SGF <b>C</b>), and is edited in place: click into it and type. <span class="call">The text is kept when the field loses focus or you move to another position, as one undoable step per visit.</span> Moves with a comment get a dot in the 分支 tree. In the wide default layout it sits in the record column under the tree; elsewhere it is a tab beside 候选 and 波动.</p>
+  <div class="row">
+    <div>
+      <p class="label"><b>Reading</b></p>
+      <div class="panel dark" style="border-radius:8px;outline:1px solid #2a2a2e;width:340px">
+        <div class="tabs" style="padding-top:12px"><span>候选</span><span>波动</span><span class="on">评论</span><span>分支</span></div>
+        <div class="comments">
+          <div class="where"><span>第 38 手 白 N17</span><span>点击编辑</span></div>
+          <div class="box">白棋先手便宜之后脱先。这里如果黑在 Q13 挡，白可以在 R11 轻巧地处理，局部两分。</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="label"><b>Editing</b></p>
+      <div class="panel dark" style="border-radius:8px;outline:1px solid #2a2a2e;width:340px">
+        <div class="tabs" style="padding-top:12px"><span>候选</span><span>波动</span><span class="on">评论</span><span>分支</span></div>
+        <div class="comments">
+          <div class="where"><span>第 38 手 白 N17</span><span>Esc 完成</span></div>
+          <div class="box edit">白棋先手便宜之后脱先。这里如果黑在 Q13 挡，白可以在 R11 轻巧地处理，局部两分。我觉得黑应该直接 Q11 夹<span class="caret"></span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="label"><b>No comment yet</b></p>
+      <div class="panel dark" style="border-radius:8px;outline:1px solid #2a2a2e;width:340px">
+        <div class="tabs" style="padding-top:12px"><span>候选</span><span>波动</span><span class="on">评论</span><span>分支</span></div>
+        <div class="comments">
+          <div class="where"><span>第 39 手 黑 C11</span><span></span></div>
+          <div class="box empty">添加评论</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="max-width:1000px">While the comment field has focus, keys type text: ←, →, Space and the other shortcuts do nothing until Esc or a click elsewhere (today's focus rule). The root's comment, before the first move, shows as <b>开局前</b>.</p>
+</div>
+
+<script>
+const N = 19, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+// A pro-style opening, 38 moves. Odd moves Black.
+const GAME = ['Q16','D4','Q3','D16','C14','F17','R5','C6','O17','R14','P14','Q13','R15','S15','R13','Q12','R16','S14','R12','R11','S11','Q11','F3','D6','J4','C17','E15','C16','D14','K16','H17','K17','G16','R9','P9','O16','N16','N17'];
+const BASE = 38;
+function stonesAt(n) { const m = {}; GAME.slice(0, n).forEach((p, i) => (m[p] = i % 2 ? 2 : 1)); return m; }
+
+function draw(canvas, css, o) {
+  const dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W; canvas.style.width = css + 'px'; canvas.style.height = css + 'px';
+  const ctx = canvas.getContext('2d');
+  const gr = ctx.createLinearGradient(0, 0, W, W); gr.addColorStop(0, '#e0b46c'); gr.addColorStop(1, '#d6a85e');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, W);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 70; i++) { ctx.fillStyle = `rgba(120,80,30,${(.02 + rnd() * .03).toFixed(3)})`; ctx.fillRect(rnd() * W, 0, (1 + rnd() * 3) * dpr, W); }
+  const margin = (css < 340 ? 16 : 26) * dpr, sp = (W - 2 * margin) / (N - 1), at = (i) => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr * .8));
+  ctx.beginPath(); for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N - 1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N - 1), at(i)); } ctx.stroke();
+  ctx.lineWidth = Math.round(1.4 * dpr); ctx.strokeRect(at(0), at(0), at(N - 1) - at(0), at(N - 1) - at(0));
+  ctx.fillStyle = '#3A2A14'; for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .1, 0, 7); ctx.fill(); }
+  if (css >= 340) {
+    ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${10 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .42); ctx.fillText(String(N - i), margin * .42, at(i)); }
+  }
+  const stone = (p, c, alpha = 1, ghost = false) => {
+    const [x, y] = pt(p), r = sp * .48, cx = at(x), cy = at(y);
+    ctx.save(); ctx.globalAlpha = alpha;
+    if (!ghost) { ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .4; ctx.shadowOffsetX = r * .1; ctx.shadowOffsetY = r * .15; }
+    const g = ctx.createRadialGradient(cx - r * .36, cy - r * .4, r * .06, cx, cy, r);
+    if (c === 1) { g.addColorStop(0, '#6a6a68'); g.addColorStop(.3, '#2c2c2b'); g.addColorStop(1, '#0a0a0a'); } else { g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#f1eee6'); g.addColorStop(1, '#c4bdaf'); }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.restore();
+    if (ghost) { ctx.save(); ctx.setLineDash([3 * dpr, 3 * dpr]); ctx.strokeStyle = 'rgba(40,24,6,.7)'; ctx.lineWidth = dpr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); ctx.restore(); }
+  };
+  const ink = (c) => (c === 1 ? '#f2f0ea' : c === 2 ? '#1a1a1a' : '#2B1D0E');
+  const stones = o.stones;
+  for (const [p, c] of Object.entries(stones)) stone(p, c, o.fadeFrom && o.fadeFrom.includes(p) ? .35 : 1);
+  if (o.ghost) stone(o.ghost[0], o.ghost[1], .55, true);
+  if (o.last) { const [x, y] = pt(o.last); ctx.fillStyle = ink(stones[o.last]); ctx.beginPath(); ctx.arc(at(x), at(y), sp * .11, 0, 7); ctx.fill(); }
+  // try-out stones: numbered, with a muted ring
+  (o.tryout || []).forEach(([p, c], i) => {
+    stone(p, c);
+    const [x, y] = pt(p);
+    ctx.save(); ctx.strokeStyle = 'rgba(226,163,59,.9)'; ctx.lineWidth = 1.6 * dpr; ctx.setLineDash([2.5 * dpr, 2 * dpr]); ctx.beginPath(); ctx.arc(at(x), at(y), sp * .56, 0, 7); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = ink(c); ctx.font = `600 ${sp * .42}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), at(x), at(y) + dpr * .5);
+  });
+  // marks
+  for (const [p, t, label] of o.marks || []) {
+    const [x, y] = pt(p), cx = at(x), cy = at(y), s = sp * .3, c = stones[p];
+    ctx.save(); ctx.strokeStyle = c ? ink(c) : '#2B1D0E'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.7 * dpr;
+    if (!c && (t === 'A' || t === '1')) { ctx.fillStyle = '#e0b46c'; ctx.beginPath(); ctx.arc(cx, cy, sp * .36, 0, 7); ctx.fill(); ctx.fillStyle = '#2B1D0E'; }
+    ctx.beginPath();
+    if (t === 'TR') { ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s * .9, cy + s * .6); ctx.lineTo(cx - s * .9, cy + s * .6); ctx.closePath(); ctx.stroke(); }
+    if (t === 'SQ') { ctx.strokeRect(cx - s * .75, cy - s * .75, s * 1.5, s * 1.5); }
+    if (t === 'CR') { ctx.arc(cx, cy, s * .8, 0, 7); ctx.stroke(); }
+    if (t === 'MA') { ctx.moveTo(cx - s * .7, cy - s * .7); ctx.lineTo(cx + s * .7, cy + s * .7); ctx.moveTo(cx + s * .7, cy - s * .7); ctx.lineTo(cx - s * .7, cy + s * .7); ctx.stroke(); }
+    if (t === 'A' || t === '1') { ctx.font = `600 ${sp * .5}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, cx, cy + dpr); }
+    ctx.restore();
+  }
+  if (o.stroke) {
+    ctx.save(); ctx.strokeStyle = 'rgba(37,99,235,.85)'; ctx.lineWidth = 3 * dpr; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); o.stroke.forEach(([x, y], i) => { const X = at(x), Y = at(y); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke(); ctx.restore();
+  }
+  // candidate discs
+  for (const [p, wr, ld, best] of o.discs || []) {
+    const [x, y] = pt(p), cx = at(x), cy = at(y), r = sp * .47;
+    ctx.save(); ctx.fillStyle = '#FBF1D9'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = best ? '#B8321F' : '#8A6A32'; ctx.lineWidth = (best ? 2.6 : 1.2) * dpr; ctx.stroke();
+    ctx.fillStyle = '#2B1D0E'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${best ? 600 : 500} ${sp * .3}px Inter`; ctx.fillText(wr, cx, cy - sp * .1);
+    ctx.font = `${sp * .22}px Inter`; ctx.fillText(ld, cx, cy + sp * .17); ctx.restore();
+  }
+}
+
+function trend(svg, cut) {
+  const w = +svg.getAttribute('width'), h = +svg.getAttribute('height');
+  let s = 11, r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  let v = 50, wr = [], ld = [], l = 0;
+  for (let i = 0; i < 120; i++) { v = Math.max(8, Math.min(92, v + (r() - .5) * 7 - (i > 70 ? .5 : 0))); l = Math.max(-12, Math.min(12, l + (r() - .5) * 2)); wr.push(v); ld.push(l); }
+  const X = (i) => (i / 119) * w, Y = (p) => h - (p / 100) * h, YL = (p) => h / 2 - (p / 12) * (h / 2);
+  const path = (a, f) => a.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + f(p).toFixed(1)).join(' ');
+  svg.innerHTML = `<line x1="0" x2="${w}" y1="${h / 2}" y2="${h / 2}" stroke="#303035"/>
+    <path d="${path(ld, YL)}" fill="none" stroke="#e2a33b" stroke-width="1.3" opacity=".9"/>
+    <path d="${path(wr, Y)}" fill="none" stroke="#eceae4" stroke-width="1.5"/>
+    <line x1="${X(cut)}" x2="${X(cut)}" y1="0" y2="${h}" stroke="#a3a19a" stroke-dasharray="3 3"/>`;
+}
+function cands(el, rows) {
+  el.innerHTML = rows.map(([m, w, l]) => `<div><span>${m}</span><span>${w}</span><span class="lead">${l}</span></div>`).join('');
+}
+
+function render() {
+  const s38 = stonesAt(BASE);
+  const tryLine = [['P12', 1], ['P11', 2], ['O13', 1]];
+  const tryStones = { ...s38 };
+  draw(document.getElementById('bA'), 480, { stones: tryStones, tryout: tryLine, discs: [['O12', '44.0', '−1.9', true], ['N13', '42.7', '−2.6']] });
+  draw(document.getElementById('bB'), 480, { stones: tryStones, tryout: tryLine, discs: [['O12', '44.0', '−1.9', true], ['N13', '42.7', '−2.6']] });
+  draw(document.getElementById('bP'), 322, { stones: tryStones, tryout: tryLine });
+  draw(document.getElementById('bM'), 480, {
+    stones: s38, last: 'N17',
+    marks: [['R14', 'TR'], ['Q12', 'SQ'], ['P9', 'CR'], ['S12', 'MA'], ['O13', 'A', 'A'], ['P11', 'A', 'B'], ['O11', 'A', 'C'], ['Q13', 'TR']],
+    stroke: [[13.2, 7.6], [13.6, 6.8], [14.6, 6.4], [15.6, 6.7], [16.2, 7.6], [16.0, 8.7], [15.0, 9.3], [13.9, 9.0], [13.3, 8.3], [13.2, 7.6]],
+  });
+  const setup = { ...s38 }; delete setup['R9'];
+  draw(document.getElementById('bS'), 480, { stones: { ...setup, Q10: 1, P10: 1 }, ghost: ['R8', 2], last: null });
+  for (const id of ['tA', 'tM', 'tS']) trend(document.getElementById(id), 38);
+  trend(document.getElementById('tB'), 38);
+  const rows = [['O12', '44.0%', '−1.9'], ['N13', '42.7%', '−2.6'], ['N12', '41.9%', '−3.0'], ['R10', '40.2%', '−3.4']];
+  cands(document.getElementById('cA'), rows); cands(document.getElementById('cB'), rows.slice(0, 3));
+}
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>

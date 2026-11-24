@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3 tree, menus and game info</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root, .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --pop:#2a2a2e; --btn:#2c2c31; --chg:#E2A33B; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1180px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1180px; margin:0 auto 48px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1060px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+  .label b { color:#ECEAE4; font-weight:600; }
+  .note { font-size:12px; color:#9a988f; margin-top:8px; line-height:1.6; max-width:520px; }
+  .pick { display:inline-block; font-size:11px; color:#141416; background:#e8c27a; border-radius:999px; padding:1px 8px; margin-left:6px; font-weight:600; }
+
+  .panel { background:var(--panel); color:var(--text); font-size:13px; position:relative; border-radius:8px; outline:1px solid #2a2a2e; overflow:hidden; }
+  .tabs { display:flex; gap:16px; padding:10px 16px 0; font-size:13px; color:var(--muted); border-bottom:1px solid var(--hairline); }
+  .tabs span { padding-bottom:7px; }
+  .tabs span.on { color:var(--text); border-bottom:2px solid var(--text); }
+  .treehead { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; font-size:12px; color:var(--muted); }
+  .scroll { overflow:hidden; position:relative; }
+  .scroll svg { display:block; }
+
+  .menu { position:absolute; width:236px; background:#2a2a2e; color:#eceae4; border:1px solid #3a3a40; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.4); padding:5px; font-size:13px; z-index:3; }
+  .menu.static { position:static; }
+  .menu div { padding:6px 10px; border-radius:5px; display:flex; justify-content:space-between; gap:12px; }
+  .menu div .m { color:#a3a19a; }
+  .menu div.sep { padding:0; height:1px; background:#3a3a40; margin:5px 4px; }
+  .menu div.hi { background:#3a3a40; }
+  .menu div.dim { color:#6c6a64; }
+  .menu .title { font-size:11px; color:#8a887f; padding:4px 10px 2px; }
+
+  .boardwrap { padding:10px; background:#141416; position:relative; border-radius:8px; outline:1px solid #2a2a2e; }
+  .boardwrap canvas { display:block; border-radius:3px; }
+
+  .pop { width:400px; background:var(--pop); color:var(--text); border:1px solid #3a3a40; border-radius:10px; box-shadow:0 14px 36px rgba(0,0,0,.45); padding:16px 18px 14px; font-size:13px; }
+  .pop h3 { margin:0 0 12px; font-size:14px; font-weight:600; display:flex; justify-content:space-between; }
+  .pop h3 span { font-size:12px; color:var(--muted); font-weight:400; }
+  .grid { display:grid; grid-template-columns:52px 1fr 76px; gap:8px 10px; align-items:center; }
+  .grid .k { color:var(--muted); font-size:12px; }
+  .in { background:#1f1f23; border:1px solid #3a3a40; border-radius:6px; padding:5px 9px; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; }
+  .in.ph { color:#6c6a64; }
+  .in.sel::after { content:' ▾'; color:var(--muted); font-size:11px; }
+  .in.focus { outline:2px solid var(--line); }
+  .seg { display:inline-flex; border:1px solid #3a3a40; border-radius:6px; overflow:hidden; font-size:12px; }
+  .seg span { padding:4px 10px; color:var(--muted); border-right:1px solid #3a3a40; white-space:nowrap; }
+  .seg span:last-child { border-right:none; }
+  .seg span.on { background:var(--text); color:var(--panel); }
+  .hr { height:1px; background:#3a3a40; margin:14px -18px; }
+  .sub { font-size:12px; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; }
+  .kv { display:grid; grid-template-columns:76px 1fr; gap:8px 10px; align-items:center; }
+  .kv .k { color:var(--muted); font-size:12px; }
+  .fill { font-size:12px; border:1px solid #3a3a40; border-radius:6px; padding:4px 9px; background:color-mix(in srgb, #7fd1a8 12%, transparent); white-space:nowrap; }
+  .more { font-size:12px; color:var(--muted); margin-top:10px; }
+  .src { font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px; }
+  .src code { background:#3a3a40; border-radius:3px; padding:0 4px; color:var(--text); font-size:11.5px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>M3 分支、右键菜单和棋局信息 tree, menus and game info, round 2</h1>
+  <p><b>Approved by the owner on 2026-11-23</b>, with 回到这一手 on the right-click menu only.</p>
+  The same game as round 1, at move 38. From move 38 the record continues with C11 (A). There is a kept variation starting O12 (B), with a branch of its own, and an open try-out starting P12 (C). A later variation leaves the main line at move 52.
+  <ul>
+    <li>Interface design 4.4 drew the tree as a horizontal row. Since M1 it is a panel, and a panel can be a short strip or a tall column, so both shapes are shown.</li>
+    <li>Text in <span class="call">this colour</span> is my call, open to change.</li>
+  </ul>
+</div>
+
+<!-- 1 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>1 分支 the variation tree</h2>
+  <p class="cap">Each move is a small stone. The <b>current move</b> has a ring. <b>Letters</b> mark the lines you can go into from the current move, the same letters as the board's badges. A <b>dot</b> above a stone means it has a comment. The <b>try-out</b> line is dashed, in the same amber as 试下中. A click on a stone goes to it. The tree scrolls to keep the current move in view, and draws only what is on screen, so a record with hundreds of branches stays quick.</p>
+  <div class="row">
+    <div>
+      <p class="label"><b>Short and wide</b>: a strip under the analysis panels</p>
+      <div class="panel dark" style="width:560px">
+        <div class="tabs"><span>候选</span><span>波动</span><span>评论</span><span class="on">分支</span></div>
+        <div class="treehead"><span>第 38 手，3 个后续</span><span>主分支 247 手</span></div>
+        <div class="scroll" style="height:170px"><svg id="treeH"></svg></div>
+      </div>
+      <p class="note">Moves run left to right, as interface design 4.4 drew them; variations drop below where they leave. Every fifth move is numbered.</p>
+    </div>
+    <div>
+      <p class="label"><b>Tall and narrow</b>: the record column of the wide default layout</p>
+      <div class="panel dark" style="width:250px">
+        <div class="tabs"><span class="on">分支</span><span>评论</span></div>
+        <div class="treehead"><span>第 38 手</span><span>3 个后续</span></div>
+        <div class="scroll" style="height:420px"><svg id="treeV"></svg></div>
+      </div>
+    </div>
+    <div style="max-width:300px">
+      <p class="cap" style="margin-top:22px"><span class="call"><b>The tree takes the shape of its panel:</b> moves run across when the panel is wider than tall, and down when it is taller than wide. Dragging the panel somewhere else turns it.</span></p>
+      <p class="cap"><b>Keys</b>: ← → and ↑ ↓ step, as today. [ and ] switch between the continuations of the current move (owner, 2026-11-23). Esc goes back to where this variation left, B goes back to the main line.</p>
+      <p class="cap"><span class="call"><b>No tree, no panel.</b> As in design 4.4, a record without variations folds the 分支 panel to nothing, and it appears with the first variation.</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- 2 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>2 Right-click menus (long press on touch)</h2>
+  <p class="cap">Interface design 6 asked for these: make main line, delete a variation, add a note. Every item can be undone, so none asks for confirmation.</p>
+  <div class="row">
+    <div>
+      <p class="label"><b>On a stone in the tree</b>, or a letter badge on the board</p>
+      <div class="menu static">
+        <div class="title">B 分支，第 39 手 黑 O12</div>
+        <div class="hi">设为主分支</div>
+        <div>上移一位 <span class="m">B 变 A</span></div>
+        <div class="sep"></div>
+        <div>删除这个分支</div>
+        <div>删除这一手及之后</div>
+        <div class="sep"></div>
+        <div>编辑评论</div>
+      </div>
+      <p class="note" style="max-width:236px"><span class="call">上移一位 swaps a variation with the one before it, so the order of the letters can be changed without making it the main line.</span> 编辑评论 opens the 评论 panel on that move, with the cursor in it.</p>
+    </div>
+    <div>
+      <p class="label"><b>On a try-out stone</b></p>
+      <div class="menu static">
+        <div class="title">试下，第 39 手 黑 P12</div>
+        <div class="hi">结束试下 <span class="m">回到第 38 手</span></div>
+        <div>保留为分支</div>
+      </div>
+      <p class="note" style="max-width:236px"><span class="call"><b>保留为分支</b> turns the try-out into an ordinary variation, for when a line you tried turns out worth keeping. It then counts as a change, and is saved.</span></p>
+    </div>
+    <div>
+      <p class="label"><b>On the board</b>, in normal mode</p>
+      <div class="row" style="gap:14px">
+        <div class="menu static">
+          <div class="title">黑子 Q16</div>
+          <div class="hi">回到这一手 <span class="m">第 1 手</span></div>
+          <div>显示手数 <span class="m">N</span></div>
+        </div>
+        <div class="menu static">
+          <div class="title">空点 O13</div>
+          <div class="hi">在这里试下</div>
+          <div>停一手</div>
+          <div class="sep"></div>
+          <div>标记 <span class="m">▸</span></div>
+        </div>
+      </div>
+      <p class="note" style="max-width:520px"><b>回到这一手</b> goes back to the move that placed the stone (charter 7.2). A plain click on a stone does nothing, so a stray click never moves you away (owner, 2026-11-23). <span class="call">在这里试下 starts a try-out with that move, the quick way in without the button. 标记 ▸ puts one mark without switching to 标记 mode.</span></p>
+    </div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div class="boardwrap"><canvas id="bL"></canvas></div>
+    <div style="max-width:420px">
+      <p class="cap" style="margin-top:4px"><b>Letter badges</b> (interface design 5.4, unchanged): A, B and C sit on the upper right of each continuation's point. C11 and P12 are not among KataGo's candidates, so each gets an empty outlined disc under its letter. <span class="call">The try-out's letter is amber, like its line in the tree.</span></p>
+      <p class="cap">A click on a badge goes into that line. A right-click on it opens the first menu above.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 3 ------------------------------------------------------------------------------------>
+<div class="section">
+  <h2>3 棋局信息 game information</h2>
+  <p class="cap">The rules chip and the title open it, as since M6, and now it can be edited. <span class="call">Fields are edited in place; each change is one undoable step, and marks the game as changed.</span> 结果 (SGF <b>RE</b>) is a choice of winner and a margin, or 中盘, 超时 or 弃权. When final scoring (M2) has a count, <b>填入点目结果</b> writes it in.</p>
+  <div class="row">
+    <div>
+      <p class="label"><b>Players and result</b></p>
+      <div class="pop">
+        <h3>棋局信息 <span>Esc 关闭</span></h3>
+        <div class="grid">
+          <span class="k">黑方</span><span class="in">陈一鸣</span><span class="in">九段</span>
+          <span class="k">白方</span><span class="in focus">林溪</span><span class="in">九段</span>
+          <span class="k">结果</span><span style="display:flex;gap:6px"><span class="in sel" style="flex:1">白胜</span><span class="in sel" style="flex:1">中盘</span></span><span></span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><span class="fill">填入点目结果：白胜 2.5 目</span><span style="font-size:12px;color:var(--muted)">来自终局点目</span></div>
+        <div class="kv" style="margin-top:12px">
+          <span class="k">日期</span><span class="in">2025-12-24</span>
+          <span class="k">赛事</span><span class="in">第30届三星杯 决赛</span>
+          <span class="k">轮次</span><span class="in">第2局</span>
+          <span class="k">地点</span><span class="in ph">未填</span>
+        </div>
+        <div class="hr"></div>
+        <div class="sub"><span>规则和贴目</span><span>KataGo 按此分析</span></div>
+        <div style="display:flex;gap:10px;align-items:center"><span class="seg"><span class="on">中国</span><span>日韩</span><span>自定义</span></span><span style="color:var(--muted);font-size:12px">贴 7.5 目</span></div>
+                <div class="src">棋谱记载 <code>RU[Chinese]</code> <code>KM[7.5]</code>，按中国规则读取。</div>
+      </div>
+    </div>
+    <div>
+      <p class="label"><b>自定义 rules</b>: KataGo's full rule set</p>
+      <div class="pop">
+        <h3>棋局信息 <span>Esc 关闭</span></h3>
+        <div class="more">黑方 陈一鸣 九段，白方 林溪 九段，白中盘胜 <span style="color:var(--text)">▸</span></div>
+        <div class="hr"></div>
+        <div class="sub"><span>规则和贴目</span><span>KataGo 按此分析</span></div>
+        <div style="display:flex;gap:10px;align-items:center"><span class="seg"><span>中国</span><span>日韩</span><span class="on">自定义</span></span></div>
+        <div class="kv" style="margin-top:12px">
+          <span class="k">贴目</span><span style="display:flex;gap:6px;align-items:center"><span class="in" style="width:70px">7.5</span><span style="color:var(--muted)">− +</span></span>
+          <span class="k">计分</span><span class="seg"><span class="on">数子</span><span>数目</span></span>
+          <span class="k">打劫</span><span class="seg"><span class="on">简单劫</span><span>局面同形</span><span>情境同形</span></span>
+          <span class="k">自杀</span><span class="seg"><span class="on">禁止</span><span>允许</span></span>
+          <span class="k">双活计税</span><span class="seg"><span class="on">不计</span><span>双活</span><span>全部</span></span>
+          <span class="k">让子补偿</span><span class="seg"><span>0</span><span>N−1</span><span class="on">N</span></span>
+          <span class="k">按钮</span><span class="seg"><span class="on">无</span><span>有</span></span>
+        </div>
+        <div class="src">These start from the preset you were on, so nothing changes until you edit. <span class="call">Saving writes RU as KataGo's rule string when it is not one of the presets.</span></div>
+      </div>
+    </div>
+    <div style="max-width:300px">
+      <p class="cap" style="margin-top:22px"><b>Where it opens.</b> A popover on the desktop, a full sheet on a phone (the M1 narrow layout), like settings.</p>
+      <p class="cap"><span class="call"><b>Komi and rules</b> stay together in the lower half, because changing them changes what KataGo analyses. The players and the result are only record. A handicap (HA) shows as text here; its stones are placed in 摆子.</span></p>
+      <p class="cap"><b>Board size</b> is not here: a record's size is fixed. <span class="call">新建棋局 gets 其他路数… for 5 to 18, beside today's 19, 13 and 9.</span></p>
+      <p class="cap">The backlog item M6 minor 4 is fixed on the way: choosing 自定义 without editing anything no longer rewrites <b>RU</b> and <b>KM</b> on save.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- tree data --------------------------------------------------------------------------
+// depth = move number. lane = row (horizontal) or column (vertical).
+const nodes = [];
+const add = (id, parent, depth, lane, kind = 'kept') => nodes.push({ id, parent, depth, lane, kind, color: depth % 2 ? 1 : 2 });
+for (let d = 26; d <= 70; d++) add('m' + d, d > 26 ? 'm' + (d - 1) : null, d, 0);
+add('b39', 'm38', 39, 1); for (let d = 40; d <= 45; d++) add('b' + d, 'b' + (d - 1), d, 1);
+add('bb42', 'b41', 42, 2); add('bb43', 'bb42', 43, 2); add('bb44', 'bb43', 44, 2);
+add('c39', 'm38', 39, 3, 'try'); add('c40', 'c39', 40, 3, 'try'); add('c41', 'c40', 41, 3, 'try');
+add('d53', 'm52', 53, 1); for (let d = 54; d <= 57; d++) add('d' + d, 'd' + (d - 1), d, 1);
+const CURRENT = 'm38';
+const LETTERS = { m39: 'A', b39: 'B', c39: 'C' };
+const COMMENTS = new Set(['m38', 'b40', 'm47']);
+const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+function tree(svg, horizontal, w, h, start, stepD, stepL) {
+  svg.setAttribute('width', w); svg.setAttribute('height', h);
+  const pad = horizontal ? { a: 18, b: 34 } : { a: 22, b: 40 };
+  const P = (n) => horizontal ? [pad.b + (n.depth - start) * stepD, pad.a + 6 + n.lane * stepL] : [pad.b + n.lane * stepL, pad.a + (n.depth - start) * stepD];
+  let out = '';
+  // links
+  for (const n of nodes) {
+    if (!n.parent) continue;
+    const p = byId[n.parent], [x1, y1] = P(p), [x2, y2] = P(n);
+    const dash = n.kind === 'try' ? 'stroke-dasharray="3 3"' : '';
+    const col = n.kind === 'try' ? '#E2A33B' : '#5a5a61';
+    if (n.lane === p.lane) out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="1.4" ${dash}/>`;
+    else {
+      const d = horizontal ? `M${x1} ${y1} L${x1} ${y2 - 6} Q${x1} ${y2} ${x1 + 6} ${y2} L${x2} ${y2}` : `M${x1} ${y1} L${x2 - 6} ${y1} Q${x2} ${y1} ${x2} ${y1 + 6} L${x2} ${y2}`;
+      out += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.4" ${dash}/>`;
+    }
+  }
+  for (const n of nodes) {
+    const [x, y] = P(n);
+    if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
+    const r = 5.5;
+    if (n.id === CURRENT) out += `<circle cx="${x}" cy="${y}" r="${r + 4}" fill="none" stroke="#eceae4" stroke-width="2"/>`;
+    const fill = n.color === 1 ? '#111' : '#efede6';
+    const stroke = n.kind === 'try' ? '#E2A33B' : n.color === 1 ? '#6b6b70' : '#bdb9ae';
+    out += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.2" ${n.kind === 'try' ? 'stroke-dasharray="2 1.6"' : ''}/>`;
+    if (COMMENTS.has(n.id)) out += `<circle cx="${x - 7}" cy="${y - 8}" r="2.2" fill="#c9a66b"/>`;
+    if (LETTERS[n.id]) {
+      const L = LETTERS[n.id], bg = n.kind === 'try' ? '#E2A33B' : '#eceae4', fg = '#1e1e21';
+      out += `<rect x="${x + 5}" y="${y - 15}" width="11" height="11" rx="2.5" fill="${bg}"/><text x="${x + 10.5}" y="${y - 6.6}" font-size="8.5" font-weight="700" text-anchor="middle" fill="${fg}" font-family="Inter">${L}</text>`;
+    }
+    if (n.lane === 0 && n.depth % 5 === 0) {
+      out += horizontal
+        ? `<text x="${x}" y="${y + 20}" font-size="10" text-anchor="middle" fill="#7d7b74" font-family="Inter">${n.depth}</text>`
+        : `<text x="${x - 14}" y="${y + 3.5}" font-size="10" text-anchor="end" fill="#7d7b74" font-family="Inter">${n.depth}</text>`;
+    }
+  }
+  svg.innerHTML = out;
+}
+
+// ---- board ------------------------------------------------------------------------------
+const N = 19, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+const GAME = ['Q16','D4','Q3','D16','C14','F17','R5','C6','O17','R14','P14','Q13','R15','S15','R13','Q12','R16','S14','R12','R11','S11','Q11','F3','D6','J4','C17','E15','C16','D14','K16','H17','K17','G16','R9','P9','O16','N16','N17'];
+function board(canvas, css) {
+  const dpr = Math.max(2, window.devicePixelRatio || 1), W = css * dpr;
+  canvas.width = W; canvas.height = W; canvas.style.width = css + 'px'; canvas.style.height = css + 'px';
+  const ctx = canvas.getContext('2d');
+  const gr = ctx.createLinearGradient(0, 0, W, W); gr.addColorStop(0, '#e0b46c'); gr.addColorStop(1, '#d6a85e');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, W);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 70; i++) { ctx.fillStyle = `rgba(120,80,30,${(.02 + rnd() * .03).toFixed(3)})`; ctx.fillRect(rnd() * W, 0, (1 + rnd() * 3) * dpr, W); }
+  const margin = 26 * dpr, sp = (W - 2 * margin) / (N - 1), at = (i) => margin + i * sp;
+  ctx.strokeStyle = '#3A2A14'; ctx.lineWidth = Math.max(1, Math.round(dpr * .8));
+  ctx.beginPath(); for (let i = 0; i < N; i++) { ctx.moveTo(at(i), at(0)); ctx.lineTo(at(i), at(N - 1)); ctx.moveTo(at(0), at(i)); ctx.lineTo(at(N - 1), at(i)); } ctx.stroke();
+  ctx.lineWidth = Math.round(1.4 * dpr); ctx.strokeRect(at(0), at(0), at(N - 1) - at(0), at(N - 1) - at(0));
+  ctx.fillStyle = '#3A2A14'; for (const a of [3, 9, 15]) for (const b of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a), at(b), sp * .1, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(58,42,20,.8)'; ctx.font = `${10 * dpr}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i), margin * .42); ctx.fillText(String(N - i), margin * .42, at(i)); }
+  GAME.forEach((p, i) => {
+    const [x, y] = pt(p), r = sp * .48, cx = at(x), cy = at(y), c = i % 2 ? 2 : 1;
+    ctx.save(); ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .4; ctx.shadowOffsetX = r * .1; ctx.shadowOffsetY = r * .15;
+    const g = ctx.createRadialGradient(cx - r * .36, cy - r * .4, r * .06, cx, cy, r);
+    if (c === 1) { g.addColorStop(0, '#6a6a68'); g.addColorStop(.3, '#2c2c2b'); g.addColorStop(1, '#0a0a0a'); } else { g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#f1eee6'); g.addColorStop(1, '#c4bdaf'); }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.restore();
+    if (i === GAME.length - 1) { ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(cx, cy, sp * .11, 0, 7); ctx.fill(); }
+  });
+  // candidate discs (B is one of them)
+  const disc = (p, wr, ld, best) => {
+    const [x, y] = pt(p), cx = at(x), cy = at(y), r = sp * .47;
+    ctx.save(); ctx.fillStyle = '#FBF1D9'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = best ? '#B8321F' : '#8A6A32'; ctx.lineWidth = (best ? 2.6 : 1.2) * dpr; ctx.stroke();
+    ctx.fillStyle = '#2B1D0E'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${best ? 600 : 500} ${sp * .3}px Inter`; ctx.fillText(wr, cx, cy - sp * .1);
+    ctx.font = `${sp * .22}px Inter`; ctx.fillText(ld, cx, cy + sp * .17); ctx.restore();
+  };
+  disc('O12', '46.0', '−1.2', true); disc('N13', '44.1', '−1.9'); disc('Q10', '42.0', '−2.8');
+  // empty outlined discs for continuations that are not candidates
+  for (const p of ['C11', 'P12']) { const [x, y] = pt(p); ctx.save(); ctx.strokeStyle = 'rgba(43,29,14,.7)'; ctx.lineWidth = 1.3 * dpr; ctx.beginPath(); ctx.arc(at(x), at(y), sp * .42, 0, 7); ctx.stroke(); ctx.restore(); }
+  // badges
+  for (const [p, L, tryout] of [['C11', 'A'], ['O12', 'B'], ['P12', 'C', true]]) {
+    const [x, y] = pt(p), s = sp * .4, bx = at(x) + sp * .22, by = at(y) - sp * .62;
+    ctx.save(); ctx.fillStyle = tryout ? '#E2A33B' : '#1f1a14'; ctx.beginPath(); ctx.roundRect(bx, by, s, s, s * .22); ctx.fill();
+    ctx.fillStyle = tryout ? '#1f1a14' : '#f3efe4'; ctx.font = `700 ${s * .72}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L, bx + s / 2, by + s / 2 + dpr * .5); ctx.restore();
+  }
+}
+
+document.fonts.ready.then(() => {
+  tree(document.getElementById('treeH'), true, 560, 170, 29, 26, 30);
+  tree(document.getElementById('treeV'), false, 250, 420, 31, 26, 34);
+  board(document.getElementById('bL'), 420);
+});
+</script>
+</body>
+</html>
