@@ -1,10 +1,8 @@
 import { useRef } from 'react';
 import { cn } from 'cn';
 import { useRowLineWheel } from '../board/useWheelNavigation';
-import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { moveKey, sameMove, type ShownCandidate } from '../analysis/candidates';
-import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
+import { catchingUp, moveKey, sameMove, type ShownCandidate } from '../analysis/candidates';
 import { formatLead, formatPercent, formatVisits } from '../analysis/format';
 import { nextSort, sortCandidates } from '../analysis/sortCandidates';
 import { useShownCandidates } from '../analysis/useShownCandidates';
@@ -54,11 +52,12 @@ function template(columns: Column[], share: boolean): string {
 export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const { current, shown: all, fading } = useShownCandidates();
+  const { current, shown: all } = useShownCandidates();
   const sort = useDeviceStore((s) => s.settings.candidateSort);
   const chosen = useDeviceStore((s) => s.settings.candidateColumns);
   const sortedRows = sortCandidates(all, sort.key, sort.descending);
   const shown = maxRows === undefined ? sortedRows : sortedRows.slice(0, maxRows);
+  const analysing = useEngineStore((s) => s.engine?.state === 'analysing');
   const rejected = useEngineStore((s) => s.rejected);
   const snapshot = useGameStore((s) => s.snapshot);
   const hidden = useViewStore((s) => s.hidden || s.held);
@@ -85,7 +84,7 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
     <span>{t('analysis.table.hidden')}</span>
   ) : current && !rejected ? (
     <span className="tabular-nums">
-      {fading
+      {analysing && catchingUp(current)
         ? t('analysis.table.catchingUp', {
             visits: grouped.format(current.rootVisits),
             previous: grouped.format(current.previousVisits),
@@ -106,11 +105,6 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
         {c.rank === 1 ? t('analysis.playedBest') : t('analysis.played', { diff })}
       </span>
     );
-  };
-
-  const rowStyle: CSSProperties = {
-    opacity: fading ? CATCHING_UP_OPACITY : 1,
-    transition: `opacity ${CATCHING_UP_FADE_MS}ms`,
   };
 
   return (
@@ -187,8 +181,7 @@ export function CandidateTable({ maxRows }: { maxRows?: number } = {}) {
                   role="row"
                   data-rank={c.rank}
                   data-highlighted={highlighted || undefined}
-                  data-catching-up={fading || undefined}
-                  style={{ ...rowStyle, ...grid }}
+                  style={grid}
                   className={`${GRID} rounded border-b border-divider-soft px-1.5 py-2 ${highlighted ? 'bg-divider-soft' : ''}`}
                   onMouseEnter={() => setHover({ move: c.move, source: 'table' })}
                   onMouseLeave={() => {

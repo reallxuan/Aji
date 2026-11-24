@@ -146,19 +146,6 @@ describe('BoardCanvas candidates', () => {
     expect(cleared).toBeGreaterThanOrEqual(2);
   });
 
-  it('fades the candidate layer while a new search catches up', () => {
-    stubRatio(1);
-    const props = { cssSize: 400, boardSize: 19, stones: empty(19), lastMove: null };
-    const { container, rerender } = render(
-      <BoardCanvas {...props} candidates={[best]} catchingUp />,
-    );
-    const layer = container.querySelector<HTMLCanvasElement>('canvas[data-layer="candidates"]')!;
-    expect(layer).toHaveStyle({ opacity: '0.6' });
-    expect(layer.style.transition).toBe('opacity 200ms');
-    rerender(<BoardCanvas {...props} candidates={[best]} catchingUp={false} />);
-    expect(layer).toHaveStyle({ opacity: '1' });
-  });
-
   it('reports the hovered candidate when the pointer enters and leaves its disc', () => {
     stubRatio(1);
     const onHover = vi.fn();

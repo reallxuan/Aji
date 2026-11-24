@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
@@ -80,29 +80,6 @@ it('shows an empty track before any result', () => {
   expect(document.querySelector('[data-segment]')).toBeNull();
   expect(screen.getByTestId('winrate-bar')).toBeInTheDocument();
   expect(screen.queryByText(/%/)).toBeNull();
-});
-
-it('fades the numbers while a new search catches up', () => {
-  const engine = mount(analysis({ rootVisits: 640, previousVisits: 1000 }));
-  for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
-    expect(text).toHaveStyle({ opacity: '0.6' });
-  act(() =>
-    engine.getState().applyEvent({
-      type: 'analysisUpdate',
-      analysis: analysis({ rootVisits: 1100, previousVisits: 1000 }),
-    }),
-  );
-  for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
-    expect(text).toHaveStyle({ opacity: '1' });
-});
-
-it('the bar is not faded while paused', () => {
-  mount(analysis({ rootVisits: 640, previousVisits: 1000 }), 492, undefined, {
-    state: 'paused',
-    version: '1.18.2',
-  });
-  for (const text of document.querySelectorAll<HTMLElement>('[data-segment] span'))
-    expect(text).toHaveStyle({ opacity: '1' });
 });
 
 it('even_lead_reads_even_in_both_languages', () => {

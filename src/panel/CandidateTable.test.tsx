@@ -11,6 +11,9 @@ import { resetDeviceStore, useDeviceStore } from '../device/deviceStore';
 import { DEFAULT_DEVICE_SETTINGS } from '../device/deviceSettings';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, expect, it } from 'vitest';
+import { subBoardHarness } from '../analysis/subBoardTesting';
+import { MainBoard } from '../layout/MainBoard';
+import { WinrateBar } from './WinrateBar';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
 import { createEngineStore, EngineStoreProvider, type EngineStore } from '../engine/engineStore';
 import { resetGameStore, useGameStore } from '../game/gameStore';
@@ -27,6 +30,7 @@ import { CandidateTable } from './CandidateTable';
 import { storedSettings } from '../setup/testing';
 
 afterEach(() => {
+  cleanup();
   resetGameStore();
   resetViewStore();
   resetDeviceStore();
@@ -166,11 +170,31 @@ it('reads 实战 最佳 when the played move is the best', () => {
   expect(within(rows()[0]).getByText('实战 最佳')).toBeInTheDocument();
 });
 
-it('fades the rows while catching up', () => {
-  mount({ update: analysis({ rootVisits: 640, previousVisits: 1000 }) });
-  for (const row of rows()) {
-    expect(row).toHaveAttribute('data-catching-up');
-    expect(row).toHaveStyle({ opacity: '0.6' });
+it('keeps the board, rows and win rates at full opacity while visits catch up', async () => {
+  const { wrapper, engine } = subBoardHarness();
+  const { container } = render(
+    <>
+      <MainBoard rect={{ x: 0, y: 0, width: 400, height: 400 }} />
+      <CandidateTable />
+      <WinrateBar width={492} />
+    </>,
+    { wrapper },
+  );
+  for (const rootVisits of [640, 1000]) {
+    await act(async () => {
+      engine.getState().applyEvent({
+        type: 'analysisUpdate',
+        analysis: analysis({ rootVisits, previousVisits: 1000 }),
+      });
+    });
+    if (rootVisits === 640) expect(screen.getByText('总计算量 640 / 1,000')).toBeVisible();
+    else expect(screen.queryByText('总计算量 640 / 1,000')).toBeNull();
+
+    const discs = container.querySelector('canvas[data-layer="candidates"]')!;
+    const bar = within(screen.getByTestId('winrate-bar'));
+    expect(rows()).toHaveLength(CANDIDATES.length);
+    for (const element of [discs, ...rows(), bar.getByText('54.2%'), bar.getByText('45.8%')])
+      expect(getComputedStyle(element).opacity || '1').toBe('1');
   }
 });
 
@@ -180,8 +204,6 @@ it('a paused search shows its own total, not the catching-up header', () => {
     engine: { state: 'paused', version: '1.18.2' },
   });
   expect(screen.getByText('总计算量 640')).toBeInTheDocument();
-  expect(document.querySelector('[data-catching-up]')).toBeNull();
-  for (const row of rows()) expect(row).toHaveStyle({ opacity: '1' });
 });
 
 it('a restarting engine does not keep the catching-up header', () => {
@@ -190,7 +212,6 @@ it('a restarting engine does not keep the catching-up header', () => {
     engine: { state: 'starting' },
   });
   expect(screen.queryByText('总计算量 640 / 1,000')).toBeNull();
-  expect(document.querySelector('[data-catching-up]')).toBeNull();
 });
 
 it('shows 已隐藏（F） and no rows while hidden', () => {

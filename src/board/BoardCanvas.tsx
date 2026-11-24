@@ -3,7 +3,6 @@ import type { MarkAt } from '../transport/generated/MarkAt';
 import { drawMarks } from './marks';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sameMove, type ShownCandidate } from '../analysis/candidates';
-import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
 import type { BoardId, StoneId } from '../device/deviceSettings';
 import type { Color } from '../transport/generated/Color';
 import type { DiscField } from '../transport/generated/DiscField';
@@ -36,8 +35,6 @@ export interface BoardCanvasProps {
   discLines?: [DiscField, DiscField];
   /** The interface language, for the discs' numbers. */
   lang?: string;
-  /** A new search is still below the cached depth: the discs are faded (design 5.2). */
-  catchingUp?: boolean;
   /** The pointer entered a disc (its move) or left every disc (`null`). */
   onHoverCandidate?(move: Move | null): void;
   /**
@@ -99,7 +96,6 @@ export function BoardCanvas({
   candidates = NO_CANDIDATES,
   discLines = DEFAULT_LINES,
   lang = 'en',
-  catchingUp = false,
   onHoverCandidate,
   hoveredCandidate,
   variation = null,
@@ -406,11 +402,7 @@ export function BoardCanvas({
         width={backing}
         height={backing}
         className="absolute inset-0"
-        style={{
-          ...style,
-          opacity: catchingUp && !variation ? CATCHING_UP_OPACITY : 1,
-          transition: `opacity ${CATCHING_UP_FADE_MS}ms`,
-        }}
+        style={style}
         aria-hidden
       />
       {gestures.ghost && onDragStone && (

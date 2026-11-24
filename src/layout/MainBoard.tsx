@@ -65,7 +65,7 @@ export function MainBoard({
   const boardArea = useRef<HTMLDivElement>(null);
   useWheelNavigation(boardArea);
   const { i18n } = useTranslation();
-  const { current, shown, fading } = useShownCandidates();
+  const { current, shown } = useShownCandidates();
   const hidden = useViewStore((s) => s.hidden || s.held);
   const discLines = useDeviceStore((s) => s.settings.discLines);
   const coordinates = useDeviceStore((s) => s.settings.showCoordinates);
@@ -269,7 +269,6 @@ export function MainBoard({
         boardStyle={style.board}
         stoneStyle={style.stones}
         lang={i18n.language}
-        catchingUp={fading}
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}
         onTapPoint={
