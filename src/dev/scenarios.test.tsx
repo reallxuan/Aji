@@ -196,6 +196,7 @@ describe('development scenarios', () => {
       if (one?.type !== 'gameTrend') throw new Error('no trend');
       expect(one.nodes[0].stats).toBeNull();
       expect(one.nodes[1].stats).not.toBeNull();
+      expect(one.nodes[1].loss).toBeNull();
       await transport.request({ type: 'cacheClear', scope: 'game' });
       const cleared = events.at(-1);
       expect(cleared).toMatchObject({ type: 'gameTrend', reason: 'reset' });
@@ -343,4 +344,254 @@ describe('development scenarios', () => {
       vi.useRealTimers();
     }
   });
+});
+
+it('scenario game edits through the transport', async () => {
+  const transport = scenarioTransport('game')!;
+  const events: AppEvent[] = [];
+  transport.subscribe((e) => events.push(e));
+  await transport.request({ type: 'gameNew', size: 9 });
+  await transport.request({
+    type: 'gameEdit',
+    edit: { kind: 'play', mv: { type: 'play', x: 1, y: 1 } },
+  });
+  await transport.request({ type: 'gameNavigate', to: 'first' });
+  await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+  const exported = await transport.request({
+    type: 'gameExport',
+    options: { scope: 'branch', clean: true, inPlace: false },
+  });
+  expect(exported).toMatchObject({ type: 'gameExport', text: expect.stringContaining('B[]') });
+  expect(exported).toMatchObject({ text: expect.not.stringContaining('B[bb]') });
+  expect(events.filter((e) => e.type === 'gameTrend').map((e) => e.reason)).toEqual([
+    'reset',
+    'lineChanged',
+    'lineChanged',
+  ]);
+  expect(transport.unhandled).toEqual([]);
+});
+
+it('fake save handshake clears changed only for the written edit', async () => {
+  const transport = scenarioTransport('game')!;
+  const files = createFakeFiles({ files: { '/game.sgf': '(;)' } });
+  const edit = (text: string) =>
+    transport.request({ type: 'gameEdit', edit: { kind: 'setComment', node: 0, text } });
+  await edit('囲碁');
+  const out = await transport.request({
+    type: 'gameExport',
+    options: { scope: 'game', clean: false, inPlace: true },
+  });
+  if (out.type !== 'gameExport' || !out.bytes) throw new Error('no byte export');
+  await edit('newer');
+  await files.save('/game.sgf', out.bytes);
+  expect(files.written.get('/game.sgf')).toContain('C[囲碁]');
+  expect((await files.openPath('/game.sgf')).bytes).toBe(out.bytes);
+  await expect(
+    transport.request({ type: 'gameSaved', editId: out.editId, utf8: true }),
+  ).resolves.toMatchObject({ snapshot: { changed: true } });
+  await expect(transport.request({ type: 'gameUndo' })).resolves.toMatchObject({
+    snapshot: { changed: false },
+  });
+});
+
+it('keeps main-line job results off a variation with the same line index', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('job-done', { tick: 50 })!;
+    const events: AppEvent[] = [];
+    transport.subscribe((e) => events.push(e));
+    const edit = await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    if (edit.type !== 'game') throw new Error('no game');
+    const pushed = events.at(-1);
+    expect(pushed).toMatchObject({
+      type: 'gameTrend',
+      reason: 'lineChanged',
+      revision: edit.snapshot.lineRevision,
+    });
+    if (pushed?.type !== 'gameTrend') throw new Error('no trend');
+    expect(pushed.nodes[0].stats).not.toBeNull();
+    expect(pushed.nodes[1].stats).toBeNull();
+    await transport.request({ type: 'gameNavigate', to: 'previousSibling' });
+    const trend = await transport.request({ type: 'gameTrend' });
+    if (trend.type !== 'trend') throw new Error('no trend');
+    expect(trend.nodes[1].stats).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('simulates live engine updates only on the main line', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('analysing')!;
+    const events: AppEvent[] = [];
+    transport.subscribe((e) => events.push(e));
+    await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    await expect(transport.request({ type: 'engineStatus' })).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: false },
+    });
+    vi.advanceTimersByTime(300);
+    expect(events.filter((e) => e.type === 'analysisUpdate')).toEqual([]);
+    await transport.request({ type: 'gameNavigate', to: 'mainLine' });
+    vi.advanceTimersByTime(300);
+    expect(events.filter((e) => e.type === 'analysisUpdate').length).toBeGreaterThan(0);
+    await expect(transport.request({ type: 'engineStatus' })).resolves.toMatchObject({
+      engine: { state: 'analysing' },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('starts a fresh live search when another fixture reuses the same fake slot', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('analysing')!;
+    const events: AppEvent[] = [];
+    transport.subscribe((e) => events.push(e));
+    vi.advanceTimersByTime(300);
+    await transport.request({ type: 'gameNew', size: 9 });
+    events.length = 0;
+    vi.advanceTimersByTime(100);
+    const update = events.find((e) => e.type === 'analysisUpdate');
+    expect(update).toMatchObject({ analysis: { boardSize: 9, previousVisits: 0, rootVisits: 50 } });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('a selected-line job on a variation searches only its shared main-line prefix', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('game')!;
+    const events: AppEvent[] = [];
+    transport.subscribe((e) => events.push(e));
+    await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    const settings = await transport.request({ type: 'settingsGet' });
+    if (settings.type !== 'settings') throw new Error('no settings');
+    await transport.request({
+      type: 'jobStart',
+      options: { ...settings.settings.jobOptions, scope: 'line' },
+    });
+    expect(events.at(-1)).toMatchObject({ type: 'jobProgress', progress: { total: 1 } });
+    await transport.request({ type: 'jobStop' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('a job counts a duplicated comment-only position once', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('game')!;
+    const events: AppEvent[] = [];
+    transport.subscribe((e) => events.push(e));
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    for (const stone of ['white', null] as const)
+      await transport.request({
+        type: 'gameEdit',
+        edit: { kind: 'setupStone', point: { x: 0, y: 0 }, stone },
+      });
+    const settings = await transport.request({ type: 'settingsGet' });
+    if (settings.type !== 'settings') throw new Error('no settings');
+    await transport.request({
+      type: 'jobStart',
+      options: { ...settings.settings.jobOptions, scope: 'line' },
+    });
+    expect(events.at(-1)).toMatchObject({ type: 'jobProgress', progress: { total: 2 } });
+    await transport.request({ type: 'jobStop' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('clears a reached limit on a variation, keeps pause and restores the cached main-line limit', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('analysing')!;
+    const status = () => transport.request({ type: 'engineStatus' });
+    const settings = await transport.request({ type: 'settingsGet' });
+    if (settings.type !== 'settings') throw new Error('no settings');
+    await transport.request({
+      type: 'settingsSet',
+      settings: { ...settings.settings, visitLimit: 50 },
+    });
+    await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
+    vi.advanceTimersByTime(100);
+    await expect(status()).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: true },
+    });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    await expect(status()).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: false },
+    });
+    await transport.request({ type: 'analysisPause' });
+    await transport.request({ type: 'gameNavigate', to: 'mainLine' });
+    vi.advanceTimersByTime(300);
+    await expect(status()).resolves.toMatchObject({ engine: { state: 'paused' } });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    await transport.request({ type: 'analysisResume' });
+    await expect(status()).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: false },
+    });
+    await transport.request({ type: 'gameNavigate', to: 'mainLine' });
+    vi.advanceTimersByTime(100);
+    await expect(status()).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: true },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('keeps the engine busy on a variation until the main-line job finishes', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('analysing', { tick: 50 })!;
+    const settings = await transport.request({ type: 'settingsGet' });
+    if (settings.type !== 'settings') throw new Error('no settings');
+    await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
+    await transport.request({ type: 'jobStart', options: settings.settings.jobOptions });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    vi.advanceTimersByTime(100);
+    await expect(transport.request({ type: 'engineStatus' })).resolves.toMatchObject({
+      engine: { state: 'analysing' },
+    });
+    vi.advanceTimersByTime(30000);
+    await expect(transport.request({ type: 'engineStatus' })).resolves.toMatchObject({
+      engine: { state: 'ready', limitReached: false },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('keeps root estimates stable on consecutive slots with the same position', async () => {
+  vi.useFakeTimers();
+  try {
+    const transport = scenarioTransport('analysing')!;
+    const updates: AnalysisUpdate[] = [];
+    transport.subscribe((e) => {
+      if (e.type === 'analysisUpdate') updates.push(e.analysis);
+    });
+    await transport.request({ type: 'gameEdit', edit: { kind: 'pass' } });
+    for (const stone of ['white', null] as const)
+      await transport.request({
+        type: 'gameEdit',
+        edit: { kind: 'setupStone', point: { x: 0, y: 0 }, stone },
+      });
+    vi.advanceTimersByTime(100);
+    const commentSlot = updates.at(-1)!;
+    await transport.request({ type: 'gameNavigate', to: 'previous' });
+    vi.advanceTimersByTime(100);
+    expect(updates.at(-1)).toMatchObject({
+      position: commentSlot.position,
+      winrate: commentSlot.winrate,
+      scoreLead: commentSlot.scoreLead,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -193,6 +193,17 @@ and extra games, `truncated.sgf` cut at move 183, `illegal-ko.sgf` a 9×9 game w
 an occupied point, and `size-19x13.sgf` fails as a non-square board. `moved-away.sgf` is in the
 recent list but not on the fake disk.
 
+The browser game supports kept variations, try-out, undo and redo, setup stones, the player to
+move, comments, marks and game information. Export writes the kept tree, or the selected line for
+a branch export. Clean copies omit comments. The fake disk stores in-place writes as bytes and the
+scenario exports UTF-8. Record editing, file decoding and source-encoding preservation are tested
+against the Rust backend.
+
+The fake board resolves captures and checks occupied points, suicide and simple ko. Rules beyond
+simple ko, inserting a move and flattening a position require the native backend. Simulated live
+analysis and whole-game jobs cover the main line only. Switching variations shows results for
+the positions shared with that line.
+
 Dragging a file from the desktop onto the page goes through the same path as a drop on the
 desktop app (`src/dev/browserDrops.ts`): the board dims while the file is over the window, and
 the drop opens it, so dropping the samples' names (any file called `illegal-ko.sgf`, say) shows
