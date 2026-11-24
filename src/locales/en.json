@@ -549,7 +549,9 @@
       "trend": "Trend",
       "candidates": "Candidates",
       "swings": "Swings",
-      "subboard": "Sub-board"
+      "subboard": "Sub-board",
+      "tree": "Variations",
+      "comments": "Comments"
     },
     "noCandidate": "No candidate",
     "move": "Move {{panel}}",
@@ -814,6 +816,14 @@
     "removeStone": "Remove this stone",
     "changeBlack": "Change to black",
     "changeWhite": "Change to white",
-    "dragHint": "Drag a stone to move it."
+    "dragHint": "Drag a stone to move it.",
+    "editComment": "Edit comment"
+  },
+  "tree": {
+    "empty": "No variations yet",
+    "continuations": "{{count}} continuations",
+    "mainLine": "Main line: {{n}} moves",
+    "continuations_one": "{{count}} continuation",
+    "position": "Move {{n}}, {{next}}"
   }
 }

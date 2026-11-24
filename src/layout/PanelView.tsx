@@ -13,8 +13,8 @@ export type Actions = {
   dragging: PanelRef | null;
   startDrag(ref: PanelRef, e: PointerEvent): void;
   selectTab(ref: PanelRef): void;
-  beginResize(path: number[], index: number, mins: [number, number]): () => Resize;
-  even(path: number[], index: number): void;
+  beginResize(path: number[], first: number, second: number, mins: [number, number]): () => Resize;
+  even(path: number[], first: number, second: number): void;
 };
 
 export const STILL: Actions = {

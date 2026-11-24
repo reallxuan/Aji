@@ -69,7 +69,7 @@ describe('the narrow arrangement', () => {
   it('375×812 shows tabs and the bottom navigation', () => {
     renderWithGame(<LayoutFrame />);
     expect(document.querySelector('[data-narrow]')).not.toBeNull();
-    expect(tabs()).toEqual(['走势', '候选', '波动']);
+    expect(tabs()).toEqual(['走势', '候选', '波动', '评论', '分支']);
     expect(shown()).toEqual(['trend']);
     expect(within(bottomNav()!).getAllByRole('button')).toHaveLength(4);
     // The board takes the width, less 4 px each side.
@@ -163,7 +163,7 @@ describe('the narrow arrangement', () => {
     renderWithGame(<LayoutFrame />);
     expect(bottomNav()).toBeNull();
     // The first panel always shows; a strip chooses the second among the rest (候选, 波动).
-    expect(tabs()).toEqual(['候选', '波动']);
+    expect(tabs()).toEqual(['候选', '波动', '评论', '分支']);
     expect(shown()).toEqual(['trend', 'candidates']);
     // The header keeps the full navigation there.
     expect(screen.getByRole('button', { name: '下一手' })).toBeInTheDocument();
@@ -172,13 +172,13 @@ describe('the narrow arrangement', () => {
   it('tabs follow the layout order and skip hidden panels', () => {
     useDeviceStore.getState().update({ layout: presetLayout('classic') });
     const first = renderWithGame(<LayoutFrame />);
-    expect(tabs()).toEqual(['走势', '候选', '副盘']);
+    expect(tabs()).toEqual(['走势', '分支', '评论', '候选', '副盘']);
     first.unmount();
     useDeviceStore
       .getState()
       .update({ layout: hidePanel(presetLayout('default'), { kind: 'trend' }) });
     renderWithGame(<LayoutFrame />);
-    expect(tabs()).toEqual(['候选', '波动']);
+    expect(tabs()).toEqual(['候选', '波动', '评论', '分支']);
   });
 
   it('the active tab is remembered', () => {

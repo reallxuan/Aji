@@ -18,6 +18,7 @@ import type { SessionEdit } from '../transport/generated/SessionEdit';
 import { useDeviceStore } from '../device/deviceStore';
 import { pointLabel } from '../board/coordinates';
 import { useMarkEdit } from './useMarkEdit';
+import { useGameStore } from '../game/gameStore';
 import { navigate } from '../game/actions';
 import { edit } from '../game/editActions';
 import { useActionContext } from '../game/useActionContext';
@@ -25,7 +26,7 @@ import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { Point } from '../transport/generated/Point';
 import type { BoardNode } from './boardNodes';
 
-const BRANCH_EDITS = ['promote', 'moveUp', 'deleteBranch', 'deleteFrom'] as const;
+import { NodeMenu } from '../tree/NodeMenu';
 const POINT_MARKS = ['triangle', 'square', 'circle', 'cross', 'letter', 'number'] as const;
 
 export interface BoardMenuTarget {
@@ -73,7 +74,8 @@ export function BoardMenu({
   const trying = snapshot.tryout !== null;
   const boardEdit = (e: SessionEdit) => (scoringInProgress() ? false : edit(ctx, e));
   const go = (node: number) => {
-    if (!scoringInProgress()) void navigate(ctx, { node });
+    if (!scoringInProgress() && useGameStore.getState().snapshot?.revision === snapshot.revision)
+      void navigate(ctx, { node });
   };
   const start = snapshot.tryout === null ? undefined : nodes.get(snapshot.tryout)?.number;
   const tryHere = async () => {
@@ -87,7 +89,6 @@ export function BoardMenu({
       point,
       stone: stone === 'black' ? 'white' : 'black',
     }));
-  const endTryout = () => void boardEdit({ kind: 'tryoutEnd' });
   const toggleNumbers = () => run('view.moveNumbers');
   const pass = () => void boardEdit({ kind: 'pass' });
   const markAt = (tool: (typeof POINT_MARKS)[number]) =>
@@ -96,35 +97,18 @@ export function BoardMenu({
     t(b.tryout ? 'edit.tryBranch' : 'edit.branch', { letter: b.letter });
   const branchItems = (id: number, tryout: boolean) => {
     const node = nodes.get(id);
-    if (tryout) {
-      const keep = () => void boardEdit({ kind: 'tryoutKeep', node: id });
-      return (
-        <>
-          <ContextMenuItem onSelect={endTryout}>
-            {t('edit.end')}
-            {start !== undefined && (
-              <small className="ml-auto text-text-muted">{t('edit.backTo', { n: start })}</small>
-            )}
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={keep}>{t('edit.keep')}</ContextMenuItem>
-        </>
-      );
-    }
-    return BRANCH_EDITS.map((kind) => (
-      <ContextMenuItem
-        key={kind}
-        disabled={
-          trying ||
-          !node ||
-          (kind === 'moveUp' && node.firstChild) ||
-          ((kind === 'promote' || kind === 'deleteBranch') && node.mainLine)
-        }
-        title={trying ? t('notice.endTryoutFirst') : undefined}
-        onSelect={() => void boardEdit({ kind, node: id })}
-      >
-        {t(kind === 'deleteFrom' ? 'commands.edit.deleteFrom' : `edit.${kind}`)}
-      </ContextMenuItem>
-    ));
+    return (
+      <NodeMenu
+        id={id}
+        snapshot={snapshot}
+        mainLine={node?.mainLine ?? false}
+        firstChild={node?.firstChild ?? false}
+        root={node?.root ?? false}
+        tryout={tryout}
+        start={start}
+        available={!!node}
+      />
+    );
   };
   return (
     <ContextMenu

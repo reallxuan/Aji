@@ -98,6 +98,6 @@ describe('layoutFrame', () => {
       },
     };
     const f = wide(layoutFrame(twoRight, 1600, 900, minSize));
-    expect(f.hairlines).toEqual([{ x: f.columns[1].x, index: 1 }]);
+    expect(f.hairlines).toEqual([{ left: f.columns[0], right: f.columns[1] }]);
   });
 });

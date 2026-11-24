@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { CandidateTable } from '../panel/CandidateTable';
 import { HeaderPanel } from '../panel/HeaderPanel';
 import { TrendGraph } from '../panel/TrendGraph';
-import { MIN_SIZES } from './constants';
+import { TreePanel } from '../tree/TreePanel';
+import { useGameStore } from '../game/gameStore';
+import { MIN_SIZES, type PanelSizeSpec } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
 import { SwingList } from '../panel/SwingList';
@@ -12,7 +14,7 @@ export interface PanelSpec {
   kind: PanelKind;
   labelKey: string;
   hideable: boolean;
-  minSize: { width: number; height: number };
+  minSize: PanelSizeSpec;
   Component(props: { panel: PanelRef; width: number; height: number }): ReactNode;
 }
 
@@ -51,6 +53,23 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     hideable: true,
     minSize: MIN_SIZES.swings,
     Component: () => <SwingList />,
+  },
+  tree: {
+    kind: 'tree',
+    labelKey: 'layout.panels.tree',
+    hideable: true,
+    minSize: MIN_SIZES.tree,
+    Component: TreePanel,
+  },
+  comments: {
+    kind: 'comments',
+    labelKey: 'layout.panels.comments',
+    hideable: true,
+    minSize: MIN_SIZES.comments,
+    Component: function CommentPreview() {
+      const comment = useGameStore((s) => s.snapshot?.comment);
+      return <p className="overflow-auto whitespace-pre-wrap px-4 py-2 text-sm">{comment}</p>;
+    },
   },
   subboard: {
     kind: 'subboard',

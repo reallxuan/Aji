@@ -1,4 +1,4 @@
-import { BOARD_FLOOR, BOARD_MARGIN, TWO_COLUMN_WIDTH } from './constants';
+import { BOARD_FLOOR, BOARD_MARGIN, folded, TWO_COLUMN_WIDTH } from './constants';
 import type { Layout, Node, PanelRef } from './model';
 import { wideDefaultLayout } from './presets';
 
@@ -16,24 +16,24 @@ export type Frame =
       /** The board with its margins: the width the board takes in the root row. */
       slot: { x: number; width: number };
       columns: Column[];
-      /** Draggable lines between two adjacent root columns; `index` is the left one's. */
-      hairlines: Array<{ x: number; index: number }>;
+      /** Drawn neighbours with their original child indices, including across a folded column. */
+      hairlines: Array<{ left: Column; right: Column }>;
     }
   | { narrow: true; layout: Layout };
 
 type MinSize = (ref: PanelRef) => { width: number; height: number };
 
 /** The narrowest a node can be: a row adds its children, a column takes the widest. */
-export function minWidth(node: Node, minSize: MinSize): number {
+export function minWidth(node: Node, minSize: MinSize, branches = true): number {
   switch (node.type) {
     case 'board':
       return 0;
     case 'panel':
-      return minSize(node.panel).width;
+      return folded(node, branches) ? 0 : minSize(node.panel).width;
     case 'tabs':
       return Math.max(...node.panels.map((p) => minSize(p).width));
     case 'split': {
-      const widths = node.children.map((c) => minWidth(c, minSize));
+      const widths = node.children.map((c) => minWidth(c, minSize, branches));
       return node.dir === 'row' ? widths.reduce((a, b) => a + b, 0) : Math.max(...widths);
     }
   }
@@ -78,12 +78,18 @@ function share(
   return { widths: whole, rest };
 }
 
-function frameFor(layout: Layout, width: number, height: number, minSize: MinSize): Frame {
+function frameFor(
+  layout: Layout,
+  width: number,
+  height: number,
+  minSize: MinSize,
+  branches: boolean,
+): Frame {
   const { children, weights } = layout.root;
   const columns = children
     .map((node, index) => ({ node, index, weight: weights[index] }))
-    .filter((c) => c.node.type !== 'board');
-  const mins = columns.map((c) => minWidth(c.node, minSize));
+    .filter((c) => c.node.type !== 'board' && !folded(c.node, branches));
+  const mins = columns.map((c) => minWidth(c.node, minSize, branches));
   const minTotal = mins.reduce((a, b) => a + b, 0);
   const size = Math.floor(Math.min(height - 2 * BOARD_MARGIN, width - 2 * BOARD_MARGIN - minTotal));
   if (height > width || size < BOARD_FLOOR) return { narrow: true, layout };
@@ -105,15 +111,15 @@ function frameFor(layout: Layout, width: number, height: number, minSize: MinSiz
     if (children[index].type === 'board') {
       slot = { x, width: size + 2 * BOARD_MARGIN + rest };
       x += slot.width;
-    } else {
+    } else if (columns[column]?.index === index) {
       placed.push({ index, x, width: widths[column] });
       x += widths[column++];
     }
   }
-  const hairlines = placed
-    .slice(1)
-    .filter((c, i) => placed[i].index === c.index - 1)
-    .map((c) => ({ x: c.x, index: c.index - 1 }));
+  const hairlines = placed.slice(1).flatMap((right, i) => {
+    const left = placed[i];
+    return left.x + left.width === right.x ? [{ left, right }] : [];
+  });
   return {
     narrow: false,
     layout,
@@ -135,8 +141,9 @@ export function layoutFrame(
   width: number,
   height: number,
   minSize: MinSize,
+  branches = true,
 ): Frame {
-  const frame = frameFor(layout, width, height, minSize);
+  const frame = frameFor(layout, width, height, minSize, branches);
   if (
     frame.narrow ||
     layout.preset !== 'default' ||
@@ -145,6 +152,6 @@ export function layoutFrame(
   ) {
     return frame;
   }
-  const wide = frameFor(wideDefaultLayout(), width, height, minSize);
+  const wide = frameFor(wideDefaultLayout(layout), width, height, minSize, branches);
   return wide.narrow ? frame : wide;
 }

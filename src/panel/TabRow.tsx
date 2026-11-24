@@ -24,7 +24,10 @@ export function TabRow({
 }) {
   const { t } = useTranslation();
   return (
-    <div role="tablist" className="flex flex-none gap-[18px] px-6 pt-3 text-[0.78125rem]">
+    <div
+      role="tablist"
+      className="flex min-w-0 flex-none gap-[18px] overflow-x-auto px-6 pt-3 text-[0.78125rem]"
+    >
       {panels.map((ref, i) => (
         <button
           key={refId(ref)}
@@ -32,7 +35,7 @@ export function TabRow({
           role="tab"
           aria-selected={i === active}
           className={cn(
-            'pb-1.5',
+            'shrink-0 whitespace-nowrap pb-1.5',
             touch && 'min-h-11 min-w-11',
             i === active
               ? 'text-text shadow-[inset_0_-2px_0_var(--color-text)]'

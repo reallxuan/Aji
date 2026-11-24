@@ -3,13 +3,16 @@
  * per device. Panels are named by kind (and, for sub-boards, rank), never by component.
  */
 
-export type PanelKind = 'header' | 'winrate' | 'trend' | 'candidates' | 'swings' | 'subboard';
+export type PanelKind =
+  'header' | 'winrate' | 'trend' | 'candidates' | 'swings' | 'tree' | 'comments' | 'subboard';
 export const PANEL_KINDS: readonly PanelKind[] = [
   'header',
   'winrate',
   'trend',
   'candidates',
   'swings',
+  'tree',
+  'comments',
   'subboard',
 ];
 
@@ -48,6 +51,8 @@ export type Layout = {
   /** A row holding the board exactly once, with columns on either side. */
   root: SplitNode;
   hidden: Hidden[];
+  /** The responsive default has two independently selected tab groups in a wide window. */
+  wideTabs?: { analysis: 'candidates' | 'swings'; record: 'tree' | 'comments' };
   /** Where a hovered candidate's line is drawn: the main board, or the first sub-board. */
   lines: 'board' | 'subboard';
 };

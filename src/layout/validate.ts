@@ -148,6 +148,14 @@ export function validateLayout(raw: unknown): Layout {
       preset,
       root,
       hidden: readHidden(raw.hidden, seen),
+      ...(preset === 'default' && isRecord(raw.wideTabs)
+        ? {
+            wideTabs: {
+              analysis: raw.wideTabs.analysis === 'swings' ? 'swings' : 'candidates',
+              record: raw.wideTabs.record === 'comments' ? 'comments' : 'tree',
+            },
+          }
+        : {}),
       lines: raw.lines === 'subboard' ? 'subboard' : 'board',
     };
   } catch {

@@ -2,6 +2,7 @@ import type { GameTree } from '../transport/generated/GameTree';
 
 export interface BoardNode {
   number: number;
+  root: boolean;
   tryout: boolean;
   tryoutNumber: number;
   mainLine: boolean;
@@ -19,6 +20,7 @@ export function boardNodes(tree: GameTree | null) {
     const count = node.mv === null ? 0 : 1;
     const tryout = !!(node.flags & 2);
     nodes.set(node.id, {
+      root: node.parent === null,
       number: (parent?.number ?? 0) + count,
       tryout,
       tryoutNumber: tryout ? (parent?.tryoutNumber ?? 0) + count : 0,

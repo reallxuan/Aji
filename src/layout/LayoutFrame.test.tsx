@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
 import { useGameStore } from '../game/gameStore';
@@ -6,7 +6,9 @@ import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { LayoutFrame } from './LayoutFrame';
-import { hidePanel } from './ops';
+import { useTreeStore } from '../game/treeStore';
+import { record } from '../tree/testing';
+import { hidePanel, movePanel, showPanel } from './ops';
 import type { Layout } from './model';
 import { presetLayout } from './presets';
 
@@ -36,7 +38,7 @@ describe('LayoutFrame', () => {
   it('each preset renders its panels', () => {
     mount(presetLayout('classic'));
     // The left column holds the bar and the graph; the candidates sit above the sub-board.
-    expect(shown()).toEqual(['winrate', 'trend', 'header', 'candidates', 'subboard:1']);
+    expect(shown()).toEqual(['winrate', 'trend', 'tree', 'header', 'candidates', 'subboard:1']);
   });
 
   it('four boards renders three sub-boards', () => {
@@ -101,7 +103,7 @@ describe('LayoutFrame', () => {
   it('the wide default shows the sub-board in a second column', () => {
     setWindow(1920, 1080);
     mount(null);
-    expect(shown()).toEqual(['header', 'winrate', 'trend', 'candidates', 'subboard:1']);
+    expect(shown()).toEqual(['header', 'winrate', 'trend', 'candidates', 'tree', 'subboard:1']);
   });
 
   it('keeps its panels with empty contents before the first status', () => {
@@ -160,4 +162,67 @@ describe('LayoutFrame', () => {
       expect(screen.getByTestId('scoring-card')).toBeInTheDocument();
     });
   });
+});
+
+it('folds a standalone tree until the first variation, while a tree tab keeps its empty state', () => {
+  setWindow(1440, 900);
+  useTreeStore.setState({ tree: record([null, 0, 1]) });
+  const base = presetLayout('minimal');
+  const first = mount(showPanel(base, { kind: 'tree' }));
+  expect(document.querySelector('[data-panel="tree"]')).toBeNull();
+  act(() => useTreeStore.setState({ tree: record([null, 0, 1, 0]) }));
+  expect(document.querySelector('[data-panel="tree"]')).toBeInTheDocument();
+  first.unmount();
+  useTreeStore.setState({ tree: record([null, 0, 1]) });
+  mount(presetLayout('classic'));
+  expect(screen.getByText('还没有分支')).toBeVisible();
+});
+
+it('wide record tabs stay above the sub-board at twice its weight and selecting Comments survives resizing', async () => {
+  setWindow(1920, 1080);
+  mount(null);
+  const treeGroup = document.querySelector('[data-panel="tree"]')!.parentElement!.parentElement!;
+  const subboard = document.querySelector('[data-panel="subboard:1"]')!.parentElement!;
+  expect(Number(treeGroup.style.flexGrow) / Number(subboard.style.flexGrow)).toBeCloseTo(2);
+  await act(async () => fireEvent.click(screen.getByRole('tab', { name: '波动' })));
+  expect(shown()).toContain('swings');
+  fireEvent.click(screen.getByRole('tab', { name: '评论' }));
+  expect(shown()).toContain('comments');
+  expect(shown()).toContain('swings');
+  act(() => {
+    setWindow(1440, 900);
+    window.dispatchEvent(new Event('resize'));
+  });
+  expect(shown()).toContain('comments');
+  expect(shown()).not.toContain('subboard:1');
+});
+
+it('folds a standalone root tree before board sizing and restores its original column on a fork', () => {
+  setWindow(1000, 700);
+  const layout = movePanel(
+    presetLayout('default'),
+    { kind: 'tree' },
+    { kind: 'column', side: 'left' },
+  );
+  useTreeStore.setState({ tree: record([null, 0, 1]) });
+  mount(layout);
+  const stored = useDeviceStore.getState().settings.layout;
+  const board = () => document.querySelector<HTMLElement>('[data-board]')!.style;
+  expect(document.querySelectorAll('aside')).toHaveLength(1);
+  expect(board().left).toBe('16px');
+  expect(board().width).toBe('668px');
+  act(() => useTreeStore.setState({ tree: record([null, 0, 1, 0]) }));
+  expect(document.querySelectorAll('aside')).toHaveLength(2);
+  expect(document.querySelector('aside [data-panel="tree"]')).toBeInTheDocument();
+  expect(board().left).toBe('216px');
+  expect(board().width).toBe('488px');
+  act(() => {
+    setWindow(750, 600);
+    window.dispatchEvent(new Event('resize'));
+  });
+  expect(document.querySelector('[data-narrow]')).toBeInTheDocument();
+  act(() => useTreeStore.setState({ tree: record([null, 0]) }));
+  expect(document.querySelector('[data-narrow]')).toBeNull();
+  expect(board().width).toBe('438px');
+  expect(useDeviceStore.getState().settings.layout).toBe(stored);
 });

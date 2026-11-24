@@ -55,7 +55,8 @@ export function MainBoard({
   const mode = useModeStore((s) => s.mode);
   const markupTool = useModeStore((s) => s.markupTool);
   const tree = useTreeStore((s) => s.tree);
-  const nodes = useMemo(() => boardNodes(tree), [tree]);
+  const currentTree = tree?.revision === snapshot?.treeRevision ? tree : null;
+  const nodes = useMemo(() => boardNodes(currentTree), [currentTree]);
   const [menu, setMenu] = useState<BoardMenuTarget | null>(null);
   const moveNumbers = useDeviceStore((s) => s.settings.moveNumbers);
   const boardArea = useRef<HTMLDivElement>(null);

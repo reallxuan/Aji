@@ -1,3 +1,5 @@
+import { layoutFrame } from './frameGeometry';
+
 import { describe, expect, it } from 'vitest';
 import type { Layout, Node } from './model';
 import { PRESET_IDS, presetLayout } from './presets';
@@ -39,6 +41,8 @@ describe('validateLayout', () => {
       'trend',
       'candidates',
       'swings',
+      'comments',
+      'tree',
     ]);
     for (const id of PRESET_IDS.filter((id) => id !== 'default')) {
       expect(refs(presetLayout(id).root)).not.toContain('swings');
@@ -196,4 +200,24 @@ describe('validateLayout', () => {
       expect(refs(v.root)).toContain('header');
     }
   });
+});
+
+it('an old default layout validates without the new panels, including in a wide window', () => {
+  const saved = {
+    ...layoutWith([
+      { type: 'board' },
+      column([
+        panel('header'),
+        panel('winrate'),
+        panel('trend'),
+        { type: 'tabs', panels: [{ kind: 'candidates' }, { kind: 'swings' }], active: 1 },
+      ]),
+    ]),
+    preset: 'default',
+  };
+  const layout = validateLayout(saved);
+  expect(refs(layout.root)).not.toContain('tree');
+  const frame = layoutFrame(layout, 1920, 1080, () => ({ width: 200, height: 120 }));
+  expect(refs(frame.layout.root)).not.toContain('comments');
+  expect(refs(frame.layout.root)).toContain('swings');
 });

@@ -549,7 +549,9 @@
       "trend": "走势",
       "candidates": "候选",
       "swings": "波动",
-      "subboard": "副盘"
+      "subboard": "副盘",
+      "tree": "分支",
+      "comments": "评论"
     },
     "noCandidate": "无候选",
     "move": "移动{{panel}}",
@@ -814,6 +816,14 @@
     "removeStone": "删除这颗子",
     "changeBlack": "改为黑子",
     "changeWhite": "改为白子",
-    "dragHint": "拖动棋子以移动"
+    "dragHint": "拖动棋子以移动",
+    "editComment": "编辑评论"
+  },
+  "tree": {
+    "empty": "还没有分支",
+    "continuations": "{{count}} 个后续",
+    "mainLine": "主分支 {{n}} 手",
+    "position": "第 {{n}} 手，{{next}}",
+    "continuations_one": "{{count}} 个后续"
   }
 }

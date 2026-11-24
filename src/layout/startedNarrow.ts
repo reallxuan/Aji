@@ -1,3 +1,4 @@
+import { currentHasVariations } from '../game/treeStore';
 import { MIN_SIZES } from './constants';
 import { layoutFrame } from './frameGeometry';
 import { validateLayout } from './validate';
@@ -15,6 +16,7 @@ export function startedNarrow(storedLayout: unknown): boolean {
     window.innerHeight,
     // The registry's sizes, read from the constants so this imports no panel component.
     (ref) => MIN_SIZES[ref.kind],
+    currentHasVariations(),
   ).narrow;
   return first;
 }

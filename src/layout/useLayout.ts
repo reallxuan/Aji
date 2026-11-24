@@ -47,6 +47,10 @@ export function resetLayoutDraft() {
   useDraft.setState({ draft: null });
 }
 
+export function currentLayout(): Layout {
+  return useDraft.getState().draft ?? validateLayout(useDeviceStore.getState().settings.layout);
+}
+
 /** The device's layout, validated (design 5.1), with any change not yet stored. */
 export function useLayout(): { layout: Layout; setLayout(next: Layout): void } {
   const stored = useDeviceStore((s) => s.settings.layout);
