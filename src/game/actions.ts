@@ -128,16 +128,21 @@ export async function saveAs(ctx: ActionContext): Promise<void> {
   }
 }
 
-async function change(ctx: ActionContext, request: () => Promise<GameReply>): Promise<void> {
+async function change(
+  ctx: ActionContext,
+  request: () => Promise<GameReply>,
+): Promise<GameSnapshot | null> {
   try {
-    apply(await request());
+    return apply(await request());
   } catch (error) {
     fail(ctx.t, ctx.t('notice.gameFailed'), error);
+    return null;
   }
 }
 
-export const startNewGame = (ctx: ActionContext, size: number) =>
-  change(ctx, () => newGame(ctx.transport, size));
+export async function startNewGame(ctx: ActionContext, size: number): Promise<void> {
+  await change(ctx, () => newGame(ctx.transport, size));
+}
 
 export const navigate = (ctx: ActionContext, to: NavTarget) =>
   change(ctx, () => navigateGame(ctx.transport, to));

@@ -9,13 +9,13 @@ import { errorNotice } from './notices';
 async function change(
   ctx: Pick<ActionContext, 't' | 'transport'>,
   request: Promise<GameReply>,
-): Promise<number | null> {
+): Promise<{ visit: number | null } | null> {
   try {
     const { snapshot } = await request;
     useGameStore.getState().apply(snapshot);
     // A follow-up (for example playing after tryoutStart) belongs to this snapshot.
     const state = useGameStore.getState();
-    return state.snapshot?.revision === snapshot.revision ? state.nodeVisit : null;
+    return { visit: state.snapshot?.revision === snapshot.revision ? state.nodeVisit : null };
   } catch (cause) {
     const error = toTransportError(cause);
     let label: string | undefined;
@@ -43,11 +43,16 @@ async function change(
   }
 }
 
-export const editAndGetVisit = (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
+/** A refused request returns null. An accepted but superseded snapshot has no current visit. */
+export const applyEdit = (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
   change(ctx, editGame(ctx.transport, e));
+export const editAndGetVisit = async (
+  ctx: Pick<ActionContext, 't' | 'transport'>,
+  e: SessionEdit,
+) => (await applyEdit(ctx, e))?.visit ?? null;
 export const edit = async (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
   (await editAndGetVisit(ctx, e)) !== null;
 export const undo = async (ctx: ActionContext) =>
-  (await change(ctx, undoGame(ctx.transport))) !== null;
+  (await change(ctx, undoGame(ctx.transport)))?.visit != null;
 export const redo = async (ctx: ActionContext) =>
-  (await change(ctx, redoGame(ctx.transport))) !== null;
+  (await change(ctx, redoGame(ctx.transport)))?.visit != null;

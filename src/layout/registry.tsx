@@ -3,7 +3,7 @@ import { CandidateTable } from '../panel/CandidateTable';
 import { HeaderPanel } from '../panel/HeaderPanel';
 import { TrendGraph } from '../panel/TrendGraph';
 import { TreePanel } from '../tree/TreePanel';
-import { useGameStore } from '../game/gameStore';
+import { CommentPanel } from '../comments/CommentPanel';
 import { MIN_SIZES, type PanelSizeSpec } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
@@ -66,10 +66,7 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     labelKey: 'layout.panels.comments',
     hideable: true,
     minSize: MIN_SIZES.comments,
-    Component: function CommentPreview() {
-      const comment = useGameStore((s) => s.snapshot?.comment);
-      return <p className="overflow-auto whitespace-pre-wrap px-4 py-2 text-sm">{comment}</p>;
-    },
+    Component: CommentPanel,
   },
   subboard: {
     kind: 'subboard',

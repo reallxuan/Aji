@@ -1,4 +1,10 @@
 {
+  "comments": {
+    "beforeFirst": "Before the first move",
+    "add": "Add a comment",
+    "click": "Click to edit",
+    "finish": "Esc to finish"
+  },
   "about": {
     "versionLine": "Aji version {{version}} ({{os}} {{arch}})",
     "title": "About Aji",

@@ -49,14 +49,18 @@ export function NodeMenu({
   const canAct = () => available && currentTreeTarget(snapshot);
   const comment = async () => {
     if (!canAct() || trying) return;
-    if (snapshot.node !== id) await navigate(ctx, { node: id });
-    const current = useGameStore.getState().snapshot;
+    const acknowledged = snapshot.node === id ? snapshot : await navigate(ctx, { node: id });
+    const { snapshot: current, nodeVisit } = useGameStore.getState();
     if (
       !current ||
-      !currentTreeTarget(current) ||
+      !acknowledged ||
+      acknowledged.node !== id ||
+      acknowledged.gameRevision !== snapshot.gameRevision ||
+      nodeVisit > acknowledged.revision ||
+      scoringInProgress() ||
+      current.tryout !== null ||
       current.node !== id ||
-      current.gameRevision !== snapshot.gameRevision ||
-      current.treeRevision !== snapshot.treeRevision
+      current.gameRevision !== snapshot.gameRevision
     )
       return;
     const comments = { kind: 'comments' } as const;

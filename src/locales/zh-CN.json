@@ -1,4 +1,10 @@
 {
+  "comments": {
+    "beforeFirst": "开局前",
+    "add": "添加评论",
+    "click": "点击编辑",
+    "finish": "Esc 完成"
+  },
   "about": {
     "versionLine": "Aji 版本 {{version}}（{{os}} {{arch}}）",
     "title": "关于 Aji",
