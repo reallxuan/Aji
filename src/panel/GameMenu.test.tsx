@@ -111,9 +111,16 @@ it('game menu has the m2 items in order', async () => {
     .getAllByRole('menuitem')
     .map((item) => item.textContent);
   expect(names).toEqual(
-    ['新建棋局', '打开棋谱…', '打开最近', '另存为…', '分析全局…', '清除分析结果', '终局点目'].map(
-      (name) => expect.stringMatching(new RegExp(`^${name}`)),
-    ),
+    [
+      '新建棋局',
+      '打开棋谱…',
+      '打开最近',
+      '另存为…',
+      '棋局信息',
+      '分析全局…',
+      '清除分析结果',
+      '终局点目',
+    ].map((name) => expect.stringMatching(new RegExp(`^${name}`))),
   );
   const clear = await openSub(menu, '清除分析结果');
   expect(
@@ -171,4 +178,22 @@ it('终局点目 starts scoring on the position', async () => {
   expect(useScoringStore.getState().active).toBe(true);
   expect(requests).toContainEqual({ type: 'gameScore', mode: { kind: 'final', dead: [] } });
   resetScoringStore();
+});
+
+it('offers sizes 5 through 18 under other sizes', async () => {
+  const { requests } = renderWithGame(<GameMenu />);
+  const menu = await openSub(await openSub(await openMenu('未命名棋局'), '新建棋局'), '其他路数');
+  expect(within(menu).getAllByRole('menuitem')).toHaveLength(14);
+  await act(async () => fireEvent.click(within(menu).getByRole('menuitem', { name: '18 路' })));
+  expect(requests).toContainEqual({ type: 'gameNew', size: 18 });
+});
+it('opens game information from the title as a full sheet in a narrow frame', async () => {
+  renderWithGame(<GameMenu narrow />);
+  await act(async () =>
+    fireEvent.click(
+      within(await openMenu('未命名棋局')).getByRole('menuitem', { name: '棋局信息' }),
+    ),
+  );
+  expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+  expect(screen.getByLabelText('棋局名称')).toBeInTheDocument();
 });

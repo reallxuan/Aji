@@ -40,6 +40,8 @@ pub struct Labels {
     pub quit: &'static str,
     pub file: &'static str,
     pub new_game: &'static str,
+    pub other_sizes: &'static str,
+    pub size_label: &'static str,
     pub size19: &'static str,
     pub size13: &'static str,
     pub size9: &'static str,
@@ -93,6 +95,8 @@ pub fn labels(language: MenuLanguage) -> Labels {
             quit: "退出 Aji",
             file: "文件",
             new_game: "新建棋局",
+            other_sizes: "其他路数",
+            size_label: "{n} 路",
             size19: "19 路",
             size13: "13 路",
             size9: "9 路",
@@ -140,6 +144,8 @@ pub fn labels(language: MenuLanguage) -> Labels {
             quit: "Quit Aji",
             file: "File",
             new_game: "New Game",
+            other_sizes: "Other Sizes",
+            size_label: "{n}×{n}",
             size19: "19×19",
             size13: "13×13",
             size9: "9×9",
@@ -263,14 +269,20 @@ pub fn build<R: Runtime>(
         .separator()
         .item(&PredefinedMenuItem::quit(app, Some(l.quit))?)
         .build()?;
+    let mut other_sizes = SubmenuBuilder::new(app, l.other_sizes);
+    for n in 5..=18 {
+        let label = l.size_label.replace("{n}", &n.to_string());
+        other_sizes = other_sizes.item(&item(app, MenuAction::New(n), &label)?);
+    }
     let new_game = SubmenuBuilder::new(app, l.new_game)
         .item(
-            &MenuItemBuilder::with_id(MenuAction::New19.id(), l.size19)
+            &MenuItemBuilder::with_id(MenuAction::New(19).id(), l.size19)
                 .accelerator("CmdOrCtrl+N")
                 .build(app)?,
         )
-        .item(&item(app, MenuAction::New13, l.size13)?)
-        .item(&item(app, MenuAction::New9, l.size9)?)
+        .item(&item(app, MenuAction::New(13), l.size13)?)
+        .item(&item(app, MenuAction::New(9), l.size9)?)
+        .item(&other_sizes.build()?)
         .build()?;
     let file = SubmenuBuilder::new(app, l.file)
         .item(&new_game)
@@ -353,8 +365,22 @@ mod tests {
     fn both_languages_label_the_file_menu() {
         let zh = labels(MenuLanguage::ZhCn);
         let en = labels(MenuLanguage::En);
+        assert_eq!(zh.other_sizes, "其他路数");
+        assert_eq!(en.other_sizes, "Other Sizes");
         assert_eq!((zh.file, zh.save_as), ("文件", "另存为…"));
         assert_eq!((en.file, en.save_as), ("File", "Save As…"));
+    }
+
+    #[test]
+    fn new_size_ids_round_trip() {
+        for n in 5..=19 {
+            let action = MenuAction::New(n);
+            assert_eq!(action.id(), format!("new:{n}"));
+            assert_eq!(MenuAction::from_id(&action.id()), Some(action));
+        }
+        for invalid in ["new:4", "new:20", "new:-1", "new:huge", "new:09"] {
+            assert_eq!(MenuAction::from_id(invalid), None);
+        }
     }
 
     #[test]
@@ -424,6 +450,8 @@ mod tests {
             l.quit,
             l.file,
             l.new_game,
+            l.other_sizes,
+            l.size_label,
             l.size19,
             l.size13,
             l.size9,

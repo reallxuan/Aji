@@ -4,6 +4,7 @@ import {
   EraserIcon,
   FolderOpenIcon,
   HistoryIcon,
+  InfoIcon,
   PlusIcon,
   SaveIcon,
   ScanSearchIcon,
@@ -23,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { GameInfoSurface } from './GameInfoPopover';
 import { shortcut, useOs } from '../app/useOs';
 import { openFromPicker, openRecent, saveAs, startNewGame } from '../game/actions';
 import { useGameStore } from '../game/gameStore';
@@ -95,12 +97,16 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
  * and 截图 are in the menu bar or the 视图 button (owner, 2026-11-22). 分析全局… drops its panel
  * from the title, as the rules chip drops its own.
  */
-export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
+export function GameMenu({
+  touch = false,
+  narrow = false,
+}: { touch?: boolean; narrow?: boolean } = {}) {
   const { t } = useTranslation();
   const ctx = useActionContext();
   const engine = useEngineStoreApi();
   const os = useOs();
   const snapshot = useGameStore((s) => s.snapshot);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const panelOpen = useJobPanelStore((s) => s.open);
   const setPanelOpen = useJobPanelStore((s) => s.setOpen);
@@ -111,7 +117,13 @@ export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
   const icon = 'size-4 text-text-muted';
 
   return (
-    <Popover open={panelOpen} onOpenChange={setPanelOpen}>
+    <Popover
+      open={panelOpen || (infoOpen && !narrow)}
+      onOpenChange={(open) => {
+        if (infoOpen) setInfoOpen(open);
+        else setPanelOpen(open);
+      }}
+    >
       <DropdownMenu
         onOpenChange={(open) => {
           if (!open) return;
@@ -158,6 +170,16 @@ export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
                   {size === 19 && <DropdownMenuShortcut>{shortcut(os, N)}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>{t('menu.otherSizes')}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto">
+                  {Array.from({ length: 14 }, (_, i) => i + 5).map((n) => (
+                    <DropdownMenuItem key={n} onSelect={() => void startNewGame(ctx, n)}>
+                      {t(`menu.size${n}`)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuItem className="gap-2.5" onSelect={() => void openFromPicker(ctx)}>
@@ -196,6 +218,10 @@ export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
             <DropdownMenuShortcut>{shortcut(os, S, true)}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem className="gap-2.5" onSelect={() => setInfoOpen(true)}>
+            <InfoIcon className={icon} aria-hidden />
+            {t('gameInfo.title')}
+          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2.5" onSelect={openJobPanel}>
             <ScanSearchIcon className={icon} aria-hidden />
             {t('menu.analyseGame')}
@@ -225,20 +251,24 @@ export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent
-        align="start"
-        sideOffset={6}
-        collisionPadding={12}
-        className="w-auto p-0"
-        onOpenAutoFocus={(event) => {
-          // Return starts: 开始 has the focus.
-          event.preventDefault();
-          const start = (event.currentTarget as HTMLElement).querySelector(START_BUTTON);
-          if (start instanceof HTMLElement) start.focus();
-        }}
-      >
-        <JobPanelContent onDone={() => setPanelOpen(false)} />
-      </PopoverContent>
+      {infoOpen ? (
+        <GameInfoSurface open={infoOpen} narrow={narrow} onClose={() => setInfoOpen(false)} />
+      ) : (
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          collisionPadding={12}
+          className="w-auto p-0"
+          onOpenAutoFocus={(event) => {
+            // Return starts: 开始 has the focus.
+            event.preventDefault();
+            const start = (event.currentTarget as HTMLElement).querySelector(START_BUTTON);
+            if (start instanceof HTMLElement) start.focus();
+          }}
+        >
+          <JobPanelContent onDone={() => setPanelOpen(false)} />
+        </PopoverContent>
+      )}
     </Popover>
   );
 }

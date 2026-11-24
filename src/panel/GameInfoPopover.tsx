@@ -1,5 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { setRules } from '../game/actions';
+import { Dialog } from 'radix-ui';
+import { Sheet } from '../layout/Sheet';
+import { PopoverContent } from '@/components/ui/popover';
+import { useCallback } from 'react';
+import { registerRecordEditor, usePendingField, writeRootField } from '../game/fieldWrites';
+import type { InfoField } from '../transport/generated/InfoField';
+import type { GameSnapshot } from '../transport/generated/GameSnapshot';
+import { DraftInput, type RegisterEditor } from './DraftInput';
+import { ResultField, infoInputClass } from './ResultField';
 import { useGameStore } from '../game/gameStore';
 import { formatKomi, komiOf, scoringOf } from '../game/komi';
 import { useActionContext } from '../game/useActionContext';
@@ -15,16 +23,6 @@ function describe(rules: AnalysisRules, t: TFunction): string {
   });
 }
 
-function Stone({ color, label }: { color: 'black' | 'white'; label: string }) {
-  const look =
-    color === 'black'
-      ? 'bg-[radial-gradient(circle_at_35%_30%,#666,#111_60%)]'
-      : 'bg-[radial-gradient(circle_at_35%_30%,#fff,#ddd8cc_80%)] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]';
-  return (
-    <span role="img" aria-label={label} className={`size-3.5 flex-none rounded-full ${look}`} />
-  );
-}
-
 const Code = ({ children }: { children: string }) => (
   <code className="rounded-xs bg-divider-soft px-1 font-mono text-[0.71875rem] text-text">
     {children}
@@ -32,9 +30,8 @@ const Code = ({ children }: { children: string }) => (
 );
 
 /** What the file wrote and how Aji read it, with a way back to that reading. */
-function RulesSource() {
+function RulesSource({ restoreReading }: { restoreReading(): void }) {
   const { t } = useTranslation();
-  const ctx = useActionContext();
   const rules = useGameStore((s) => s.snapshot?.rules);
   if (!rules) return null;
   const codes = [rules.ru && `RU[${rules.ru}]`, rules.km && `KM[${rules.km}]`].filter(
@@ -44,7 +41,7 @@ function RulesSource() {
     <button
       type="button"
       className="ml-1 text-text underline decoration-line underline-offset-3 hover:decoration-text"
-      onClick={() => void setRules(ctx, null)}
+      onClick={restoreReading}
     >
       {t('rules.source.restore')}
     </button>
@@ -76,71 +73,142 @@ function RulesSource() {
   );
 }
 
-function Info() {
-  const { t } = useTranslation();
-  const info = useGameStore((s) => s.snapshot?.info);
-  if (!info) return null;
-  const event = [info.event, info.round].filter(Boolean).join(' ');
-  const rows: Array<[string, string | null]> = [
-    [t('gameInfo.result'), info.result],
-    [t('gameInfo.date'), info.date],
-    [t('gameInfo.event'), event || null],
-    [t('gameInfo.place'), info.place],
-    [t('gameInfo.handicap'), info.handicap ? String(info.handicap) : null],
-  ];
-  const shown = rows.filter((row): row is [string, string] => Boolean(row[1]));
-  const players: Array<['black' | 'white', string | null, string | null]> = [
-    ['black', info.black, info.blackRank],
-    ['white', info.white, info.whiteRank],
-  ];
-  if (!info.black && !info.white && shown.length === 0)
-    return <p className="text-[0.8125rem] text-text-muted">{t('gameInfo.empty')}</p>;
+function InfoEditor({
+  field,
+  snapshot,
+  register,
+}: {
+  field: InfoField;
+  snapshot: GameSnapshot;
+  register: RegisterEditor;
+}) {
+  const ctx = useActionContext();
+  const pending = usePendingField(ctx.transport, field);
+  const value = pending ? pending.value : snapshot.info[field];
+  const change = (next: string | null) =>
+    void writeRootField(ctx, snapshot.gameRevision, { kind: 'setInfo', field, value: next });
+  const label = ctx.t(`gameInfo.${field}`);
+  if (field === 'result')
+    return <ResultField value={value} onChange={change} register={register} />;
   return (
-    <>
-      {players.map(([color, name, rank]) => (
-        <div key={color} className="flex items-center gap-2.5 py-0.5 text-[0.875rem]">
-          <Stone color={color} label={t(`gameInfo.${color}`)} />
-          <span className="truncate">{name ?? '?'}</span>
-          {rank && <span className="text-[0.78125rem] text-text-muted">{rank}</span>}
-        </div>
-      ))}
-      {shown.length > 0 && (
-        <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1 text-[0.8125rem]">
-          {shown.map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="text-text-muted">{label}</dt>
-              <dd className="min-w-0 break-words">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </>
+    <DraftInput
+      aria-label={label}
+      className={infoInputClass}
+      value={value ?? ''}
+      register={register}
+      placeholder={ctx.t('gameInfo.unfilled')}
+      onCommit={(text) => change(text || null)}
+    />
   );
 }
 
-const Heading = ({ children }: { children: string }) => (
-  <h4 className="mb-2.5 text-[0.75rem] font-medium tracking-wide text-text-muted">{children}</h4>
-);
+const PLAYERS = [
+  ['black', 'blackRank'],
+  ['white', 'whiteRank'],
+] as const;
+const RECORD_FIELDS = ['date', 'event', 'round', 'place', 'gameName'] as const;
 
-/** The game information popover's body (mockup frame C): the record, then the analysis rules. */
-export function GameInfoContent() {
-  const { t } = useTranslation();
+function Form({ snapshot }: { snapshot: GameSnapshot }) {
   const ctx = useActionContext();
-  const current = useGameStore((s) => s.snapshot?.rules.current);
-  // 340 px as designed, or wider when a language's rule names need it (English).
+  const { t } = ctx;
+  const register = useCallback(
+    (finish: () => void) => registerRecordEditor(ctx.transport, finish),
+    [ctx.transport],
+  );
+  const pending = usePendingField(ctx.transport, 'rules');
+  const current = pending ? (pending.value ?? snapshot.rules.fromFile) : snapshot.rules.current;
+  const selectRules = (rules: AnalysisRules | null) =>
+    void writeRootField(ctx, snapshot.gameRevision, { kind: 'setRules', rules });
+  const editor = (field: InfoField) => (
+    <InfoEditor field={field} register={register} snapshot={snapshot} />
+  );
+  const result = editor('result');
+  const labelClass = 'self-center text-xs text-text-muted';
   return (
-    <div className="w-min min-w-[340px]">
+    <fieldset disabled={snapshot.tryout !== null} className="min-w-0 text-sm disabled:opacity-65">
       <section className="px-4 py-3.5">
-        <Heading>{t('gameInfo.title')}</Heading>
-        <Info />
+        <h3 className="mb-3 font-medium">{t('gameInfo.title')}</h3>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(4rem,0.45fr)] gap-x-2 gap-y-1.5">
+          {PLAYERS.map(([color, rank]) => (
+            <div key={color} className="contents">
+              <span className={labelClass}>{t(`gameInfo.${color}`)}</span>
+              {editor(color)}
+              {editor(rank)}
+            </div>
+          ))}
+          <span className={labelClass}>{t('gameInfo.result')}</span>
+          <div className="col-span-2">{result}</div>
+          {RECORD_FIELDS.map((field) => (
+            <div key={field} className="contents">
+              <span className={labelClass}>{t(`gameInfo.${field}`)}</span>
+              <div className="col-span-2 grid">{editor(field)}</div>
+            </div>
+          ))}
+          {snapshot.info.handicap !== null && (
+            <>
+              <span className={labelClass}>{t('gameInfo.handicap')}</span>
+              <span>{snapshot.info.handicap}</span>
+            </>
+          )}
+        </div>
       </section>
       <section className="border-t border-hairline px-4 py-3.5">
-        <Heading>{t('rules.title')}</Heading>
-        {current && (
-          <RulesControl value={current} onChange={(rules) => void setRules(ctx, rules)} />
-        )}
-        <RulesSource />
+        <h4 className="mb-2.5 text-xs font-medium text-text-muted">{t('rules.title')}</h4>
+        <RulesControl value={current} onChange={selectRules} register={register} />
+        <RulesSource restoreReading={() => selectRules(null)} />
       </section>
-    </div>
+    </fieldset>
+  );
+}
+
+export function GameInfoContent() {
+  const snapshot = useGameStore((s) => s.snapshot);
+  return snapshot ? <Form key={snapshot.gameRevision} snapshot={snapshot} /> : null;
+}
+
+function keepEditing(event: KeyboardEvent) {
+  if (event.target instanceof HTMLInputElement) event.preventDefault();
+}
+
+/** Both header entry points use the same form; the narrow frame gets the full-window sheet. */
+export function GameInfoSurface({
+  narrow,
+  open,
+  onClose,
+}: {
+  narrow: boolean;
+  open: boolean;
+  onClose(): void;
+}) {
+  const { t } = useTranslation();
+  if (narrow)
+    return (
+      <Dialog.Root
+        open={open}
+        onOpenChange={(shown) => {
+          if (!shown) onClose();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Content asChild aria-describedby={undefined} onEscapeKeyDown={keepEditing}>
+            <Sheet onClose={onClose}>
+              <Dialog.Title className="sr-only">{t('gameInfo.title')}</Dialog.Title>
+              <GameInfoContent />
+            </Sheet>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  return (
+    <PopoverContent
+      aria-label={t('gameInfo.title')}
+      align="start"
+      sideOffset={6}
+      collisionPadding={12}
+      onEscapeKeyDown={keepEditing}
+      className="max-h-(--radix-popover-content-available-height) w-[min(26rem,calc(100vw-24px))] overflow-y-auto p-0"
+    >
+      <GameInfoContent />
+    </PopoverContent>
   );
 }

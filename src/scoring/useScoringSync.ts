@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../game/gameStore';
 import { useTransport } from '../transport/TransportProvider';
-import { useScoringStore } from './scoringStore';
+import { scoreOrigin, useScoringStore } from './scoringStore';
 
 /**
  * Keeps final scoring on the position it counts (P2 M2 design 5.8): any move elsewhere (a key,
@@ -12,11 +12,11 @@ export function useScoringSync(): void {
   const active = useScoringStore((s) => s.active);
   const place = useGameStore((s) =>
     s.snapshot
-      ? `${s.snapshot.lineIndex}:${s.snapshot.moveNumber}:${s.snapshot.stones.map((c) => c?.[0] ?? '.').join('')}`
+      ? `${s.snapshot.gameRevision}:${s.snapshot.node}:${s.snapshot.lineIndex}:${s.snapshot.moveNumber}:${s.snapshot.stones.map((c) => c?.[0] ?? '.').join('')}`
       : null,
   );
-  const rules = useGameStore((s) => (s.snapshot ? JSON.stringify(s.snapshot.rules.current) : null));
-  const counted = useRef<{ place: string | null; rules: string | null } | null>(null);
+  const origin = useGameStore((s) => scoreOrigin(s.snapshot));
+  const counted = useRef<{ place: string | null; origin: string | null } | null>(null);
 
   useEffect(() => {
     if (!active) {
@@ -24,12 +24,12 @@ export function useScoringSync(): void {
       return;
     }
     if (!counted.current) {
-      counted.current = { place, rules };
+      counted.current = { place, origin };
     } else if (place !== counted.current.place) {
       void useScoringStore.getState().exit(transport);
-    } else if (rules !== counted.current.rules) {
-      counted.current.rules = rules;
+    } else if (origin !== counted.current.origin) {
+      counted.current.origin = origin;
       void useScoringStore.getState().rescore(transport);
     }
-  }, [active, place, rules, transport]);
+  }, [active, place, origin, transport]);
 }

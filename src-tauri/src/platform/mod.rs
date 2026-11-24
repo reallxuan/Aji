@@ -53,9 +53,7 @@ pub const SHOT_TARGETS: [&str; 3] = ["board", "subboard", "graph"];
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum MenuAction {
-    New19,
-    New13,
-    New9,
+    New(u8),
     Open,
     SaveAs,
     /// The recent file at this index.
@@ -81,6 +79,7 @@ impl MenuAction {
     /// The menu item id.
     pub fn id(&self) -> String {
         match self {
+            MenuAction::New(n) => format!("new:{n}"),
             MenuAction::Recent(n) => format!("recent:{n}"),
             MenuAction::Layout(preset) => format!("layout:{preset}"),
             MenuAction::SaveImage(target) => format!("saveImage:{target}"),
@@ -93,6 +92,11 @@ impl MenuAction {
     }
 
     pub fn from_id(id: &str) -> Option<MenuAction> {
+        if let Some(n) = id.strip_prefix("new:") {
+            let size = n.parse::<u8>().ok()?;
+            return ((5..=19).contains(&size) && size.to_string() == n)
+                .then_some(MenuAction::New(size));
+        }
         if let Some(n) = id.strip_prefix("recent:") {
             return n.parse().ok().map(MenuAction::Recent);
         }
@@ -109,9 +113,6 @@ impl MenuAction {
                 .then(|| MenuAction::Layout(preset.to_owned()));
         }
         [
-            MenuAction::New19,
-            MenuAction::New13,
-            MenuAction::New9,
             MenuAction::Open,
             MenuAction::SaveAs,
             MenuAction::ClearRecent,
@@ -672,8 +673,8 @@ mod tests {
     fn menu_actions_json_shape() {
         use serde_json::json;
         assert_eq!(
-            serde_json::to_value(MenuAction::New13).unwrap(),
-            json!("new13")
+            serde_json::to_value(MenuAction::New(13)).unwrap(),
+            json!({"new":13})
         );
         assert_eq!(
             serde_json::to_value(MenuAction::SaveAs).unwrap(),
@@ -689,7 +690,7 @@ mod tests {
             Some(MenuAction::ClearRecent)
         );
         assert_eq!(MenuAction::from_id("about"), None);
-        for action in [MenuAction::New19, MenuAction::Open, MenuAction::Recent(0)] {
+        for action in [MenuAction::New(19), MenuAction::Open, MenuAction::Recent(0)] {
             assert_eq!(MenuAction::from_id(&action.id()), Some(action));
         }
     }

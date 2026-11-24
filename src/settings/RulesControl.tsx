@@ -1,83 +1,24 @@
 import { MinusIcon, PlusIcon } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Field, Segmented, type Layout } from './RuleField';
+import { DECIMAL_INPUT_MODE, DraftInput, type RegisterEditor } from '../panel/DraftInput';
+import { CustomRulesFields } from './CustomRulesFields';
 import { useTranslation } from 'react-i18next';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { formatKomi, komiOf, MAX_KOMI, parseKomi, scoringOf } from '../game/komi';
+import { detailsOf, formatKomi, komiOf, MAX_KOMI, parseKomi, scoringOf } from '../game/komi';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
-import type { Scoring } from '../transport/generated/Scoring';
 
 type Kind = AnalysisRules['kind'];
 
-type Layout = 'popover' | 'settings';
-
-/** Short muted labels in the popover; the settings page's wide label column elsewhere. */
-const FIELD = {
-  popover: { row: 'gap-3 text-[0.84375rem]', label: 'w-9 text-text-muted' },
-  settings: { row: 'gap-x-4 gap-y-2 text-[0.875rem] flex-wrap', label: 'w-36' },
-} as const;
-
-function Field({
-  label,
-  layout,
-  children,
-}: {
-  label: string;
-  layout: Layout;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`flex min-h-8 items-center ${FIELD[layout].row}`}>
-      <span className={`flex-none ${FIELD[layout].label}`}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: Array<[T, string]>;
-  onChange(value: T): void;
-}) {
-  return (
-    <ToggleGroup
-      type="single"
-      variant="outline"
-      size="sm"
-      aria-label={label}
-      value={value}
-      // Clicking the chosen item again would clear it; the rules always have a value.
-      onValueChange={(next) => next && next !== value && onChange(next as T)}
-    >
-      {options.map(([option, text]) => (
-        <ToggleGroupItem key={option} value={option} className="px-3 whitespace-nowrap">
-          {text}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
 /** − komi +: steps of 0.5 within ±150; a typed value is taken on Enter or blur if valid. */
-function KomiStepper({ komi, onChange }: { komi: number; onChange(komi: number): void }) {
+function KomiStepper({
+  komi,
+  onChange,
+  register,
+}: {
+  komi: number;
+  onChange(komi: number): void;
+  register?: RegisterEditor;
+}) {
   const { t } = useTranslation();
-  const [text, setText] = useState(formatKomi(komi));
-  // A komi changed from outside (a step, another client) replaces what is shown.
-  const [shown, setShown] = useState(komi);
-  if (shown !== komi) {
-    setShown(komi);
-    setText(formatKomi(komi));
-  }
-  const commit = () => {
-    const typed = parseKomi(text);
-    if (typed === null || typed === komi) setText(formatKomi(komi));
-    else onChange(typed);
-  };
   const step = (by: number) => onChange(Math.max(-MAX_KOMI, Math.min(MAX_KOMI, komi + by)));
   const button =
     'flex h-7 w-8 items-center justify-center text-text-muted hover:text-text disabled:opacity-35';
@@ -92,16 +33,15 @@ function KomiStepper({ komi, onChange }: { komi: number; onChange(komi: number):
       >
         <MinusIcon className="size-3.5" aria-hidden />
       </button>
-      <input
+      <DraftInput
         aria-label={t('rules.komi')}
-        inputMode="decimal"
+        inputMode={DECIMAL_INPUT_MODE}
         className="h-7 w-14 border-x border-hairline bg-transparent text-center font-medium tabular-nums outline-none focus:border-text focus:ring-2 focus:ring-text/20"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') setText(formatKomi(komi));
+        value={formatKomi(komi)}
+        register={register}
+        onCommit={(text) => {
+          const typed = parseKomi(text);
+          if (typed !== null && typed !== komi) onChange(typed);
         }}
       />
       <button
@@ -126,24 +66,24 @@ export function RulesControl({
   onChange,
   layout = 'popover',
   ruleLabel,
+  register,
 }: {
   value: AnalysisRules;
   onChange(rules: AnalysisRules): void;
   layout?: Layout;
   /** The first row's label; 规则 by default. */
   ruleLabel?: string;
+  register?: RegisterEditor;
 }) {
   const { t } = useTranslation();
   const komi = komiOf(value);
   const scoring = scoringOf(value);
   const choose = (kind: Kind) =>
     onChange(
-      kind === 'custom' ? { kind, komi, scoring, details: null } : ({ kind } as AnalysisRules),
+      kind === 'custom'
+        ? { kind, komi, scoring, details: detailsOf(value) }
+        : ({ kind } as AnalysisRules),
     );
-  const scorings: Array<[Scoring, string]> = [
-    ['area', t('rules.area')],
-    ['territory', t('rules.territory')],
-  ];
   const kinds: Array<[Kind, string]> = [
     ['chinese', t('rules.chinese')],
     ['japaneseKorean', t('rules.japaneseKorean')],
@@ -162,7 +102,11 @@ export function RulesControl({
       <Field label={t('rules.komi')} layout={layout}>
         {value.kind === 'custom' ? (
           <>
-            <KomiStepper komi={komi} onChange={(next) => onChange({ ...value, komi: next })} />
+            <KomiStepper
+              register={register}
+              komi={komi}
+              onChange={(next) => onChange({ ...value, komi: next, details: detailsOf(value) })}
+            />
             <span className="text-[0.75rem] text-text-muted">{t('rules.stepHint')}</span>
           </>
         ) : (
@@ -175,14 +119,7 @@ export function RulesControl({
         )}
       </Field>
       {value.kind === 'custom' && (
-        <Field label={t('rules.scoring')} layout={layout}>
-          <Segmented<Scoring>
-            label={t('rules.scoring')}
-            value={scoring}
-            options={scorings}
-            onChange={(next) => onChange({ ...value, scoring: next })}
-          />
-        </Field>
+        <CustomRulesFields value={value} layout={layout} onChange={onChange} />
       )}
     </div>
   );

@@ -514,10 +514,42 @@
       "none": "The file names no rules or komi, so the default is used.",
       "changedNone": "Changed. The file names no rules or komi; the default was used.",
       "restore": "Restore the file's setting"
+    },
+    "fields": {
+      "ko": "Ko rule",
+      "suicide": "Suicide",
+      "tax": "Group tax",
+      "whiteHandicapBonus": "Handicap bonus",
+      "hasButton": "Button"
+    },
+    "options": {
+      "ko": {
+        "simple": "Simple",
+        "positional": "Positional",
+        "situational": "Situational"
+      },
+      "suicide": {
+        "off": "Forbidden",
+        "on": "Allowed"
+      },
+      "tax": {
+        "none": "None",
+        "seki": "Seki",
+        "all": "All"
+      },
+      "whiteHandicapBonus": {
+        "zero": "0",
+        "nMinusOne": "N-1",
+        "n": "N"
+      },
+      "hasButton": {
+        "off": "Off",
+        "on": "On"
+      }
     }
   },
   "gameInfo": {
-    "title": "Game",
+    "title": "Game information",
     "result": "Result",
     "date": "Date",
     "event": "Event",
@@ -525,7 +557,27 @@
     "handicap": "Handicap",
     "empty": "The record names no players or event",
     "black": "Black",
-    "white": "White"
+    "white": "White",
+    "blackRank": "Black rank",
+    "whiteRank": "White rank",
+    "round": "Round",
+    "gameName": "Game name",
+    "unfilled": "Empty",
+    "method": "Win by",
+    "margin": "Winning margin",
+    "fillScore": "Use final count: {{verdict}}",
+    "winners": {
+      "black": "Black wins",
+      "white": "White wins",
+      "draw": "Draw",
+      "none": "No result"
+    },
+    "methods": {
+      "points": "Points",
+      "resign": "Resignation",
+      "time": "Time",
+      "forfeit": "Forfeit"
+    }
   },
   "menu": {
     "newGame": "New Game",
@@ -546,7 +598,20 @@
     "clearPosition": "This Position",
     "clearGame": "Whole Game",
     "finalScoring": "Final Scoring",
-    "estimate": "Position Estimate"
+    "estimate": "Position Estimate",
+    "otherSizes": "Other Sizes",
+    "size5": "5×5",
+    "size6": "6×6",
+    "size7": "7×7",
+    "size8": "8×8",
+    "size10": "10×10",
+    "size11": "11×11",
+    "size12": "12×12",
+    "size14": "14×14",
+    "size15": "15×15",
+    "size16": "16×16",
+    "size17": "17×17",
+    "size18": "18×18"
   },
   "layout": {
     "panels": {

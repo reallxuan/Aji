@@ -37,7 +37,7 @@ const baseDetails: Record<Scoring, RuleDetails> = {
   },
 };
 
-function detailsOf(rules: AnalysisRules): RuleDetails {
+export function detailsOf(rules: AnalysisRules): RuleDetails {
   return (rules.kind === 'custom' && rules.details) || baseDetails[scoringOf(rules)];
 }
 

@@ -120,7 +120,7 @@ export function NarrowFrame({
     <div data-narrow className="flex h-full w-full flex-col bg-panel">
       {!placeholder && (
         <>
-          <PanelHeader compact={phone} touch />
+          <PanelHeader compact={phone} touch narrow />
           <NoticeLine />
           {notConfigured ? <NoEngine /> : <EngineStatus />}
         </>

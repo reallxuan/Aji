@@ -1,6 +1,9 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
-import { resetGameStore } from '../game/gameStore';
+import { createI18n } from '../i18n/createI18n';
+import { GameInfoContent } from '../panel/GameInfoPopover';
+import { writeRootField } from '../game/fieldWrites';
+import { resetGameStore, useGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
@@ -159,3 +162,160 @@ it('reads in English', () => {
   expect(card.querySelector('span.mr-1')).toHaveTextContent(/alive\.$/);
   expect(card).toHaveTextContent('White wins by 8.5');
 });
+
+it('fills RE only from a count belonging to this game and position', async () => {
+  const { requests, transport } = mount({ kind: 'chinese' }, null);
+  await act(async () => useScoringStore.getState().rescore(transport));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /填入点目结果/ })));
+  expect(requests).toContainEqual({
+    type: 'gameEdit',
+    edit: { kind: 'setInfo', field: 'result', value: 'W+8.5' },
+  });
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 200, gameRevision: 2 })));
+  expect(screen.queryByRole('button', { name: /填入点目结果/ })).toBeNull();
+});
+
+it('keeps a finished count for game information across an equivalent rules selection', async () => {
+  const { useScoringSync } = await import('./useScoringSync');
+  function Synced() {
+    useScoringSync();
+    return <GameInfoContent />;
+  }
+  const { requests, transport } = renderWithGame(<Synced />, {
+    answer: (r) => (r.type === 'gameScore' ? { type: 'score', ...AREA } : undefined),
+  });
+  act(() => useScoringStore.setState({ active: true }));
+  await act(async () => useScoringStore.getState().rescore(transport));
+  const snapshot = useGameStore.getState().snapshot!;
+  act(() =>
+    useGameStore.getState().apply({
+      ...snapshot,
+      revision: 2,
+      rules: {
+        ...snapshot.rules,
+        current: { kind: 'custom', komi: 7.5, scoring: 'area', details: null },
+      },
+    }),
+  );
+  expect(requests.filter((r) => r.type === 'gameScore')).toHaveLength(1);
+  await act(async () => useScoringStore.getState().exit(transport));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /填入点目结果/ })));
+  expect(requests).toContainEqual({
+    type: 'gameEdit',
+    edit: { kind: 'setInfo', field: 'result', value: 'W+8.5' },
+  });
+  act(() => useGameStore.getState().apply({ ...snapshot, revision: 999, node: 1 }));
+  expect(screen.queryByRole('button', { name: /填入点目结果/ })).toBeNull();
+});
+
+function delayedReply() {
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { done, release };
+}
+
+it.each(['accepted', 'failed', 'equivalent'] as const)(
+  'checks the effective pending rules before filling the score (%s)',
+  async (outcome) => {
+    const gate = delayedReply();
+    const snapshot = makeSnapshot();
+    const { transport, requests } = renderWithGame(
+      <>
+        <ScoringCard />
+        <GameInfoContent />
+      </>,
+      {
+        snapshot,
+        answer: (req) => {
+          if (req.type === 'gameScore') return { type: 'score', ...AREA };
+          if (req.type === 'gameEdit' && req.edit.kind === 'setRules') {
+            const rules = req.edit.rules!;
+            return gate.done.then(() => {
+              if (outcome === 'failed') throw Error('rejected');
+              return {
+                type: 'game',
+                warnings: [],
+                snapshot: {
+                  ...snapshot,
+                  revision: 200,
+                  rules: { ...snapshot.rules, current: rules },
+                },
+              };
+            });
+          }
+        },
+      },
+    );
+    act(() => useScoringStore.setState({ active: true }));
+    await act(async () => useScoringStore.getState().rescore(transport));
+    const fill = () => screen.queryAllByRole('button', { name: /填入点目结果/ });
+    const oldButtons = fill();
+    expect(oldButtons).toHaveLength(2);
+    let sent!: Promise<boolean>;
+    act(() => {
+      sent = writeRootField({ transport, t: createI18n('en').t }, snapshot.gameRevision, {
+        kind: 'setRules',
+        rules: {
+          kind: 'custom',
+          scoring: 'area',
+          komi: outcome === 'equivalent' ? 7.5 : 8,
+          details: null,
+        },
+      });
+      // A native click can arrive before React removes a button.
+      oldButtons[0].click();
+    });
+    expect(requests.some((r) => r.type === 'gameEdit' && r.edit.kind === 'setInfo')).toBe(
+      outcome === 'equivalent',
+    );
+    expect(fill()).toHaveLength(outcome === 'equivalent' ? 2 : 0);
+    await act(async () => {
+      gate.release();
+      await sent;
+    });
+    expect(fill()).toHaveLength(outcome === 'equivalent' ? 2 : 0);
+  },
+);
+
+it.each(['expired', 'new count with the same margin'] as const)(
+  'rechecks a queued score hand-off when an earlier result edit finishes (%s)',
+  async (handoff) => {
+    const snapshot = makeSnapshot();
+    const gate = delayedReply();
+    const { requests, transport } = renderWithGame(<GameInfoContent />, {
+      snapshot,
+      answer: (req) => {
+        if (req.type === 'gameScore') return { type: 'score', ...AREA };
+        if (req.type === 'gameEdit' && req.edit.kind === 'setInfo' && req.edit.value === '0')
+          return gate.done.then(() => ({
+            type: 'game',
+            warnings: [],
+            snapshot: { ...snapshot, revision: 2, info: { ...snapshot.info, result: '0' } },
+          }));
+        if (req.type === 'gameEdit' && req.edit.kind === 'setRules') throw Error('rejected');
+      },
+    });
+    act(() => useScoringStore.setState({ active: true }));
+    await act(async () => useScoringStore.getState().rescore(transport));
+    fireEvent.change(screen.getByLabelText('结果'), { target: { value: 'draw' } });
+    fireEvent.click(screen.getByRole('button', { name: /填入点目结果/ }));
+    if (handoff === 'expired') {
+      await act(async () => fireEvent.click(screen.getByRole('radio', { name: '日韩规则' })));
+    } else {
+      await act(async () => useScoringStore.getState().rescore(transport));
+      fireEvent.click(screen.getByRole('button', { name: /填入点目结果/ }));
+    }
+    await act(async () => {
+      gate.release();
+      await gate.done;
+    });
+    const results = requests.flatMap((r) =>
+      r.type === 'gameEdit' && r.edit.kind === 'setInfo' && r.edit.field === 'result'
+        ? [r.edit.value]
+        : [],
+    );
+    expect(results).toEqual(handoff === 'expired' ? ['0'] : ['0', 'W+8.5']);
+  },
+);

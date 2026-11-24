@@ -4,6 +4,8 @@ import { useModeStore } from '../edit/modeStore';
 import { create } from 'zustand';
 import { engineAction } from '../engine/engineAction';
 import type { EngineStore } from '../engine/engineStore';
+import { detailsOf, komiOf, scoringOf } from '../game/komi';
+import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import { useGameStore } from '../game/gameStore';
 import { useJobStore } from '../job/jobStore';
 import { pauseAnalysis, resumeAnalysis, scoreGame } from '../transport/api';
@@ -33,6 +35,8 @@ export interface ScoringState {
   suggested: Point[];
   /** The count with `dead` removed; `null` until it arrives. */
   score: ScoreView | null;
+  /** Last completed count, retained after exiting so game information can use it. */
+  lastCount: { origin: string; margin: number } | null;
   /** The last count asked for failed; the next one that answers clears it. */
   failed: boolean;
   /** Starting paused the analysis (and so a whole-game job), so leaving resumes it. */
@@ -65,22 +69,50 @@ const IDLE: Pick<
 };
 
 /** Each count asked for; an answer to an older one is dropped. */
+export function scoreOrigin(snapshot: GameSnapshot | null): string | null {
+  if (!snapshot || snapshot.tryout !== null) return null;
+  const rules = snapshot.rules.current;
+  const details = detailsOf(rules);
+  return JSON.stringify([
+    snapshot.gameRevision,
+    snapshot.node,
+    snapshot.positionKey ?? snapshot.stones,
+    snapshot.captures,
+    scoringOf(rules),
+    komiOf(rules),
+    details.ko,
+    details.tax,
+    details.suicide,
+    details.hasButton,
+    details.whiteHandicapBonus,
+    details.friendlyPassOk,
+  ]);
+}
+
 let asked = 0;
 let stopWatching: (() => void) | undefined;
 
 export const useScoringStore = create<ScoringState>()((set, get) => {
   const count = async (transport: Transport, dead: Point[]) => {
     const mine = ++asked;
-    set({ dead });
+    const origin = scoreOrigin(useGameStore.getState().snapshot);
+    set({ dead, lastCount: null });
     try {
       const score = await scoreGame(transport, { kind: 'final', dead });
-      if (mine === asked && get().active) set({ score, failed: false });
+      if (
+        mine === asked &&
+        get().active &&
+        origin &&
+        origin === scoreOrigin(useGameStore.getState().snapshot)
+      )
+        set({ score, failed: false, lastCount: { origin, margin: score.margin } });
     } catch {
       if (mine === asked && get().active) set({ failed: true });
     }
   };
   return {
     ...IDLE,
+    lastCount: null,
     async start(ctx) {
       const { transport, engine } = ctx;
       if (get().active || get().starting) return;
@@ -97,13 +129,17 @@ export const useScoringStore = create<ScoringState>()((set, get) => {
       const running =
         engineAction(engine.getState().engine, useJobStore.getState().progress) === 'pause';
       useModeStore.getState().setMode('normal');
-      stopWatching = useGameStore.subscribe(({ snapshot }) => {
-        if (snapshot?.tryout != null) void get().exit(transport);
+      const game = useGameStore.getState().snapshot?.gameRevision;
+      const visit = useGameStore.getState().nodeVisit;
+      stopWatching = useGameStore.subscribe(({ snapshot, nodeVisit }) => {
+        if (snapshot?.tryout != null || snapshot?.gameRevision !== game || nodeVisit !== visit)
+          void get().exit(transport);
       });
-      set({ ...IDLE, active: true, paused: running });
+      set({ ...IDLE, lastCount: null, active: true, paused: running });
       if (running) await pauseAnalysis(transport).catch(() => undefined);
       // Any mode reports KataGo's suggestion; the empty marking only asks for it.
       if (mine !== asked || !get().active) return;
+      const origin = scoreOrigin(useGameStore.getState().snapshot);
       let suggested: Point[];
       try {
         suggested = (await scoreGame(transport, { kind: 'final', dead: [] })).suggestedDead;
@@ -112,6 +148,7 @@ export const useScoringStore = create<ScoringState>()((set, get) => {
         return;
       }
       if (mine !== asked || !get().active) return;
+      if (origin !== scoreOrigin(useGameStore.getState().snapshot)) return;
       set({ suggested });
       await count(transport, suggested);
     },
@@ -156,5 +193,5 @@ export function resetScoringStore(): void {
   stopWatching?.();
   stopWatching = undefined;
   asked++;
-  useScoringStore.setState({ ...IDLE });
+  useScoringStore.setState({ ...IDLE, lastCount: null });
 }

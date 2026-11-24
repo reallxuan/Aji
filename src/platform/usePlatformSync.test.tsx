@@ -40,7 +40,7 @@ it('tells the menu bar the language and runs menu commands', async () => {
     </I18nextProvider>,
   );
   expect(files.menuLanguages).toEqual(['zh-CN']);
-  await act(async () => files.emitMenu('new9'));
+  await act(async () => files.emitMenu({ new: 9 }));
   expect(requests).toEqual([{ type: 'gameNew', size: 9 }]);
   await act(async () => {
     await i18n.changeLanguage('en');

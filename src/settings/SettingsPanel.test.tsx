@@ -109,7 +109,14 @@ describe('SettingsPanel', () => {
     await act(async () => fireEvent.click(within(rules).getByRole('radio', { name: '自定义' })));
     expect(sets(transport.requests).at(-1)?.defaultRules).toEqual({
       kind: 'custom',
-      details: null,
+      details: {
+        ko: 'simple',
+        tax: 'none',
+        suicide: false,
+        hasButton: false,
+        whiteHandicapBonus: 'n',
+        friendlyPassOk: true,
+      },
       komi: 7.5,
       scoring: 'area',
     });

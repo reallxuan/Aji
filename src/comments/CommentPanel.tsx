@@ -44,7 +44,7 @@ function CommentField({ snapshot, visit }: { snapshot: GameSnapshot; visit: numb
   const pending = usePendingComment(ctx.transport, id);
   useLayoutEffect(() => {
     if (field.current && draft.current === null)
-      field.current.value = pending?.text ?? comment ?? '';
+      field.current.value = pending?.value ?? comment ?? '';
   }, [pending, comment]);
 
   const keep = () => {

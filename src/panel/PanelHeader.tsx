@@ -23,11 +23,13 @@ const openSettings = () => usePanelStore.getState().show('settings');
 export function PanelHeader({
   compact = false,
   touch = false,
+  narrow = false,
 }: {
   /** The phone header (P2 M1 design 5.5): title, move counter, engine dot and gear. */
   compact?: boolean;
   /** Touch targets of at least 44 px. */
   touch?: boolean;
+  narrow?: boolean;
 } = {}) {
   const { t } = useTranslation();
   const tryout = useGameStore((s) => s.snapshot?.tryout != null);
@@ -60,14 +62,14 @@ export function PanelHeader({
         )}
       >
         <div className="flex min-w-0 flex-1 items-center">
-          <GameMenu touch={compact} />
+          <GameMenu touch={compact} narrow={narrow} />
         </div>
         {!compact && status}
         {compact ? (
           <MoveCounter />
         ) : (
           <>
-            <RulesChip />
+            <RulesChip narrow={narrow} />
             <NavButtons touch={touch} />
           </>
         )}

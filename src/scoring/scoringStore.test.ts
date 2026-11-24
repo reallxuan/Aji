@@ -218,3 +218,18 @@ describe('useScoringStore', () => {
     expect(useScoringStore.getState().score?.margin).toBe(2 - 8.5);
   });
 });
+
+it('removes the prior count from the result field during a pending or failed recount', async () => {
+  try {
+    const fail = setUp('ready', (dead) => (dead.length === 1 ? -1 : 0));
+    await useScoringStore.getState().start(fail.ctx);
+    expect(useScoringStore.getState().lastCount?.margin).toBe(-6.5);
+    const failing = useScoringStore.getState().toggle(fail.transport, H4);
+    expect(useScoringStore.getState().lastCount).toBeNull();
+    await failing;
+    expect(useScoringStore.getState().lastCount).toBeNull();
+  } finally {
+    resetScoringStore();
+    resetGameStore();
+  }
+});

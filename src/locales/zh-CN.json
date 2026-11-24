@@ -514,6 +514,38 @@
       "none": "棋谱没有写规则或贴目，使用默认设置。",
       "changedNone": "已改动。棋谱没有写规则或贴目，原按默认设置读取。",
       "restore": "恢复棋谱设定"
+    },
+    "fields": {
+      "ko": "打劫",
+      "suicide": "自杀",
+      "tax": "双活计税",
+      "whiteHandicapBonus": "让子补偿",
+      "hasButton": "按钮"
+    },
+    "options": {
+      "ko": {
+        "simple": "简单劫",
+        "positional": "局面同形",
+        "situational": "情境同形"
+      },
+      "suicide": {
+        "off": "禁止",
+        "on": "允许"
+      },
+      "tax": {
+        "none": "不计",
+        "seki": "双活",
+        "all": "全部"
+      },
+      "whiteHandicapBonus": {
+        "zero": "0",
+        "nMinusOne": "N-1",
+        "n": "N"
+      },
+      "hasButton": {
+        "off": "无",
+        "on": "有"
+      }
     }
   },
   "gameInfo": {
@@ -525,7 +557,27 @@
     "handicap": "让子",
     "empty": "棋谱没有记录对局信息",
     "black": "黑方",
-    "white": "白方"
+    "white": "白方",
+    "blackRank": "黑方段位",
+    "whiteRank": "白方段位",
+    "round": "轮次",
+    "gameName": "棋局名称",
+    "unfilled": "未填",
+    "method": "胜法",
+    "margin": "胜目",
+    "fillScore": "填入点目结果：{{verdict}}",
+    "winners": {
+      "black": "黑胜",
+      "white": "白胜",
+      "draw": "和棋",
+      "none": "无结果"
+    },
+    "methods": {
+      "points": "目数",
+      "resign": "中盘",
+      "time": "超时",
+      "forfeit": "弃权"
+    }
   },
   "menu": {
     "newGame": "新建棋局",
@@ -546,7 +598,20 @@
     "clearPosition": "本局面",
     "clearGame": "整局",
     "finalScoring": "终局点目",
-    "estimate": "形势判断"
+    "estimate": "形势判断",
+    "otherSizes": "其他路数",
+    "size5": "5 路",
+    "size6": "6 路",
+    "size7": "7 路",
+    "size8": "8 路",
+    "size10": "10 路",
+    "size11": "11 路",
+    "size12": "12 路",
+    "size14": "14 路",
+    "size15": "15 路",
+    "size16": "16 路",
+    "size17": "17 路",
+    "size18": "18 路"
   },
   "layout": {
     "panels": {

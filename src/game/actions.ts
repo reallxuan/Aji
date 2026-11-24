@@ -176,14 +176,9 @@ export function runMenuCommand(
       options ? ctx.t(key, options) : ctx.t(key);
     return shotFromMenu(kind, target, ctx.files, title, t);
   }
-  if (typeof command === 'object') return openRecent(ctx, command.recent);
+  if (typeof command === 'object')
+    return 'new' in command ? startNewGame(ctx, command.new) : openRecent(ctx, command.recent);
   switch (command) {
-    case 'new19':
-      return startNewGame(ctx, 19);
-    case 'new13':
-      return startNewGame(ctx, 13);
-    case 'new9':
-      return startNewGame(ctx, 9);
     case 'open':
       return openFromPicker(ctx);
     case 'saveAs':
