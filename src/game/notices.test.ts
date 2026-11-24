@@ -7,7 +7,7 @@ import { makeSnapshot } from './testing';
 
 const zh = createI18n('zh-CN').t;
 const en = createI18n('en').t;
-const at183 = makeSnapshot({ mainLineLength: 183 });
+const at183 = makeSnapshot({ lineLength: 183 });
 
 describe('error notices', () => {
   it('name the board size that cannot be opened', () => {

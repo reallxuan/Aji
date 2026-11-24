@@ -107,6 +107,14 @@ impl History {
         Some(entry)
     }
 
+    pub fn can_undo(&self) -> bool {
+        self.applied > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.applied < self.entries.len()
+    }
+
     pub fn last_kept(&self) -> u64 {
         self.entries
             .range(..self.applied)

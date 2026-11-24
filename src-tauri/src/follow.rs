@@ -107,7 +107,7 @@ pub(crate) async fn trend_of(
     let line = session.line();
     let stats = stats_of(ctx, &line).await;
     let losses = losses_of(ctx, &line, &stats).await;
-    let revision = session.revision();
+    let revision = session.line_revision;
     let nodes: Vec<TrendNode> = line
         .iter()
         .zip(&stats)

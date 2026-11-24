@@ -40,7 +40,7 @@ function line(losses: Record<number, Loss> = SWINGS, analysedTo = 12): TrendNode
 function mount(nodes: TrendNode[] = line(), lineIndex = 6) {
   useTrendStore.getState().setNodes(nodes, 1);
   return renderWithGame(<SwingList />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex, moveNumber: lineIndex, mainLineLength: 11 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex, moveNumber: lineIndex, lineLength: 11 }),
   });
 }
 

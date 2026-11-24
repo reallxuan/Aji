@@ -47,7 +47,7 @@ function mount(saved: JobOptions = DEFAULT_JOB_OPTIONS, language?: 'en') {
   let closed = 0;
   const harness = renderWithGame(<JobPanelContent onDone={() => closed++} />, {
     language,
-    snapshot: makeSnapshot({ mainLineLength: 40, hasMoves: true }),
+    snapshot: makeSnapshot({ lineLength: 40, hasMoves: true }),
     answer: (request: Request) =>
       request.type === 'settingsSet'
         ? { type: 'settings', settings: request.settings }

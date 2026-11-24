@@ -38,7 +38,7 @@ const WARNING_ORDER: GameWarning['code'][] = [
 function warningValues(warning: GameWarning, snapshot: GameSnapshot) {
   switch (warning.code) {
     case 'truncated':
-      return { moves: snapshot.mainLineLength, next: snapshot.mainLineLength + 1 };
+      return { moves: snapshot.lineLength, next: snapshot.lineLength + 1 };
     case 'extraGames':
       // The backend counts the games besides the open one; people count them all.
       return { total: warning.count + 1 };

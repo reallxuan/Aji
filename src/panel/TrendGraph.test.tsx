@@ -49,7 +49,7 @@ function line(): TrendNode[] {
 function mount() {
   useTrendStore.getState().setNodes(line());
   const result = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   return result;
 }
@@ -135,7 +135,7 @@ it('draws no mistake bars, however large a loss', () => {
   nodes[41] = { ...nodes[41], stats: { winrate: 0.5, scoreLead: 0, visits: 200 } };
   useTrendStore.getState().setNodes(nodes);
   renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   expect(svg().querySelectorAll('[data-mistake]')).toHaveLength(0);
 });
@@ -147,7 +147,7 @@ it('draws and names White’s numbers in White’s perspective', () => {
   useTrendStore.getState().setNodes(nodes);
   // A 154 px panel: 4 above the chart, which is 150 (jsdom measures the legend as 0).
   renderWithGame(<TrendGraph height={154} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
   });
   // The lone node at 42: Black's 80% is White's 20%, plotted from the top of a 116 px plot.
   const lone = svg().querySelector('circle[data-line="winrate"]')!;
@@ -161,7 +161,7 @@ it('switches the perspective from the legend, and remembers it', async () => {
   useSettingsStore.getState().apply(storedSettings);
   useTrendStore.getState().setNodes(line());
   const { requests } = renderWithGame(<TrendGraph height={150} width={WIDTH} />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, mainLineLength: 100 }),
+    snapshot: makeSnapshot({ revision: 1, lineIndex: 30, moveNumber: 30, lineLength: 100 }),
     answer: (request) =>
       request.type === 'settingsSet' ? { type: 'settings', settings: request.settings } : undefined,
   });
@@ -180,7 +180,7 @@ it('the_graph_keeps_the_chosen_colour', () => {
       revision: 1,
       lineIndex: 30,
       moveNumber: 30,
-      mainLineLength: 100,
+      lineLength: 100,
       nextColor: 'white',
     }),
   });

@@ -115,7 +115,9 @@ describe('SettingsPanel', () => {
     });
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '增加贴目' })));
     expect(sets(transport.requests).at(-1)?.defaultRules).toMatchObject({ komi: 8 });
-    expect(transport.requests.some((r) => r.type === 'gameSetRules')).toBe(false);
+    expect(
+      transport.requests.some((r) => r.type === 'gameEdit' && r.edit.kind === 'setRules'),
+    ).toBe(false);
   });
 
   it('switches language and theme at once', async () => {

@@ -204,6 +204,36 @@ describe('development scenarios', () => {
     }
   });
 
+  it('keeps a running job and its cached results through equivalent rules edits', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = scenarioTransport('job-running', { tick: 50 })!;
+      const events: AppEvent[] = [];
+      transport.subscribe((event) => events.push(event));
+      vi.advanceTimersByTime(200);
+      const before = await transport.request({ type: 'cacheStats' });
+      if (before.type !== 'cacheStats') throw new Error('no cache');
+      expect(before.usedBytes).toBeGreaterThan(0);
+      await transport.request({
+        type: 'gameEdit',
+        edit: {
+          kind: 'setRules',
+          rules: { kind: 'custom', details: null, scoring: 'territory', komi: 6.5 },
+        },
+      });
+      expect(await transport.request({ type: 'cacheStats' })).toEqual(before);
+      vi.advanceTimersByTime(100);
+      expect(events.some((e) => e.type === 'jobProgress' && e.progress.state === 'stopped')).toBe(
+        false,
+      );
+      const after = await transport.request({ type: 'cacheStats' });
+      if (after.type !== 'cacheStats') throw new Error('no cache');
+      expect(after.usedBytes).toBeGreaterThan(before.usedBytes);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('job-done opens on an analysed game with the job just done', async () => {
     vi.useFakeTimers();
     try {
@@ -239,7 +269,7 @@ describe('development scenarios', () => {
         type: 'settingsSet',
         settings: { ...settings.settings, visitLimit: 300 },
       });
-      await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '' });
+      await transport.request({ type: 'gameOpen', name: 'samsung.sgf', bytes: '', atEnd: false });
       const at = async (move: number) => {
         const reply = await transport.request({ type: 'gameNavigate', to: { move } });
         return (reply as { snapshot: GameSnapshot }).snapshot;

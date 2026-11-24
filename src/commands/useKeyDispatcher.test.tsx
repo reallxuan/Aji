@@ -80,14 +80,14 @@ describe('navigation keys', () => {
   });
 
   it('moves ten with PageDown, clamped to the end of the line', async () => {
-    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 30, mainLineLength: 45 }) });
+    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 30, lineLength: 45 }) });
     fireEvent.keyDown(window, { key: 'PageDown' });
     await frame();
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 40 } });
     act(() =>
       useGameStore
         .getState()
-        .apply(makeSnapshot({ revision: 500, moveNumber: 40, mainLineLength: 45 })),
+        .apply(makeSnapshot({ revision: 500, moveNumber: 40, lineLength: 45 })),
     );
     fireEvent.keyDown(window, { key: 'PageDown' });
     await frame();
@@ -95,7 +95,7 @@ describe('navigation keys', () => {
   });
 
   it('moves ten back with PageUp, stopping at the start', async () => {
-    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 4, mainLineLength: 45 }) });
+    const { requests } = mount({ snapshot: makeSnapshot({ moveNumber: 4, lineLength: 45 }) });
     fireEvent.keyDown(window, { key: 'PageUp' });
     await frame();
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: { move: 0 } });

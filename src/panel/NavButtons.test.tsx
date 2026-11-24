@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 const at = (atStart: boolean, atEnd: boolean) =>
-  makeSnapshot({ atStart, atEnd, hasMoves: true, moveNumber: 5, mainLineLength: 10 });
+  makeSnapshot({ atStart, atEnd, hasMoves: true, moveNumber: 5, lineLength: 10 });
 
 it('disables first and previous at the start, next and last at the end', () => {
   const { unmount } = renderWithGame(<NavButtons />, { snapshot: at(true, false) });

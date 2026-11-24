@@ -36,7 +36,7 @@ const page = (id: CommandId, by: number) =>
     (ctx) => {
       const snapshot = useGameStore.getState().snapshot;
       if (!snapshot) return;
-      ctx.go({ move: Math.max(0, Math.min(snapshot.mainLineLength, snapshot.moveNumber + by)) });
+      ctx.go({ move: Math.max(0, Math.min(snapshot.lineLength, snapshot.moveNumber + by)) });
     },
     { repeats: true },
   );

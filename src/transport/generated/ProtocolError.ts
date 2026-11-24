@@ -6,6 +6,6 @@ import type { ErrorCode } from "./ErrorCode";
  */
 export type ProtocolError = { code: ErrorCode, message: string, 
 /**
- * A value the UI puts in the text: only `sgfUnsupportedSize`'s size, as `19x13`.
+ * An unsupported size (such as `19x13`), or the camelCase illegal move reason.
  */
 detail?: string, };

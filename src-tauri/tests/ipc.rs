@@ -177,7 +177,7 @@ fn rpc_opens_a_game_from_base64() {
     .unwrap();
     assert_eq!(response["type"], "game");
     assert_eq!(response["snapshot"]["size"], 9);
-    assert_eq!(response["snapshot"]["mainLineLength"], 1);
+    assert_eq!(response["snapshot"]["lineLength"], 1);
     assert_eq!(
         response["snapshot"]["rules"]["current"],
         json!({"kind": "chinese"})

@@ -54,7 +54,7 @@ it('says what changed and restores the file reading', () => {
   const source = screen.getByTestId('rules-source');
   expect(source).toHaveTextContent('已改动。棋谱记载 RU[Japanese] KM[0]，原按日韩规则读取。');
   fireEvent.click(screen.getByRole('button', { name: '恢复棋谱设定' }));
-  expect(requests).toContainEqual({ type: 'gameSetRules', rules: null });
+  expect(requests).toContainEqual({ type: 'gameEdit', edit: { kind: 'setRules', rules: null } });
 });
 
 it('says when the file has neither rules nor komi', () => {
@@ -73,5 +73,8 @@ it('sends a rules change for this game', () => {
     km: '6.5',
   });
   fireEvent.click(screen.getByRole('radio', { name: '中国规则' }));
-  expect(requests).toContainEqual({ type: 'gameSetRules', rules: { kind: 'chinese' } });
+  expect(requests).toContainEqual({
+    type: 'gameEdit',
+    edit: { kind: 'setRules', rules: { kind: 'chinese' } },
+  });
 });

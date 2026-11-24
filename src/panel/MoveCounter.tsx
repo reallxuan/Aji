@@ -12,8 +12,8 @@ export function MoveCounter() {
   const { t } = useTranslation();
   const ctx = useActionContext();
   const current = useGameStore((s) => s.snapshot?.moveNumber ?? 0);
-  const total = useGameStore((s) => s.snapshot?.mainLineLength ?? 0);
-  const canJump = useGameStore((s) => (s.snapshot?.mainLineLength ?? 0) > 0);
+  const total = useGameStore((s) => s.snapshot?.lineLength ?? 0);
+  const canJump = useGameStore((s) => (s.snapshot?.lineLength ?? 0) > 0);
   const [draft, setDraft] = useState<string | null>(null);
   const done = useRef(false);
 

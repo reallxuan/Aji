@@ -7,7 +7,7 @@ import { MoveCounter } from './MoveCounter';
 
 afterEach(() => resetGameStore());
 
-const game = makeSnapshot({ moveNumber: 58, mainLineLength: 171, hasMoves: true });
+const game = makeSnapshot({ moveNumber: 58, lineLength: 171, hasMoves: true });
 
 it('reads current / total, and 0 / 0 with no game', () => {
   const { unmount } = renderWithGame(<MoveCounter />, { snapshot: game });

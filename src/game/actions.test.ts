@@ -17,7 +17,7 @@ const samsung = makeSnapshot({
   name: 'samsung',
   info: { ...noInfo, black: '丁浩', white: '廖元赫' },
   hasMoves: true,
-  mainLineLength: 183,
+  lineLength: 183,
 });
 
 function setup(

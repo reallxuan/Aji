@@ -102,7 +102,7 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
   const { t } = useTranslation();
   const ctx = useActionContext();
   const saved = useSettingsStore((s) => s.settings?.jobOptions) ?? DEFAULT_JOB_OPTIONS;
-  const last = useGameStore((s) => s.snapshot?.mainLineLength ?? 0);
+  const last = useGameStore((s) => s.snapshot?.lineLength ?? 0);
   const nodes = useTrendStore((s) => s.nodes);
   const speed = useEngineStore((s) => s.speed);
 

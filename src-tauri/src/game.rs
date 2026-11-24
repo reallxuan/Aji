@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::history::{EntryKind, History, Spot};
-use crate::protocol::GameSnapshot;
+use crate::protocol::{Continuation, GameSnapshot, GameTree, MarkAt, Placed, TreeNode};
 
 /// The largest file Aji opens.
 pub const MAX_SGF_BYTES: usize = 20 * 1024 * 1024;
@@ -178,6 +178,8 @@ pub struct GameSession {
     /// Remember the old path across edits, including when a removed subtree loses its parent.
     selected_line: Vec<NodeId>,
     pub line_revision: u64,
+    pub tree_revision: u64,
+    save_as_first: bool,
     /// The file name without `.sgf`; `None` for a new game.
     name: Option<String>,
     rules: AnalysisRules,
@@ -256,6 +258,29 @@ fn edited_line_positions(kind: &EntryKind, line: &[NodeId]) -> bool {
         })
 }
 
+/// Record links, the try-out bit, comment presence and the refreshed legality index
+/// determine whether clients need a new tree. The test is symmetric across undo/redo.
+fn edited_tree(change: &Change, old_illegal: &[NodeId], game: &Game) -> bool {
+    fn has_comment(props: &[aji_core::sgf::SgfProp]) -> bool {
+        props
+            .iter()
+            .find(|p| p.id == "C")
+            .and_then(|p| p.values.first())
+            .is_some_and(|s| !s.is_empty())
+    }
+    old_illegal != game.illegal_nodes()
+        || change
+            .forward
+            .iter()
+            .zip(change.inverse.iter().rev())
+            .any(|(op, inverse)| match (op, inverse) {
+                (Op::SetProps { props, .. }, Op::SetProps { props: old, .. }) => {
+                    has_comment(props) != has_comment(old)
+                }
+                _ => true,
+            })
+}
+
 impl GameSession {
     /// An empty game of `size` lines (5 to 19).
     pub fn new(size: u8, rules: AnalysisRules) -> Result<GameSession, OpenError> {
@@ -280,6 +305,7 @@ impl GameSession {
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
             line_revision: 0,
+            tree_revision: 0,
             game,
             others: Vec::new(),
             name: None,
@@ -288,6 +314,7 @@ impl GameSession {
             ru: None,
             km: None,
             revision: 0,
+            save_as_first: false,
             warnings: Vec::new(),
         })
     }
@@ -346,6 +373,7 @@ impl GameSession {
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
             line_revision: 0,
+            tree_revision: 0,
             game,
             others,
             name: stem(name),
@@ -354,6 +382,9 @@ impl GameSession {
             ru: trimmed(&root, "RU"),
             km: trimmed(&root, "KM"),
             revision: 0,
+            save_as_first: warnings
+                .iter()
+                .any(|w| matches!(w, GameWarning::Truncated | GameWarning::Repaired)),
             warnings,
         })
     }
@@ -362,9 +393,15 @@ impl GameSession {
     pub fn replace(&mut self, next: GameSession) {
         let revision = self.revision + 1;
         let line_revision = self.line_revision + 1;
+        let tree_revision = self.tree_revision + 1;
         *self = next;
+        self.tree_revision = tree_revision;
         self.line_revision = line_revision;
         self.revision = revision;
+    }
+
+    pub fn current_node(&self) -> NodeId {
+        self.current
     }
 
     pub fn current_line(&self) -> Vec<NodeId> {
@@ -686,6 +723,7 @@ impl GameSession {
     }
 
     fn edit_record(&mut self, record: Edit, before: Spot) -> Result<bool, Refusal> {
+        let old_illegal = self.game.illegal_nodes().to_vec();
         let change = self.game.edit(&record)?;
         let kept = before.tryout.is_none() || matches!(record, Edit::KeepTryout { .. });
         match record {
@@ -717,6 +755,7 @@ impl GameSession {
             _ => {}
         }
         let has_entry = !change.forward.is_empty() || before.tryout != self.tryout;
+        self.tree_revision += u64::from(edited_tree(&change, &old_illegal, &self.game));
         let kind = EntryKind::Record(change);
         self.refresh_line(edited_line_positions(&kind, &self.selected_line));
         if has_entry {
@@ -744,7 +783,11 @@ impl GameSession {
         };
         let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
         match &entry.kind {
-            EntryKind::Record(change) => self.game.undo(change),
+            EntryKind::Record(change) => {
+                let old_illegal = self.game.illegal_nodes().to_vec();
+                self.game.undo(change);
+                self.tree_revision += u64::from(edited_tree(change, &old_illegal, &self.game));
+            }
             EntryKind::Rules { before, .. } => self.rules = *before,
         }
         let spot = entry.before;
@@ -758,7 +801,11 @@ impl GameSession {
         };
         let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
         match &entry.kind {
-            EntryKind::Record(change) => self.game.redo(change),
+            EntryKind::Record(change) => {
+                let old_illegal = self.game.illegal_nodes().to_vec();
+                self.game.redo(change);
+                self.tree_revision += u64::from(edited_tree(change, &old_illegal, &self.game));
+            }
             EntryKind::Rules { after, .. } => self.rules = *after,
         }
         let spot = entry.after;
@@ -774,20 +821,13 @@ impl GameSession {
         self.history.last_kept()
     }
 
-    pub fn mark_saved(&mut self, id: u64) {
+    pub fn mark_saved(&mut self, id: u64) -> bool {
         let changed = self.changed();
         self.history.mark_saved(id);
-        if changed != self.changed() {
-            self.revision += 1;
-        }
-    }
-
-    /// The original rules request returns whether the effective analysis settings changed.
-    pub fn set_rules(&mut self, rules: Option<AnalysisRules>) -> Result<bool, AnalysisRules> {
-        let before = self.rules;
-        self.edit(SessionEdit::SetRules { rules })
-            .map_err(|_| rules.unwrap_or(self.from_file))?;
-        Ok(!before.same_effect(&self.rules))
+        let updated = changed != self.changed() || self.save_as_first;
+        self.save_as_first = false;
+        self.revision += u64::from(updated);
+        updated
     }
 
     /// The board after `moves` from the current node; nothing changes.
@@ -866,6 +906,39 @@ impl GameSession {
             .next_move_on_line(self.current, &self.selected_line[self.line_index() + 1..])
     }
 
+    pub fn tree(&self) -> GameTree {
+        let mut nodes = Vec::new();
+        let mut stack = vec![self.game.root()];
+        while let Some(id) = stack.pop() {
+            let played = self.game.recorded_move(id).ok().flatten();
+            let mut flags = 0;
+            if self.game.comment(id).is_some_and(|text| !text.is_empty()) {
+                flags |= TreeNode::COMMENT;
+            }
+            if self.game.is_tryout(id) {
+                flags |= TreeNode::TRYOUT;
+            }
+            if played.is_none() {
+                flags |= TreeNode::NO_MOVE;
+            }
+            if self.game.illegal_nodes().binary_search(&id).is_ok() {
+                flags |= TreeNode::ILLEGAL;
+            }
+            nodes.push(TreeNode {
+                id: id as u32,
+                parent: self.game.parent(id).map(|p| p as u32),
+                color: played.map(|(color, _)| color),
+                mv: played.map(|(_, mv)| mv),
+                flags,
+            });
+            stack.extend(self.game.children(id).iter().rev().copied());
+        }
+        GameTree {
+            revision: self.tree_revision,
+            nodes,
+        }
+    }
+
     pub fn snapshot(&self) -> GameSnapshot {
         let node = self.current;
         let board = self.game.board_at(node);
@@ -873,6 +946,42 @@ impl GameSession {
         let index = self.line_index();
         GameSnapshot {
             revision: self.revision,
+            node: node as u32,
+            line_revision: self.line_revision,
+            tree_revision: self.tree_revision,
+            comment: self.game.comment(node).map(str::to_owned),
+            marks: self
+                .game
+                .marks(node)
+                .into_iter()
+                .map(|(point, mark)| MarkAt { point, mark })
+                .collect(),
+            continuations: self
+                .game
+                .children(node)
+                .iter()
+                .map(|&id| Continuation {
+                    node: id as u32,
+                    mv: self.game.last_move(id),
+                    tryout: self.game.is_tryout(id),
+                })
+                .collect(),
+            tryout: self.tryout.map(|id| id as u32),
+            changed: self.changed(),
+            can_undo: self.history.can_undo(),
+            can_redo: self.history.can_redo(),
+            save_as_first: self.save_as_first,
+            placed: self
+                .game
+                .placed_by(node)
+                .into_iter()
+                .map(|p| Placed {
+                    point: p.point,
+                    node: p.node as u32,
+                    number: p.number,
+                    branch_number: p.branch_number,
+                })
+                .collect(),
             name: self.name.clone(),
             info: self.game.info().clone(),
             rules: RulesState {
@@ -889,7 +998,7 @@ impl GameSession {
             move_number: self.game.move_number(node),
             line_index: index as u32,
             next_move: self.next_move().map(|(_, mv)| mv),
-            main_line_length: self
+            line_length: self
                 .selected_line
                 .iter()
                 .filter(|&&id| self.game.last_move(id).is_some())
@@ -927,6 +1036,45 @@ mod tests {
             node: 0,
             text: Some(text.into()),
         }
+    }
+
+    #[test]
+    fn tree_flags_follow_edits_and_their_inverses() {
+        let mut s = GameSession::open("flags.sgf", b"(;SZ[9]AB[aa];W[aa])", AnalysisRules::Chinese)
+            .unwrap();
+        assert_eq!(s.tree().nodes[1].flags, TreeNode::ILLEGAL);
+        s.edit(SessionEdit::SetupStone {
+            point: Point { x: 0, y: 0 },
+            stone: None,
+        })
+        .unwrap();
+        assert_eq!(s.tree_revision, 1);
+        assert_eq!(s.tree().nodes[1].flags, 0);
+        s.undo();
+        assert_eq!(s.tree_revision, 2);
+        assert_eq!(s.tree().nodes[1].flags, TreeNode::ILLEGAL);
+        s.redo();
+        s.edit(SessionEdit::TryoutStart).unwrap();
+        s.edit(SessionEdit::Play { mv: play(1, 1) }).unwrap();
+        let scratch = s.snapshot().node;
+        assert_eq!(s.tree().nodes.last().unwrap().flags, TreeNode::TRYOUT);
+        s.edit(SessionEdit::TryoutKeep { node: scratch }).unwrap();
+        assert_eq!(s.tree().nodes.last().unwrap().flags, 0);
+    }
+
+    #[test]
+    fn tree_preorder_follows_reordered_siblings() {
+        let mut s = branches();
+        s.edit(SessionEdit::Promote { node: 4 }).unwrap();
+        assert_eq!(
+            s.tree().nodes.iter().map(|n| n.id).collect::<Vec<_>>(),
+            [0, 1, 4, 5, 6, 2, 3]
+        );
+        s.undo();
+        assert_eq!(
+            s.tree().nodes.iter().map(|n| n.id).collect::<Vec<_>>(),
+            [0, 1, 2, 3, 4, 5, 6]
+        );
     }
 
     #[test]
@@ -1502,7 +1650,10 @@ mod tests {
             scoring: aji_core::game::Scoring::Area,
             details: None,
         };
-        assert_eq!(session.set_rules(Some(rules)), Ok(false));
+        assert_eq!(
+            session.edit(SessionEdit::SetRules { rules: Some(rules) }),
+            Ok(true)
+        );
         let snapshot = session.snapshot();
         assert_eq!(snapshot.rules.current, rules);
         assert!(!snapshot.rules.changed);

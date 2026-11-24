@@ -7,6 +7,7 @@ import type { AppEvent } from '../transport/generated/AppEvent';
 import type { Color } from '../transport/generated/Color';
 import type { GameInfo } from '../transport/generated/GameInfo';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
+import type { GameTree } from '../transport/generated/GameTree';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import type { Illegal } from '../transport/generated/Illegal';
 import type { Move } from '../transport/generated/Move';
@@ -256,12 +257,58 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
   let rules: AnalysisRules = record.fromFile;
   let revision = 0;
   let warnings: GameWarning[] = [];
+  let lineRevision = 0;
+  let treeRevision = 0;
+  let saveAsFirst = false;
+  // The linear scenario supports rules edits. Preserve their identity when redo is discarded.
+  const history: { id: number; before: AnalysisRules; after: AnalysisRules }[] = [];
+  let applied = 0;
+  let nextId = 0;
+  let savedId = 0;
+  const editId = () => history[applied - 1]?.id ?? 0;
+
+  function tree(): GameTree {
+    return {
+      revision: treeRevision,
+      nodes: nodes.map((node, id) => ({
+        id,
+        parent: id ? id - 1 : null,
+        color: id === 0 ? null : id % 2 ? 'black' : 'white',
+        mv: node.lastMove,
+        flags: (node.lastMove ? 0 : 4) | (node.illegal ? 8 : 0),
+      })),
+    };
+  }
+
+  function placed(): GameSnapshot['placed'] {
+    const stones = nodes[index].stones.slice();
+    const result: GameSnapshot['placed'] = [];
+    for (let i = index; i > 0; i--) {
+      const move = nodes[i].lastMove;
+      if (move?.type !== 'play') continue;
+      const at = move.y * record.size + move.x;
+      if (stones[at] !== (i % 2 ? 'black' : 'white')) continue;
+      result.push({ point: { x: move.x, y: move.y }, node: i, number: i, branchNumber: null });
+      stones[at] = null;
+    }
+    return result.reverse();
+  }
 
   function snapshot(): GameSnapshot {
     const node = nodes[index];
     const last = nodes.length - 1;
     return makeSnapshot({
       revision,
+      node: index,
+      lineRevision,
+      treeRevision,
+      continuations:
+        index < last ? [{ node: index + 1, mv: nodes[index + 1].lastMove, tryout: false }] : [],
+      saveAsFirst,
+      placed: placed(),
+      changed: savedId !== editId(),
+      canUndo: applied > 0,
+      canRedo: applied < history.length,
       name: record.name,
       info: record.info,
       rules: {
@@ -278,7 +325,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       moveNumber: index,
       lineIndex: index,
       nextMove: index < last ? nodes[index + 1].lastMove : null,
-      mainLineLength: last,
+      lineLength: last,
       atStart: index === 0,
       atEnd: index === last,
       illegal: node.illegal,
@@ -299,22 +346,29 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     }));
   }
 
-  function changed(withWarnings = false, withTrend = false): Response {
+  function changed(withWarnings = false, withTrend = false, withTree = false): Response {
     revision += 1;
+    if (withTrend) lineRevision++;
+    if (withTree) treeRevision++;
     const next = snapshot();
     emit({ type: 'gameSnapshot', snapshot: next });
-    // As the backend does on open, new and a rules change.
-    if (withTrend) emit({ type: 'gameTrend', revision, nodes: trend() });
+    if (withTree) emit({ type: 'gameTree', tree: tree() });
+    if (withTrend) emit({ type: 'gameTrend', revision: lineRevision, nodes: trend() });
     return { type: 'game', snapshot: next, warnings: withWarnings ? warnings : [] };
   }
 
-  function load(next: Record, nextWarnings: GameWarning[]): Response {
+  function load(next: Record, nextWarnings: GameWarning[], atEnd = false): Response {
     record = next;
     nodes = play(record);
-    index = 0;
+    index = atEnd ? nodes.length - 1 : 0;
+    history.length = 0;
+    applied = 0;
+    nextId = 0;
+    savedId = 0;
+    saveAsFirst = nextWarnings.some((w) => w.code === 'truncated' || w.code === 'repaired');
     rules = record.fromFile;
     warnings = nextWarnings;
-    return changed(true, true);
+    return changed(true, true, true);
   }
 
   /** The answer to a `game*` request, or `null` for any other request. */
@@ -341,7 +395,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         );
       case 'gameOpen': {
         const { record: next, warnings: found } = openByName(request.name);
-        return load(next, found);
+        return load(next, found, request.atEnd);
       }
       case 'gameNavigate': {
         const last = nodes.length - 1;
@@ -370,13 +424,41 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         index = target;
         return changed();
       }
-      case 'gameSetRules': {
-        const next = request.rules ?? record.fromFile;
+      case 'gameTree':
+        return { type: 'gameTree', ...tree() };
+      case 'gameEdit': {
+        if (request.edit.kind !== 'setRules') return null;
+        const next = request.edit.rules ?? record.fromFile;
         if (JSON.stringify(next) === JSON.stringify(rules))
           return { type: 'game', snapshot: snapshot(), warnings: [] };
         const effectChanged = !sameRulesEffect(rules, next);
+        if (effectChanged) {
+          history.splice(applied, history.length - applied, {
+            id: ++nextId,
+            before: rules,
+            after: next,
+          });
+          applied++;
+        }
         rules = next;
         return changed(false, effectChanged);
+      }
+      case 'gameUndo':
+        if (applied === 0) return { type: 'game', snapshot: snapshot(), warnings: [] };
+        rules = history[--applied].before;
+        return changed(false, true);
+      case 'gameRedo':
+        if (applied === history.length) return { type: 'game', snapshot: snapshot(), warnings: [] };
+        rules = history[applied++].after;
+        return changed(false, true);
+      case 'gameSaved': {
+        const wasChanged = editId() !== savedId;
+        const wasSaveAsFirst = saveAsFirst;
+        saveAsFirst = false;
+        savedId = request.editId;
+        return wasSaveAsFirst || wasChanged !== (savedId !== editId())
+          ? changed()
+          : { type: 'game', snapshot: snapshot(), warnings: [] };
       }
       case 'gamePreview':
         return {
@@ -384,7 +466,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
           preview: { stones: nodes[index].stones, captured: [], illegalAt: null },
         };
       case 'gameTrend':
-        return { type: 'trend', revision, nodes: trend() };
+        return { type: 'trend', revision: lineRevision, nodes: trend() };
       case 'gameExport':
         if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
         return {

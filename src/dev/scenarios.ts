@@ -444,7 +444,14 @@ export function scenarioTransport(
 
   const transport = createFakeTransport((request) => handle(request)) as ScenarioTransport;
   transport.unhandled = unhandled;
-  const game = createFakeGame((event) => transport.emit(event));
+  const game = createFakeGame((event) => {
+    // A new game or an effective rules change replaces the linear scenario's trend.
+    if (event.type === 'gameTrend') {
+      stopFakeJob();
+      results.clear();
+    }
+    transport.emit(event);
+  });
 
   // The scripted whole-game job and the results it left, by line index.
   const results = new Map<number, FakeResult>();
@@ -471,7 +478,7 @@ export function scenarioTransport(
     fakeJob = null;
   };
   if (name === 'job-running' || name === 'job-done') {
-    game({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '' });
+    game({ type: 'gameOpen', name: 'samsung-30-final-2.sgf', bytes: '', atEnd: false });
     if (name === 'job-running') {
       setTimeout(() => startFakeJob(settings.jobOptions), tick);
     } else {
@@ -819,12 +826,6 @@ export function scenarioTransport(
           nodes: trend.nodes.map((node, i) => ({ ...node, ...results.get(i) })),
         };
       }
-      case 'gameNew':
-      case 'gameOpen':
-      case 'gameSetRules':
-        stopFakeJob();
-        results.clear();
-        return game(request)!;
       default: {
         const answer = game(request);
         if (answer) return answer;

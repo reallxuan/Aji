@@ -182,15 +182,15 @@ export const newGame = (transport: Transport, size: number) =>
   gameReply(transport, { type: 'gameNew', size });
 
 /** `bytes` is the file, base64-encoded. */
-export const openGame = (transport: Transport, name: string, bytes: string) =>
-  gameReply(transport, { type: 'gameOpen', name, bytes });
+export const openGame = (transport: Transport, name: string, bytes: string, atEnd = false) =>
+  gameReply(transport, { type: 'gameOpen', name, bytes, atEnd });
 
 export const navigateGame = (transport: Transport, to: NavTarget) =>
   gameReply(transport, { type: 'gameNavigate', to });
 
 /** `null` goes back to the file's reading. */
 export const setGameRules = (transport: Transport, rules: AnalysisRules | null) =>
-  gameReply(transport, { type: 'gameSetRules', rules });
+  gameReply(transport, { type: 'gameEdit', edit: { kind: 'setRules', rules } });
 
 export const getGameSnapshot = (transport: Transport) =>
   gameReply(transport, { type: 'gameSnapshot' });
@@ -200,7 +200,11 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
 }
 
 export async function exportGame(transport: Transport): Promise<{ name: string; text: string }> {
-  const { name, text } = await expectType(transport, { type: 'gameExport' }, 'gameExport');
+  const { name, text } = await expectType(
+    transport,
+    { type: 'gameExport', options: { scope: 'game', clean: false, inPlace: false } },
+    'gameExport',
+  );
   return { name, text };
 }
 

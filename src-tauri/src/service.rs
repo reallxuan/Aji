@@ -17,7 +17,7 @@ use aji_manager::install::{
 use base64::Engine as _;
 use tokio::sync::{Mutex, mpsc, watch};
 
-use crate::game::{GameSession, NavTarget, OpenError};
+use crate::game::{GameSession, OpenError, Refusal};
 use crate::protocol::{
     AppEvent, AppInfo, CacheScope, ErrorCode, OsKind, ProtocolError, Request, Response,
     RunningEngine, ScoreMode, ScoreView,
@@ -216,15 +216,25 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         }),
         Request::SettingsSet { settings } => return set_settings(ctx, settings).await,
         Request::GameNew { size } => return game_new(ctx, size).await,
-        Request::GameOpen { name, bytes } => return game_open(ctx, name, bytes).await,
-        Request::GameNavigate { to } => return game_navigate(ctx, to).await,
+        Request::GameOpen {
+            name,
+            bytes,
+            at_end,
+        } => return game_open(ctx, name, bytes, at_end).await,
+        Request::GameNavigate { to } => return update_game(ctx, |s| Ok(s.navigate(to))).await,
+        Request::GameEdit { edit } => return update_game(ctx, |s| s.edit(edit)).await,
+        Request::GameUndo => return update_game(ctx, |s| Ok(s.undo())).await,
+        Request::GameRedo => return update_game(ctx, |s| Ok(s.redo())).await,
+        Request::GameSaved { edit_id, utf8: _ } => {
+            return update_game(ctx, |s| Ok(s.mark_saved(edit_id))).await;
+        }
+        Request::GameTree => return Ok(Response::GameTree(ctx.game.lock().await.tree())),
         Request::GameTrend => {
             let session = ctx.game.lock().await;
             let (revision, nodes) = follow::trend_of(ctx, &session, false).await;
             return Ok(Response::Trend { revision, nodes });
         }
         Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
-        Request::GameSetRules { rules } => return game_set_rules(ctx, rules).await,
         Request::GameSnapshot => {
             let session = ctx.game.lock().await;
             Ok(Response::Game {
@@ -232,7 +242,7 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 warnings: session.warnings().to_vec(),
             })
         }
-        Request::GameExport => return game_export(ctx).await,
+        Request::GameExport { options: _ } => return game_export(ctx).await,
         Request::JobStart { options } => return follow::job_start(ctx, options).await,
         Request::JobStop => {
             follow::stop_job(ctx).await;
@@ -301,6 +311,29 @@ pub(crate) fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolErro
     }
 }
 
+impl From<Refusal> for ProtocolError {
+    fn from(refusal: Refusal) -> Self {
+        match refusal {
+            Refusal::Illegal(reason) => {
+                let detail = match reason {
+                    aji_core::game::Illegal::Occupied => "occupied",
+                    aji_core::game::Illegal::Suicide => "suicide",
+                    aji_core::game::Illegal::Ko => "ko",
+                    aji_core::game::Illegal::OffBoard => "offBoard",
+                };
+                ProtocolError {
+                    code: ErrorCode::GameIllegalMove,
+                    message: format!("illegal move: {detail}"),
+                    detail: Some(detail.into()),
+                }
+            }
+            Refusal::EndTryoutFirst => error(ErrorCode::GameEndTryoutFirst, "end try-out first"),
+            Refusal::NoSuchNode => error(ErrorCode::GameNoSuchNode, "no such node"),
+            Refusal::InvalidRules => error(ErrorCode::Internal, "komi out of range"),
+        }
+    }
+}
+
 impl From<OpenError> for ProtocolError {
     fn from(e: OpenError) -> Self {
         match e {
@@ -356,17 +389,24 @@ fn lizzie_rows(session: &GameSession) -> Vec<Row> {
 /// same order. The snapshot goes first: an engine that has analysed the position answers at once
 /// from its cache, and a client drops analysis for a position it has not been told of. An engine
 /// that cannot take the position (shut down) is logged: the board still moves.
-async fn publish(ctx: &AppContext, session: &GameSession, warnings: bool) -> Response {
+async fn publish(
+    ctx: &AppContext,
+    session: &GameSession,
+    warnings: bool,
+    send_position: bool,
+) -> Response {
     let snapshot = session.snapshot();
     ctx.events.emit(AppEvent::GameSnapshot {
-        snapshot: snapshot.clone(),
+        snapshot: Box::new(snapshot.clone()),
     });
-    let sent = match session.position() {
-        Some(position) => ctx.engine.set_position_next(position, session.next()).await,
-        None => ctx.engine.clear_position().await,
-    };
-    if let Err(e) = sent {
-        eprintln!("aji: the engine did not take the position: {e}");
+    if send_position {
+        let sent = match session.position() {
+            Some(position) => ctx.engine.set_position_next(position, session.next()).await,
+            None => ctx.engine.clear_position().await,
+        };
+        if let Err(e) = sent {
+            eprintln!("aji: the engine did not take the position: {e}");
+        }
     }
     Response::Game {
         snapshot: Box::new(snapshot),
@@ -389,7 +429,10 @@ async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError>
     let mut session = ctx.game.lock().await;
     follow::stop_job(ctx).await;
     session.replace(next);
-    let reply = publish(ctx, &session, false).await;
+    let reply = publish(ctx, &session, false, true).await;
+    ctx.events.emit(AppEvent::GameTree {
+        tree: session.tree(),
+    });
     push_trend(ctx, &session).await;
     Ok(reply)
 }
@@ -400,6 +443,7 @@ async fn game_open(
     ctx: &AppContext,
     name: String,
     bytes: String,
+    at_end: bool,
 ) -> Result<Response, ProtocolError> {
     // Base64 is 4 bytes per 3; anything longer than this decodes to more than the limit.
     if bytes.len() > (crate::game::MAX_SGF_BYTES / 3 + 1) * 4 {
@@ -411,7 +455,11 @@ async fn game_open(
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(bytes.as_bytes())
             .map_err(|e| error(ErrorCode::Internal, format!("bytes are not base64: {e}")))?;
-        let session = GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)?;
+        let mut session =
+            GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)?;
+        if at_end {
+            session.open_at_end();
+        }
         let rows = lizzie_rows(&session);
         Ok::<_, ProtocolError>((session, rows))
     })
@@ -424,7 +472,10 @@ async fn game_open(
     if !rows.is_empty() {
         ctx.engine.import(rows).await;
     }
-    let reply = publish(ctx, &session, true).await;
+    let reply = publish(ctx, &session, true, true).await;
+    ctx.events.emit(AppEvent::GameTree {
+        tree: session.tree(),
+    });
     push_trend(ctx, &session).await;
     if ui.analyse_on_open
         && let Err(e) = follow::start_on(ctx, &session, ui.job_options).await
@@ -434,43 +485,37 @@ async fn game_open(
     Ok(reply)
 }
 
-async fn game_navigate(ctx: &AppContext, to: NavTarget) -> Result<Response, ProtocolError> {
-    let mut session = ctx.game.lock().await;
-    Ok(match session.navigate(to) {
-        true => publish(ctx, &session, false).await,
-        false => unchanged(&session),
-    })
-}
-
-async fn game_set_rules(
+async fn update_game(
     ctx: &AppContext,
-    rules: Option<AnalysisRules>,
+    update: impl FnOnce(&mut GameSession) -> Result<bool, Refusal>,
 ) -> Result<Response, ProtocolError> {
     let mut session = ctx.game.lock().await;
-    let revision = session.revision();
-    match session.set_rules(rules) {
-        Ok(true) => {
-            follow::stop_job(ctx).await;
-            let reply = publish(ctx, &session, false).await;
-            push_trend(ctx, &session).await;
-            Ok(reply)
-        }
-        Ok(false) if session.revision() != revision => {
-            let snapshot = session.snapshot();
-            ctx.events.emit(AppEvent::GameSnapshot {
-                snapshot: snapshot.clone(),
-            });
-            Ok(Response::Game {
-                snapshot: Box::new(snapshot),
-                warnings: Vec::new(),
-            })
-        }
-        Ok(false) => Ok(unchanged(&session)),
-        Err(rules) => Err(error(
-            ErrorCode::Internal,
-            format!("komi out of range: {rules:?}"),
-        )),
+    let (line, tree) = (session.line_revision, session.tree_revision);
+    let current = session.current_node();
+    let rules = session.rules();
+    if !update(&mut session)? {
+        return Ok(unchanged(&session));
     }
+    if !rules.same_effect(&session.rules()) {
+        follow::stop_job(ctx).await;
+    }
+    let line_changed = session.line_revision != line;
+    let reply = publish(
+        ctx,
+        &session,
+        false,
+        current != session.current_node() || line_changed,
+    )
+    .await;
+    if session.tree_revision != tree {
+        ctx.events.emit(AppEvent::GameTree {
+            tree: session.tree(),
+        });
+    }
+    if line_changed {
+        push_trend(ctx, &session).await;
+    }
+    Ok(reply)
 }
 
 /// Forgets results. `game` and `all` stop the job: its passes would only search them again.
@@ -1477,7 +1522,7 @@ mod tests {
     use aji_core::sgf::parse_sgf;
     use aji_core::{BoardSize, Komi, Move, Point};
 
-    use crate::game::{GameWarning, NavTarget};
+    use crate::game::{GameWarning, NavTarget, SessionEdit};
     use crate::protocol::GameSnapshot;
 
     const SAMSUNG: &[u8] =
@@ -1496,6 +1541,7 @@ mod tests {
         handle(
             ctx,
             Request::GameOpen {
+                at_end: false,
                 name: name.into(),
                 bytes: b64(bytes),
             },
@@ -1512,6 +1558,183 @@ mod tests {
 
     async fn navigate(ctx: &AppContext, to: NavTarget) -> GameSnapshot {
         snap(handle(ctx, Request::GameNavigate { to }).await).0
+    }
+
+    async fn wire(ctx: &AppContext, request: serde_json::Value) -> Result<Response, ProtocolError> {
+        handle(ctx, serde_json::from_value(request).unwrap()).await
+    }
+
+    #[tokio::test]
+    async fn edit_undo_redo_answer_with_snapshots() {
+        use serde_json::json;
+        let ctx = ctx();
+        let run = |request| wire(&ctx, request);
+        let play = snap(run(json!({"type":"gameEdit","edit":{"kind":"pass"}})).await).0;
+        assert_eq!((play.move_number, play.last_move), (1, Some(Move::Pass)));
+        assert!(play.can_undo);
+        let undone = snap(run(json!({"type":"gameUndo"})).await).0;
+        assert_eq!(undone.move_number, 0);
+        assert!(undone.can_redo);
+        let redone = snap(run(json!({"type":"gameRedo"})).await).0;
+        assert_eq!(redone.move_number, 1);
+        assert!(redone.changed);
+    }
+
+    #[tokio::test]
+    async fn tree_event_only_on_structure_changes() {
+        use serde_json::json;
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "branches.sgf", b"(;SZ[9];B[aa](;W[bb])(;W[cc]))")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Node(3)).await;
+        let edit = |text| {
+            wire(
+                &ctx,
+                json!({"type":"gameEdit","edit":{"kind":"setComment","node":3,"text":text}}),
+            )
+        };
+        edit("one").await.unwrap();
+        edit("two").await.unwrap();
+        wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
+        wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
+        wire(&ctx, json!({"type":"gameRedo"})).await.unwrap();
+        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        let events: Vec<_> = recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .collect();
+        let trees: Vec<_> = events
+            .iter()
+            .filter(|e| e["type"] == "gameTree")
+            .map(|e| &e["tree"])
+            .collect();
+        assert_eq!(
+            trees
+                .iter()
+                .map(|t| t["revision"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            [1, 2, 3, 4, 5]
+        );
+        assert_eq!(trees[1]["nodes"][3]["flags"], 1);
+        let lines: Vec<_> = events
+            .iter()
+            .filter(|e| e["type"] == "gameTrend")
+            .map(|e| e["revision"].as_u64().unwrap())
+            .collect();
+        assert_eq!(lines, [1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn rules_edit_stops_the_job() {
+        use serde_json::json;
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        for request in [
+            json!({"type":"gameEdit","edit":{"kind":"setRules","rules":{"kind":"japaneseKorean"}}}),
+            json!({"type":"gameUndo"}),
+            json!({"type":"gameRedo"}),
+        ] {
+            started(&ctx).await;
+            wire(&ctx, request).await.unwrap();
+            assert!(!ctx.follow.lock().unwrap().flow.is_running());
+        }
+    }
+
+    #[tokio::test]
+    async fn an_illegal_move_is_refused_with_its_reason() {
+        use serde_json::json;
+        let ctx = ctx();
+        open(&ctx, "occupied.sgf", b"(;SZ[9]AB[aa])").await.unwrap();
+        let request =
+            json!({"type":"gameEdit","edit":{"kind":"play","mv":{"type":"play","x":0,"y":0}}});
+        let error = serde_json::to_value(wire(&ctx, request).await.unwrap_err()).unwrap();
+        assert_eq!(error["code"], "gameIllegalMove");
+        assert_eq!(error["detail"], "occupied");
+    }
+
+    #[tokio::test]
+    async fn open_at_end_lands_on_the_last_move() {
+        use serde_json::json;
+        let ctx = ctx();
+        let request = json!({"type":"gameOpen","name":"end.sgf","bytes":b64(b"(;SZ[9];B[aa];W[];C[end]"),"atEnd":true});
+        let s = snap(wire(&ctx, request).await).0;
+        assert_eq!((s.line_index, s.last_move), (2, Some(Move::Pass)));
+        assert!(s.save_as_first);
+        let s = snap(wire(&ctx, json!({"type":"gameSaved","editId":0,"utf8":true})).await).0;
+        assert!(!s.save_as_first);
+    }
+
+    #[tokio::test]
+    #[ignore = "release performance budget"]
+    async fn tree_payload_for_ten_thousand_nodes_is_fast() {
+        use serde_json::json;
+        let ctx = ctx();
+        let branch = format!("({})", ";B[];W[]".repeat(10));
+        let text = format!("(;SZ[19]{})", branch.repeat(500));
+        open(&ctx, "tree.sgf", text.as_bytes()).await.unwrap();
+        let now = std::time::Instant::now();
+        let tree = wire(&ctx, json!({"type":"gameTree"})).await.unwrap();
+        let elapsed = now.elapsed();
+        let value = serde_json::to_value(tree).unwrap();
+        assert_eq!(value["nodes"].as_array().unwrap().len(), 10001);
+        eprintln!("10,001-node tree payload: {elapsed:?}");
+        assert!(elapsed < std::time::Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    #[ignore = "release performance budget"]
+    async fn edit_undo_redo_on_three_hundred_moves() {
+        let ctx = ctx();
+        let source = parse_sgf(std::str::from_utf8(SAMSUNG).unwrap()).unwrap();
+        let moves = &source.games[0].nodes[1..];
+        let mut fixture = String::from("(;SZ[19]");
+        for i in 0..300 {
+            if i % 6 == 0 {
+                fixture.push('(');
+            }
+            let color = if i % 2 == 0 { "B" } else { "W" };
+            let point = moves
+                .get(i)
+                .and_then(|node| node.first(color))
+                .unwrap_or("");
+            fixture.push_str(&format!(";{color}[{point}]"));
+        }
+        fixture.push_str(&")(;B[])".repeat(50));
+        fixture.push(')');
+        open(&ctx, "performance.sgf", fixture.as_bytes())
+            .await
+            .unwrap();
+        let last = navigate(&ctx, NavTarget::Last).await;
+        assert_eq!(last.line_length, 300);
+        let tree = ctx.game.lock().await.tree();
+        assert_eq!(tree.nodes.len(), 351);
+        for request in [
+            Request::GameEdit {
+                edit: SessionEdit::Pass,
+            },
+            Request::GameUndo,
+            Request::GameRedo,
+        ] {
+            let now = std::time::Instant::now();
+            let s = snap(handle(&ctx, request.clone()).await).0;
+            let elapsed = now.elapsed();
+            assert_eq!(
+                s.move_number,
+                if request == Request::GameUndo {
+                    300
+                } else {
+                    301
+                }
+            );
+            eprintln!("{request:?} on 300 moves / 50 variations: {elapsed:?}");
+            assert!(elapsed < std::time::Duration::from_millis(50));
+        }
     }
 
     /// The game the tests opened, built again, to compute the positions the engine should get.
@@ -1547,7 +1770,7 @@ mod tests {
         let (s, warnings) = snap(open(&ctx, "small.sgf", SMALL.as_bytes()).await);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(s.name.as_deref(), Some("small"));
-        assert_eq!((s.size, s.move_number, s.main_line_length), (9, 0, 4));
+        assert_eq!((s.size, s.move_number, s.line_length), (9, 0, 4));
         assert!(s.at_start && !s.at_end && s.has_moves);
         let game = reference(SMALL.as_bytes());
         let rules = AnalysisRules::Custom {
@@ -1580,7 +1803,13 @@ mod tests {
         let s = navigate(&ctx, NavTarget::Next).await;
         assert_eq!(s.move_number, 2);
 
-        let Ok(Response::GameExport { name, text }) = handle(&ctx, Request::GameExport).await
+        let Ok(Response::GameExport { name, text }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
         else {
             panic!("expected an export");
         };
@@ -1646,12 +1875,14 @@ mod tests {
         assert_eq!(trend_events(&recorded), 1);
         handle(
             &ctx,
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::Custom {
-                    details: None,
-                    komi: Komi::new(0.5).unwrap(),
-                    scoring: Scoring::Area,
-                }),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::Custom {
+                        details: None,
+                        komi: Komi::new(0.5).unwrap(),
+                        scoring: Scoring::Area,
+                    }),
+                },
             },
         )
         .await
@@ -1719,8 +1950,10 @@ mod tests {
         let s = snap(
             handle(
                 &ctx,
-                Request::GameSetRules {
-                    rules: Some(custom),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules {
+                        rules: Some(custom),
+                    },
                 },
             )
             .await,
@@ -1735,7 +1968,14 @@ mod tests {
         assert_eq!(expected.komi, Komi::new(7.0).unwrap());
         assert_eq!(expected.rules, aji_core::Rules::Japanese.into());
         assert_eq!(ctx.engine.status().position, Some(expected.key()));
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport { text, .. }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert!(
@@ -1743,10 +1983,26 @@ mod tests {
             "{text}"
         );
 
-        let s = snap(handle(&ctx, Request::GameSetRules { rules: None }).await).0;
+        let s = snap(
+            handle(
+                &ctx,
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules { rules: None },
+                },
+            )
+            .await,
+        )
+        .0;
         assert!(!s.rules.changed);
         assert_eq!(s.rules.current, s.rules.from_file);
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport { text, .. }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert!(
@@ -1759,9 +2015,14 @@ mod tests {
             komi: Komi::new(151.0).unwrap(),
             scoring: Scoring::Area,
         };
-        let error = handle(&ctx, Request::GameSetRules { rules: Some(wild) })
-            .await
-            .unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules { rules: Some(wild) },
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::Internal);
     }
 
@@ -1791,7 +2052,14 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.code, ErrorCode::SgfUnsupportedSize);
         assert_eq!(snap(handle(&ctx, Request::GameSnapshot).await).0.size, 13);
-        let error = handle(&ctx, Request::GameExport).await.unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::GameEmpty);
     }
 
@@ -1821,6 +2089,7 @@ mod tests {
         let error = handle(
             &ctx,
             Request::GameOpen {
+                at_end: false,
                 name: "bad.sgf".into(),
                 bytes: "not base64!".into(),
             },
@@ -1846,7 +2115,14 @@ mod tests {
         let (s, warnings) = snap(open(&ctx, "two.sgf", COLLECTION).await);
         assert_eq!(warnings, [GameWarning::ExtraGames { count: 1 }]);
         assert_eq!(s.info.game_name.as_deref(), Some("first"));
-        let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport { text, .. }) = handle(
+            &ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!("expected an export");
         };
         assert_eq!(parse_sgf(&text).unwrap().games.len(), 2, "{text}");
@@ -1885,8 +2161,10 @@ mod tests {
         navigate(&ctx, NavTarget::Previous).await;
         handle(
             &ctx,
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::Chinese),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::Chinese),
+                },
             },
         )
         .await
@@ -1984,17 +2262,21 @@ mod tests {
                 },
             ),
             (
-                json!({"type": "gameSetRules", "rules": null}),
-                Request::GameSetRules { rules: None },
+                json!({"type":"gameEdit","edit":{"kind":"setRules","rules":null}}),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules { rules: None },
+                },
             ),
             (
-                json!({"type": "gameSetRules", "rules": {"kind": "custom", "komi": 7, "scoring": "area"}}),
-                Request::GameSetRules {
-                    rules: Some(AnalysisRules::Custom {
-                        details: None,
-                        komi: Komi::new(7.0).unwrap(),
-                        scoring: Scoring::Area,
-                    }),
+                json!({"type":"gameEdit","edit":{"kind":"setRules","rules":{"kind":"custom","komi":7,"scoring":"area"}}}),
+                Request::GameEdit {
+                    edit: SessionEdit::SetRules {
+                        rules: Some(AnalysisRules::Custom {
+                            details: None,
+                            komi: Komi::new(7.0).unwrap(),
+                            scoring: Scoring::Area,
+                        }),
+                    },
                 },
             ),
             (
@@ -2188,11 +2470,14 @@ mod tests {
             Request::JobStop,
             Request::GameNew { size: 9 },
             Request::GameOpen {
+                at_end: false,
                 name: "nine.sgf".into(),
                 bytes: b64(NINE.as_bytes()),
             },
-            Request::GameSetRules {
-                rules: Some(AnalysisRules::JapaneseKorean),
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
             },
             Request::CacheClear {
                 scope: CacheScope::Game,
@@ -2505,7 +2790,14 @@ mod tests {
     }
 
     async fn export_text(ctx: &AppContext) -> String {
-        let Ok(Response::GameExport { text, .. }) = handle(ctx, Request::GameExport).await else {
+        let Ok(Response::GameExport { text, .. }) = handle(
+            ctx,
+            Request::GameExport {
+                options: Default::default(),
+            },
+        )
+        .await
+        else {
             panic!()
         };
         text

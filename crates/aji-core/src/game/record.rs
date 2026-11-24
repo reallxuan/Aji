@@ -429,7 +429,8 @@ impl Game {
         }
     }
 
-    fn recorded_move(&self, node: NodeId) -> Result<Option<(Color, Move)>, Illegal> {
+    /// Reads the move property without computing or caching a board.
+    pub fn recorded_move(&self, node: NodeId) -> Result<Option<(Color, Move)>, Illegal> {
         let sgf = self.sgf(node);
         let Some((color, value)) = [("B", Color::Black), ("W", Color::White)]
             .into_iter()
