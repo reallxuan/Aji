@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatLead, formatPercent } from '../analysis/format';
 import { coverage, swings, type SwingBy, type SwingRow } from '../analysis/swings';
-import { useTrendStore } from '../analysis/trendStore';
+import { currentTrendLine, useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useDeviceStore } from '../device/deviceStore';
 import { navigate } from '../game/actions';
@@ -113,10 +113,13 @@ function Side({ color, rows, current }: { color: Color; rows: SwingRow[]; curren
   const ctx = useActionContext();
   const size = useGameStore((s) => s.snapshot?.size ?? 19);
   const nodes = useTrendStore((s) => s.nodes);
+  const revision = useTrendStore((s) => s.lineRevision);
   const name = t(`swings.${color}`);
   // The position before the move: KataGo's candidates there, the move played among them.
-  const before = (row: SwingRow) =>
-    void navigate(ctx, { move: nodes[row.lineIndex - 1]?.moveNumber ?? row.moveNumber - 1 });
+  const before = (row: SwingRow) => {
+    const parent = nodes[row.lineIndex - 1];
+    if (parent && currentTrendLine(revision)) void navigate(ctx, { node: parent.node });
+  };
 
   return (
     <section role="region" aria-label={name} className="min-w-0 tabular-nums">

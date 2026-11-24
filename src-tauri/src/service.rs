@@ -2346,6 +2346,59 @@ mod tests {
         assert!(nodes.iter().all(|n| n.stats.is_none()), "no engine ran");
     }
 
+    #[tokio::test]
+    async fn trend_includes_replayed_side_and_job_eligibility() {
+        use serde_json::json;
+        let mut ctx = ctx();
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        open(&ctx, "setup.sgf", b"(;SZ[9]AB[aa]PL[W];W[bb];C[note])")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Last).await;
+        wire(
+            &ctx,
+            json!({"type":"gameEdit","edit":{"kind":"tryoutStart"}}),
+        )
+        .await
+        .unwrap();
+        wire(
+            &ctx,
+            json!({"type":"gameEdit","edit":{"kind":"play","mv":{"type":"play","x":3,"y":3}}}),
+        )
+        .await
+        .unwrap();
+        let reply = wire(&ctx, json!({"type":"gameTrend"})).await.unwrap();
+        let value = serde_json::to_value(reply).unwrap();
+        let nodes = value["nodes"].as_array().unwrap();
+        let sides: Vec<_> = nodes.iter().map(|n| (&n["toPlay"], &n["tryout"])).collect();
+        assert_eq!(
+            serde_json::to_value(sides).unwrap(),
+            json!([
+                ["white", false],
+                ["black", false],
+                ["black", false],
+                ["white", true]
+            ])
+        );
+        let scratch = nodes[3]["node"].clone();
+        for (request, expected_tryout) in [
+            (
+                json!({"type":"gameEdit","edit":{"kind":"tryoutKeep","node":scratch}}),
+                false,
+            ),
+            (json!({"type":"gameUndo"}), true),
+            (json!({"type":"gameRedo"}), false),
+        ] {
+            recorded.0.lock().unwrap().clear();
+            wire(&ctx, request).await.unwrap();
+            let events = recorded.0.lock().unwrap();
+            assert!(events.iter().any(|event| matches!(event,
+                AppEvent::GameTrend{nodes,..} if nodes[3].tryout == expected_tryout
+            )));
+        }
+    }
+
     fn trend_events(recorded: &Recorded) -> usize {
         recorded
             .0

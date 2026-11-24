@@ -7,13 +7,13 @@ import { useActionContext } from './useActionContext';
  * Navigation for held keys and the wheel: at most one request per animation frame, the latest
  * target winning, so a burst of key repeats or wheel events never queues up behind itself.
  */
-export function useFrameNavigate(): (to: NavTarget) => void {
+export function useFrameNavigate(): (to: NavTarget, isCurrent?: () => boolean) => void {
   const ctx = useActionContext();
   const latest = useRef(ctx);
   useLayoutEffect(() => {
     latest.current = ctx;
   });
-  const pending = useRef<NavTarget | null>(null);
+  const pending = useRef<{ to: NavTarget; isCurrent?: () => boolean } | null>(null);
   const frame = useRef<number | null>(null);
 
   useEffect(
@@ -23,14 +23,15 @@ export function useFrameNavigate(): (to: NavTarget) => void {
     [],
   );
 
-  return useCallback((to: NavTarget) => {
-    pending.current = to;
+  return useCallback((to: NavTarget, isCurrent?: () => boolean) => {
+    pending.current = { to, isCurrent };
     if (frame.current !== null) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = null;
       const target = pending.current;
       pending.current = null;
-      if (target !== null) void navigate(latest.current, target);
+      if (target && (!target.isCurrent || target.isCurrent()))
+        void navigate(latest.current, target.to);
     });
   }, []);
 }

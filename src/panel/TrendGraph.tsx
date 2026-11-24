@@ -7,7 +7,7 @@ import { CapturesLine } from './CapturesLine';
 import { CoverageStrip } from './CoverageStrip';
 import { JobStatus } from './JobStatus';
 import { plotRuns, plotted, scoreRange } from '../analysis/trend';
-import { useTrendStore } from '../analysis/trendStore';
+import { currentTrendLine, useTrendStore } from '../analysis/trendStore';
 import { moveLabel } from '../board/coordinates';
 import { useGameStore } from '../game/gameStore';
 import { useDeviceStore } from '../device/deviceStore';
@@ -63,7 +63,7 @@ function viewed(
 }
 
 /**
- * The chosen side's win rate and lead over the main line (design 5.5, 13.1): one slot per main-line node, gaps
+ * The chosen side's win rate and lead over the selected line (design 5.14): one slot per node, gaps
  * left empty, the current node dashed. Hover shows a node's
  * numbers; click or drag goes there. `width` is for tests; the panel's width otherwise.
  */
@@ -77,6 +77,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
   const lang = i18n.language;
   const panelWidth = usePanelWidth();
   const W = width ?? panelWidth;
+  const revision = useTrendStore((s) => s.lineRevision);
   const stored = useTrendStore((s) => s.nodes);
   const perspective = useDeviceStore((s) => s.settings.perspective);
   const boardKomi = useBoardKomi();
@@ -108,9 +109,9 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
     return Math.max(0, Math.min(nodes.length - 1, i));
   };
   const goTo = (i: number) => {
-    if (!nodes[i] || dragging.current === i) return;
+    if (!nodes[i] || dragging.current === i || !currentTrendLine(revision)) return;
     dragging.current = i;
-    go({ move: nodes[i].moveNumber });
+    go({ node: nodes[i].node }, () => currentTrendLine(revision));
   };
 
   const line = (y: (i: number) => number, name: string, color: string, stroke: number) =>

@@ -274,6 +274,10 @@ pub struct TrendNode {
     pub stats: Option<TrendStats>,
     /// The node's move's loss (design 5.1); `null` without a move or results.
     pub loss: Option<Loss>,
+    // The replayed side to move; absent where no engine position exists.
+    pub to_play: Option<Color>,
+    // A visible scratch node, excluded from whole-game jobs.
+    pub tryout: bool,
 }
 
 /// A trend node whose result changed, by its index on the selected line.
@@ -836,6 +840,8 @@ mod tests {
         let node = TrendNode {
             node: 7,
             key: Some(PositionKey(12)),
+            to_play: Some(Color::Black),
+            tryout: false,
             move_number: 3,
             mover: Some(Color::White),
             mv: Some(Move::Pass),
@@ -846,7 +852,7 @@ mod tests {
             }),
             loss: None,
         };
-        let want = json!({"node": 7, "key": "000000000000000c", "moveNumber": 3, "mover": "white", "move": {"type": "pass"},
+        let want = json!({"node": 7, "key": "000000000000000c", "toPlay": "black", "tryout": false, "moveNumber": 3, "mover": "white", "move": {"type": "pass"},
                           "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80},
                           "loss": null});
         assert_eq!(

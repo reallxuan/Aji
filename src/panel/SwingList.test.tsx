@@ -2,7 +2,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import { resetTrendStore, useTrendStore } from '../analysis/trendStore';
 import { resetDeviceStore, useDeviceStore } from '../device/deviceStore';
-import { resetGameStore } from '../game/gameStore';
+import { resetGameStore, useGameStore } from '../game/gameStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { makeSnapshot } from '../game/testing';
 import type { Loss } from '../transport/generated/Loss';
@@ -27,9 +27,11 @@ function line(losses: Record<number, Loss> = SWINGS, analysedTo = 12): TrendNode
   return Array.from({ length: 12 }, (_, i) => {
     const analysed = i < analysedTo;
     return {
-      node: i,
+      node: i + 200,
       key: i.toString(16).padStart(16, '0'),
       moveNumber: i,
+      tryout: false,
+      toPlay: i % 2 ? 'white' : 'black',
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move: i === 0 ? null : { type: 'play', x: i, y: 3 },
       stats: analysed ? { winrate: 0.5, scoreLead: 0, visits: 100 } : null,
@@ -42,7 +44,13 @@ function line(losses: Record<number, Loss> = SWINGS, analysedTo = 12): TrendNode
 function mount(nodes: TrendNode[] = line(), lineIndex = 6) {
   useTrendStore.getState().setNodes(nodes, 1);
   return renderWithGame(<SwingList />, {
-    snapshot: makeSnapshot({ revision: 1, lineIndex, moveNumber: lineIndex, lineLength: 11 }),
+    snapshot: makeSnapshot({
+      revision: 1,
+      lineRevision: 1,
+      lineIndex,
+      moveNumber: lineIndex,
+      lineLength: 11,
+    }),
   });
 }
 
@@ -84,7 +92,7 @@ it('click_goes_to_the_position_before', async () => {
   await act(async () => {
     fireEvent.click(row(5));
   });
-  expect(requests).toContainEqual({ type: 'gameNavigate', to: { move: 4 } });
+  expect(requests).toContainEqual({ type: 'gameNavigate', to: { node: 204 } });
 });
 
 it('current_move_row_is_highlighted', () => {
@@ -111,4 +119,16 @@ it('no_results_show_the_empty_state', () => {
 it('a whole game of results has no footer', () => {
   mount();
   expect(screen.queryByText(/只有/)).toBeNull();
+});
+
+it('a swing row waits for the replacement line before navigating by node ID', async () => {
+  const { requests } = mount();
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, lineRevision: 2 })));
+  fireEvent.click(row(5));
+  expect(requests.filter((r) => r.type === 'gameNavigate')).toHaveLength(0);
+  act(() => useTrendStore.getState().setNodes(line(), 2));
+  await act(async () => {
+    fireEvent.click(row(5));
+  });
+  expect(requests).toContainEqual({ type: 'gameNavigate', to: { node: 204 } });
 });

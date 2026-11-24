@@ -120,6 +120,8 @@ pub(crate) async fn trend_of(
             key: node.key,
             move_number: node.move_number,
             mover: node.mover,
+            to_play: node.to_play,
+            tryout: node.tryout,
             mv: node.mv,
             stats,
             loss,

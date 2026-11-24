@@ -143,6 +143,8 @@ describe('the scenarios’ fake game', () => {
     expect(reply.nodes[0]).toEqual({
       node: 0,
       key: '0000000000001000',
+      toPlay: 'black',
+      tryout: false,
       moveNumber: 0,
       mover: null,
       move: null,

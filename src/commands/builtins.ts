@@ -1,6 +1,8 @@
 import { useEstimateStore } from '../analysis/estimateStore';
 import { useViewStore } from '../analysis/viewStore';
 import { openFromPicker, saveAs, startNewGame } from '../game/actions';
+import { edit, undo, redo } from '../game/editActions';
+import { useModeStore } from '../edit/modeStore';
 import { useGameStore } from '../game/gameStore';
 import { clearAnalysis, openJobPanel, stopGameJob } from '../job/actions';
 import { useJobStore } from '../job/jobStore';
@@ -43,6 +45,33 @@ const page = (id: CommandId, by: number) =>
 
 /** Today's commands: the board's keys (design 5.7, M7 design 5.10) and the file chords. */
 export const BUILTINS: Command[] = [
+  step('nav.previousSibling', 'previousSibling'),
+  step('nav.nextSibling', 'nextSibling'),
+  press('nav.mainLine', (ctx) => ctx.go('mainLine')),
+  press('nav.escape', (ctx) => {
+    const modes = useModeStore.getState();
+    if (modes.mode !== 'normal') modes.setMode('normal');
+    else if (useGameStore.getState().snapshot?.tryout != null)
+      void edit(ctx.actions, { kind: 'tryoutEnd' });
+    else ctx.go('branchPoint');
+  }),
+  press('edit.undo', (ctx) => {
+    if (useGameStore.getState().snapshot?.canUndo) void undo(ctx.actions);
+  }),
+  press('edit.redo', (ctx) => {
+    if (useGameStore.getState().snapshot?.canRedo) void redo(ctx.actions);
+  }),
+  press('edit.tryout', (ctx) => {
+    const snapshot = useGameStore.getState().snapshot;
+    const { active, starting } = useScoringStore.getState();
+    if (snapshot && !active && !starting)
+      void edit(ctx.actions, { kind: snapshot.tryout === null ? 'tryoutStart' : 'tryoutEnd' });
+  }),
+  press('edit.deleteFrom', (ctx) => {
+    const snapshot = useGameStore.getState().snapshot;
+    if (snapshot && !snapshot.atStart)
+      void edit(ctx.actions, { kind: 'deleteFrom', node: snapshot.node });
+  }),
   step('nav.previous', 'previous'),
   step('nav.next', 'next'),
   step('nav.first', 'first'),
@@ -71,7 +100,7 @@ export const BUILTINS: Command[] = [
     (ctx) =>
       void useScoringStore
         .getState()
-        .start({ transport: ctx.actions.transport, engine: ctx.engine }),
+        .start({ transport: ctx.actions.transport, engine: ctx.engine, t: ctx.actions.t }),
   ),
   press('estimate.toggle', () => useEstimateStore.getState().toggle()),
   press('candidates.toggleHidden', () => useViewStore.getState().toggleHidden(), {

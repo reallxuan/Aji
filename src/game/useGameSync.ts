@@ -5,6 +5,7 @@ import { usePlatformFiles } from '../platform/PlatformProvider';
 import { getGameSnapshot } from '../transport/api';
 import { useTransport } from '../transport/TransportProvider';
 import { useGameStore } from './gameStore';
+import { useTreeSync } from './useTreeSync';
 import { windowTitle } from './title';
 
 /**
@@ -13,6 +14,7 @@ import { windowTitle } from './title';
  * first engine status are in, so the panel's first frame shows neither half alone.
  */
 export function useGameSync(): { ready: boolean } {
+  useTreeSync();
   const transport = useTransport();
   const engine = useEngineStoreApi();
   const files = usePlatformFiles();

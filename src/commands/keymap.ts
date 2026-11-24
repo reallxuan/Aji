@@ -23,6 +23,14 @@ export function keyName(key: string): string {
 }
 
 const BOARD: Array<[string, CommandId]> = [
+  ['V', 'edit.tryout'],
+  ['Delete', 'edit.deleteFrom'],
+  ['Backspace', 'edit.deleteFrom'],
+  ['[', 'nav.previousSibling'],
+  [']', 'nav.nextSibling'],
+  ['B', 'nav.mainLine'],
+  ['Escape', 'nav.escape'],
+  ['N', 'view.moveNumbers'],
   ['ArrowLeft', 'nav.previous'],
   ['ArrowUp', 'nav.previous'],
   ['ArrowRight', 'nav.next'],
@@ -38,6 +46,8 @@ const BOARD: Array<[string, CommandId]> = [
 ];
 
 const FILE: Array<[string, CommandId]> = [
+  ['Mod+S', 'file.save'],
+  ['Mod+Y', 'edit.redo'],
   ['Mod+O', 'file.open'],
   ['Shift+Mod+S', 'file.saveAs'],
   ['Mod+N', 'file.new19'],
@@ -49,7 +59,13 @@ const FILE: Array<[string, CommandId]> = [
  * Elsewhere 分析全局… has no key.
  */
 export function defaultKeymap(os: OsKind | null): Map<string, CommandId> {
-  return new Map(os === null || os === 'macos' ? BOARD : [...BOARD, ...FILE]);
+  const map = new Map(BOARD);
+  if (os !== null) {
+    map.set('Mod+Z', 'edit.undo');
+    map.set('Shift+Mod+Z', 'edit.redo');
+    if (os !== 'macos') for (const [chord, id] of FILE) map.set(chord, id);
+  }
+  return map;
 }
 
 /** The defaults with the device's overrides on top; an override naming no command is ignored. */

@@ -17,6 +17,8 @@ import type { EngineState } from './generated/EngineState';
 import type { PositionKey } from './generated/PositionKey';
 import type { AnalysisRules } from './generated/AnalysisRules';
 import type { GameSnapshot } from './generated/GameSnapshot';
+import type { GameTree } from './generated/GameTree';
+import type { SessionEdit } from './generated/SessionEdit';
 import type { GameWarning } from './generated/GameWarning';
 import type { Move } from './generated/Move';
 import type { NavTarget } from './generated/NavTarget';
@@ -189,9 +191,20 @@ export const openGame = (transport: Transport, name: string, bytes: string, atEn
 export const navigateGame = (transport: Transport, to: NavTarget) =>
   gameReply(transport, { type: 'gameNavigate', to });
 
+export const editGame = (transport: Transport, edit: SessionEdit) =>
+  gameReply(transport, { type: 'gameEdit', edit });
+
+export const undoGame = (transport: Transport) => gameReply(transport, { type: 'gameUndo' });
+export const redoGame = (transport: Transport) => gameReply(transport, { type: 'gameRedo' });
+
+export async function getGameTree(transport: Transport): Promise<GameTree> {
+  const { revision, nodes } = await expectType(transport, { type: 'gameTree' }, 'gameTree');
+  return { revision, nodes };
+}
+
 /** `null` goes back to the file's reading. */
 export const setGameRules = (transport: Transport, rules: AnalysisRules | null) =>
-  gameReply(transport, { type: 'gameEdit', edit: { kind: 'setRules', rules } });
+  editGame(transport, { kind: 'setRules', rules });
 
 export const getGameSnapshot = (transport: Transport) =>
   gameReply(transport, { type: 'gameSnapshot' });
@@ -203,7 +216,7 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
 export const exportGame = (transport: Transport, options: ExportOptions) =>
   expectType(transport, { type: 'gameExport', options }, 'gameExport');
 
-export const gameSaved = (transport: Transport, editId: number, utf8: boolean) =>
+export const markSaved = (transport: Transport, editId: number, utf8: boolean) =>
   gameReply(transport, { type: 'gameSaved', editId, utf8 });
 
 /** One entry per main-line node, with the engine's cached result where it has one. */

@@ -10,6 +10,7 @@ import { useActionContext } from '../game/useActionContext';
 import { useSettingsStore } from '../settings/settingsStore';
 import type { JobOptions } from '../transport/generated/JobOptions';
 import type { JobRange } from '../transport/generated/JobRange';
+import type { JobScope } from '../transport/generated/JobScope';
 import type { JobSide } from '../transport/generated/JobSide';
 import { startGameJob } from './actions';
 import { DEFAULT_JOB_OPTIONS, jobEstimate } from './estimate';
@@ -85,6 +86,7 @@ function Choice<T extends string>({
   );
 }
 
+const SCOPES: JobScope[] = ['line', 'allBranches'];
 const RANGES: Array<JobRange['kind']> = ['whole', 'moves'];
 const SIDES: JobSide[] = ['both', 'black', 'white'];
 
@@ -106,10 +108,17 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
   const nodes = useTrendStore((s) => s.nodes);
   const speed = useEngineStore((s) => s.speed);
 
+  const [scope, setScope] = useState(saved.scope ?? 'line');
   const [range, setRange] = useState(saved.range.kind);
   const [from, setFrom] = useState(String(saved.range.kind === 'moves' ? saved.range.from : 1));
   const [to, setTo] = useState(
-    String(saved.range.kind === 'moves' ? Math.min(saved.range.to, last) : Math.max(1, last)),
+    String(
+      saved.range.kind === 'moves'
+        ? saved.scope === 'allBranches'
+          ? saved.range.to
+          : Math.min(saved.range.to, last)
+        : Math.max(1, last),
+    ),
   );
   const [side, setSide] = useState<JobSide>(saved.side);
   const [visits, setVisits] = useState(String(saved.visits));
@@ -118,13 +127,18 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
   const [boostVisits, setBoostVisits] = useState(String(saved.boost.visits));
 
   const options = (): JobOptions => {
-    const first = Math.min(number(from, 1), Math.max(1, last));
+    const limit = scope === 'line' ? Math.max(1, last) : Infinity;
+    const first = Math.min(number(from, 1), limit);
     return {
-      scope: saved.scope,
+      scope,
       range:
         range === 'whole'
           ? { kind: 'whole' }
-          : { kind: 'moves', from: first, to: Math.max(first, Math.min(number(to, last), last)) },
+          : {
+              kind: 'moves',
+              from: first,
+              to: Math.max(first, Math.min(number(to, Math.max(1, last)), limit)),
+            },
       side,
       visits: number(visits, saved.visits),
       boost: {
@@ -188,6 +202,14 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
     >
       <h4 className="mb-2.5 text-[0.875rem] font-medium">{t('job.title')}</h4>
       <div className="flex flex-col gap-1.5">
+        <Row label={t('job.scope')}>
+          <Choice<JobScope>
+            label={t('job.scope')}
+            value={scope}
+            options={SCOPES.map((value) => [value, t(`job.${value}`)])}
+            onChange={setScope}
+          />
+        </Row>
         <Row label={t('job.range')}>
           <Choice<JobRange['kind']>
             label={t('job.range')}
@@ -256,7 +278,7 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
         data-testid="job-estimate"
         className="mt-3 text-[0.78125rem] leading-relaxed text-text-muted"
       >
-        {note}
+        {scope === 'allBranches' ? t('job.estimate.branches') : note}
         <br />
         {t('job.browse')}
       </p>

@@ -211,7 +211,7 @@ export function GameMenu() {
             className="gap-2.5"
             disabled={!snapshot?.hasMoves}
             onSelect={() =>
-              void useScoringStore.getState().start({ transport: ctx.transport, engine })
+              void useScoringStore.getState().start({ transport: ctx.transport, engine, t: ctx.t })
             }
           >
             <CalculatorIcon className={icon} aria-hidden />

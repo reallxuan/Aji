@@ -12,6 +12,8 @@ function nodes(
     node: i,
     key: i.toString(16).padStart(16, '0'),
     moveNumber: i,
+    tryout: false,
+    toPlay: i % 2 ? 'white' : 'black',
     mover: movers[i],
     move: movers[i] ? { type: 'play', x: i % 19, y: 0 } : null,
     stats: s && { winrate: s[0], scoreLead: s[1], visits: s[2] },

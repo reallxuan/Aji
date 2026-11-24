@@ -4,25 +4,46 @@ import type { NavTarget } from '../transport/generated/NavTarget';
 import type { OsKind } from '../transport/generated/OsKind';
 import { BUILTINS } from './builtins';
 
-export type CommandId =
-  | 'nav.previous'
-  | 'nav.next'
-  | 'nav.first'
-  | 'nav.last'
-  | 'nav.pageBack'
-  | 'nav.pageForward'
-  | 'file.open'
-  | 'file.saveAs'
-  | 'file.new19'
-  | 'analysis.toggle'
-  | 'analysis.game'
-  | 'analysis.stopGame'
-  | 'analysis.clearPosition'
-  | 'analysis.clearGame'
-  | 'scoring.start'
-  | 'estimate.toggle'
-  | 'candidates.toggleHidden'
-  | 'candidates.peek';
+const ids = [
+  'edit.undo',
+  'edit.redo',
+  'edit.tryout',
+  'edit.deleteFrom',
+  'nav.previousSibling',
+  'nav.nextSibling',
+  'nav.mainLine',
+  'nav.escape',
+  'file.save',
+  'file.saveBranch',
+  'file.saveClean',
+  'view.rotateCw',
+  'view.rotateCcw',
+  'view.flipH',
+  'view.flipV',
+  'view.resetOrientation',
+  'view.moveNumbers',
+  'replay.toggle',
+  'nav.previous',
+  'nav.next',
+  'nav.first',
+  'nav.last',
+  'nav.pageBack',
+  'nav.pageForward',
+  'file.open',
+  'file.saveAs',
+  'file.new19',
+  'analysis.toggle',
+  'analysis.game',
+  'analysis.stopGame',
+  'analysis.clearPosition',
+  'analysis.clearGame',
+  'scoring.start',
+  'estimate.toggle',
+  'candidates.toggleHidden',
+  'candidates.peek',
+] as const;
+export type CommandId = (typeof ids)[number];
+const knownIds = new Set<string>(ids);
 
 export type Phase = 'down' | 'up';
 
@@ -53,7 +74,7 @@ export interface Command {
 export const COMMANDS: ReadonlyMap<CommandId, Command> = new Map(BUILTINS.map((c) => [c.id, c]));
 
 export function isCommandId(id: string): id is CommandId {
-  return COMMANDS.has(id as CommandId);
+  return knownIds.has(id);
 }
 
 /** The context the key dispatcher last registered, for `runCommand`. */

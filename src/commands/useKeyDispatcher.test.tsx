@@ -260,3 +260,71 @@ describe('the dispatcher', () => {
     expect(requests.at(-1)).toEqual({ type: 'gameNavigate', to: 'last' });
   });
 });
+
+it.each(['windows', 'macos'] as const)(
+  'binds editing keys on %s and leaves text editing to the field',
+  async (os) => {
+    const { requests } = mount({
+      os,
+      snapshot: makeSnapshot({ node: 42, atStart: false, canUndo: true, canRedo: true }),
+    });
+    await act(async () => {});
+    const mod = os === 'macos' ? { metaKey: true } : { ctrlKey: true };
+    const other = os === 'macos' ? { ctrlKey: true } : { metaKey: true };
+    const field = screen.getByRole('textbox');
+    for (const key of ['v', 'b', '[', ']', 'n', 'Delete', 'Backspace', 'Escape']) {
+      expect(fireEvent.keyDown(field, { key })).toBe(true);
+    }
+    expect(fireEvent.keyDown(field, { key: 'z', ...mod })).toBe(true);
+    expect(fireEvent.keyDown(window, { key: 'z', ...other })).toBe(true);
+    expect(requests.filter((r) => r.type !== 'appInfo')).toEqual([]);
+    fireEvent.keyDown(window, { key: 'z', ...mod });
+    fireEvent.keyDown(window, { key: 'z', shiftKey: true, ...mod });
+    fireEvent.keyDown(window, { key: 'y', ...mod });
+    for (const key of ['Delete', 'Backspace', 'v']) fireEvent.keyDown(window, { key });
+    await frame();
+    expect(requests.filter((r) => r.type === 'gameUndo')).toHaveLength(1);
+    expect(requests.filter((r) => r.type === 'gameRedo')).toHaveLength(os === 'macos' ? 1 : 2);
+    expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([
+      { type: 'gameEdit', edit: { kind: 'deleteFrom', node: 42 } },
+      { type: 'gameEdit', edit: { kind: 'deleteFrom', node: 42 } },
+      { type: 'gameEdit', edit: { kind: 'tryoutStart' } },
+    ]);
+    for (const key of ['[', ']', 'b']) {
+      fireEvent.keyDown(window, { key });
+      await frame();
+    }
+    expect(navigations(requests)).toEqual(
+      ['previousSibling', 'nextSibling', 'mainLine'].map((to) => ({ type: 'gameNavigate', to })),
+    );
+    expect(defaultKeymap(os).get('N')).toBe('view.moveNumbers');
+    expect(defaultKeymap(os).get('Mod+S')).toBe(os === 'macos' ? undefined : 'file.save');
+  },
+);
+
+it('escape runs the chain in order', async () => {
+  const { useModeStore } = await import('../edit/modeStore');
+  const { requests } = mount();
+  useModeStore.getState().setMode('markup');
+  const popover = document.createElement('div');
+  popover.setAttribute('data-radix-popper-content-wrapper', '');
+  document.body.append(popover);
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('markup');
+  popover.remove();
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('markup');
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(useModeStore.getState().mode).toBe('normal');
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 2, tryout: 0 })));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  await frame();
+  expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([
+    { type: 'gameEdit', edit: { kind: 'tryoutEnd' } },
+  ]);
+  expect(navigations(requests)).toEqual([]);
+  act(() => useGameStore.getState().apply(makeSnapshot({ revision: 200 })));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  await frame();
+  expect(navigations(requests)).toEqual([{ type: 'gameNavigate', to: 'branchPoint' }]);
+});

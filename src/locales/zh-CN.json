@@ -463,6 +463,14 @@
     "cacheMemoryOnly": {
       "title": "分析结果不会保留",
       "detail": "缓存文件无法使用，结果只保留到 Aji 退出。"
+    },
+    "endTryoutFirst": "先结束试下",
+    "noSuchNode": "这一步已不在棋谱中。",
+    "illegalMove": {
+      "occupied": "这里已经有棋子。",
+      "suicide": "这一步会自杀。",
+      "ko": "不能立即回提。",
+      "offBoard": "落点在棋盘之外。"
     }
   },
   "rules": {
@@ -572,12 +580,19 @@
       "first": "第一手",
       "last": "最后一手",
       "pageBack": "后退十手",
-      "pageForward": "前进十手"
+      "pageForward": "前进十手",
+      "previousSibling": "上一个分支",
+      "nextSibling": "下一个分支",
+      "mainLine": "回到主线",
+      "escape": "退出当前模式或回到分支点"
     },
     "file": {
       "open": "打开棋谱…",
       "saveAs": "另存为…",
-      "new19": "新建 19 路棋局"
+      "new19": "新建 19 路棋局",
+      "save": "保存",
+      "saveBranch": "另存当前分支…",
+      "saveClean": "另存为纯净棋谱…"
     },
     "analysis": {
       "toggle": "暂停或继续分析",
@@ -595,6 +610,23 @@
     },
     "estimate": {
       "toggle": "显示或隐藏形势判断"
+    },
+    "edit": {
+      "undo": "撤销",
+      "redo": "重做",
+      "tryout": "试下",
+      "deleteFrom": "删除这一手及之后"
+    },
+    "view": {
+      "rotateCw": "顺时针 90°",
+      "rotateCcw": "逆时针 90°",
+      "flipH": "水平翻转",
+      "flipV": "垂直翻转",
+      "resetOrientation": "还原",
+      "moveNumbers": "显示或隐藏手数"
+    },
+    "replay": {
+      "toggle": "开始或暂停自动播放"
     }
   },
   "screenshot": {
@@ -641,7 +673,8 @@
       "minutes": "，约需 {{count}} 分钟",
       "underMinute": "，不到 1 分钟",
       "boost": "，加强另计",
-      "end": "。"
+      "end": "。",
+      "branches": "分析所有分支中符合条件的局面，跳过试下。"
     },
     "browse": "分析时可以照常浏览，当前局面总是先算。",
     "cancel": "取消",
@@ -659,7 +692,10 @@
       "stop": "停止全局分析"
     },
     "rangeLine": "第 <from/> 到 <to/> 手",
-    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>"
+    "boostLine": "胜率变化超过 <threshold/>% 时加算到 <visits/>",
+    "scope": "分析路线",
+    "line": "当前路线",
+    "allBranches": "所有分支"
   },
   "swings": {
     "by": "按",

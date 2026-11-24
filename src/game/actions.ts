@@ -3,11 +3,10 @@ import type { EngineStore } from '../engine/engineStore';
 import type { MenuCommand, OpenedFile, PlatformFiles } from '../platform/files';
 import {
   exportGame,
-  gameSaved,
+  markSaved,
   navigateGame,
   newGame,
   openGame,
-  setGameRules,
   type GameReply,
 } from '../transport/api';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
@@ -15,6 +14,7 @@ import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import type { NavTarget } from '../transport/generated/NavTarget';
 import { TransportError, type Transport } from '../transport/transport';
+import { edit } from './editActions';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
 import { errorNotice, warningNotice } from './notices';
@@ -121,7 +121,7 @@ export async function saveAs(ctx: ActionContext): Promise<void> {
     const title = gameTitle(useGameStore.getState().snapshot, ctx.t);
     const token = await ctx.files.saveAs(fileNameFor(title), text);
     if (!token) return;
-    apply(await gameSaved(ctx.transport, editId, true));
+    apply(await markSaved(ctx.transport, editId, true));
     await ctx.files.remember(token, title).catch(() => {});
   } catch (error) {
     failed(error);
@@ -143,8 +143,9 @@ export const navigate = (ctx: ActionContext, to: NavTarget) =>
   change(ctx, () => navigateGame(ctx.transport, to));
 
 /** `null` goes back to the file's reading. */
-export const setRules = (ctx: ActionContext, rules: AnalysisRules | null) =>
-  change(ctx, () => setGameRules(ctx.transport, rules));
+export async function setRules(ctx: ActionContext, rules: AnalysisRules | null): Promise<void> {
+  await edit(ctx, { kind: 'setRules', rules });
+}
 
 /**
  * What a menu bar item does: the same actions as the title menu, and the 布局 presets. `engine`
@@ -194,7 +195,7 @@ export function runMenuCommand(
     case 'clearGame':
       return clearAnalysis(ctx, 'game');
     case 'finalScoring':
-      return useScoringStore.getState().start({ transport: ctx.transport, engine });
+      return useScoringStore.getState().start({ transport: ctx.transport, engine, t: ctx.t });
     case 'estimate':
       useEstimateStore.getState().toggle();
       return Promise.resolve();

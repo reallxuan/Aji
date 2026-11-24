@@ -267,6 +267,8 @@ pub struct LineNode<P = Option<Position>> {
     pub node: NodeId,
     pub move_number: u32,
     pub mover: Option<Color>,
+    pub to_play: Option<Color>,
+    pub tryout: bool,
     pub mv: Option<Move>,
     /// `None` on an illegal node.
     pub key: Option<PositionKey>,
@@ -275,26 +277,31 @@ pub struct LineNode<P = Option<Position>> {
 }
 
 /// A rules edit affects every position. For an in-place record edit, compare the
-/// properties used by replay. Structural edits are covered by the line's node IDs.
-fn edited_line_positions(kind: &EntryKind, line: &[NodeId]) -> bool {
+/// properties used by replay and the try-out flag used by job estimates. Structural edits
+/// are covered by the line's node IDs.
+fn edited_trend_nodes(kind: &EntryKind, line: &[NodeId]) -> bool {
     let EntryKind::Record(change) = kind else {
         return true;
     };
+    let selected = std::cell::LazyCell::new(|| line.iter().copied().collect::<HashSet<_>>());
     change
         .forward
         .iter()
         .zip(change.inverse.iter().rev())
         .any(|(forward, inverse)| {
+            if let Op::SetTryout { node, .. } = forward {
+                return selected.contains(node);
+            }
             let (Op::SetProps { node, props: after }, Op::SetProps { props: before, .. }) =
                 (forward, inverse)
             else {
                 return false;
             };
             // Core replay uses the first property with each identifier, even in unusual files.
-            line.contains(node)
-                && ["AB", "AW", "AE", "PL", "B", "W", "HA"].iter().any(|&id| {
-                    before.iter().find(|p| p.id == id) != after.iter().find(|p| p.id == id)
-                })
+            ["AB", "AW", "AE", "PL", "B", "W", "HA"]
+                .iter()
+                .any(|&id| before.iter().find(|p| p.id == id) != after.iter().find(|p| p.id == id))
+                && selected.contains(node)
         })
 }
 
@@ -841,7 +848,7 @@ impl GameSession {
         let has_entry = !change.forward.is_empty() || before.tryout != self.tryout;
         self.tree_revision += u64::from(edited_tree(&change, &old_illegal, &self.game));
         let kind = EntryKind::Record(change);
-        self.refresh_line(edited_line_positions(&kind, &self.selected_line));
+        self.refresh_line(edited_trend_nodes(&kind, &self.selected_line));
         if has_entry {
             self.push(kind, kept, before);
         } else if self.spot() == before {
@@ -865,7 +872,7 @@ impl GameSession {
         let Some(entry) = self.history.undo() else {
             return false;
         };
-        let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
+        let positions_changed = edited_trend_nodes(&entry.kind, &self.selected_line);
         match &entry.kind {
             EntryKind::Record(change) => {
                 let old_illegal = self.game.illegal_nodes().to_vec();
@@ -883,7 +890,7 @@ impl GameSession {
         let Some(entry) = self.history.redo() else {
             return false;
         };
-        let positions_changed = edited_line_positions(&entry.kind, &self.selected_line);
+        let positions_changed = edited_trend_nodes(&entry.kind, &self.selected_line);
         match &entry.kind {
             EntryKind::Record(change) => {
                 let old_illegal = self.game.illegal_nodes().to_vec();
@@ -1065,6 +1072,8 @@ impl GameSession {
                     node,
                     parent,
                     move_number,
+                    to_play: position.map(Position::to_move),
+                    tryout: self.game.is_tryout(node),
                     mover: played.map(|p| p.0),
                     mv: played.map(|p| p.1),
                     key: position.map(Position::key),

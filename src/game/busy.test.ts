@@ -30,3 +30,18 @@ it('a menu open beside a card still keeps the keys', () => {
   popper('dropdown-menu-content');
   expect(busy(document.body)).toBe(true);
 });
+
+it('retains the keyboard inside a nested contenteditable and when a modal is open', () => {
+  const editor = document.createElement('div');
+  editor.setAttribute('contenteditable', 'plaintext-only');
+  const text = document.createElement('span');
+  editor.append(text);
+  document.body.append(editor);
+  expect(busy(text)).toBe(true);
+  editor.remove();
+  const dialog = document.createElement('div');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  document.body.append(dialog);
+  expect(busy(document.body)).toBe(true);
+});

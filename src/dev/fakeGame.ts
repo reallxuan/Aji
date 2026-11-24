@@ -345,6 +345,8 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       node: i,
       key: positionKey(i),
       moveNumber: i,
+      tryout: false,
+      toPlay: i % 2 ? 'white' : 'black',
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move: node.lastMove,
       stats: null,

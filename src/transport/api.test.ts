@@ -228,6 +228,8 @@ it('asks for the trend and unwraps its nodes', async () => {
     {
       node: 0,
       key: '0000000000000000',
+      toPlay: 'black' as const,
+      tryout: false,
       moveNumber: 0,
       mover: null,
       move: null,
@@ -237,6 +239,8 @@ it('asks for the trend and unwraps its nodes', async () => {
     {
       node: 1,
       key: '0000000000000001',
+      toPlay: 'white' as const,
+      tryout: false,
       moveNumber: 1,
       mover: 'black' as const,
       move: { type: 'pass' as const },

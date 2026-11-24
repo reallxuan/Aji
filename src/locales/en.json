@@ -463,6 +463,14 @@
     "cacheMemoryOnly": {
       "title": "Analysis results aren't being kept",
       "detail": "The cache file can't be used, so results last only until Aji quits."
+    },
+    "endTryoutFirst": "End try-out first",
+    "noSuchNode": "This node is no longer in the game.",
+    "illegalMove": {
+      "occupied": "A stone already occupies that point.",
+      "suicide": "That move is suicide.",
+      "ko": "You cannot retake the ko yet.",
+      "offBoard": "That point is outside the board."
     }
   },
   "rules": {
@@ -572,12 +580,19 @@
       "first": "First move",
       "last": "Last move",
       "pageBack": "Back ten moves",
-      "pageForward": "Forward ten moves"
+      "pageForward": "Forward ten moves",
+      "previousSibling": "Previous continuation",
+      "nextSibling": "Next continuation",
+      "mainLine": "Return to the main line",
+      "escape": "Leave mode or return to the branch point"
     },
     "file": {
       "open": "Open…",
       "saveAs": "Save As…",
-      "new19": "New 19×19 game"
+      "new19": "New 19×19 game",
+      "save": "Save",
+      "saveBranch": "Save Current Branch As…",
+      "saveClean": "Save Clean Copy As…"
     },
     "analysis": {
       "toggle": "Pause or resume analysis",
@@ -595,6 +610,23 @@
     },
     "estimate": {
       "toggle": "Show or hide the position estimate"
+    },
+    "edit": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "tryout": "Toggle try-out",
+      "deleteFrom": "Delete this move and the following moves"
+    },
+    "view": {
+      "rotateCw": "Rotate clockwise 90°",
+      "rotateCcw": "Rotate counterclockwise 90°",
+      "flipH": "Flip horizontally",
+      "flipV": "Flip vertically",
+      "resetOrientation": "Reset orientation",
+      "moveNumbers": "Show or hide move numbers"
+    },
+    "replay": {
+      "toggle": "Play or pause replay"
     }
   },
   "screenshot": {
@@ -641,7 +673,8 @@
       "minutes": " in about {{count}} min",
       "underMinute": " in under a minute",
       "boost": ", plus boosting",
-      "end": "."
+      "end": ".",
+      "branches": "Analyses matching positions across all branches. Try-out moves are excluded."
     },
     "browse": "You can browse while it runs; the position on the board always goes first.",
     "cancel": "Cancel",
@@ -659,7 +692,10 @@
       "stop": "Stop game analysis"
     },
     "rangeLine": "From <from/> to <to/>",
-    "boostLine": "Swings over <threshold/>% get <visits/> visits"
+    "boostLine": "Swings over <threshold/>% get <visits/> visits",
+    "scope": "Scope",
+    "line": "Current line",
+    "allBranches": "All branches"
   },
   "swings": {
     "by": "By",

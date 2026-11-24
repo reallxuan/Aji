@@ -1,3 +1,4 @@
+import { useModeStore } from '../edit/modeStore';
 import { create } from 'zustand';
 import { useViewStore } from '../analysis/viewStore';
 import type { EngineStore } from '../engine/engineStore';
@@ -28,6 +29,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   apply: (snapshot) => {
     const current = get().snapshot;
     if (current && snapshot.revision <= current.revision) return;
+    if (snapshot.tryout !== null) useModeStore.getState().setMode('normal');
     set({ snapshot, loaded: true });
     // A hover and its line belong to the old position.
     useViewStore.getState().reset();

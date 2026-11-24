@@ -228,3 +228,12 @@ describe('game requests', () => {
     expect(useGameStore.getState().snapshot?.revision).toBe(12);
   });
 });
+
+it('routes rules edits through the same refusal notice as the other edits', async () => {
+  const { setRules } = await import('./actions');
+  const { ctx } = setup(() => {
+    throw new TransportError('gameEndTryoutFirst', 'end try-out first');
+  });
+  await setRules(ctx, { kind: 'japaneseKorean' });
+  expect(useNoticeStore.getState().notice?.title).toBe('先结束试下');
+});

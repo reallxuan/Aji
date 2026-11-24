@@ -21,4 +21,4 @@ stats: TrendStats | null,
 /**
  * The node's move's loss (design 5.1); `null` without a move or results.
  */
-loss: Loss | null, };
+loss: Loss | null, toPlay: Color | null, tryout: boolean, };

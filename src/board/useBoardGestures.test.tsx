@@ -1,3 +1,4 @@
+import { createI18n } from '../i18n/createI18n';
 import { act, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { candidate, play, subBoardHarness } from '../analysis/subBoardTesting';
@@ -201,7 +202,11 @@ describe('final scoring on the main board', () => {
     );
     h.analyse([candidate(0, 0.55, LINE), candidate(1, 0.5, OTHER)]);
     await settle();
-    await act(() => useScoringStore.getState().start({ transport: h.transport, engine: h.engine }));
+    await act(() =>
+      useScoringStore
+        .getState()
+        .start({ transport: h.transport, engine: h.engine, t: createI18n('en').t }),
+    );
     const scored = () =>
       h.requests
         .filter((r) => r.type === 'gameScore')

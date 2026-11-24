@@ -133,11 +133,6 @@ pub struct JobProgress {
     pub eta_seconds: Option<u32>,
 }
 
-/// The side to move in a node's position; `None` on an illegal node.
-pub(crate) fn to_move(node: &LineNode) -> Option<Color> {
-    node.position.as_ref().map(|position| position.to_move())
-}
-
 fn side_is(side: JobSide, color: Color) -> bool {
     match side {
         JobSide::Both => true,
@@ -186,7 +181,7 @@ fn plan_positions(
         .iter()
         .enumerate()
         .filter(|(_, node)| position_in_range(node, options.range))
-        .filter(|(_, node)| to_move(node).is_some_and(|c| side_is(options.side, c)))
+        .filter(|(_, node)| node.to_play.is_some_and(|c| side_is(options.side, c)))
         .filter_map(|(i, node)| {
             let key = node.key?;
             if !seen.insert(key) {
