@@ -44,3 +44,9 @@ it('makes a file name from a title', () => {
   expect(fileNameFor('a/b:c*?"<>|d')).toBe('a_b_c______d.sgf');
   expect(fileNameFor('  ')).toBe('game.sgf');
 });
+
+it('marks a modified window title, including an unnamed empty record', () => {
+  const t = createI18n('zh-CN').t;
+  expect(windowTitle(makeSnapshot({ changed: true }), t)).toBe('Aji (已修改)');
+  expect(windowTitle(makeSnapshot({ changed: true, name: 'Cup' }), t)).toBe('Aji — Cup (已修改)');
+});

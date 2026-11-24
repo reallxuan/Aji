@@ -1,5 +1,5 @@
 import { createI18n } from '../i18n/createI18n';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { candidate, play, subBoardHarness } from '../analysis/subBoardTesting';
 import { resetViewStore, useViewStore } from '../analysis/viewStore';
@@ -137,24 +137,59 @@ describe('touch on the main board', () => {
     expect(view().hover).toBeNull();
   });
 
-  it('a_second_tap_on_the_same_candidate_does_nothing_yet', async () => {
-    await mount();
+  it('the first candidate tap pins and the second plays exactly once', async () => {
+    const { requests } = await mount();
     tap(3, 3);
     await settle();
-    const before = view().hover;
+    const edits = () => requests.filter((r) => r.type === 'gameEdit');
+    expect(edits()).toEqual([]);
     tap(3, 3);
-    expect(view().hover).toBe(before);
-    expect(view().variation).not.toBeNull();
+    fireEvent.click(surface(), at(3, 3));
+    await settle();
+    expect(edits()).toEqual([{ type: 'gameEdit', edit: { kind: 'play', mv: play(3) } }]);
   });
 
-  it('a long press does nothing yet', async () => {
-    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'Date', 'performance'] });
-    await mount();
-    const base = { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0 };
+  it('long press opens the board menu at 500 ms and consumes the tap', async () => {
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    });
+    const { requests } = await mount();
+    const base = { pointerId: 1, pointerType: 'touch', button: 0 };
     fireEvent.pointerDown(surface(), { ...base, ...at(3, 3) });
-    act(() => vi.advanceTimersByTime(700));
+    act(() => vi.advanceTimersByTime(499));
+    expect(screen.queryByRole('menu')).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole('menuitem', { name: '在这里试下' })).toBeInTheDocument();
     fireEvent.pointerUp(surface(), { ...base, ...at(3, 3) });
     expect(view().hover).toBeNull();
+    expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([]);
+  });
+
+  it('a native touch context event never opens the menu early or after moving beyond 10 px', async () => {
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    });
+    await mount();
+    const point = at(3, 3);
+    const base = { pointerId: 1, pointerType: 'touch', button: 0, ...point };
+    fireEvent.pointerDown(surface(), base);
+    fireEvent.contextMenu(surface(), { ...point, button: 2 });
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.pointerMove(surface(), { ...base, clientY: point.clientY + 11 });
+    act(() => vi.advanceTimersByTime(550));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('mouse clicks on a candidate and on an empty point play the actual intersection', async () => {
+    const { requests } = await mount();
+    fireEvent.click(surface(), at(3, 3));
+    await settle();
+    fireEvent.click(surface(), at(7, 8));
+    await settle();
+    expect(requests.filter((r) => r.type === 'gameEdit')).toEqual([
+      { type: 'gameEdit', edit: { kind: 'play', mv: play(3) } },
+      { type: 'gameEdit', edit: { kind: 'play', mv: play(7, 8) } },
+    ]);
   });
 
   it('tapping another candidate moves the pin to it', async () => {

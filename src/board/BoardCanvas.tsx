@@ -9,6 +9,7 @@ import type { Point } from '../transport/generated/Point';
 import { candidateAt, drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
+import { badgeAt, drawEditOverlay, type Badge, type StoneNumber } from './badges';
 import { drawBoard } from './drawBoard';
 import { boardGeometry, pointAt } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
@@ -58,11 +59,20 @@ export interface BoardCanvasProps {
    * design 5.8); a tap then goes here and never to a candidate.
    */
   onTapPoint?(point: Point): void;
+  onClickPoint?(point: Point): void;
+  onClickCandidate?(move: Move): void;
+  onContextPoint?(point: Point, at: Point): void;
+  onClickBadge?(badge: Badge, at: Point): void;
+  onContextBadge?(badge: Badge, at: Point): void;
+  badges?: readonly Badge[];
+  tryoutNumbers?: readonly StoneNumber[];
+  numbers?: readonly StoneNumber[];
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
 }
 
+const NONE: never[] = [];
 const NO_CANDIDATES: readonly ShownCandidate[] = [];
 /** The Inter faces the layers draw with: coordinates 400, disc lines 500 to 700. */
 const FONT_FACES = ['400 12px Inter', '500 12px Inter', '600 12px Inter', '700 12px Inter'];
@@ -93,7 +103,16 @@ export function BoardCanvas({
   nextRing = null,
   ownership = null,
   onTapPoint,
+  onClickPoint,
+  onClickCandidate,
+  onClickBadge,
+  onContextPoint,
+  onContextBadge,
+  badges = NONE,
+  tryoutNumbers = NONE,
+  numbers = NONE,
 }: BoardCanvasProps) {
+  const editLayer = useRef<HTMLCanvasElement>(null);
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
   const ownershipLayer = useRef<HTMLCanvasElement>(null);
@@ -188,22 +207,74 @@ export function BoardCanvas({
     hovered.current = move;
     onHoverCandidate?.(move);
   };
-  const tapPoint = (x: number, y: number) => {
-    const point = pointAt(x, y, { cssSize, boardSize, coordinates });
-    if (point) onTapPoint?.(point);
+  const showEdits = !variation && !!(badges.length || tryoutNumbers.length || numbers.length);
+  useEffect(() => {
+    const ctx = editLayer.current?.getContext('2d');
+    if (ctx)
+      drawEditOverlay(
+        ctx,
+        { cssSize, dpr, boardSize, coordinates, style: boardStyle },
+        stones,
+        badges,
+        tryoutNumbers,
+        numbers,
+      );
+  }, [
+    showEdits,
+    cssSize,
+    dpr,
+    boardSize,
+    coordinates,
+    boardStyle,
+    stones,
+    badges,
+    tryoutNumbers,
+    numbers,
+    fontsLoaded,
+  ]);
+  const view = { cssSize, boardSize, coordinates };
+  const hitBadge = (x: number, y: number) =>
+    badges.length && !variation
+      ? badgeAt(boardGeometry(cssSize, boardSize, coordinates), badges, x, y)
+      : undefined;
+  const choose = (x: number, y: number, touch: boolean) => {
+    const point = pointAt(x, y, view);
+    if (onTapPoint) {
+      if (point) onTapPoint(point);
+      return;
+    }
+    const badge = hitBadge(x, y);
+    if (badge && onClickBadge) {
+      const box = board.current!.getBoundingClientRect();
+      onClickBadge(badge, { x: x + box.left, y: y + box.top });
+      return;
+    }
+    const disc = candidateAt(x, y, view, candidates);
+    if (touch) onTapCandidate?.(disc);
+    else if (disc) onClickCandidate?.(disc);
+    if (!disc && point) onClickPoint?.(point);
+  };
+  const context = (x: number, y: number) => {
+    const box = board.current?.getBoundingClientRect();
+    if (!box) return;
+    const at = { x: x + box.left, y: y + box.top };
+    const badge = hitBadge(x, y);
+    if (badge && onContextBadge) {
+      onContextBadge(badge, at);
+      return;
+    }
+    const point = pointAt(x, y, view);
+    if (point) onContextPoint?.(point, at);
   };
   const gestures = useBoardGestures({
-    tap: (x, y) =>
-      onTapPoint
-        ? tapPoint(x, y)
-        : onTapCandidate?.(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates)),
+    tap: (x, y) => choose(x, y, true),
+    longPress: context,
     step: (forward) => onSwipeStep?.(forward),
   });
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    // A tap has already been handled; the click a browser sends after it is its echo.
-    if (!onTapPoint || gestures.afterTouch()) return;
+    if (event.button !== 0 || gestures.afterTouch()) return;
     const box = event.currentTarget.getBoundingClientRect();
-    tapPoint(event.clientX - box.left, event.clientY - box.top);
+    choose(event.clientX - box.left, event.clientY - box.top, false);
   };
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     // A browser follows a tap with mouse events; the hover is the mouse's alone.
@@ -211,7 +282,7 @@ export function BoardCanvas({
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
-    hover(candidateAt(x, y, { cssSize, boardSize, coordinates }, candidates));
+    hover(hitBadge(x, y) ? null : candidateAt(x, y, view, candidates));
   };
 
   const backing = Math.max(0, Math.round(cssSize * dpr));
@@ -224,6 +295,13 @@ export function BoardCanvas({
       onMouseMove={onMouseMove}
       onMouseLeave={() => !gestures.afterTouch() && hover(null)}
       onClick={onClick}
+      onContextMenu={(event) => {
+        if (!onContextPoint && !onContextBadge) return;
+        event.preventDefault();
+        if (gestures.afterTouch()) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        context(event.clientX - box.left, event.clientY - box.top);
+      }}
       {...gestures.handlers}
     >
       <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
@@ -257,6 +335,17 @@ export function BoardCanvas({
         }}
         aria-hidden
       />
+      {showEdits && (
+        <canvas
+          ref={editLayer}
+          data-layer="editing"
+          width={backing}
+          height={backing}
+          className="absolute inset-0 pointer-events-none"
+          style={style}
+          aria-hidden
+        />
+      )}
     </div>
   );
 }

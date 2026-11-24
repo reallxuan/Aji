@@ -772,5 +772,35 @@
     "failed": "Could not count this position.",
     "openByOwnership": "The game was not played out, so open areas follow KataGo's judgement."
   },
-  "separator": ", "
+  "separator": ", ",
+  "title": {
+    "changed": "Modified"
+  },
+  "edit": {
+    "tools": "Editing tools",
+    "trying": "Trying moves",
+    "markup": "Markup",
+    "setup": "Setup",
+    "goToStone": "Go to this move (move {{n}})",
+    "showNumbers": "Show move numbers",
+    "tryHere": "Try a move here",
+    "end": "End try-out",
+    "backTo": "Return to move {{n}}",
+    "keep": "Keep as a variation",
+    "triangle": "Triangle",
+    "square": "Square",
+    "circle": "Circle",
+    "cross": "Cross",
+    "letter": "Letter",
+    "number": "Number",
+    "empty": "Empty point {{point}}",
+    "black": "Black stone {{point}}",
+    "white": "White stone {{point}}",
+    "promote": "Make main line",
+    "moveUp": "Move up one place",
+    "deleteBranch": "Delete this variation",
+    "tryout": "Try out",
+    "branch": "Variation {{letter}}",
+    "tryBranch": "Try-out {{letter}}"
+  }
 }

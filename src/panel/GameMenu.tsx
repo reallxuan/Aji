@@ -8,6 +8,7 @@ import {
   SaveIcon,
   ScanSearchIcon,
 } from 'lucide-react';
+import { cn } from 'cn';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -94,7 +95,7 @@ function RecentItems({ entries }: { entries: RecentEntry[] }) {
  * and 截图 are in the menu bar or the 视图 button (owner, 2026-11-22). 分析全局… drops its panel
  * from the title, as the rules chip drops its own.
  */
-export function GameMenu() {
+export function GameMenu({ touch = false }: { touch?: boolean } = {}) {
   const { t } = useTranslation();
   const ctx = useActionContext();
   const engine = useEngineStoreApi();
@@ -119,7 +120,12 @@ export function GameMenu() {
         }}
       >
         <PopoverAnchor asChild>
-          <DropdownMenuTrigger className="group -ml-1.5 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft">
+          <DropdownMenuTrigger
+            className={cn(
+              'group -ml-1.5 flex items-center gap-1 rounded-sm px-1.5 py-1 text-[0.875rem] font-medium hover:bg-divider-soft data-[state=open]:bg-divider-soft',
+              touch ? 'min-h-11 min-w-11' : 'min-w-0',
+            )}
+          >
             <span className="truncate">{title}</span>
             <ChevronDownIcon
               className="size-3.5 flex-none text-text-muted group-data-[state=open]:text-text"

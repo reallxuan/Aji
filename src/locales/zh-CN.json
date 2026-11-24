@@ -772,5 +772,35 @@
     "failed": "无法点目。",
     "openByOwnership": "棋局未下完，未封闭的区域按 KataGo 判断。"
   },
-  "separator": "，"
+  "separator": "，",
+  "title": {
+    "changed": "已修改"
+  },
+  "edit": {
+    "tools": "编辑工具",
+    "trying": "试下中",
+    "markup": "标记",
+    "setup": "摆子",
+    "goToStone": "回到这一手 (第 {{n}} 手)",
+    "showNumbers": "显示手数",
+    "tryHere": "在这里试下",
+    "end": "结束试下",
+    "backTo": "回到第 {{n}} 手",
+    "keep": "保留为分支",
+    "triangle": "三角",
+    "square": "方形",
+    "circle": "圆形",
+    "cross": "叉号",
+    "letter": "字母",
+    "number": "数字",
+    "empty": "空点 {{point}}",
+    "black": "黑子 {{point}}",
+    "white": "白子 {{point}}",
+    "promote": "设为主分支",
+    "moveUp": "上移一位",
+    "deleteBranch": "删除这个分支",
+    "tryout": "试下",
+    "branch": "分支 {{letter}}",
+    "tryBranch": "试下 {{letter}}"
+  }
 }

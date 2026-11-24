@@ -30,11 +30,19 @@ export interface CandidateColumns {
   vsBest: boolean;
 }
 
+export interface MoveNumbers {
+  mode: 'off' | 'all' | 'last';
+  last: number;
+  restartInBranch: boolean;
+  lastOn: 'all' | 'last';
+}
+
 /**
  * Settings that belong to one device rather than to the engine side (P2 M1 design 5.8): a phone
  * and the desktop show the same engine differently.
  */
 export interface DeviceSettings {
+  moveNumbers: MoveNumbers;
   version: 1;
   /** The stored layout, unchecked; the layout model validates it. */
   layout: unknown;
@@ -75,6 +83,7 @@ export interface DeviceSettings {
 
 export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   version: 1,
+  moveNumbers: { mode: 'off', last: 10, restartInBranch: false, lastOn: 'all' },
   layout: null,
   narrowTab: null,
   keymap: {},
@@ -99,6 +108,16 @@ export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 const oneOf = <T>(values: readonly T[], v: unknown): v is T => values.includes(v as T);
+
+function parseNumbers(v: unknown, d: MoveNumbers): MoveNumbers {
+  if (!isRecord(v)) return d;
+  return {
+    mode: oneOf<MoveNumbers['mode']>(['off', 'all', 'last'], v.mode) ? v.mode : d.mode,
+    last: typeof v.last === 'number' && Number.isInteger(v.last) && v.last > 0 ? v.last : d.last,
+    lastOn: v.lastOn === 'last' ? 'last' : 'all',
+    restartInBranch: v.restartInBranch === true,
+  };
+}
 
 function parseKeymap(v: unknown): Record<string, string> | undefined {
   if (!isRecord(v)) return undefined;
@@ -155,6 +174,7 @@ export function parseDeviceSettings(raw: unknown): DeviceSettings {
   const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
   return {
     version: 1,
+    moveNumbers: parseNumbers(raw.moveNumbers, d.moveNumbers),
     layout: raw.layout === undefined ? d.layout : raw.layout,
     narrowTab: typeof raw.narrowTab === 'string' ? raw.narrowTab : d.narrowTab,
     keymap: parseKeymap(raw.keymap) ?? d.keymap,

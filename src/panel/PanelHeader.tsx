@@ -1,3 +1,5 @@
+import { PHONE_STATUS_HEIGHT } from '../layout/constants';
+import { useGameStore } from '../game/gameStore';
 import { SettingsIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePanelStore } from '../app/panelStore';
@@ -28,15 +30,39 @@ export function PanelHeader({
   touch?: boolean;
 } = {}) {
   const { t } = useTranslation();
+  const tryout = useGameStore((s) => s.snapshot?.tryout != null);
+  const changed = useGameStore((s) => !!s.snapshot?.changed);
   const os = useOs();
-  return (
-    <header
-      className={cn('@container flex-none border-b border-hairline', compact ? 'h-[52px]' : 'h-14')}
+  const status = (tryout || changed) && (
+    <div
+      role="status"
+      className={cn('flex shrink-0 items-center gap-1.5', compact && 'px-3')}
+      style={compact ? { height: PHONE_STATUS_HEIGHT } : undefined}
     >
-      <div className="flex h-full items-center gap-2.5 pr-[18px] pl-6 @max-[500px]:gap-1.5">
+      {tryout && (
+        <span className="flex-none whitespace-nowrap rounded-full border border-amber-600/50 px-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+          {t('edit.trying')}
+        </span>
+      )}
+      {changed && (
+        <span className="flex-none whitespace-nowrap rounded-full border border-hairline px-1.5 text-[11px] text-text-muted">
+          {t('title.changed')}
+        </span>
+      )}
+    </div>
+  );
+  return (
+    <header className="@container flex-none border-b border-hairline">
+      <div
+        className={cn(
+          'flex items-center gap-2.5 @max-[500px]:gap-1.5',
+          compact ? 'h-[51px] px-3' : 'h-[55px] pr-[18px] pl-6',
+        )}
+      >
         <div className="flex min-w-0 flex-1 items-center">
-          <GameMenu />
+          <GameMenu touch={compact} />
         </div>
+        {!compact && status}
         {compact ? (
           <MoveCounter />
         ) : (
@@ -60,6 +86,7 @@ export function PanelHeader({
           <SettingsIcon className="size-4" aria-hidden />
         </button>
       </div>
+      {compact && status}
     </header>
   );
 }

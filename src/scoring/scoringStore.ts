@@ -146,6 +146,11 @@ export const useScoringStore = create<ScoringState>()((set, get) => {
   };
 });
 
+/** Board edits wait from the start request until final scoring has ended. */
+export function scoringInProgress(state: ScoringState = useScoringStore.getState()): boolean {
+  return state.starting || state.active;
+}
+
 /** Tests: leave scoring without touching the engine. */
 export function resetScoringStore(): void {
   stopWatching?.();

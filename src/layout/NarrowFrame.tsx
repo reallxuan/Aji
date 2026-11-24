@@ -1,3 +1,4 @@
+import { EditRow } from '../edit/EditRow';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDeviceStore } from '../device/deviceStore';
@@ -9,7 +10,8 @@ import { NoEngine } from '../panel/NoEngine';
 import { NoticeLine } from '../panel/NoticeLine';
 import { PanelHeader } from '../panel/PanelHeader';
 import { TabRow } from '../panel/TabRow';
-import { PHONE_WIDTH } from './constants';
+import { useGameStore } from '../game/gameStore';
+import { PHONE_STATUS_HEIGHT, PHONE_WIDTH, TOUCH_TARGET } from './constants';
 import { MainBoard } from './MainBoard';
 import { type PanelRef, panelsOf, refId } from './model';
 import { PanelView } from './PanelView';
@@ -61,6 +63,8 @@ export function NarrowFrame({
   const narrowTab = useDeviceStore((s) => s.settings.narrowTab);
   const update = useDeviceStore((s) => s.update);
   const phone = width < PHONE_WIDTH;
+  const hasStatus = useGameStore((s) => s.snapshot?.tryout != null || !!s.snapshot?.changed);
+  const headerHeight = phone ? HEADER.phone + (hasStatus ? PHONE_STATUS_HEIGHT : 0) : HEADER.tablet;
 
   const visible = panelsOf(layout.root);
   const tabs = visible.filter((p) => p.kind !== 'header' && p.kind !== 'winrate');
@@ -81,7 +85,7 @@ export function NarrowFrame({
   const barHeight = bar && !scoring ? BAR + (phone ? CAPTURES : 0) : 0;
   // The height left for the board and the panels; the panels keep 160 px of it only while the
   // board keeps its floor, so a small landscape window shows the board first.
-  const room = height - (phone ? HEADER.phone + NAV : HEADER.tablet) - barHeight;
+  const room = height - headerHeight - (phone ? NAV : 0) - barHeight - (scoring ? 0 : TOUCH_TARGET);
   const boardRoom = Math.max(
     Math.min(BOARD_FLOOR, room),
     room - (scoring ? SCORING_ROOM : PANELS_MIN),
@@ -123,6 +127,7 @@ export function NarrowFrame({
       </div>
       {!placeholder && (
         <>
+          {!scoring && <EditRow touch />}
           {bar && !scoring && (
             // The bar is the board's, not a tab: drawn as it is, with no grip.
             <div className="flex-none border-t border-hairline">

@@ -17,6 +17,7 @@ describe('parseDeviceSettings', () => {
   it('keeps every valid field', () => {
     const raw = {
       version: 1,
+      moveNumbers: { mode: 'last', last: 15, restartInBranch: true, lastOn: 'last' },
       layout: { anything: true },
       narrowTab: 'candidates',
       keymap: { ArrowLeft: 'nav.next' },

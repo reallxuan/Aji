@@ -20,6 +20,8 @@ export const HAIRLINE_HIT = 8;
 export const HAIRLINE_HIT_COARSE = 20;
 /** Touch targets in the narrow arrangement. */
 export const TOUCH_TARGET = 44;
+/** Extra header row for editing status on a phone, in CSS px. */
+export const PHONE_STATUS_HEIGHT = 24;
 /** A swipe steps once per this many CSS px. */
 export const SWIPE_STEP = 40;
 /** Sub-boards follow a deepening line at most this often. */

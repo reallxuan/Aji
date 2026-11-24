@@ -1,3 +1,4 @@
+import { EditRow } from '../edit/EditRow';
 import { useEngineStore } from '../engine/engineStore';
 import { EngineStatus } from './EngineStatus';
 import { NoEngine } from './NoEngine';
@@ -13,6 +14,7 @@ export function HeaderPanel() {
   return (
     <div className="flex flex-col">
       <PanelHeader />
+      <EditRow />
       <NoticeLine />
       {notConfigured ? <NoEngine /> : <EngineStatus />}
     </div>
