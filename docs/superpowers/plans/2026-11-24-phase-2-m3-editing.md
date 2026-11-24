@@ -30,7 +30,16 @@
 - Section numbers below (5.3 and so on) are the design's.
 - The phase plan is [Phase 2 plan](2026-11-21-phase-2-roadmap.md).
 
-**Status:** Not started.
+**Status:** Implemented and reviewed on 2026-11-24. The arm64 macOS app is ready for the maintainer's walk. The automated exit checks produced these results.
+
+- **Branch review and checks.** A fresh whole-branch source review found five issues, and browser testing found two. Regression checks reproduced all seven, and the reviewer approved the corrections. The final checks passed 939 Rust tests and 994 frontend tests, formatting, Clippy, lint, type checking, licence checks and third-party notices. All 100 generated TypeScript bindings matched a fresh generation byte for byte. On a 300-move record with 50 variations, release-mode edit, undo and redo took 1.157, 2.523 and 1.141 ms respectively (50 ms budget each). Building the payload for 10,001 nodes including the root took 2.077 ms (under 100 ms for 10,000 nodes).
+- **Browser.** Headless Chrome passed 168/168 editing checks across 1440 × 900, 375 × 812 and 768 × 1024, both themes, with mouse and emulated touch. These included the corrected try-out Pass, title menu under the touch layout grip and phone submenu labels. For insert, flatten and all-branch analysis the browser fake exercises the controls and requests. The native checks below exercised their effects.
+- **Native Mac.** Process-local AppKit events and WKWebView editing commands exercised actual menu items, Command-Z and Shift-Command-Z. Focused comment undo and redo left record history intact. Board undo and redo changed one move each. Undoing flatten restored every tree row. Canceling close or a save dialog retained edits. A failed in-place save kept the dirty record open, and retrying wrote the move and quit. Discard quit without writing, and try-out alone quit without a prompt. The job panel started real KataGo 1.18.2 with its b18 network and completed all 257/257 positions, including the side branch.
+- **Encoding.** An unedited in-place save of the GBK Fox fixture preserved all 262 raw property values across 243 nodes and preserved the tree structure. The complete file changed from 1,624 to 1,629 bytes as SGF whitespace and repeated property identifiers were normalized.
+- **Interoperability.** Aji edited a copy of the 254-move Shin Jinseo–Byun Sangil Samsung Cup semifinal of 2026-11-17. The review exercised keeping and discarding try-out moves, promotion, comments, marks, setup, undo and redo. Sabaki Web opened the saved SGF and showed both players, 255 moves across one fork, one marked node and the comment “Review variation after move 38”. The source file retained its original hash.
+- **Build and remaining checks.** `pnpm tauri build --bundles app` produced the 14.57 MiB arm64 Aji.app (0.1.0). Its local ad-hoc signature passed `codesign --verify --deep --strict`. The maintainer's hands-on walk and physical touchscreen check remain open. LizzieYzy was unavailable on the test Mac. The Windows walk belongs to Phase 2 M4.
+
+**Compatibility notes.** SGF export uses compact `RU` for exact Tromp–Taylor so historical named rules keep their established meaning. An otherwise empty explicit `PL[B]` root shares the implicit Black root's analysis key. Old analysis for such roots may need reanalysis or reimport from SGF `LZ`. Clean export removes comments and analysis, including secondary `LZ` data in a collection. If an in-place export exceeds the 20 MiB opening limit, Aji preserves the original file and the dirty record. An explicit Save As can write an oversized copy that Aji cannot reopen.
 
 ## Global Constraints
 
@@ -120,7 +129,7 @@
   - `Position { pub rules: KataRules, … }`. `Position::key()` keeps its bytes, since `key_bytes` is unchanged.
   - `query.rs`: `"rules"` is `rules.preset().map(Rules::katago_name)` when there is one, else the rules object with KataGo's field names (`ko`, `scoring`, `tax`, `suicide`, `hasButton`, `whiteHandicapBonus`, `friendlyPassOk`).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `katago_string_round_trips_every_combination` (3 × 2 × 3 × 2 × 2 × 3 rule sets)
   - `custom_without_details_is_its_scorings_preset` (`kata_rules()` equals `KataRules::from(Rules::Chinese)` for area)
   - `old_custom_json_still_reads` (`{"kind":"custom","komi":7,"scoring":"area"}` deserialises with `details: None`)
@@ -130,14 +139,14 @@
   - `to_sgf_writes_the_preset_name_or_the_katago_string`
   - `query_sends_a_preset_name_or_a_rules_object` (`chinese` for Chinese; the object for `ko: positional`)
   - `existing_position_keys_are_unchanged` (the M2 test vector still holds)
-- [ ] **Step 2: Run** `cargo test --workspace`. Expected: the new tests FAIL to compile or fail.
-- [ ] **Step 3: Implement** the interfaces above.
+- [x] **Step 2: Run** `cargo test --workspace`. Expected: the new tests FAIL to compile or fail.
+- [x] **Step 3: Implement** the interfaces above.
   - `read_rules` tries `from_katago_string` before the name table.
   - `Position::empty` takes `KataRules`, and every caller passes `rules.kata_rules()`.
   - `GameSession::set_rules`'s `changed` and the snapshot's `rules.changed` use `same_effect` (M6 minor 4).
-- [ ] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test` (regenerated bindings). Expected: PASS.
-- [ ] **Step 5: Check with the real KataGo** (`docs/development.md`'s development engine): one query with a custom rules object (`ko: positional`, `tax: all`) is accepted, and its results come back. Record the check in the commit message.
-- [ ] **Step 6: Commit** `feat(core): carry KataGo's full rule set in custom rules`.
+- [x] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test` (regenerated bindings). Expected: PASS.
+- [x] **Step 5: Check with the real KataGo** (`docs/development.md`'s development engine): one query with a custom rules object (`ko: positional`, `tax: all`) is accepted, and its results come back. Record the check in the commit message.
+- [x] **Step 6: Commit** `feat(core): carry KataGo's full rule set in custom rules`.
 
 ### Task 2: An editable node pool
 
@@ -163,17 +172,17 @@
   - `Game::info(&self) -> GameInfo`: computed from the root's properties, no longer stored.
   - `to_sgf` skips try-out nodes and detached nodes.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `line_through_follows_first_children_after_the_tip`
   - `to_sgf_does_not_rely_on_id_order` (a pool whose child has a smaller id writes the same SGF)
   - `invalidate_recomputes_the_subtree_only`
   - `illegal_scan_keeps_no_boards` (after opening a 10 000-node generated record, no node state is cached)
   - `trim_keeps_the_path`
   - `to_sgf_skips_tryout_and_detached_nodes`
-- [ ] **Step 2: Run** `cargo test -p aji-core record`. Expected: FAIL.
-- [ ] **Step 3: Implement** the interfaces. `states` stays `Vec<OnceLock<NodeState>>`; `invalidate` and `trim` replace entries through `&mut self`.
-- [ ] **Step 4: Run** `cargo test --workspace`. Expected: PASS, with every Phase 1 and M2 game test unchanged.
-- [ ] **Step 5: Commit** `refactor(core): make the game's node pool editable`.
+- [x] **Step 2: Run** `cargo test -p aji-core record`. Expected: FAIL.
+- [x] **Step 3: Implement** the interfaces. `states` stays `Vec<OnceLock<NodeState>>`; `invalidate` and `trim` replace entries through `&mut self`.
+- [x] **Step 4: Run** `cargo test --workspace`. Expected: PASS, with every Phase 1 and M2 game test unchanged.
+- [x] **Step 5: Commit** `refactor(core): make the game's node pool editable`.
 
 ### Task 3: Primitive operations and their inverses
 
@@ -197,15 +206,15 @@
   - `Game::undo(&mut self, change: &Change)` and `Game::redo(&mut self, change: &Change)`.
   - `Game::release(&mut self, nodes: &[NodeId])`: empties detached nodes that no history entry can reach again.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `each_op_then_its_inverse_is_identity` (for every variant, on a fixture with variations)
   - `undo_restores_odd_records_byte_for_byte` (Review Focus 1: the odd-node fixture, a random sequence of 200 ops from a seeded generator, undone in reverse; `write_sgf(to_sgf)` equals the original)
   - `redo_after_undo_equals_the_first_application`
   - `ids_survive_undo_and_redo`
-- [ ] **Step 2: Run** `cargo test -p aji-core edit`. Expected: FAIL.
-- [ ] **Step 3: Implement** `Op`, `alloc`, `apply_op`, `undo`, `redo` and `release`.
-- [ ] **Step 4: Run** `cargo test -p aji-core`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(core): apply and invert primitive record operations`.
+- [x] **Step 2: Run** `cargo test -p aji-core edit`. Expected: FAIL.
+- [x] **Step 3: Implement** `Op`, `alloc`, `apply_op`, `undo`, `redo` and `release`.
+- [x] **Step 4: Run** `cargo test -p aji-core`. Expected: PASS.
+- [x] **Step 5: Commit** `feat(core): apply and invert primitive record operations`.
 
 ### Task 4: Record edits
 
@@ -259,7 +268,7 @@
   - **KeepTryout** clears the try-out flag on the path from the first try-out ancestor to `node`, and on `node`'s whole subtree.
   - **DropTryout** detaches every try-out node whose parent is kept.
 
-- [ ] **Step 1: Write the failing tests**, one per rule above:
+- [x] **Step 1: Write the failing tests**, one per rule above:
   - `play_enters_a_matching_child`
   - `play_appends_a_new_variation`
   - `play_refuses_an_occupied_point_and_a_suicide`
@@ -277,10 +286,10 @@
   - `drop_tryout_detaches_tryout_tops`
   - `placed_by_names_each_stones_move_and_branch_number`
   - `every_edit_undoes_exactly` (each edit on the odd-node fixture; undo; SGF byte-identical)
-- [ ] **Step 2: Run** `cargo test -p aji-core edit`. Expected: FAIL.
-- [ ] **Step 3: Implement** `Game::edit` by compiling each edit to `Op`s, plus the three queries.
-- [ ] **Step 4: Run** `cargo test -p aji-core`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(core): edit records: moves, variations, comments, marks, setup and info`.
+- [x] **Step 2: Run** `cargo test -p aji-core edit`. Expected: FAIL.
+- [x] **Step 3: Implement** `Game::edit` by compiling each edit to `Op`s, plus the three queries.
+- [x] **Step 4: Run** `cargo test -p aji-core`. Expected: PASS.
+- [x] **Step 5: Commit** `feat(core): edit records: moves, variations, comments, marks, setup and info`.
 
 ### Task 5: The session's current line and navigation
 
@@ -311,7 +320,7 @@
   - `GameSession::open_at_end(&mut self)` (5.12).
   - `GameSession::trim()` runs after each navigation with the current path.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `going_back_before_a_branch_keeps_the_variation`
   - `next_after_the_branch_point_returns_into_the_variation`
   - `entering_another_node_moves_the_tip`
@@ -320,10 +329,10 @@
   - `move_n_follows_the_current_line`
   - `line_revision_changes_only_with_the_line`
   - `next_move_skips_pl_only_nodes` (M7 minor 6)
-- [ ] **Step 2: Run** `cargo test -p aji game::tests`. Expected: FAIL.
-- [ ] **Step 3: Implement.** Today's tests that used `index` now go through `line_index()`.
-- [ ] **Step 4: Run** `cargo test --workspace`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: follow the line the user is on through the tree`.
+- [x] **Step 2: Run** `cargo test -p aji game::tests`. Expected: FAIL.
+- [x] **Step 3: Implement.** Today's tests that used `index` now go through `line_index()`.
+- [x] **Step 4: Run** `cargo test --workspace`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: follow the line the user is on through the tree`.
 
 ### Task 6: History, unsaved changes and try-out in the session
 
@@ -373,7 +382,7 @@
     - Undo and redo restore `before` and `after`. The tip after undo is `before.tip`.
     - Opening and new clear the history; try-out ends silently.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `changed_follows_the_last_kept_edit`
   - `undo_to_the_saved_edit_clears_changed`
   - `a_dropped_redo_past_the_save_stays_changed`
@@ -388,10 +397,10 @@
   - `entering_an_existing_move_is_not_a_change`
   - `an_unchanged_comment_or_rules_value_is_not_an_edit`
   - `undo_walks_back_through_the_tryout_start`
-- [ ] **Step 2: Run** `cargo test -p aji history game::tests`. Expected: FAIL.
-- [ ] **Step 3: Implement.** Entries dropped by `push` are passed to `Game::release` for nodes that are detached.
-- [ ] **Step 4: Run** `cargo test --workspace`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: undo and redo every edit, with try-out and the unsaved mark`.
+- [x] **Step 2: Run** `cargo test -p aji history game::tests`. Expected: FAIL.
+- [x] **Step 3: Implement.** Entries dropped by `push` are passed to `Game::release` for nodes that are detached.
+- [x] **Step 4: Run** `cargo test --workspace`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: undo and redo every edit, with try-out and the unsaved mark`.
 
 ### Task 7: Protocol and service for editing, the tree and the snapshot
 
@@ -435,7 +444,7 @@
     - a change of `line_revision` pushes `GameTrend` for the new line.
   - **Open at end:** `GameOpen` gains `at_end: bool`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `api_shapes_match_the_protocol` (extended: every new request, response, event and snapshot field)
   - `edit_undo_redo_answer_with_snapshots`
   - `tree_event_only_on_structure_changes` (navigating sends none; a comment sends one, since `COMMENT` changed)
@@ -443,10 +452,10 @@
   - `rules_edit_stops_the_job`
   - `an_illegal_move_is_refused_with_its_reason`
   - `open_at_end_lands_on_the_last_move`
-- [ ] **Step 2: Run** `cargo test -p aji`. Expected: FAIL.
-- [ ] **Step 3: Implement**, and regenerate the bindings.
-- [ ] **Step 4: Run** `cargo test --workspace`, `cargo test -p aji --release -- --ignored tree_payload`, `pnpm typecheck` and `pnpm test`. Expected: PASS, with the callers fixed.
-- [ ] **Step 5: Commit** `feat: edit, undo and the tree over the protocol`.
+- [x] **Step 2: Run** `cargo test -p aji`. Expected: FAIL.
+- [x] **Step 3: Implement**, and regenerate the bindings.
+- [x] **Step 4: Run** `cargo test --workspace`, `cargo test -p aji --release -- --ignored tree_payload`, `pnpm typecheck` and `pnpm test`. Expected: PASS, with the callers fixed.
+- [x] **Step 5: Commit** `feat: edit, undo and the tree over the protocol`.
 
 ### Task 8: Export, save handshake, `LZ` on branches and encodings
 
@@ -481,7 +490,7 @@
     - `GameSession::lizzie()` and `export_with` take a `HashMap<NodeId, String>`.
   - Backlog M6 minor 9: export no longer refuses a game without moves. `GameEmpty` stays for an empty record with no properties beyond the defaults.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `gbk_values_round_trip_in_place` (a Fox GBK fixture without `CA`, opened and saved in place unchanged: every property value's bytes, and `CA`'s absence, are as in the original. `write_sgf` may change layout and add `FF` and `GM`, so whole files are not compared.)
   - `a_wrong_guess_still_round_trips_values` (short GBK fixtures that `decode` reads as EUC-KR without replacement: their property values' bytes come back)
   - `the_source_is_utf8_after_save_as_or_a_fallback`
@@ -492,10 +501,10 @@
   - `lz_on_branch_nodes_round_trips`
   - `clear_game_clears_every_node`
   - `a_header_only_game_saves` (M6 minor 9)
-- [ ] **Step 2: Run** `cargo test --workspace`. Expected: FAIL.
-- [ ] **Step 3: Implement.** If `a_wrong_guess_still_round_trips_values` cannot pass for real fixtures (GBK is decoded as GB18030, EUC-KR as windows-949), stop and report: design 5.13's claim does not hold, guessed files go to Save As first (`needs_save_as` true for `EncodingGuessed`), and the owner is told before the task continues.
-- [ ] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: save in the file's encoding, save branches and clean records, and keep analysis on branches`.
+- [x] **Step 2: Run** `cargo test --workspace`. Expected: FAIL.
+- [x] **Step 3: Implement.** If `a_wrong_guess_still_round_trips_values` cannot pass for real fixtures (GBK is decoded as GB18030, EUC-KR as windows-949), stop and report: design 5.13's claim does not hold, guessed files go to Save As first (`needs_save_as` true for `EncodingGuessed`), and the owner is told before the task continues.
+- [x] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: save in the file's encoding, save branches and clean records, and keep analysis on branches`.
 
 ### Task 9: Whole-game analysis of all branches, and the trend by line
 
@@ -518,7 +527,7 @@
   - **Losses** come from the current line's previous node (`line_losses` as today, on that line).
   - **The job's plan** is never re-planned by edits. A `SetRules` stops it (Task 7).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `all_branches_plans_every_kept_node_once`
   - `tryout_nodes_are_never_planned`
   - `range_and_side_apply_to_branches`
@@ -526,10 +535,10 @@
   - `edits_do_not_stop_the_job_but_rules_do` (Review Focus 2)
   - `progress_names_keys`
   - `old_job_options_read_with_line_scope`
-- [ ] **Step 2: Run** `cargo test -p aji job follow service`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: analyse every branch, and follow the current line in the trend`.
+- [x] **Step 2: Run** `cargo test -p aji job follow service`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `cargo test --workspace`, `pnpm typecheck` and `pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: analyse every branch, and follow the current line in the trend`.
 
 ### Task 10: Interface transport, stores and commands
 
@@ -587,7 +596,7 @@
   - **`JobPanel`** (M2's 分析全局… panel) gains a segmented 当前路线 or 所有分支 control for `scope`, kept with the other remembered job options.
   - **`useTrendSync`** drops `trendNodes` whose `revision` is not the trend store's `lineRevision`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `editActions shows the refusal notice`
   - `useTreeSync fetches on a newer treeRevision only`
   - `keymap binds the new keys` (both OS kinds)
@@ -596,10 +605,10 @@
   - `stale_trend_updates_are_dropped` (Review Focus 2)
   - `coverage strip maps keys to slots`
   - `job panel sends the chosen scope`
-- [ ] **Step 2: Run** `pnpm test src/game src/commands src/edit src/analysis src/job src/panel/CoverageStrip`. Expected: FAIL.
-- [ ] **Step 3: Implement**, with `zh-CN` and `en` strings for the commands and notices.
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: send edits, follow the tree and bind the editing keys`.
+- [x] **Step 2: Run** `pnpm test src/game src/commands src/edit src/analysis src/job src/panel/CoverageStrip`. Expected: FAIL.
+- [x] **Step 3: Implement**, with `zh-CN` and `en` strings for the commands and notices.
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: send edits, follow the tree and bind the editing keys`.
 
 ### Task 11: The browser fake's tree
 
@@ -619,15 +628,15 @@
   - `fakeGame.ts` answers `gameEdit`, `gameUndo`, `gameRedo`, `gameTree`, `gameSaved` and the new `gameExport`.
   - `development.md` says what the fake does not do: ko beyond simple ko, insert, flatten and analysis of branches.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `fake plays variations and undoes them`
   - `fake try-out ends in one step`
   - `fake save handshake clears changed`
   - `scenario game edits through the transport`
-- [ ] **Step 2: Run** `pnpm test src/dev`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(dev): edit records in the browser fake`.
+- [x] **Step 2: Run** `pnpm test src/dev`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat(dev): edit records in the browser fake`.
 
 ### Task 12: Playing on the board, the edit row, badges and board menus
 
@@ -659,7 +668,7 @@
   - **A click on an empty point in normal mode** sends `play`, or `tryoutStart` then `play` from 在这里试下. A click on a candidate disc does the same at its point. A click on a stone does nothing.
   - **The window title** ends with ` (已修改)` (`title.changed`) when changed. No "·".
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `a click on an empty point plays`
   - `a click on a stone does nothing`
   - `badges letter the continuations, amber for try-out`
@@ -667,10 +676,10 @@
   - `edit row disables markup and setup during try-out`
   - `header shows 试下中 and 已修改`
   - screenshot `badges_and_tryout_numbers`
-- [ ] **Step 2: Run** `pnpm test src/board src/edit src/panel src/layout`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: play variations on the board, with the edit row, badges and board menus`.
+- [x] **Step 2: Run** `pnpm test src/board src/edit src/panel src/layout`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: play variations on the board, with the edit row, badges and board menus`.
 
 ### Task 13: Markup and freehand
 
@@ -690,17 +699,17 @@
     - a click sends `setMark` with the tool's mark, or `null` when the same mark is there.
   - **`useFreehandStore`:** `{ strokes: Point2[][]; add; clear }`, cleared on `snapshot.node` change. Strokes are drawn on an overlay canvas, and a touch drag draws instead of swiping while ✎ is on.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `marks from the file are drawn outside markup mode`
   - `a second click with the same tool removes the mark`
   - `letters and numbers take the next free value`
   - `discs hide while marking`
   - `freehand clears on navigation`
   - screenshot `marks_on_stones_and_empty_points`
-- [ ] **Step 2: Run** `pnpm test src/board src/edit`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: mark up the board, and draw freehand`.
+- [x] **Step 2: Run** `pnpm test src/board src/edit`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: mark up the board, and draw freehand`.
 
 ### Task 14: Setup mode
 
@@ -721,16 +730,16 @@
   - **Setup's stone menu:** 删除这颗子 and 改为黑子 or 改为白子, then a hint line.
   - Discs hide in setup mode.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `setup clicks add and remove stones`
   - `alternate starts with the side to move`
   - `drag sends moveStone`
   - `insert sends one insertMove then returns to black`
   - `flatten asks nothing and is undoable from the row` (the undo button enables)
-- [ ] **Step 2: Run** `pnpm test src/edit src/board`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: set up positions`.
+- [x] **Step 2: Run** `pnpm test src/edit src/board`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: set up positions`.
 
 ### Task 15: The variation tree panel and the presets
 
@@ -769,7 +778,7 @@
     - 经典: tabs(tree, comments) under the trend in the left column;
     - 极简, 思考 and 四盘 are unchanged.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `layout puts the main line in lane 0 and variations below`
   - `layout_of_ten_thousand_nodes_is_fast` (under 50 ms in Vitest)
   - `tree turns with its panel`
@@ -777,10 +786,10 @@
   - `node menu disables items on the main line`
   - `presets place tree and comments`
   - `an old layout validates without the new panels`
-- [ ] **Step 2: Run** `pnpm test src/tree src/layout`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: show the variation tree`.
+- [x] **Step 2: Run** `pnpm test src/tree src/layout`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: show the variation tree`.
 
 ### Task 16: The comment panel
 
@@ -799,15 +808,15 @@
   - **Keeping the text.** On blur, on Esc, or when `snapshot.node` changes while editing, it sends `setComment { node: <the node being edited>, text }` if the text changed. Empty text sends `null`.
   - `requestCommentFocus(node: number)`, which `NodeMenu`'s 编辑评论 calls.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `blur keeps the comment`
   - `navigating while typing keeps it on the old node`
   - `typing_in_the_comment_never_reaches_the_board` (Review Focus 5: V, B, [, ], N, Delete, Backspace, Esc, ⌘Z typed in the field send no edit or navigation)
   - `edit comment from the node menu focuses the field`
-- [ ] **Step 2: Run** `pnpm test src/comments`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: read and write comments`.
+- [x] **Step 2: Run** `pnpm test src/comments`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm lint && pnpm typecheck && pnpm test`. Expected: PASS.
+- [x] **Step 5: Commit** `feat: read and write comments`.
 
 ### Task 17: Game information, custom rules and new game sizes
 
@@ -836,7 +845,7 @@
   - **The settings page's default rules** use the same control.
   - **`MenuAction::New(size)`:** ids `new:5` to `new:19`. `from_id` and `id` round-trip, tested.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `parse and format results round trip`
   - `an unknown RE shows as text`
   - `fill from final scoring writes RE`
@@ -844,10 +853,10 @@
   - `rules edits are disabled during try-out`
   - `new_size_ids_round_trip` (Rust)
   - `both_languages_label_the_file_menu` (extended)
-- [ ] **Step 2: Run** `pnpm test src/panel src/settings src/scoring` and `cargo test -p aji menu`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all checks. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: edit the game information and KataGo's full rules`.
+- [x] **Step 2: Run** `pnpm test src/panel src/settings src/scoring` and `cargo test -p aji menu`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all checks. Expected: PASS.
+- [x] **Step 5: Commit** `feat: edit the game information and KataGo's full rules`.
 
 ### Task 18: Saving, save options and the unsaved-changes prompt
 
@@ -879,8 +888,8 @@
   - **The guards.** Open, new, drop and recent call `confirmDiscard` first. On `app-quit-requested`, `confirmDiscard`, then `invoke('app_quit')`.
   - **Undo and redo in the menu.** The macOS 编辑 menu's 撤销 and 重做 become custom items. When a text field has focus, the interface runs `document.execCommand('undo' | 'redo')`; otherwise the game command. **[To verify]** in Task 21 that text undo works in WKWebView this way.
 
-- [ ] **Step 0: Check quitting on macOS first.** In `pnpm tauri dev`, add a temporary `RunEvent::ExitRequested` handler that calls `api.prevent_exit()` and logs. Confirm that ⌘Q and 退出 Aji from the predefined Quit item raise it and can be held. If they do not, replace the predefined Quit with a custom item that sends `MenuAction::Quit`, and route it through the same guard. Remove the temporary log.
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 0: Check quitting on macOS first.** In `pnpm tauri dev`, add a temporary `RunEvent::ExitRequested` handler that calls `api.prevent_exit()` and logs. Confirm that ⌘Q and 退出 Aji from the predefined Quit item raise it and can be held. If they do not, replace the predefined Quit with a custom item that sends `MenuAction::Quit`, and route it through the same guard. Remove the temporary log.
+- [x] **Step 1: Write the failing tests:**
   - `save in place writes bytes and marks saved`
   - `save without a token is save as`
   - `save_as_first goes to save as once`
@@ -890,10 +899,10 @@
   - `branch and clean saves do not mark saved`
   - `files_save_writes_atomically` (Rust)
   - `undo from the menu goes to a focused text field first`
-- [ ] **Step 2: Run** `pnpm test src/game src/platform` and `cargo test -p aji platform`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all checks. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: save in place, save branches and clean records, and ask before discarding changes`.
+- [x] **Step 2: Run** `pnpm test src/game src/platform` and `cargo test -p aji platform`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all checks. Expected: PASS.
+- [x] **Step 5: Commit** `feat: save in place, save branches and clean records, and ask before discarding changes`.
 
 ### Task 19: View rotation, move numbers, auto-replay and opening at the end
 
@@ -929,7 +938,7 @@
     - it stops on any other navigation, edit, board click, or at the line's end.
   - **Opening:** `openAt: 'last'` sends `GameOpen { atEnd: true }`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `orientation round trips every point`
   - `rotate then counter-rotate is identity`
   - `clicks map through the orientation`
@@ -939,10 +948,10 @@
   - `open at last sends atEnd`
   - `old device settings migrate with defaults`
   - screenshot `rotated_board_with_numbers`
-- [ ] **Step 2: Run** `pnpm test src/board src/game src/device`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all checks. Expected: PASS.
-- [ ] **Step 5: Commit** `feat: rotate the view, number the stones and replay the game`.
+- [x] **Step 2: Run** `pnpm test src/board src/game src/device`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all checks. Expected: PASS.
+- [x] **Step 5: Commit** `feat: rotate the view, number the stones and replay the game`.
 
 ### Task 20: Backlog items
 
@@ -960,17 +969,17 @@
     - PageDown stops at a trailing node with no move (a comment), as `Last` does;
     - held PageUp and PageDown send the next step only after the previous navigation answers.
 
-- [ ] **Step 1: Write the failing tests**, one per item:
+- [x] **Step 1: Write the failing tests**, one per item:
   - `komi unreadable names the rules used`
   - `encoding title covers a failed CA`
   - `missing_recent_entries_are_enabled` (Rust)
   - `drop opens the first sgf`
   - `page down reaches a trailing comment node`
   - `held page keys do not queue a burst`
-- [ ] **Step 2: Run** the named tests. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all checks. Expected: PASS.
-- [ ] **Step 5: Commit** `fix: clear the M6 and M7 backlog items M3 touches`.
+- [x] **Step 2: Run** the named tests. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all checks. Expected: PASS.
+- [x] **Step 5: Commit** `fix: clear the M6 and M7 backlog items M3 touches`.
 
 ### Task 21: Documents, the exit check and the Status
 
@@ -983,9 +992,9 @@
   - `docs/development.md`: the editing scenario;
   - this plan's **Status**.
 
-- [ ] **Step 1: Edit the documents** as design section 12 lists, with "the maintainer's decision, 2026-11-23" on the 7.10 additions.
-- [ ] **Step 2: Run a fresh whole-branch review** (superpowers:requesting-code-review). Fix each important finding with a failing test first, folded into the commit it corrects.
-- [ ] **Step 3: Check the exit on the Mac** (design 9):
+- [x] **Step 1: Edit the documents** as design section 12 lists, with "the maintainer's decision, 2026-11-23" on the 7.10 additions.
+- [x] **Step 2: Run a fresh whole-branch review** (superpowers:requesting-code-review). Fix each important finding with a failing test first, folded into the commit it corrects.
+- [x] **Step 3: Check the exit on the Mac** (design 9):
   - in `pnpm dev` at 1440 × 900, 375 × 812 and 768 × 1024, both themes, every M3 flow by mouse and by touch;
   - in `pnpm tauri dev`:
     - save in place over a GBK Fox record, and compare its bytes when nothing changed;
@@ -994,5 +1003,5 @@
     - an all-branches job.
   - Then build `pnpm tauri build --bundles app` for the owner's walk.
   - Open a saved file in Sabaki **[To verify]**, and in LizzieYzy if available.
-- [ ] **Step 4: Record** the results and anything outstanding in this plan's **Status**, as M2's does.
-- [ ] **Step 5: Commit** `docs: record Phase 2 M3`.
+- [x] **Step 4: Record** the results and anything outstanding in this plan's **Status**, as M2's does.
+- [x] **Step 5: Commit** `docs: record Phase 2 M3`.

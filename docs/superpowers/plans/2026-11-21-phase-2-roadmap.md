@@ -26,11 +26,11 @@ The owner judges it against their own habits (charter D3). Before Phase 2 the ow
   - markup and freehand drawing;
   - setup mode;
   - try-out;
-  - board transforms;
+  - board view rotation and reflection;
   - game information editing;
   - save options, and save with analysis;
   - screenshots;
-  - click a stone to jump, find a move;
+  - return to a stone's move from its menu;
   - auto-replay;
   - saving and restoring a working session.
 - **7.3 Live analysis:**
@@ -80,8 +80,8 @@ A third order, by the owner's daily-use list, was not available: the owner agree
 | P7 | The Phase 2 release | `v0.2.0`, built and released like `v0.1.0` after the M4 acceptance walk. No releases between milestones | M4 |
 | P8 | Mistake bars on the trend graph (audit P2-Q3). M7 removed them at the owner's request | They stay out. M2 builds the loss thresholds for the swing list only (move-quality marks were dropped at the owner's request, 2026-11-23) | M2 |
 | P9 | The swing list: each side's biggest drops, click to jump (audit P2-G7, P2-Q4) | In Phase 2, in M2, since whole-game analysis feeds it | M2 |
-| P10 | Try-out (audit P2-Q1). Interface design 4.1 says "no try-a-move button" [Decided], and section 6 makes every played move a variation | A variation marked as a try-out, which one step discards. Interface design 4.1 is revised to allow its toggle | M3 |
-| P11 | Markup (audit P2-Q2). Interface design 6 has "no marking without playing, for now" [Proposed] | Marks and labels found in opened files are always drawn. The tools are triangle, square, circle, cross and letters first, saved into the SGF; freehand drawing stays on screen and is not saved | M3 |
+| P10 | Try-out (audit P2-Q1) | **Settled in M3.** V or the edit-row button starts a temporary variation. End try-out discards the temporary moves in one step. Keep as branch saves a line with the record | M3 |
+| P11 | Markup (audit P2-Q2) | **Settled in M3.** Triangles, squares, circles, crosses, letters and numbers belong to the node and save in SGF. Freehand strokes stay on screen | M3 |
 | P12 | User-made board and stone images (audit P2-Q5) | Built-in styles only in Phase 2; importing one's own images is left for Phase 8 | M1 |
 
 Interface areas the interface design has not drawn yet (its section 8) get a design that goes to the owner before they are built, as O7 did in Phase 1. Each milestone below names the ones it needs.
@@ -211,6 +211,8 @@ One branch per milestone, for example `feat/p2-m1-layout`. Each ends with CI gre
 
 ### M3. Game editing
 
+**Status:** Built and reviewed on 2026-11-24. The browser and native Mac checks passed, and Sabaki Web reopened the edited game. The arm64 app is ready for the maintainer's walk. Test results and outstanding physical-device checks are recorded in the [M3 plan](2026-11-24-phase-2-m3-editing.md).
+
 **Before building, to the owner:** the designs for the variation tree and the variations section (interface design 4.4 and 5.4), the comment panel, the markup and setup tools, and the right-click menus (interface design section 6).
 
 **Build:**
@@ -221,9 +223,9 @@ One branch per milestone, for example `feat/p2-m1-layout`. Each ends with CI gre
 - **Markup tools** and freehand drawing, as P11 settles.
 - **Setup mode:** add black or white stones, alternate, pass, insert a move, drag stones, change the side to move. Remove one stone, flip one stone's colour, and flatten the position into a new start (audit P2-G8).
 - **Try-out** (试下), as P10 settles.
-- **Board transforms:** rotate, flip, swap colours.
+- **Board view:** rotate and flip.
 - **Game information editing:** players, ranks, rules (including KataGo's full rule options, audit EN6), komi, result. Final scoring's count, from M2, can be written as the result. A board size for a new game, including the non-19 sizes Phase 1 opens.
-- **Coordinates and move numbers:** all, the last N, and restarting the numbering inside a branch. **Click a stone to jump** to its move, and **find a move**. **Auto-replay**, and a timed replay of the hovered line, offered again (audit P2-G11; if the owner declines it again, it goes to 7.10).
+- **Coordinates and move numbers:** all, the last N, and restarting the numbering inside a branch. A stone's menu returns to the move that placed it. Auto-replay steps through the current game line. The maintainer declined timed replay of a hovered line (P2-G11, charter 7.10).
 - A setting for whether an opened record shows its first or its last move (audit P2-G12).
 - **Save options:** keep or drop comments, and save one branch.
 - **Whole-game analysis of all branches.** The trend graph steps by node, not by move number (M7 minor 4).
@@ -300,7 +302,7 @@ The [Phase 2 menu check](../../audits/phase-2-lizzieyzy-menu.md) read the Lizzie
 | P2-G8 Setup extras: remove, flip, flatten | M3 |
 | P2-G9 Capture counts | M1 |
 | P2-G10 Mouse bindings and a held-key shortcut overview | M4 |
-| P2-G11 Timed replay of the hovered line, offered again | M3 |
+| P2-G11 Timed replay of the hovered line | Declined on 2026-11-23, charter 7.10 |
 | P2-G12 Open a record at its first or last move | M3 |
 
 The audit's questions are decisions P8 to P12 in section 3. Its later-phase items stay in the audit for those phases' checks.

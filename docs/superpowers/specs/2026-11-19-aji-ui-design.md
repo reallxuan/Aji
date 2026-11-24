@@ -91,7 +91,9 @@ Left to right:
 - **View** (视图), on Windows and in the browser only: 布局 and 截图. On macOS they live in the menu bar (显示 → 布局, 文件 → 导出图片), and the game menu keeps to the game everywhere. **[Decided in Phase 2 M1]** (owner, 2026-11-22)
 - **Settings**.
 
-There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no "try a move", "let the AI continue" or "pause analysis" buttons. **[Decided]**
+There are no "review", "play" or "tsumego" mode tabs. **[Decided]** There are no "let the AI continue" or "pause analysis" buttons. **[Decided]**
+
+The edit row directly below the header holds Try-out (V), Markup, Setup, Undo and Redo. Starting try-out shows 试下中 in the header. **[Decided in Phase 2 M3, P10]**
 
 ### 4.2 Win rate and trend
 
@@ -113,10 +115,10 @@ Columns: rank chip, point, win rate, score lead, visits, the share of visits, di
 
 ### 4.4 Variations
 
-- The section is absent when the game has no variations. It appears when the first one is created and has a "hide" control. **[Decided]**
-- The main line is a horizontal row of numbered stones. Each variation drops down from the move where it departs and runs to the right, with a short label.
+- A standalone tree panel folds away when the game has no variations and appears with the first branch. In a tab group, the Variations tab stays available and shows “No variations yet” in the current language. **[Decided]**
+- The tree follows the shape of its panel. Moves run left to right when the panel is wider than tall, and top to bottom otherwise. A variation takes the next free lane at its branch point. Every fifth main-line move is numbered.
 - The current move has an accent ring.
-- The first move of every line available from the current position carries a letter: A for the main line, then B, C and so on in order of creation. The same letters appear on the board (section 5.4).
+- The first move of every line available from the current position carries a letter: A for the main line, then B, C and so on in the current sibling order. The same letters appear on the board (section 5.4).
 
 ## 5. Board
 
@@ -155,34 +157,34 @@ When the current position has more than one recorded continuation, each one is m
 
 - A small dark badge with a letter sits on the upper-right rim of the point, clear of the win-rate numbers of any candidate disc there.
 - A continuation that is not among the engine's candidates also gets an empty outlined disc, so the letter is not floating over an empty intersection.
+- A try-out continuation has an amber letter.
 - Only continuations from the current position are marked. Branch points elsewhere in the game appear in the variation tree only.
 
 ## 6. Variation interaction
 
-Playing a move is the only way to make a variation; there is no separate marking action. **[Decided]**
+**Playing and previewing**
 
-**Creating**
+- Clicking an empty point plays a kept move. A matching continuation enters the existing line. A new move adds a variation. A click on a candidate plays there too. On touch, the first candidate tap previews it and the second plays it.
+- Hovering a candidate previews its line. The wheel steps the preview. Enter has no action on it.
+- Try-out (V) starts a temporary line. End try-out to discard the temporary moves and return to the starting node, or use Keep as branch on the line to save it with the record.
 
-- Clicking an empty intersection plays there. If that move differs from the recorded continuations, a new variation is created and entered. If it matches one, that line is entered.
-- Clicking a candidate disc is the same as playing on that point.
-- Hovering a candidate previews the engine's continuation. Pressing Enter while hovering stores the whole continuation as one variation.
+**Moving and editing**
 
-**Moving**
+- Click a letter badge or tree node to enter that line. Left or Up steps back, Right or Down steps forward, and `[` and `]` switch continuations. Escape closes the active menu or editor, leaves markup or setup, ends try-out, or returns to the branch point, in that order.
+- The markup tools place triangles, squares, circles, crosses, letters and numbers on the current node without playing a move. Freehand strokes stay on screen and clear on navigation. **[Decided in Phase 2 M3, P11]**
+- Every record edit supports undo and redo, including playing a move, promoting or deleting a branch, comments, markup, setup and game information. Navigating within the tree keeps the record unchanged.
 
-- Clicking a letter badge on the board, or a node in the tree, enters that line.
-- Left and right arrows step through moves. Up and down arrows switch between the continuations of the current position.
-- Escape returns to the move where the current variation departs.
+**Menus**
 
-**Managing**
+Right-click or long-press to open the same menu with either input.
 
-- Letters are assigned automatically. Naming is optional.
-- Right-clicking a badge or a line in the tree offers: make main line, delete variation, add a note.
-- Deleting can be undone.
-
-Two defaults chosen without an explicit answer from the owner, both **[Proposed]**:
-
-- There is no "mark a point without playing" feature for now.
-- Accidental clicks are handled by undo, which removes the stray variation without trace. No modifier key is required to play a move.
+| Target | Actions |
+|---|---|
+| Kept tree node or continuation badge | Promote to main line, move up one place, delete the branch, delete this node and its descendants, edit the comment |
+| Try-out node | End try-out and return to the starting move, or keep as a branch |
+| Board stone during normal play | Go back to the move that placed it, or toggle move numbers. A left click leaves the position unchanged |
+| Empty point during normal play | Try out here, pass, or place a mark |
+| Stone during setup | Remove it or change its colour. Drag the stone to move it |
 
 ## 7. First-run engine setup
 
@@ -212,7 +214,6 @@ A four-segment progress line sits at the top of the panel on every step. Each st
 
 - The opened game library.
 - Settings beyond M5's (`docs/design/mockups/m5/settings.html`: interface, analysis, engine, About). Changing backend or network after setup goes through the wizard again ("重新设置引擎"). The engine section's "搜索线程" line and its "测速" button run the benchmark in place (M5 design 5.4).
-- The right-click menus of section 6. (The hover preview of a candidate's continuation is designed in M7: solid numbered stones, frozen while hovered, stepped with the wheel.)
 - The policy heatmap (removed from Aji, Phase 2 plan). Ownership, the position estimate and final scoring are designed in Phase 2 M2 (`docs/design/mockups/p2-m2/`); move-quality marks were dropped at the owner's request (2026-11-23).
 - Playing against the AI.
 - Layouts for windows wider or smaller than the reference size, and for touch.
