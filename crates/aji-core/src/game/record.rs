@@ -118,10 +118,11 @@ fn board_size(root: &SgfNode) -> Result<BoardSize, GameError> {
 }
 
 fn text(root: &SgfNode, id: &str) -> Option<String> {
-    root.first(id)
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
+    info_value(root.first(id)).map(str::to_owned)
+}
+
+pub(super) fn info_value(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|v| !v.is_empty())
 }
 
 fn color_of(s: &str) -> Option<Color> {
@@ -346,7 +347,7 @@ impl Game {
     }
 
     pub fn is_attached(&self, node: NodeId) -> bool {
-        self.nodes[node].attached
+        self.nodes.get(node).is_some_and(|n| n.attached)
     }
 
     pub fn path_to(&self, node: NodeId) -> Vec<NodeId> {
@@ -754,7 +755,7 @@ impl Game {
 }
 
 /// Replaces a property's values with one value, or adds it at the end.
-fn set_prop(node: &mut SgfNode, id: &str, value: &str) {
+pub(super) fn set_prop(node: &mut SgfNode, id: &str, value: &str) {
     match node.props.iter_mut().find(|p| p.id == id) {
         Some(prop) => prop.values = vec![value.to_owned()],
         None => node.push(id, [value.to_owned()]),
