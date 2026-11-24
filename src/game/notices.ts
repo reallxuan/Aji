@@ -3,6 +3,7 @@ import type { CacheStats } from '../transport/generated/CacheStats';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import { toTransportError } from '../transport/transport';
+import { describeRules } from './komi';
 import type { Notice } from './noticeStore';
 
 export type NoticeContent = Omit<Notice, 'id'>;
@@ -35,7 +36,7 @@ const WARNING_ORDER: GameWarning['code'][] = [
   'komiUnreadable',
 ];
 
-function warningValues(warning: GameWarning, snapshot: GameSnapshot) {
+function warningValues(warning: GameWarning, snapshot: GameSnapshot, t: TFunction) {
   switch (warning.code) {
     case 'truncated':
       return { moves: snapshot.lineLength, next: snapshot.lineLength + 1 };
@@ -44,6 +45,8 @@ function warningValues(warning: GameWarning, snapshot: GameSnapshot) {
       return { total: warning.count + 1 };
     case 'encodingGuessed':
       return { encoding: warning.encoding };
+    case 'komiUnreadable':
+      return { rules: describeRules(snapshot.rules.current, t) };
     default:
       return {};
   }
@@ -63,7 +66,7 @@ export function warningNotice(
     (a, b) => WARNING_ORDER.indexOf(a.code) - WARNING_ORDER.indexOf(b.code),
   );
   const text = (warning: GameWarning, part: 'title' | 'detail') =>
-    t(`notice.warning.${warning.code}.${part}`, warningValues(warning, snapshot));
+    t(`notice.warning.${warning.code}.${part}`, warningValues(warning, snapshot, t));
   return {
     kind: 'warning',
     title: text(first, 'title'),

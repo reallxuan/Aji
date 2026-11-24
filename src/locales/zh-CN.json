@@ -460,7 +460,7 @@
         "detail": "另存为时其余各局会原样保留。"
       },
       "encodingGuessed": {
-        "title": "棋谱未注明编码，已按 {{encoding}} 读取",
+        "title": "已推测棋谱编码并按 {{encoding}} 读取",
         "detail": "如果名字显示不对，请告诉我们。"
       },
       "repaired": {
@@ -473,7 +473,7 @@
       },
       "komiUnreadable": {
         "title": "棋谱中的贴目无法读取",
-        "detail": "已按新棋局默认规则分析，可点击规则标签更改。"
+        "detail": "已按{{rules}}分析，可点击规则标签更改。"
       }
     },
     "dropHere": "松开以打开棋谱",

@@ -134,7 +134,7 @@ pub enum GameWarning {
     Repaired,
     /// The file holds this many more games; only the first is open, and saving keeps them.
     ExtraGames { count: u32 },
-    /// The file names no encoding; it was read as this one.
+    /// The file was read using an encoding guessed from its contents.
     EncodingGuessed { encoding: String },
     /// Some moves break the rules; they are shown and flagged.
     IllegalMoves,

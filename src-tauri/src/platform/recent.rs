@@ -88,11 +88,9 @@ impl RecentList {
         self.entries.get(index).map(|e| e.path.clone())
     }
 
-    /// Drops entry `index`; an index past the end changes nothing.
-    pub fn remove(&mut self, index: usize) {
-        if index < self.entries.len() {
-            self.entries.remove(index);
-        }
+    /// Drops a file even if its position in the list changed while it was being opened.
+    pub fn remove(&mut self, path: &Path) {
+        self.entries.retain(|entry| entry.path != path);
     }
 
     pub fn clear(&mut self) {
@@ -153,10 +151,15 @@ mod tests {
             ("5.sgf", "again")
         );
         assert_eq!(entries.iter().filter(|e| e.name == "5.sgf").count(), 1);
-        assert_eq!(list.path(0), Some(dir.path().join("5.sgf")));
-        list.remove(0);
-        assert_eq!(list.entries()[0].name, "11.sgf");
-        list.remove(99);
+        let selected = list.path(0).unwrap();
+        assert_eq!(selected, dir.path().join("5.sgf"));
+        list.push(&file(&dir, "12.sgf"), "newer", 3000);
+        list.remove(&selected);
+        list.remove(&dir.path().join("absent.sgf"));
+        let entries = list.entries();
+        assert_eq!(entries[0].name, "12.sgf");
+        assert_eq!(entries[1].name, "11.sgf");
+        assert!(!entries.iter().any(|e| e.name == "5.sgf"));
         list.clear();
         assert!(list.entries().is_empty());
     }

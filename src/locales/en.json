@@ -460,7 +460,7 @@
         "detail": "Save as keeps the others as they are."
       },
       "encodingGuessed": {
-        "title": "The record names no encoding: read as {{encoding}}",
+        "title": "The record was read as {{encoding}} based on its contents",
         "detail": "If names look wrong, please let us know."
       },
       "repaired": {
@@ -473,7 +473,7 @@
       },
       "komiUnreadable": {
         "title": "The record's komi could not be read",
-        "detail": "Analysing with the default rules for new games; change them from the rules chip."
+        "detail": "Analysing with {{rules}}. You can change them from the rules chip."
       }
     },
     "dropHere": "Release to open the record",

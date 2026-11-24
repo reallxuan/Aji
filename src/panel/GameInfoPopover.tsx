@@ -10,19 +10,10 @@ import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import { DraftInput, type RegisterEditor } from './DraftInput';
 import { ResultField, infoInputClass } from './ResultField';
 import { useGameStore } from '../game/gameStore';
-import { formatKomi, komiOf, scoringOf } from '../game/komi';
+import { describeRules } from '../game/komi';
 import { useActionContext } from '../game/useActionContext';
 import { RulesControl } from '../settings/RulesControl';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
-import type { TFunction } from 'i18next';
-
-function describe(rules: AnalysisRules, t: TFunction): string {
-  if (rules.kind !== 'custom') return t(`rules.described.${rules.kind}`);
-  return t('rules.described.custom', {
-    scoring: t(`rules.${scoringOf(rules)}`),
-    komi: formatKomi(komiOf(rules)),
-  });
-}
 
 const Code = ({ children }: { children: string }) => (
   <code className="rounded-xs bg-divider-soft px-1 font-mono text-[0.71875rem] text-text">
@@ -62,7 +53,7 @@ function RulesSource({ restoreReading }: { restoreReading(): void }) {
             <Code>{code}</Code>
           </span>
         ))}
-        {t(tail, { rules: describe(rules.fromFile, t) })}
+        {t(tail, { rules: describeRules(rules.fromFile, t) })}
       </>
     );
   }

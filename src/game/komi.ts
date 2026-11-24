@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { RuleDetails } from '../transport/generated/RuleDetails';
 import type { Scoring } from '../transport/generated/Scoring';
@@ -57,6 +58,14 @@ export function sameRulesEffect(left: AnalysisRules, right: AnalysisRules): bool
 
 /** `7` for 7, `7.5` for 7.5, `-0.5` for -0.5. */
 export const formatKomi = (komi: number) => String(komi);
+
+export function describeRules(rules: AnalysisRules, t: TFunction): string {
+  if (rules.kind !== 'custom') return t(`rules.described.${rules.kind}`);
+  return t('rules.described.custom', {
+    scoring: t(`rules.${scoringOf(rules)}`),
+    komi: formatKomi(komiOf(rules)),
+  });
+}
 
 /** A typed komi: a multiple of 0.5 within ±150, else `null`. */
 export function parseKomi(text: string): number | null {

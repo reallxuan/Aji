@@ -111,7 +111,7 @@ export function TrendGraph({ height: panelHeight, width }: { height: number; wid
   const goTo = (i: number) => {
     if (!nodes[i] || dragging.current === i || !currentTrendLine(revision)) return;
     dragging.current = i;
-    go({ node: nodes[i].node }, () => currentTrendLine(revision));
+    go({ node: nodes[i].node }, { isCurrent: () => currentTrendLine(revision) });
   };
 
   const line = (y: (i: number) => number, name: string, color: string, stroke: number) =>

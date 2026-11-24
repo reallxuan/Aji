@@ -278,16 +278,7 @@ fn recent_menu<R: Runtime>(
         );
     }
     for (i, entry) in recent.iter().enumerate() {
-        let index = u32::try_from(i).unwrap_or(u32::MAX);
-        let label = match entry.title.is_empty() {
-            true => entry.name.as_str(),
-            false => entry.title.as_str(),
-        };
-        menu = menu.item(
-            &MenuItemBuilder::with_id(MenuAction::Recent(index).id(), label)
-                .enabled(!entry.missing)
-                .build(app)?,
-        );
+        menu = menu.item(&recent_menu_item(app, i, entry)?);
     }
     menu.separator()
         .item(
@@ -296,6 +287,20 @@ fn recent_menu<R: Runtime>(
                 .build(app)?,
         )
         .build()
+}
+
+fn recent_menu_item<R: Runtime>(
+    app: &AppHandle<R>,
+    index: usize,
+    entry: &RecentEntry,
+) -> tauri::Result<tauri::menu::MenuItem<R>> {
+    let index = u32::try_from(index).unwrap_or(u32::MAX);
+    let label = match entry.title.is_empty() {
+        true => entry.name.as_str(),
+        false => entry.title.as_str(),
+    };
+    // A click on a missing file removes the entry and reports what happened.
+    item(app, MenuAction::Recent(index), label)
 }
 
 /// 文件 → 导出图片 (owner, 2026-11-22): save, then copy, each of the board, the sub-board and the
@@ -642,6 +647,23 @@ mod tests {
         all.extend(l.rotations);
         all.extend(l.number_options);
         all
+    }
+
+    #[test]
+    fn missing_recent_entries_are_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recent = super::super::recent::RecentList::default();
+        recent.push(&dir.path().join("gone.sgf"), "", 1);
+        let entries = recent.entries();
+        assert!(entries[0].missing);
+        let app = tauri::test::mock_app();
+        let item = recent_menu_item(app.handle(), 0, &entries[0]).unwrap();
+        assert_eq!(
+            MenuAction::from_id(item.id().as_ref()),
+            Some(MenuAction::Recent(0))
+        );
+        assert_eq!(item.text().unwrap(), "gone.sgf");
+        assert!(item.is_enabled().unwrap());
     }
 
     #[test]

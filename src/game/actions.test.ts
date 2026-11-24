@@ -1,5 +1,6 @@
 import { useDeviceStore } from '../device/deviceStore';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEngineStore } from '../engine/engineStore';
 import { createI18n } from '../i18n/createI18n';
 import { createFakeFiles } from '../platform/fakeFiles';
 import { createFakeTransport } from '../transport/fake';
@@ -7,7 +8,14 @@ import type { GameWarning } from '../transport/generated/GameWarning';
 import type { Request } from '../transport/generated/Request';
 import type { Response } from '../transport/generated/Response';
 import { TransportError } from '../transport/transport';
-import { navigate, openDropped, openFromPicker, openRecent, saveAs, startNewGame } from './actions';
+import {
+  navigate,
+  openDropped,
+  openFromPicker,
+  runMenuCommand,
+  saveAs,
+  startNewGame,
+} from './actions';
 import { resetGameStore, useGameStore } from './gameStore';
 import { resetNotices, useNoticeStore } from './noticeStore';
 import { makeSnapshot, noInfo } from './testing';
@@ -125,9 +133,9 @@ describe('opening', () => {
     expect(useNoticeStore.getState().notice?.title).toBe('这个文件里有 3 局棋，只打开了第一局');
   });
 
-  it('refuses a dropped file that is not .sgf without reading it', async () => {
+  it('reports the first dropped path when none are .sgf without reading it', async () => {
     const { ctx, requests } = setup(() => opened(), { files: { '/notes/a.txt': 'x' } });
-    await openDropped(ctx, ['/notes/a.txt']);
+    await openDropped(ctx, ['/notes/a.txt', '/notes/b.txt']);
     expect(requests).toEqual([]);
     expect(useNoticeStore.getState().notice).toMatchObject({
       kind: 'error',
@@ -136,22 +144,27 @@ describe('opening', () => {
     });
   });
 
-  it('opens the first dropped file', async () => {
+  it('drop opens the first sgf', async () => {
     const { ctx, files } = setup(() => opened(), {
-      files: { '/a.sgf': '(;)', '/b.sgf': '(;)' },
+      files: { '/notes.txt': 'x', '/a.SgF': '(;)', '/b.sgf': '(;)' },
     });
-    await openDropped(ctx, ['/a.sgf', '/b.sgf']);
-    expect(files.remembered.map((r) => r.path)).toEqual(['/a.sgf']);
+    await openDropped(ctx, ['/notes.txt', '/a.SgF', '/b.sgf']);
+    expect(files.remembered.map((r) => r.path)).toEqual(['/a.SgF']);
   });
 
-  it('shows a missing recent file', async () => {
-    const { ctx, files } = setup(() => opened(), { recent: ['/gone.sgf'] });
-    await openRecent(ctx, 0);
+  it('a native Recent command removes a missing file and shows the notice', async () => {
+    const { ctx, files, requests } = setup(() => opened(), {
+      files: { '/here.sgf': '(;)' },
+      recent: ['/gone.sgf', '/here.sgf'],
+    });
+    await runMenuCommand(ctx, { recent: 0 }, createEngineStore());
+    expect(requests).toEqual([]);
     expect(useNoticeStore.getState().notice).toMatchObject({
       kind: 'error',
+      title: '无法打开 gone.sgf',
       detail: '文件已移动或删除。',
     });
-    expect(await files.recent()).toEqual([]);
+    expect((await files.recent()).map((entry) => entry.path)).toEqual(['/here.sgf']);
   });
 });
 

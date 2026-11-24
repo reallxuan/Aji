@@ -1,6 +1,6 @@
 import type { EngineStore } from '../engine/engineStore';
 import type { ActionContext } from '../game/actions';
-import type { NavTarget } from '../transport/generated/NavTarget';
+import type { FrameNavigate } from '../game/useFrameNavigate';
 import type { OsKind } from '../transport/generated/OsKind';
 import { BUILTINS } from './builtins';
 
@@ -52,7 +52,7 @@ export type CommandContext = {
   actions: ActionContext;
   engine: EngineStore;
   /** Navigation at most once per animation frame, the latest target winning. */
-  go(to: NavTarget): void;
+  go: FrameNavigate;
   os: OsKind | null;
 };
 

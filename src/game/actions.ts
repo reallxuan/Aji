@@ -98,12 +98,13 @@ async function openSelected(ctx: ActionContext, read: () => Promise<OpenedFile |
 
 export const openFromPicker = (ctx: ActionContext) => openSelected(ctx, () => ctx.files.pickOpen());
 
-/** Opens the first of the dropped files. */
+/** Opens the first SGF, or reports the first dropped path if there is no SGF. */
 export async function openDropped(ctx: ActionContext, paths: string[]): Promise<void> {
-  const path = paths[0];
+  const sgf = paths.find((path) => /\.sgf$/i.test(path));
+  const path = sgf ?? paths[0];
   if (!path) return;
   const name = baseName(path);
-  if (!/\.sgf$/i.test(name)) {
+  if (!sgf) {
     useNoticeStore.getState().show({
       kind: 'error',
       title: ctx.t('notice.openFailed', { name }),

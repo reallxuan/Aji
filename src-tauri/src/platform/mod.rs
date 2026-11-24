@@ -497,7 +497,7 @@ pub async fn files_open_recent<R: Runtime>(
         .as_ref()
         .is_err_and(|e| e.code == ErrorCode::FileMissing)
     {
-        platform.update_recent(&app, |recent| recent.remove(index));
+        platform.update_recent(&app, |recent| recent.remove(&path));
     }
     opened
 }

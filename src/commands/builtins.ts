@@ -38,10 +38,13 @@ const step = (id: CommandId, to: NavTarget) => press(id, (ctx) => ctx.go(to), { 
 const page = (id: CommandId, by: number) =>
   press(
     id,
-    (ctx) => {
+    ({ go }) => {
       const snapshot = useGameStore.getState().snapshot;
       if (!snapshot) return;
-      ctx.go({ move: Math.max(0, Math.min(snapshot.lineLength, snapshot.moveNumber + by)) });
+      const move = snapshot.moveNumber + by;
+      // Last includes trailing nodes without a move on the selected line.
+      const to = by > 0 && move >= snapshot.lineLength ? 'last' : { move: Math.max(0, move) };
+      go(to, { waitForReply: true });
     },
     { repeats: true },
   );
