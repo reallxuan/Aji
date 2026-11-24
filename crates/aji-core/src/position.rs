@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
 use crate::KataRules;
-use crate::coords::{BoardSize, Color, CoreError, Komi, Move, Point, Rules};
+use crate::coords::{BoardSize, Color, CoreError, Komi, Move, Point};
 
 /// A 64-bit position hash, written as 16 lowercase hex digits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, TS)]
@@ -42,7 +42,7 @@ impl<'de> Deserialize<'de> for PositionKey {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
     pub size: BoardSize,
-    pub rules: Rules,
+    pub rules: KataRules,
     pub komi: Komi,
     pub setup: Vec<(Color, Point)>,
     pub moves: Vec<(Color, Move)>,
@@ -59,7 +59,7 @@ fn color_byte(c: Color) -> u8 {
 }
 
 impl Position {
-    pub fn empty(size: BoardSize, rules: Rules, komi: Komi) -> Position {
+    pub fn empty(size: BoardSize, rules: KataRules, komi: Komi) -> Position {
         Position {
             size,
             rules,
@@ -97,7 +97,7 @@ impl Position {
     /// plays identically (Japanese and Korean) share a key.
     pub fn key(&self) -> PositionKey {
         let mut buf = vec![self.size.get()];
-        buf.extend_from_slice(&KataRules::from(self.rules).key_bytes());
+        buf.extend_from_slice(&self.rules.key_bytes());
         buf.extend_from_slice(&self.komi.half_points().to_le_bytes());
 
         let mut setup: Vec<(u8, u8, u8)> = self
@@ -137,7 +137,7 @@ impl Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::coords::move_from_gtp;
+    use crate::coords::{Rules, move_from_gtp};
 
     fn gtp(s: &str) -> Point {
         match move_from_gtp(s, BoardSize::NINETEEN).unwrap() {
@@ -147,11 +147,11 @@ mod tests {
     }
 
     fn pos(rules: Rules, komi: f64) -> Position {
-        Position::empty(BoardSize::NINETEEN, rules, Komi::new(komi).unwrap())
+        Position::empty(BoardSize::NINETEEN, rules.into(), Komi::new(komi).unwrap())
     }
 
     #[test]
-    fn position_key_is_pinned() {
+    fn existing_position_keys_are_unchanged() {
         let key = |p: &Position| p.key().to_string();
         assert_eq!(key(&pos(Rules::Chinese, 7.5)), "3edba656b924370b");
         assert_eq!(key(&pos(Rules::Chinese, 6.5)), "85aeddf0dd40aa99");

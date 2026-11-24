@@ -54,10 +54,18 @@ describe('the scenarios’ fake game', () => {
     expect(open('not-go.sgf')).toThrow(TransportError);
   });
 
+  it('keeps the selected rules form when its effect is unchanged', () => {
+    const { ask, events } = setUp();
+    const rules = { kind: 'custom', details: null, komi: 7.5, scoring: 'area' } as const;
+    const snapshot = ask({ type: 'gameSetRules', rules }).snapshot;
+    expect(snapshot.rules).toMatchObject({ current: rules, changed: false });
+    expect(events.map((event) => event.type)).toEqual(['gameSnapshot']);
+  });
+
   it('keeps the rules it is given until restored to the file’s', () => {
     const { ask } = setUp();
     ask({ type: 'gameOpen', name: 'samsung.sgf', bytes: '' });
-    const custom = { kind: 'custom', komi: 7, scoring: 'area' } as const;
+    const custom = { kind: 'custom', details: null, komi: 7, scoring: 'area' } as const;
     expect(ask({ type: 'gameSetRules', rules: custom }).snapshot.rules).toMatchObject({
       current: custom,
       changed: true,

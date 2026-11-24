@@ -17,6 +17,7 @@ function show(value: AnalysisRules) {
 
 const custom = (komi: number, scoring: 'area' | 'territory' = 'area'): AnalysisRules => ({
   kind: 'custom',
+  details: null,
   komi,
   scoring,
 });

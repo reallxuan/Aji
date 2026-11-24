@@ -82,7 +82,10 @@ it('territory_rules_show_territory_columns', () => {
 });
 
 it('custom rules follow their scoring', () => {
-  mount({ kind: 'custom', komi: 0.5, scoring: 'territory' }, { ...TERRITORY, komi: 0.5 });
+  mount(
+    { kind: 'custom', details: null, komi: 0.5, scoring: 'territory' },
+    { ...TERRITORY, komi: 0.5 },
+  );
   expect(screen.getByTestId('scoring-card')).toHaveTextContent('自定义规则，数目');
   expect(rows()[0]).toHaveLength(6);
 });

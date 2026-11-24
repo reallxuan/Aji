@@ -447,12 +447,23 @@ async fn game_set_rules(
     rules: Option<AnalysisRules>,
 ) -> Result<Response, ProtocolError> {
     let mut session = ctx.game.lock().await;
+    let revision = session.revision();
     match session.set_rules(rules) {
         Ok(true) => {
             follow::stop_job(ctx).await;
             let reply = publish(ctx, &session, false).await;
             push_trend(ctx, &session).await;
             Ok(reply)
+        }
+        Ok(false) if session.revision() != revision => {
+            let snapshot = session.snapshot();
+            ctx.events.emit(AppEvent::GameSnapshot {
+                snapshot: snapshot.clone(),
+            });
+            Ok(Response::Game {
+                snapshot: Box::new(snapshot),
+                warnings: Vec::new(),
+            })
         }
         Ok(false) => Ok(unchanged(&session)),
         Err(rules) => Err(error(
@@ -1540,6 +1551,7 @@ mod tests {
         assert!(s.at_start && !s.at_end && s.has_moves);
         let game = reference(SMALL.as_bytes());
         let rules = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(7.0).unwrap(),
             scoring: Scoring::Area,
         };
@@ -1636,6 +1648,7 @@ mod tests {
             &ctx,
             Request::GameSetRules {
                 rules: Some(AnalysisRules::Custom {
+                    details: None,
                     komi: Komi::new(0.5).unwrap(),
                     scoring: Scoring::Area,
                 }),
@@ -1699,6 +1712,7 @@ mod tests {
         open(&ctx, "small.sgf", SMALL.as_bytes()).await.unwrap();
         navigate(&ctx, NavTarget::Next).await;
         let custom = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(7.0).unwrap(),
             scoring: Scoring::Territory,
         };
@@ -1719,7 +1733,7 @@ mod tests {
         let game = reference(SMALL.as_bytes());
         let expected = game.position_at(game.main_line()[1], &custom).unwrap();
         assert_eq!(expected.komi, Komi::new(7.0).unwrap());
-        assert_eq!(expected.rules, aji_core::Rules::Japanese);
+        assert_eq!(expected.rules, aji_core::Rules::Japanese.into());
         assert_eq!(ctx.engine.status().position, Some(expected.key()));
         let Ok(Response::GameExport { text, .. }) = handle(&ctx, Request::GameExport).await else {
             panic!("expected an export");
@@ -1741,6 +1755,7 @@ mod tests {
         );
 
         let wild = AnalysisRules::Custom {
+            details: None,
             komi: Komi::new(151.0).unwrap(),
             scoring: Scoring::Area,
         };
@@ -1767,7 +1782,7 @@ mod tests {
         assert_eq!(s.name, None);
         let position = aji_core::Position::empty(
             BoardSize::new(13).unwrap(),
-            aji_core::Rules::Japanese,
+            aji_core::Rules::Japanese.into(),
             Komi::new(6.5).unwrap(),
         );
         assert_eq!(ctx.engine.status().position, Some(position.key()));
@@ -1976,6 +1991,7 @@ mod tests {
                 json!({"type": "gameSetRules", "rules": {"kind": "custom", "komi": 7, "scoring": "area"}}),
                 Request::GameSetRules {
                     rules: Some(AnalysisRules::Custom {
+                        details: None,
                         komi: Komi::new(7.0).unwrap(),
                         scoring: Scoring::Area,
                     }),

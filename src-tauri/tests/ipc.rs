@@ -24,7 +24,11 @@ use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop
 use tauri::webview::InvokeRequest;
 
 fn unconfigured_engine() -> Engine {
-    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let position = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    );
     tauri::async_runtime::block_on(async {
         Engine::spawn(None, position, EngineOptions::default(), |_| {})
     })

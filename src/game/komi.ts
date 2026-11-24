@@ -1,4 +1,5 @@
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
+import type { RuleDetails } from '../transport/generated/RuleDetails';
 import type { Scoring } from '../transport/generated/Scoring';
 
 /** The largest komi either way (design 5.5). */
@@ -15,6 +16,43 @@ export function scoringOf(rules: AnalysisRules): Scoring {
   if (rules.kind === 'chinese') return 'area';
   if (rules.kind === 'japaneseKorean') return 'territory';
   return rules.scoring;
+}
+
+const baseDetails: Record<Scoring, RuleDetails> = {
+  area: {
+    ko: 'simple',
+    tax: 'none',
+    suicide: false,
+    hasButton: false,
+    whiteHandicapBonus: 'n',
+    friendlyPassOk: true,
+  },
+  territory: {
+    ko: 'simple',
+    tax: 'seki',
+    suicide: false,
+    hasButton: false,
+    whiteHandicapBonus: 'zero',
+    friendlyPassOk: false,
+  },
+};
+
+function detailsOf(rules: AnalysisRules): RuleDetails {
+  return (rules.kind === 'custom' && rules.details) || baseDetails[scoringOf(rules)];
+}
+
+export function sameRulesEffect(left: AnalysisRules, right: AnalysisRules): boolean {
+  if (komiOf(left) !== komiOf(right) || scoringOf(left) !== scoringOf(right)) return false;
+  const a = detailsOf(left);
+  const b = detailsOf(right);
+  return (
+    a.ko === b.ko &&
+    a.tax === b.tax &&
+    a.suicide === b.suicide &&
+    a.hasButton === b.hasButton &&
+    a.whiteHandicapBonus === b.whiteHandicapBonus &&
+    a.friendlyPassOk === b.friendlyPassOk
+  );
 }
 
 /** `7` for 7, `7.5` for 7.5, `-0.5` for -0.5. */

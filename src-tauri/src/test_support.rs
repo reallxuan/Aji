@@ -17,7 +17,11 @@ use tokio::sync::watch;
 use crate::protocol::OsKind;
 
 pub fn unconfigured() -> Engine {
-    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+    let position = Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    );
     Engine::spawn(None, position, EngineOptions::default(), |_| {})
 }
 

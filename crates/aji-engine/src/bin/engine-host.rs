@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 
 fn p1() -> Position {
     let komi = Komi::new(7.5).expect("7.5 is a valid komi");
-    let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
+    let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese.into(), komi);
     p.moves = vec![
         (Color::Black, Move::Play(Point { x: 15, y: 3 })),
         (Color::White, Move::Play(Point { x: 3, y: 15 })),

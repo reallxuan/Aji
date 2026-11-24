@@ -8,7 +8,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use super::board::{Board, Illegal, expand_points};
-use super::rules::{AnalysisRules, RulesReading, Scoring, read_rules};
+use super::rules::{AnalysisRules, RulesReading, is_fox_even_game, read_rules};
 use crate::coords::{BoardSize, Color, Move, Point};
 use crate::position::Position;
 use crate::sgf::{SgfNode, SgfTree};
@@ -413,7 +413,7 @@ impl Game {
         } else {
             Some(moves.first().map_or(base_state.to_play, |&(c, _)| c))
         };
-        let mut position = Position::empty(self.size, rules.katago_rules(), rules.komi());
+        let mut position = Position::empty(self.size, rules.kata_rules(), rules.komi());
         position.setup = setup;
         position.moves = moves;
         position.initial_player = initial_player;
@@ -454,11 +454,21 @@ impl Game {
             root.push("GM", ["1".to_owned()]);
         }
         if let Some(rules) = rules {
-            let ru = match rules.scoring() {
-                Scoring::Area => "Chinese",
-                Scoring::Territory => "Japanese",
+            let kata = rules.kata_rules();
+            let ru = match kata.preset() {
+                Some(crate::Rules::Chinese) => "Chinese".to_owned(),
+                Some(crate::Rules::Japanese | crate::Rules::Korean) => {
+                    // A named Japanese RU with KM[0] is ambiguous on an even Fox record.
+                    if rules.komi().points() == 0.0 && is_fox_even_game(&root) {
+                        kata.katago_string()
+                    } else {
+                        "Japanese".to_owned()
+                    }
+                }
+                // Existing named Tromp-Taylor records retain their legacy scoring-based reading.
+                Some(crate::Rules::TrompTaylor) | None => kata.katago_string(),
             };
-            set_prop(&mut root, "RU", ru);
+            set_prop(&mut root, "RU", &ru);
             set_prop(&mut root, "KM", &format_komi(rules.komi().points()));
         }
 
@@ -545,6 +555,75 @@ mod tests {
         *g.main_line().last().unwrap()
     }
 
+    fn fox_zero_komi_round_trip(kata: crate::KataRules) {
+        let fox = game("(;AP[foxwq]HA[0]RU[Japanese]KM[0];B[pd])");
+        let original = fox.to_sgf(None);
+        assert_eq!(
+            read_rules(&original.nodes[0], AnalysisRules::Chinese)
+                .rules
+                .komi()
+                .points(),
+            6.5
+        );
+        let selected = AnalysisRules::Custom {
+            komi: crate::Komi::new(0.0).unwrap(),
+            scoring: crate::game::Scoring::Territory,
+            details: Some(kata.into()),
+        };
+        let text = crate::sgf::write_sgf(&[fox.to_sgf(Some(&selected))]);
+        let reopened = parse_sgf(&text).unwrap();
+        let root = &reopened.games[0].nodes[0];
+        assert_eq!(root.first("KM"), Some("0"));
+        assert_eq!(root.first("RU"), Some(kata.katago_string().as_str()));
+        assert!(
+            read_rules(root, AnalysisRules::Chinese)
+                .rules
+                .same_effect(&selected)
+        );
+    }
+
+    #[test]
+    fn fox_zero_komi_with_custom_rules_survives_export() {
+        fox_zero_komi_round_trip(crate::KataRules {
+            tax: crate::TaxRule::All,
+            ..crate::Rules::Japanese.into()
+        });
+    }
+
+    #[test]
+    fn fox_zero_komi_with_japanese_rules_survives_export() {
+        fox_zero_komi_round_trip(crate::Rules::Japanese.into());
+    }
+
+    #[test]
+    fn exact_tromp_taylor_survives_sgf_export() {
+        let game = game("(;RU[koPOSITIONALscoreAREAtaxNONEsui1]KM[5])");
+        let exact = read_rules(&game.to_sgf(None).nodes[0], AnalysisRules::Chinese).rules;
+        let saved = game.to_sgf(Some(&exact));
+        assert_eq!(
+            saved.nodes[0].first("RU"),
+            Some("koPOSITIONALscoreAREAtaxNONEsui1")
+        );
+        assert_eq!(
+            read_rules(&saved.nodes[0], AnalysisRules::Chinese).rules,
+            exact
+        );
+    }
+
+    #[test]
+    fn to_sgf_writes_the_preset_name_or_the_katago_string() {
+        let g = game("(;SZ[19])");
+        let root = &g.to_sgf(Some(&AnalysisRules::Chinese)).nodes[0];
+        assert_eq!(root.first("RU"), Some("Chinese"));
+        let input = game("(;RU[koPOSITIONALscoreAREAtaxALLsui1whbN]KM[7])");
+        let rules = read_rules(&input.to_sgf(None).nodes[0], AnalysisRules::Chinese).rules;
+        let root = &g.to_sgf(Some(&rules)).nodes[0];
+        assert_eq!(
+            root.first("RU"),
+            Some("koPOSITIONALscoreAREAtaxALLsui1whbN")
+        );
+    }
+
     #[test]
     fn sizes() {
         assert_eq!(
@@ -612,7 +691,7 @@ mod tests {
             .unwrap();
         assert_eq!(p.initial_player, None);
         assert!(p.setup.is_empty());
-        assert_eq!(p.rules, crate::Rules::Japanese);
+        assert_eq!(p.rules, crate::Rules::Japanese.into());
         assert_eq!(p.komi.points(), 6.5);
     }
 
@@ -724,8 +803,9 @@ mod tests {
         assert_eq!(tree.variations.len(), 2);
         assert_eq!(tree.variations[1], original.variations[1]);
         let changed = g.to_sgf(Some(&AnalysisRules::Custom {
+            details: None,
             komi: crate::Komi::new(7.0).unwrap(),
-            scoring: Scoring::Territory,
+            scoring: crate::game::Scoring::Territory,
         }));
         assert_eq!(changed.nodes[0].first("RU"), Some("Japanese"));
         assert_eq!(changed.nodes[0].first("KM"), Some("7"));

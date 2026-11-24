@@ -65,7 +65,11 @@ fn specific_lines_map_to_variants() {
 }
 
 fn empty_19() -> Position {
-    Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap())
+    Position::empty(
+        BoardSize::NINETEEN,
+        Rules::Chinese.into(),
+        Komi::new(7.5).unwrap(),
+    )
 }
 
 #[test]

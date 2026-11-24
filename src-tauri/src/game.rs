@@ -323,14 +323,14 @@ impl GameSession {
     }
 
     /// Sets the rules KataGo analyses with; `None` goes back to the file's reading. Returns
-    /// whether they changed. Rules outside what the interface allows are refused.
+    /// whether their effect changed. Rules outside what the interface allows are refused.
     pub fn set_rules(&mut self, rules: Option<AnalysisRules>) -> Result<bool, AnalysisRules> {
         let rules = rules.unwrap_or(self.from_file);
         if !rules.is_valid() {
             return Err(rules);
         }
-        let changed = rules != self.rules;
-        if changed {
+        let changed = !rules.same_effect(&self.rules);
+        if self.rules != rules {
             self.rules = rules;
             self.revision += 1;
         }
@@ -354,7 +354,7 @@ impl GameSession {
         if self.game.is_empty() {
             return None;
         }
-        let changed = self.rules != self.from_file;
+        let changed = !self.rules.same_effect(&self.from_file);
         let mut tree = self.game.to_sgf(changed.then_some(&self.rules));
         for (i, node) in main_line_mut(&mut tree).into_iter().enumerate() {
             if let Some(Some(text)) = lz.get(i) {
@@ -425,7 +425,7 @@ impl GameSession {
             rules: RulesState {
                 current: self.rules,
                 from_file: self.from_file,
-                changed: self.rules != self.from_file,
+                changed: !self.rules.same_effect(&self.from_file),
                 ru: self.ru.clone(),
                 km: self.km.clone(),
             },
@@ -509,11 +509,27 @@ mod tests {
     }
 
     #[test]
+    fn equivalent_rules_update_the_selected_form() {
+        let mut session = GameSession::new(19, AnalysisRules::Chinese).unwrap();
+        let revision = session.snapshot().revision;
+        let rules = AnalysisRules::Custom {
+            komi: aji_core::Komi::new(7.5).unwrap(),
+            scoring: aji_core::game::Scoring::Area,
+            details: None,
+        };
+        assert_eq!(session.set_rules(Some(rules)), Ok(false));
+        let snapshot = session.snapshot();
+        assert_eq!(snapshot.rules.current, rules);
+        assert!(!snapshot.rules.changed);
+        assert_eq!(snapshot.revision, revision + 1);
+    }
+
+    #[test]
     fn the_start_position_is_the_m2_default() {
         let session = GameSession::new(19, AnalysisRules::Chinese).unwrap();
         let m2 = Position::empty(
             BoardSize::NINETEEN,
-            aji_core::Rules::Chinese,
+            aji_core::Rules::Chinese.into(),
             aji_core::Komi::new(7.5).unwrap(),
         );
         assert_eq!(session.position(), Some(m2));

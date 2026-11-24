@@ -1,3 +1,4 @@
+import { sameRulesEffect } from '../game/komi';
 import { makeSnapshot, noInfo } from '../game/testing';
 import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { AnalysisUpdate } from '../transport/generated/AnalysisUpdate';
@@ -266,7 +267,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       rules: {
         current: rules,
         fromFile: record.fromFile,
-        changed: JSON.stringify(rules) !== JSON.stringify(record.fromFile),
+        changed: !sameRulesEffect(rules, record.fromFile),
         ru: record.ru,
         km: record.km,
       },
@@ -363,8 +364,9 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         const next = request.rules ?? record.fromFile;
         if (JSON.stringify(next) === JSON.stringify(rules))
           return { type: 'game', snapshot: snapshot(), warnings: [] };
+        const effectChanged = !sameRulesEffect(rules, next);
         rules = next;
-        return changed(false, true);
+        return changed(false, effectChanged);
       }
       case 'gamePreview':
         return {

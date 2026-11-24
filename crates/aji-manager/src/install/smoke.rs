@@ -16,7 +16,7 @@ use super::{FailureCode, StepFailure, classify};
 /// tail: the engine keeps one only for a crash.
 pub async fn run_test_query(files: EngineFiles, timeout: Duration) -> Result<(), StepFailure> {
     let komi = Komi::new(7.5).expect("7.5 is a valid komi");
-    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese, komi);
+    let position = Position::empty(BoardSize::NINETEEN, Rules::Chinese.into(), komi);
     let options = EngineOptions {
         visit_limit: Some(50),
         ..EngineOptions::default()

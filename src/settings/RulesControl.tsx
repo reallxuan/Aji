@@ -137,7 +137,9 @@ export function RulesControl({
   const komi = komiOf(value);
   const scoring = scoringOf(value);
   const choose = (kind: Kind) =>
-    onChange(kind === 'custom' ? { kind, komi, scoring } : ({ kind } as AnalysisRules));
+    onChange(
+      kind === 'custom' ? { kind, komi, scoring, details: null } : ({ kind } as AnalysisRules),
+    );
   const scorings: Array<[Scoring, string]> = [
     ['area', t('rules.area')],
     ['territory', t('rules.territory')],

@@ -29,10 +29,19 @@ pub fn analysis_query(
         .iter()
         .map(|&(c, mv)| Ok(json!([c.gtp(), move_to_gtp(mv, position.size)?])))
         .collect::<Result<Vec<Value>, CoreError>>()?;
+    let r = position.rules;
+    let rules = match r.preset() {
+        Some(preset) => json!(preset.katago_name()),
+        None => json!({
+            "ko": r.ko.katago_token(), "scoring": r.scoring.katago_token(),
+            "tax": r.tax.katago_token(), "suicide": r.suicide, "hasButton": r.has_button,
+            "whiteHandicapBonus": r.white_handicap_bonus.katago_token(), "friendlyPassOk": r.friendly_pass_ok,
+        }),
+    };
     let mut q = json!({
         "id": id,
         "moves": moves,
-        "rules": position.rules.katago_name(),
+        "rules": rules,
         "komi": position.komi.points(),
         "boardXSize": position.size.get(),
         "boardYSize": position.size.get(),
@@ -78,12 +87,34 @@ mod tests {
     use aji_core::{BoardSize, Color, Komi, Move, Point, Rules};
 
     fn p1() -> Position {
-        let mut p = Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+        let mut p = Position::empty(
+            BoardSize::NINETEEN,
+            Rules::Chinese.into(),
+            Komi::new(7.5).unwrap(),
+        );
         p.moves = vec![
             (Color::Black, Move::Play(Point { x: 15, y: 3 })),
             (Color::White, Move::Play(Point { x: 3, y: 15 })),
         ];
         p
+    }
+
+    #[test]
+    fn query_sends_a_preset_name_or_a_rules_object() {
+        let rules = |p: &Position| {
+            let query: Value =
+                serde_json::from_str(&analysis_query("r", p, Some(1), None, false).unwrap())
+                    .unwrap();
+            query["rules"].clone()
+        };
+        let mut p = p1();
+        assert_eq!(rules(&p), json!("chinese"));
+        p.rules.ko = aji_core::KoRule::Positional;
+        p.rules.tax = aji_core::TaxRule::All;
+        assert_eq!(
+            rules(&p),
+            json!({"ko":"POSITIONAL","scoring":"AREA","tax":"ALL","suicide":false,"hasButton":false,"whiteHandicapBonus":"N","friendlyPassOk":true})
+        );
     }
 
     #[test]

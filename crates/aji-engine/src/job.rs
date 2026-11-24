@@ -170,8 +170,11 @@ mod tests {
     use aji_core::{BoardSize, Color, Komi, Move, Point, Rules};
 
     fn item(n: u8, visits: u32) -> JobItem {
-        let mut position =
-            Position::empty(BoardSize::NINETEEN, Rules::Chinese, Komi::new(7.5).unwrap());
+        let mut position = Position::empty(
+            BoardSize::NINETEEN,
+            Rules::Chinese.into(),
+            Komi::new(7.5).unwrap(),
+        );
         position.moves = (0..n)
             .map(|i| {
                 (

@@ -9,7 +9,7 @@ import { GameInfoContent } from './GameInfoPopover';
 afterEach(() => resetGameStore());
 
 const japanese = { kind: 'japaneseKorean' } as const;
-const custom = { kind: 'custom', komi: 7, scoring: 'territory' } as const;
+const custom = { kind: 'custom', details: null, komi: 7, scoring: 'territory' } as const;
 
 function show(rules: RulesState) {
   const info = {
