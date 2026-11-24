@@ -4,6 +4,8 @@ import type { RecentEntry } from '../transport/generated/RecentEntry';
 
 export type { MenuAction as MenuCommand, OpenedFile, RecentEntry };
 
+export type DiscardChoice = 'save' | 'discard' | 'cancel';
+
 /** A drag over the window. `over` carries the paths when the system gives them (on entering). */
 export type DragEvent =
   { kind: 'over'; paths?: string[] } | { kind: 'leave' } | { kind: 'drop'; paths: string[] };
@@ -23,6 +25,12 @@ export interface PlatformFiles {
   remember(token: string, title: string): Promise<void>;
   recent(): Promise<RecentEntry[]>;
   clearRecent(): Promise<void>;
+  save(token: string, bytesBase64: string): Promise<boolean>;
+  confirmDiscard(): Promise<DiscardChoice>;
+  onQuitRequested(handler: () => void): () => void;
+  quit(expectedRevision: number): Promise<void>;
+  /** Fresh bytes for the file originally selected under this token. */
+  reread(token: string): Promise<string>;
   /** The save dialog, then the write; the saved file's token, or `null` when cancelled. */
   saveAs(suggestedName: string, text: string): Promise<string | null>;
   /** The save dialog for a PNG screenshot, then the write; `false` when cancelled. */

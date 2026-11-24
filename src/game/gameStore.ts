@@ -10,6 +10,7 @@ export interface GameState {
   snapshot: GameSnapshot | null;
   /** Changes on navigation or game replacement, even when returning to the same node. */
   nodeVisit: number;
+  fileToken: string | null;
   /** True once the first snapshot request has settled, answered or not. */
   loaded: boolean;
   /** The engine store that follows the game's position. */
@@ -24,7 +25,7 @@ export interface GameState {
   markLoaded(): void;
 }
 
-const initial = { snapshot: null, nodeVisit: 0, loaded: false, engine: null };
+const initial = { fileToken: null, snapshot: null, nodeVisit: 0, loaded: false, engine: null };
 
 export const useGameStore = create<GameState>()((set, get) => ({
   ...initial,
@@ -35,7 +36,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const moved = current?.node !== snapshot.node || current.gameRevision !== snapshot.gameRevision;
     if (moved) useFreehandStore.getState().clear();
     if (snapshot.tryout !== null) useModeStore.getState().setMode('normal');
-    set({ snapshot, loaded: true, nodeVisit: moved ? snapshot.revision : get().nodeVisit });
+    set({
+      snapshot,
+      fileToken: current?.gameRevision === snapshot.gameRevision ? get().fileToken : null,
+      loaded: true,
+      nodeVisit: moved ? snapshot.revision : get().nodeVisit,
+    });
     // A hover and its line belong to the old position.
     useViewStore.getState().reset();
     const engine = get().engine?.getState();

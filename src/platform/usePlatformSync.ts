@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDeviceStore } from '../device/deviceStore';
 import { useTranslation } from 'react-i18next';
-import { runMenuCommand } from '../game/actions';
+import { requestQuit, runMenuCommand } from '../game/actions';
 import { useEngineStoreApi } from '../engine/engineStore';
 import { useTransport } from '../transport/TransportProvider';
 import { usePlatformFiles } from './PlatformProvider';
@@ -28,6 +28,10 @@ export function usePlatformSync(): void {
     if (loaded) files.setAlwaysOnTop(alwaysOnTop).catch(() => {});
   }, [files, loaded, alwaysOnTop]);
 
+  useEffect(
+    () => files.onQuitRequested(() => void requestQuit({ transport, files, t })),
+    [files, transport, t],
+  );
   useEffect(
     () => files.onMenu((command) => void runMenuCommand({ transport, files, t }, command, engine)),
     [files, transport, t, engine],

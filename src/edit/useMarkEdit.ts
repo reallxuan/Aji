@@ -1,3 +1,4 @@
+import { recordLocked, trackMutation } from '../game/recordMutations';
 import { toggledMark } from '../board/marks';
 import type { ActionContext } from '../game/actions';
 import { edit } from '../game/editActions';
@@ -21,6 +22,7 @@ const pending = new WeakMap<Transport, Promise<void>>();
 export function useMarkEdit(ctx: ActionContext) {
   const visit = useGameStore((s) => s.nodeVisit);
   return (input: MarkInput) => {
+    if (recordLocked(ctx.transport)) return Promise.resolve();
     const apply = async () => {
       const { snapshot, nodeVisit } = useGameStore.getState();
       if (!snapshot || nodeVisit !== visit || snapshot.tryout !== null || scoringInProgress())
@@ -38,7 +40,7 @@ export function useMarkEdit(ctx: ActionContext) {
       await edit(ctx, { kind: 'setMark', node, point, mark: toggledMark(marks, existing, tool) });
     };
     const previous = pending.get(ctx.transport);
-    const next = previous ? previous.then(apply) : apply();
+    const next = trackMutation(ctx.transport, previous ? previous.then(apply) : apply());
     pending.set(ctx.transport, next);
     return next.finally(() => {
       if (pending.get(ctx.transport) === next) pending.delete(ctx.transport);

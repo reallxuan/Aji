@@ -85,10 +85,16 @@ pub enum Request {
     },
     /// Replaces the game with an empty board of `size` lines and the default rules.
     GameNew {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        expected_revision: Option<u64>,
         size: u8,
     },
     /// Opens a file's first game. `bytes` is the file, base64-encoded.
     GameOpen {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        expected_revision: Option<u64>,
         name: String,
         bytes: String,
         #[serde(default)]
@@ -111,6 +117,8 @@ pub enum Request {
     GameSaved {
         #[ts(type = "number")]
         edit_id: u64,
+        #[ts(type = "number")]
+        game_revision: u64,
         utf8: bool,
     },
     GameSnapshot,
@@ -244,6 +252,8 @@ pub enum Response {
         fell_back: bool,
         #[ts(type = "number")]
         edit_id: u64,
+        #[ts(type = "number")]
+        game_revision: u64,
     },
     Trend {
         /// The session revision the line was read at; `trendNodes` with another are stale.
@@ -538,6 +548,7 @@ pub enum ErrorCode {
     GameIllegalMove,
     GameEndTryoutFirst,
     GameNoSuchNode,
+    GameChanged,
     FileReadFailed,
     FileWriteFailed,
     /// The file's name does not end in `.sgf`.
@@ -608,9 +619,10 @@ mod tests {
             (json!({"type":"gameRedo"}), Request::GameRedo),
             (json!({"type":"gameTree"}), Request::GameTree),
             (
-                json!({"type":"gameSaved","editId":2,"utf8":true}),
+                json!({"type":"gameSaved","editId":2,"gameRevision":0,"utf8":true}),
                 Request::GameSaved {
                     edit_id: 2,
+                    game_revision: 0,
                     utf8: true,
                 },
             ),
@@ -627,6 +639,7 @@ mod tests {
             (
                 json!({"type":"gameOpen","name":"a","bytes":"","atEnd":true}),
                 Request::GameOpen {
+                    expected_revision: None,
                     name: "a".into(),
                     bytes: String::new(),
                     at_end: true,

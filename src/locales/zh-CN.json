@@ -46,6 +46,7 @@
     "gameIllegalMove": "此手不合法。",
     "gameEndTryoutFirst": "请先结束试下，再进行此编辑。",
     "gameNoSuchNode": "此节点已不存在。",
+    "gameChanged": "操作期间棋局已更改。",
     "gameEmpty": "棋局里还没有着手，无可保存。",
     "fileReadFailed": "无法读取文件。",
     "fileWriteFailed": "无法保存文件。",
@@ -432,7 +433,13 @@
   "game": {
     "players": "{{black}} 对 {{white}}"
   },
+  "unsaved": {
+    "title": "要保存这局棋的更改吗？",
+    "discard": "不保存"
+  },
   "notice": {
+    "saveTooLarge": "编辑后的棋谱超过了 Aji 可打开的 20 MB 上限。可用“另存为”保存副本。",
+    "savedAsUtf8": "原编码无法表示部分字符，已保存为 UTF-8。",
     "openFailed": "无法打开 {{name}}",
     "saveFailed": "无法保存棋谱",
     "gameFailed": "棋局未能更改",

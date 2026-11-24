@@ -46,6 +46,7 @@
     "gameIllegalMove": "This move is illegal.",
     "gameEndTryoutFirst": "End try-out before making this edit.",
     "gameNoSuchNode": "This node no longer exists.",
+    "gameChanged": "The game changed while this request was in progress.",
     "gameEmpty": "The game has no moves to save.",
     "fileReadFailed": "The file could not be read.",
     "fileWriteFailed": "The file could not be saved.",
@@ -432,7 +433,13 @@
   "game": {
     "players": "{{black}} vs {{white}}"
   },
+  "unsaved": {
+    "title": "Save changes to this game?",
+    "discard": "Don’t Save"
+  },
   "notice": {
+    "saveTooLarge": "The edited record exceeds Aji’s 20 MB opening limit. Use Save As to keep a separate copy.",
+    "savedAsUtf8": "Saved in UTF-8 because the original encoding cannot represent all characters.",
     "openFailed": "Couldn't open {{name}}",
     "saveFailed": "Couldn't save the game",
     "gameFailed": "The game could not be changed",

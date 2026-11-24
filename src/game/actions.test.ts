@@ -162,6 +162,7 @@ describe('saving', () => {
         request.type === 'gameExport'
           ? {
               type: 'gameExport',
+              gameRevision: 0,
               name: 'samsung.sgf',
               text: '(;GM[1])\n',
               bytes: null,
@@ -174,7 +175,7 @@ describe('saving', () => {
     await saveAs(ctx);
     expect(requests).toEqual([
       { type: 'gameExport', options: { scope: 'game', clean: false, inPlace: false } },
-      { type: 'gameSaved', editId: 7, utf8: true },
+      { type: 'gameSaved', gameRevision: 0, editId: 7, utf8: true },
     ]);
     expect(files.saveRequests).toEqual(['丁浩 对 廖元赫.sgf']);
     expect(files.written.get('/out/丁浩 对 廖元赫.sgf')).toBe('(;GM[1])\n');
@@ -188,6 +189,7 @@ describe('saving', () => {
     const { ctx, files, requests } = setup(
       () => ({
         type: 'gameExport',
+        gameRevision: 0,
         name: 'a.sgf',
         text: '(;)',
         bytes: null,
@@ -205,7 +207,8 @@ describe('saving', () => {
     expect(useNoticeStore.getState().notice).toBeNull();
   });
 
-  it('shows why an empty game cannot be saved', async () => {
+  it('shows an export failure', async () => {
+    useGameStore.getState().apply(samsung);
     const { ctx } = setup(() => {
       throw new TransportError('gameEmpty', 'empty');
     });
@@ -222,7 +225,7 @@ describe('game requests', () => {
       warnings: [],
     }));
     await startNewGame(ctx, 9);
-    expect(requests[0]).toEqual({ type: 'gameNew', size: 9 });
+    expect(requests[0]).toEqual({ type: 'gameNew', size: 9, expectedRevision: 0 });
     await navigate(ctx, { move: 12 });
     expect(requests[1]).toEqual({ type: 'gameNavigate', to: { move: 12 } });
     expect(useGameStore.getState().snapshot?.revision).toBe(12);

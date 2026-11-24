@@ -49,6 +49,11 @@ pub struct Labels {
     pub open_recent: &'static str,
     pub no_recent: &'static str,
     pub clear_recent: &'static str,
+    pub save: &'static str,
+    pub save_branch: &'static str,
+    pub save_clean: &'static str,
+    pub unsaved: &'static str,
+    pub discard: &'static str,
     pub save_as: &'static str,
     pub export_image: &'static str,
     /// Save and copy, in the order of [`SHOT_TARGETS`].
@@ -104,6 +109,11 @@ pub fn labels(language: MenuLanguage) -> Labels {
             open_recent: "打开最近",
             no_recent: "暂无最近打开的棋谱",
             clear_recent: "清除最近记录",
+            save: "保存",
+            save_branch: "另存当前分支…",
+            save_clean: "另存为纯净棋谱…",
+            unsaved: "要保存这局棋的更改吗？",
+            discard: "不保存",
             save_as: "另存为…",
             export_image: "导出图片",
             save_image: ["保存棋盘图片…", "保存副盘图片…", "保存走势图图片…"],
@@ -153,6 +163,11 @@ pub fn labels(language: MenuLanguage) -> Labels {
             open_recent: "Open Recent",
             no_recent: "No recent games",
             clear_recent: "Clear Menu",
+            save: "Save",
+            save_branch: "Save Current Branch As…",
+            save_clean: "Save Clean Copy As…",
+            unsaved: "Save changes to this game?",
+            discard: "Don’t Save",
             save_as: "Save As…",
             export_image: "Export Image",
             save_image: [
@@ -267,7 +282,11 @@ pub fn build<R: Runtime>(
         .item(&PredefinedMenuItem::hide_others(app, Some(l.hide_others))?)
         .item(&PredefinedMenuItem::show_all(app, Some(l.show_all))?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, Some(l.quit))?)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Quit.id(), l.quit)
+                .accelerator("CmdOrCtrl+Q")
+                .build(app)?,
+        )
         .build()?;
     let mut other_sizes = SubmenuBuilder::new(app, l.other_sizes);
     for n in 5..=18 {
@@ -294,15 +313,30 @@ pub fn build<R: Runtime>(
         .item(&recent_menu(app, &l, recent)?)
         .separator()
         .item(
+            &MenuItemBuilder::with_id(MenuAction::Save.id(), l.save)
+                .accelerator("CmdOrCtrl+S")
+                .build(app)?,
+        )
+        .item(
             &MenuItemBuilder::with_id(MenuAction::SaveAs.id(), l.save_as)
                 .accelerator("CmdOrCtrl+Shift+S")
                 .build(app)?,
         )
+        .item(&item(app, MenuAction::SaveBranch, l.save_branch)?)
+        .item(&item(app, MenuAction::SaveClean, l.save_clean)?)
         .item(&export_menu(app, &l)?)
         .build()?;
     let edit = SubmenuBuilder::new(app, l.edit)
-        .item(&PredefinedMenuItem::undo(app, Some(l.undo))?)
-        .item(&PredefinedMenuItem::redo(app, Some(l.redo))?)
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Undo.id(), l.undo)
+                .accelerator("CmdOrCtrl+Z")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id(MenuAction::Redo.id(), l.redo)
+                .accelerator("CmdOrCtrl+Shift+Z")
+                .build(app)?,
+        )
         .separator()
         .item(&PredefinedMenuItem::cut(app, Some(l.cut))?)
         .item(&PredefinedMenuItem::copy(app, Some(l.copy))?)
@@ -459,6 +493,11 @@ mod tests {
             l.open_recent,
             l.no_recent,
             l.clear_recent,
+            l.save,
+            l.save_branch,
+            l.save_clean,
+            l.unsaved,
+            l.discard,
             l.save_as,
             l.export_image,
             l.edit,

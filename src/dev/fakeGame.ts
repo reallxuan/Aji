@@ -237,6 +237,12 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
   }
 
   function handle(request: Request): Response | null {
+    if (
+      (request.type === 'gameNew' || request.type === 'gameOpen') &&
+      request.expectedRevision !== undefined &&
+      request.expectedRevision !== session.snapshot().revision
+    )
+      throw new TransportError('gameChanged', 'the game changed after confirmation');
     switch (request.type) {
       case 'gameNew': {
         if (!Number.isInteger(request.size) || request.size < 5 || request.size > 19) {
@@ -274,6 +280,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
           type: 'gameExport',
           name: (session.snapshot().name ?? 'game') + '.sgf',
           editId: session.editId(),
+          gameRevision: session.snapshot().gameRevision,
           text: request.options.inPlace ? null : text,
           bytes: request.options.inPlace ? utf8Base64(text) : null,
           fellBack: false,
@@ -299,7 +306,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
             session.redo();
             break;
           case 'gameSaved':
-            session.saved(request.editId);
+            if (request.gameRevision === before.gameRevision) session.saved(request.editId);
             break;
         }
         return publish(before);

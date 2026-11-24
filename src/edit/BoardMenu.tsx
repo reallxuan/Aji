@@ -1,3 +1,4 @@
+import { trackMutation } from '../game/recordMutations';
 import { setupEdit } from './setupEdit';
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -166,7 +167,10 @@ export function BoardMenu({
           </>
         ) : (
           <>
-            <ContextMenuItem disabled={trying} onSelect={() => void tryHere()}>
+            <ContextMenuItem
+              disabled={trying}
+              onSelect={() => void trackMutation(ctx.transport, tryHere())}
+            >
               {t('edit.tryHere')}
             </ContextMenuItem>
             <ContextMenuItem onSelect={pass}>{t('analysis.pass')}</ContextMenuItem>

@@ -26,7 +26,15 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { GameInfoSurface } from './GameInfoPopover';
 import { shortcut, useOs } from '../app/useOs';
-import { openFromPicker, openRecent, saveAs, startNewGame } from '../game/actions';
+import {
+  openFromPicker,
+  openRecent,
+  save,
+  saveAs,
+  saveBranch,
+  saveClean,
+  startNewGame,
+} from '../game/actions';
 import { useGameStore } from '../game/gameStore';
 import { gameTitle } from '../game/title';
 import { useEngineStoreApi } from '../engine/engineStore';
@@ -39,6 +47,12 @@ import type { RecentEntry } from '../platform/files';
 import type { CacheScope } from '../transport/generated/CacheScope';
 
 const DAY = 24 * 60 * 60 * 1000;
+const SAVE_ACTIONS = [
+  ['save', save],
+  ['saveAs', saveAs],
+  ['saveBranch', saveBranch],
+  ['saveClean', saveClean],
+] as const;
 const SIZES = [19, 13, 9] as const;
 /** The job panel's 开始, which takes the focus so Return starts. */
 const START_BUTTON = '[data-start]';
@@ -208,15 +222,20 @@ export function GameMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2.5"
-            disabled={!snapshot?.hasMoves}
-            onSelect={() => void saveAs(ctx)}
-          >
-            <SaveIcon className={icon} aria-hidden />
-            {t('menu.saveAs')}
-            <DropdownMenuShortcut>{shortcut(os, S, true)}</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {SAVE_ACTIONS.map(([id, action]) => (
+            <DropdownMenuItem
+              key={id}
+              className="gap-2.5"
+              disabled={!snapshot}
+              onSelect={() => void action(ctx)}
+            >
+              <SaveIcon className={icon} aria-hidden />
+              {t(`commands.file.${id}`)}
+              {(id === 'save' || id === 'saveAs') && (
+                <DropdownMenuShortcut>{shortcut(os, S, id === 'saveAs')}</DropdownMenuShortcut>
+              )}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem className="gap-2.5" onSelect={() => setInfoOpen(true)}>
             <InfoIcon className={icon} aria-hidden />

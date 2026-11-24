@@ -14,6 +14,7 @@ pub mod window;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use aji_core::Position;
@@ -26,7 +27,7 @@ use aji_manager::install::{
 use aji_manager::manifest::{
     BUNDLED, ClientOptions, MANIFEST_BASES, ManifestStore, Platform, http_client, trusted_keys,
 };
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::{mpsc, watch};
 
@@ -48,19 +49,42 @@ const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Registers the `rpc` command. Generic over the runtime so tests can use Tauri's mock runtime;
 /// they `.manage` their own [`AppContext`].
 pub fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![
-        ipc::rpc,
-        platform::files_pick_open,
-        platform::files_open_path,
-        platform::files_open_recent,
-        platform::files_remember,
-        platform::files_recent,
-        platform::files_clear_recent,
-        platform::files_save_as,
-        platform::files_save_image,
-        platform::files_copy_image,
-        platform::menu_set_language,
-    ])
+    builder
+        .manage(QuitApproved::default())
+        .invoke_handler(tauri::generate_handler![
+            ipc::rpc,
+            platform::files_pick_open,
+            platform::files_open_path,
+            platform::files_reread,
+            platform::files_open_recent,
+            platform::files_remember,
+            platform::files_recent,
+            platform::files_clear_recent,
+            platform::files_save,
+            platform::confirm_discard,
+            app_quit,
+            platform::files_save_as,
+            platform::files_save_image,
+            platform::files_copy_image,
+            platform::menu_set_language,
+        ])
+}
+
+#[derive(Default)]
+struct QuitApproved(AtomicBool);
+
+#[tauri::command]
+async fn app_quit<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    approved: tauri::State<'_, QuitApproved>,
+    ctx: tauri::State<'_, AppContext>,
+    expected_revision: u64,
+) -> Result<(), protocol::ProtocolError> {
+    let session = ctx.game.lock().await;
+    service::check_revision(&session, Some(expected_revision))?;
+    approved.0.store(true, Ordering::Release);
+    app.exit(0);
+    Ok(())
 }
 
 fn fit_main_window(app: &tauri::App) {
@@ -360,10 +384,26 @@ pub fn run() {
         .build(context)
         .expect("error while building tauri application");
     app.run(|app, event| {
-        if let RunEvent::Exit = event
-            && let Some(ctx) = app.try_state::<AppContext>()
-        {
-            shut_down(Arc::clone(&ctx.installer), ctx.engine.clone());
+        let approved = app.state::<QuitApproved>().0.load(Ordering::Acquire);
+        match event {
+            RunEvent::WindowEvent {
+                label,
+                event: WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "main" && !approved => {
+                api.prevent_close();
+                let _ = app.emit("app-quit-requested", ());
+            }
+            RunEvent::ExitRequested { api, .. } if !approved => {
+                api.prevent_exit();
+                let _ = app.emit("app-quit-requested", ());
+            }
+            RunEvent::Exit => {
+                if let Some(ctx) = app.try_state::<AppContext>() {
+                    shut_down(Arc::clone(&ctx.installer), ctx.engine.clone());
+                }
+            }
+            _ => {}
         }
     });
 }

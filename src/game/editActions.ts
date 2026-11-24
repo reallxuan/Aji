@@ -4,9 +4,10 @@ import { toTransportError } from '../transport/transport';
 import type { ActionContext } from './actions';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
+import { recordLocked, trackMutation } from './recordMutations';
 import { errorNotice } from './notices';
 
-async function change(
+async function applyChange(
   ctx: Pick<ActionContext, 't' | 'transport'>,
   request: Promise<GameReply>,
 ): Promise<{ visit: number | null } | null> {
@@ -43,9 +44,14 @@ async function change(
   }
 }
 
+function change(ctx: Pick<ActionContext, 'transport' | 't'>, request: () => Promise<GameReply>) {
+  if (recordLocked(ctx.transport)) return Promise.resolve(null);
+  return trackMutation(ctx.transport, applyChange(ctx, request()));
+}
+
 /** A refused request returns null. An accepted but superseded snapshot has no current visit. */
 export const applyEdit = (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
-  change(ctx, editGame(ctx.transport, e));
+  change(ctx, () => editGame(ctx.transport, e));
 export const editAndGetVisit = async (
   ctx: Pick<ActionContext, 't' | 'transport'>,
   e: SessionEdit,
@@ -53,6 +59,6 @@ export const editAndGetVisit = async (
 export const edit = async (ctx: Pick<ActionContext, 't' | 'transport'>, e: SessionEdit) =>
   (await editAndGetVisit(ctx, e)) !== null;
 export const undo = async (ctx: ActionContext) =>
-  (await change(ctx, undoGame(ctx.transport)))?.visit != null;
+  (await change(ctx, () => undoGame(ctx.transport)))?.visit != null;
 export const redo = async (ctx: ActionContext) =>
-  (await change(ctx, redoGame(ctx.transport)))?.visit != null;
+  (await change(ctx, () => redoGame(ctx.transport)))?.visit != null;

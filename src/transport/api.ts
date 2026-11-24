@@ -181,12 +181,17 @@ async function gameReply(transport: Transport, request: Request): Promise<GameRe
   return { snapshot, warnings };
 }
 
-export const newGame = (transport: Transport, size: number) =>
-  gameReply(transport, { type: 'gameNew', size });
+export const newGame = (transport: Transport, size: number, expectedRevision: number) =>
+  gameReply(transport, { type: 'gameNew', size, expectedRevision });
 
 /** `bytes` is the file, base64-encoded. */
-export const openGame = (transport: Transport, name: string, bytes: string, atEnd = false) =>
-  gameReply(transport, { type: 'gameOpen', name, bytes, atEnd });
+export const openGame = (
+  transport: Transport,
+  name: string,
+  bytes: string,
+  expectedRevision: number,
+  atEnd = false,
+) => gameReply(transport, { type: 'gameOpen', name, bytes, atEnd, expectedRevision });
 
 export const navigateGame = (transport: Transport, to: NavTarget) =>
   gameReply(transport, { type: 'gameNavigate', to });
@@ -216,8 +221,12 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
 export const exportGame = (transport: Transport, options: ExportOptions) =>
   expectType(transport, { type: 'gameExport', options }, 'gameExport');
 
-export const markSaved = (transport: Transport, editId: number, utf8: boolean) =>
-  gameReply(transport, { type: 'gameSaved', editId, utf8 });
+export const markSaved = (
+  transport: Transport,
+  gameRevision: number,
+  editId: number,
+  utf8: boolean,
+) => gameReply(transport, { type: 'gameSaved', gameRevision, editId, utf8 });
 
 /** One entry per main-line node, with the engine's cached result where it has one. */
 export async function getTrend(

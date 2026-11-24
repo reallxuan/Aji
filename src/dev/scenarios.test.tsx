@@ -387,7 +387,12 @@ it('fake save handshake clears changed only for the written edit', async () => {
   expect(files.written.get('/game.sgf')).toContain('C[囲碁]');
   expect((await files.openPath('/game.sgf')).bytes).toBe(out.bytes);
   await expect(
-    transport.request({ type: 'gameSaved', editId: out.editId, utf8: true }),
+    transport.request({
+      type: 'gameSaved',
+      gameRevision: out.gameRevision,
+      editId: out.editId,
+      utf8: true,
+    }),
   ).resolves.toMatchObject({ snapshot: { changed: true } });
   await expect(transport.request({ type: 'gameUndo' })).resolves.toMatchObject({
     snapshot: { changed: false },

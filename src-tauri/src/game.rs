@@ -217,7 +217,7 @@ pub struct GameSession {
     tip: NodeId,
     /// Remember the old path across edits, including when a removed subtree loses its parent.
     selected_line: Vec<NodeId>,
-    game_revision: u64,
+    pub(crate) game_revision: u64,
     pub line_revision: u64,
     pub tree_revision: u64,
     source: Source,

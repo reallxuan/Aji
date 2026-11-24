@@ -53,7 +53,7 @@ network: ImportedNetwork | null, } | { "type": "setupInstalled", active: ActiveS
 /**
  * Boxed: a snapshot is far larger than any other reply.
  */
-snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gameTree" } & GameTree | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string | null, bytes: string | null, fellBack: boolean, editId: number, } | { "type": "trend", 
+snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gameTree" } & GameTree | { "type": "gamePreview", preview: Preview, } | { "type": "gameExport", name: string, text: string | null, bytes: string | null, fellBack: boolean, editId: number, gameRevision: number, } | { "type": "trend", 
 /**
  * The session revision the line was read at; `trendNodes` with another are stale.
  */

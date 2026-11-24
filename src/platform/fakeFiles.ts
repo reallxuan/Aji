@@ -14,7 +14,7 @@ export interface FakeFilesOptions {
 }
 
 export interface FakeFiles extends PlatformFiles {
-  save(token: string, bytesBase64: string): Promise<boolean>;
+  emitQuitRequested(): void;
   remembered: Array<{ path: string; title: string }>;
   written: Map<string, string>;
   /** Screenshots saved, by path. */
@@ -47,6 +47,7 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
     path,
     title: baseName(path),
   }));
+  const quitRequests = new Set<() => void>();
   const drags = new Set<(event: DragEvent) => void>();
   const menus = new Set<(command: MenuCommand) => void>();
 
@@ -70,6 +71,7 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
       return options.pick ? open(options.pick) : null;
     },
     openPath: open,
+    reread: async (token) => (await open(token)).bytes,
     async openRecent(index) {
       const entry = recent[index];
       if (!entry) throw new TransportError('internal', `no recent file ${index}`);
@@ -100,6 +102,18 @@ export function createFakeFiles(options: FakeFilesOptions = {}): FakeFiles {
     async clearRecent() {
       recent.length = 0;
     },
+    async confirmDiscard() {
+      const { browserConfirmDiscard } = await import('./browserConfirmDiscard');
+      return browserConfirmDiscard();
+    },
+    onQuitRequested(handler) {
+      quitRequests.add(handler);
+      return () => quitRequests.delete(handler);
+    },
+    emitQuitRequested() {
+      for (const handler of quitRequests) handler();
+    },
+    async quit() {},
     async save(token, bytes) {
       if (!disk.has(token)) return false;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));

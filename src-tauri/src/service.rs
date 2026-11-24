@@ -214,18 +214,29 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 .unwrap_or_default(),
         }),
         Request::SettingsSet { settings } => return set_settings(ctx, settings).await,
-        Request::GameNew { size } => return game_new(ctx, size).await,
+        Request::GameNew {
+            size,
+            expected_revision,
+        } => return game_new(ctx, size, expected_revision).await,
         Request::GameOpen {
+            expected_revision,
             name,
             bytes,
             at_end,
-        } => return game_open(ctx, name, bytes, at_end).await,
+        } => return game_open(ctx, name, bytes, at_end, expected_revision).await,
         Request::GameNavigate { to } => return update_game(ctx, |s| Ok(s.navigate(to))).await,
         Request::GameEdit { edit } => return update_game(ctx, |s| s.edit(edit)).await,
         Request::GameUndo => return update_game(ctx, |s| Ok(s.undo())).await,
         Request::GameRedo => return update_game(ctx, |s| Ok(s.redo())).await,
-        Request::GameSaved { edit_id, utf8 } => {
-            return update_game(ctx, |s| Ok(s.mark_saved(edit_id, utf8))).await;
+        Request::GameSaved {
+            game_revision,
+            edit_id,
+            utf8,
+        } => {
+            return update_game(ctx, |s| {
+                Ok(s.game_revision == game_revision && s.mark_saved(edit_id, utf8))
+            })
+            .await;
         }
         Request::GameTree => return Ok(Response::GameTree(ctx.game.lock().await.tree())),
         Request::GameTrend => {
@@ -403,9 +414,27 @@ fn unchanged(session: &GameSession) -> Response {
     }
 }
 
-async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError> {
+pub(crate) fn check_revision(
+    session: &GameSession,
+    expected: Option<u64>,
+) -> Result<(), ProtocolError> {
+    if expected.is_some_and(|revision| revision != session.revision()) {
+        return Err(error(
+            ErrorCode::GameChanged,
+            "the game changed after confirmation",
+        ));
+    }
+    Ok(())
+}
+
+async fn game_new(
+    ctx: &AppContext,
+    size: u8,
+    expected_revision: Option<u64>,
+) -> Result<Response, ProtocolError> {
     let next = GameSession::new(size, default_rules(ctx))?;
     let mut session = ctx.game.lock().await;
+    check_revision(&session, expected_revision)?;
     follow::stop_job(ctx).await;
     session.replace(next);
     let reply = publish(ctx, &session, false, true).await;
@@ -423,11 +452,18 @@ async fn game_open(
     name: String,
     bytes: String,
     at_end: bool,
+    expected_revision: Option<u64>,
 ) -> Result<Response, ProtocolError> {
     // Base64 is 4 bytes per 3; anything longer than this decodes to more than the limit.
     if bytes.len() > (crate::game::MAX_SGF_BYTES / 3 + 1) * 4 {
         return Err(OpenError::TooLarge.into());
     }
+    // Older clients can omit an approval revision. Their parse must still lose
+    // to an edit committed while the blocking task is running.
+    let expected_revision = match expected_revision {
+        Some(revision) => revision,
+        None => ctx.game.lock().await.revision(),
+    };
     let ui = ui_settings(ctx);
     let defaults = ui.default_rules;
     let (next, rows) = tokio::task::spawn_blocking(move || {
@@ -452,6 +488,7 @@ async fn game_open(
     .await
     .map_err(|e| error(ErrorCode::Internal, e.to_string()))??;
     let mut session = ctx.game.lock().await;
+    check_revision(&session, Some(expected_revision))?;
     follow::stop_job(ctx).await;
     session.replace(next);
     // Before the position goes out, so a stored row shows at once.
@@ -639,6 +676,7 @@ async fn game_export(ctx: &AppContext, options: ExportOptions) -> Result<Respons
         bytes,
         fell_back: encoded.fell_back,
         edit_id: session.last_kept(),
+        game_revision: session.game_revision,
     })
 }
 
@@ -1550,6 +1588,7 @@ mod tests {
         handle(
             ctx,
             Request::GameOpen {
+                expected_revision: None,
                 at_end: false,
                 name: name.into(),
                 bytes: b64(bytes),
@@ -1761,7 +1800,7 @@ mod tests {
             assert!(text.contains("CA[UTF-8]"));
             wire(
                 &ctx,
-                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"utf8":true}),
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"gameRevision":reply["gameRevision"],"utf8":true}),
             )
             .await
             .unwrap();
@@ -1840,7 +1879,7 @@ mod tests {
         let s = snap(
             wire(
                 &ctx,
-                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"utf8":true}),
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"gameRevision":reply["gameRevision"],"utf8":true}),
             )
             .await,
         )
@@ -2090,7 +2129,15 @@ mod tests {
         wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
         wire(&ctx, json!({"type":"gameUndo"})).await.unwrap();
         wire(&ctx, json!({"type":"gameRedo"})).await.unwrap();
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         let events: Vec<_> = recorded
             .0
             .lock()
@@ -2148,6 +2195,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_edit_while_the_open_request_is_pending_wins_before_replacement() {
+        let ctx = ctx();
+        let mut game = ctx.game.lock().await;
+        let old_revision = game.revision();
+        let opening = game_open(
+            &ctx,
+            "later.sgf".into(),
+            b64(SMALL.as_bytes()),
+            false,
+            Some(old_revision),
+        );
+        tokio::pin!(opening);
+        // Poll the real open future into the parser while we hold the commit lock.
+        tokio::select! {
+            biased;
+            result = &mut opening => panic!("open completed with the old session locked: {result:?}"),
+            () = tokio::task::yield_now() => {}
+        }
+        game.edit(SessionEdit::Pass).unwrap();
+        drop(game);
+        assert_eq!(opening.await.unwrap_err().code, ErrorCode::GameChanged);
+        let snapshot = ctx.game.lock().await.snapshot();
+        assert_eq!(snapshot.move_number, 1);
+        assert!(snapshot.changed);
+        assert!(snapshot.name.is_none());
+    }
+
+    #[tokio::test]
     async fn open_at_end_lands_on_the_last_move() {
         use serde_json::json;
         let ctx = ctx();
@@ -2155,7 +2230,14 @@ mod tests {
         let s = snap(wire(&ctx, request).await).0;
         assert_eq!((s.line_index, s.last_move), (2, Some(Move::Pass)));
         assert!(s.save_as_first);
-        let s = snap(wire(&ctx, json!({"type":"gameSaved","editId":0,"utf8":true})).await).0;
+        let s = snap(
+            wire(
+                &ctx,
+                json!({"type":"gameSaved","editId":0,"gameRevision":s.game_revision,"utf8":true}),
+            )
+            .await,
+        )
+        .0;
         assert!(!s.save_as_first);
     }
 
@@ -2434,7 +2516,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(trend_events(&recorded), 2);
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(trend_events(&recorded), 3);
     }
 
@@ -2586,7 +2676,17 @@ mod tests {
             r#"{"defaultRules":{"kind":"japaneseKorean"}}"#,
         )
         .unwrap();
-        let s = snap(handle(&ctx, Request::GameNew { size: 13 }).await).0;
+        let s = snap(
+            handle(
+                &ctx,
+                Request::GameNew {
+                    size: 13,
+                    expected_revision: None,
+                },
+            )
+            .await,
+        )
+        .0;
         assert_eq!(s.size, 13);
         assert_eq!(s.rules.current, AnalysisRules::JapaneseKorean);
         assert!(!s.has_moves && s.at_start && s.at_end);
@@ -2597,9 +2697,15 @@ mod tests {
             Komi::new(6.5).unwrap(),
         );
         assert_eq!(ctx.engine.status().position, Some(position.key()));
-        let error = handle(&ctx, Request::GameNew { size: 4 })
-            .await
-            .unwrap_err();
+        let error = handle(
+            &ctx,
+            Request::GameNew {
+                size: 4,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::SgfUnsupportedSize);
         assert_eq!(snap(handle(&ctx, Request::GameSnapshot).await).0.size, 13);
         let error = handle(
@@ -2639,6 +2745,7 @@ mod tests {
         let error = handle(
             &ctx,
             Request::GameOpen {
+                expected_revision: None,
                 at_end: false,
                 name: "bad.sgf".into(),
                 bytes: "not base64!".into(),
@@ -2721,7 +2828,15 @@ mod tests {
         )
         .await
         .unwrap();
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         handle(&ctx, Request::GameSnapshot).await.unwrap();
         let revisions = game_events(&ctx, &recorded);
         assert_eq!(revisions.len(), 5, "{revisions:?}");
@@ -2799,7 +2914,10 @@ mod tests {
         for (value, request) in [
             (
                 json!({"type": "gameNew", "size": 9}),
-                Request::GameNew { size: 9 },
+                Request::GameNew {
+                    size: 9,
+                    expected_revision: None,
+                },
             ),
             (
                 json!({"type": "gameNavigate", "to": "previous"}),
@@ -3107,7 +3225,15 @@ mod tests {
         )
         .await
         .unwrap();
-        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        handle(
+            &ctx,
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
+        )
+        .await
+        .unwrap();
         let reasons: Vec<_> = recorded
             .0
             .lock()
@@ -3285,8 +3411,12 @@ mod tests {
         let (ctx, recorded) = nine(dir.path()).await;
         let stoppers = [
             Request::JobStop,
-            Request::GameNew { size: 9 },
+            Request::GameNew {
+                size: 9,
+                expected_revision: None,
+            },
             Request::GameOpen {
+                expected_revision: None,
                 at_end: false,
                 name: "nine.sgf".into(),
                 bytes: b64(NINE.as_bytes()),

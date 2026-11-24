@@ -18,6 +18,7 @@ type Write<T = Value> =
 function newQueue(game: number | undefined) {
   return {
     game,
+    version: 0,
     stopWatching: null as (() => void) | null,
     writes: createStore(() => new Map<Field, Write>()),
     editors: new Set<() => void>(),
@@ -111,6 +112,7 @@ function enqueue(
     previous.stillApplies === stillApplies
   )
     return previous.done;
+  if (!previous || previous.value !== value) queue.version++;
   const attempt = previous?.status === 'pending' ? previous.done.then(send) : send();
   const done = attempt.then((ok) => {
     const active = writes.getState().get(field);
@@ -203,6 +205,14 @@ export function registerRecordEditor(transport: Transport, finish: () => void) {
   return () => {
     editors.delete(finish);
   };
+}
+
+/** Finish any new typing while a picker or a file read was pending. Retries of an
+ * unchanged draft keep the same version, including a draft the user chose to discard. */
+export function recordFieldVersion(transport: Transport): number {
+  const queue = queueFor(transport);
+  for (const finish of queue.editors) finish();
+  return queue.version;
 }
 
 /** Finish mounted fields and retry retained failures once before saving or leaving a record. */

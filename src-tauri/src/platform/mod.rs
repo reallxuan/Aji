@@ -6,7 +6,7 @@ pub mod menu;
 pub mod recent;
 
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -17,7 +17,9 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use base64::Engine as _;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_dialog::{
+    DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+};
 use ts_rs::TS;
 
 use crate::game::MAX_SGF_BYTES;
@@ -56,6 +58,12 @@ pub enum MenuAction {
     New(u8),
     Open,
     SaveAs,
+    Save,
+    SaveBranch,
+    SaveClean,
+    Undo,
+    Redo,
+    Quit,
     /// The recent file at this index.
     Recent(u32),
     ClearRecent,
@@ -115,6 +123,12 @@ impl MenuAction {
         [
             MenuAction::Open,
             MenuAction::SaveAs,
+            MenuAction::Save,
+            MenuAction::SaveBranch,
+            MenuAction::SaveClean,
+            MenuAction::Undo,
+            MenuAction::Redo,
+            MenuAction::Quit,
             MenuAction::ClearRecent,
             MenuAction::AnalyseGame,
             MenuAction::StopGame,
@@ -151,38 +165,79 @@ fn with_extension_added(path: &Path, extension: &str) -> PathBuf {
 /// Reads an SGF file for `gameOpen`: its name and bytes. Refuses other extensions, files over
 /// 20 MB, and missing files.
 pub fn read_sgf_file(path: &Path) -> Result<(String, Vec<u8>), ProtocolError> {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    if !has_sgf_extension(path) {
-        return Err(error(ErrorCode::FileNotSgf, format!("{name} is not .sgf")));
-    }
-    let read_failed = |e: io::Error| match e.kind() {
+    let file = GameFile::existing(path)?;
+    Ok((file.name(), file.read()?))
+}
+
+fn read_failed(e: io::Error) -> ProtocolError {
+    match e.kind() {
         io::ErrorKind::NotFound => error(ErrorCode::FileMissing, e.to_string()),
         _ => error(ErrorCode::FileReadFailed, e.to_string()),
-    };
-    let metadata = fs::metadata(path).map_err(read_failed)?;
-    if !metadata.is_file() {
-        return Err(error(
-            ErrorCode::FileReadFailed,
-            format!("{name} is not a file"),
-        ));
     }
-    if metadata.len() > MAX_SGF_BYTES as u64 {
-        return Err(error(
-            ErrorCode::SgfTooLarge,
-            format!("{name} is over 20 MB"),
-        ));
+}
+
+#[derive(Clone)]
+struct GameFile {
+    selected: PathBuf,
+    target: PathBuf,
+}
+impl GameFile {
+    fn existing(path: &Path) -> Result<Self, ProtocolError> {
+        if !has_sgf_extension(path) {
+            return Err(error(ErrorCode::FileNotSgf, "expected an SGF file"));
+        }
+        Ok(Self {
+            selected: path.to_path_buf(),
+            target: fs::canonicalize(path).map_err(read_failed)?,
+        })
     }
-    let bytes = fs::read(path).map_err(read_failed)?;
-    if bytes.len() > MAX_SGF_BYTES {
-        return Err(error(
-            ErrorCode::SgfTooLarge,
-            format!("{name} is over 20 MB"),
-        ));
+    fn for_save(selected: PathBuf) -> io::Result<Self> {
+        let target = match fs::canonicalize(&selected) {
+            Ok(target) => target,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                let parent = selected
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .unwrap_or(Path::new("."));
+                fs::canonicalize(parent)?.join(selected.file_name().unwrap_or_default())
+            }
+            Err(e) => return Err(e),
+        };
+        Ok(Self { selected, target })
     }
-    Ok((name, bytes))
+
+    fn name(&self) -> String {
+        self.selected
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
+    fn read(&self) -> Result<Vec<u8>, ProtocolError> {
+        let path = &self.target;
+        let name = self.name();
+        let metadata = fs::metadata(path).map_err(read_failed)?;
+        if !metadata.is_file() {
+            return Err(error(
+                ErrorCode::FileReadFailed,
+                format!("{name} is not a file"),
+            ));
+        }
+        if metadata.len() > MAX_SGF_BYTES as u64 {
+            return Err(error(
+                ErrorCode::SgfTooLarge,
+                format!("{name} is over 20 MB"),
+            ));
+        }
+        let bytes = fs::read(path).map_err(read_failed)?;
+        if bytes.len() > MAX_SGF_BYTES {
+            return Err(error(
+                ErrorCode::SgfTooLarge,
+                format!("{name} is over 20 MB"),
+            ));
+        }
+        Ok(bytes)
+    }
 }
 
 /// Writes `bytes` to a temporary file beside `path`, then renames it over `path`, so a crash
@@ -193,12 +248,37 @@ pub fn write_atomically(path: &Path, bytes: impl AsRef<[u8]>) -> io::Result<()> 
         _ => Path::new("."),
     };
     let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-    let written = File::create(&temp).and_then(|mut file| {
+    let permissions = match fs::metadata(path) {
+        Ok(metadata) => Some(metadata.permissions()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e),
+    };
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let (temp, mut file) = loop {
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let temp = dir.join(format!(".{name}.{}.{id}.tmp", std::process::id()));
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        if let Some(mode) = &permissions {
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            options.mode(mode.mode());
+        }
+        match options.open(&temp) {
+            Ok(file) => break (temp, file),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
+    let result = (|| {
+        if let Some(permissions) = permissions {
+            file.set_permissions(permissions)?;
+        }
         file.write_all(bytes.as_ref())?;
-        file.sync_all()
-    });
-    let result = written.and_then(|()| fs::rename(&temp, path));
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp, path)
+    })();
     if result.is_err() {
         let _ = fs::remove_file(&temp);
     }
@@ -254,7 +334,7 @@ fn now_ms() -> u64 {
 pub struct DesktopFiles {
     recent_path: PathBuf,
     recent: Mutex<RecentList>,
-    tokens: Mutex<HashMap<String, PathBuf>>,
+    tokens: Mutex<HashMap<String, GameFile>>,
     next_token: AtomicU64,
     language: Mutex<MenuLanguage>,
 }
@@ -271,16 +351,18 @@ impl DesktopFiles {
         }
     }
 
-    fn token(&self, path: PathBuf) -> String {
+    fn token(&self, file: GameFile) -> String {
         let token = format!("f{}", self.next_token.fetch_add(1, Ordering::Relaxed));
-        lock(&self.tokens).insert(token.clone(), path);
+        lock(&self.tokens).insert(token.clone(), file);
         token
     }
 
     fn opened(&self, path: &Path) -> Result<OpenedFile, ProtocolError> {
-        let (name, bytes) = read_sgf_file(path)?;
+        let file = GameFile::existing(path)?;
+        let name = file.name();
+        let bytes = file.read()?;
         Ok(OpenedFile {
-            token: self.token(path.to_path_buf()),
+            token: self.token(file),
             name,
             bytes: base64::engine::general_purpose::STANDARD.encode(bytes),
         })
@@ -365,6 +447,19 @@ pub async fn files_open_path(
     platform.opened(Path::new(&path))
 }
 
+/// Refreshes a previously selected file after a save may have replaced its bytes.
+#[tauri::command]
+pub async fn files_reread(
+    token: String,
+    platform: State<'_, DesktopFiles>,
+) -> Result<String, ProtocolError> {
+    let file = lock(&platform.tokens)
+        .get(&token)
+        .cloned()
+        .ok_or_else(|| error(ErrorCode::FileReadFailed, "unknown file token"))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(file.read()?))
+}
+
 /// Entry `index` of the recent list. A file that is gone leaves the list.
 #[tauri::command]
 pub async fn files_open_recent<R: Runtime>(
@@ -398,7 +493,7 @@ pub async fn files_remember<R: Runtime>(
         .get(&token)
         .cloned()
         .ok_or_else(|| error(ErrorCode::Internal, format!("unknown file token {token}")))?;
-    platform.update_recent(&app, |recent| recent.push(&path, &title, now_ms()));
+    platform.update_recent(&app, |recent| recent.push(&path.selected, &title, now_ms()));
     Ok(())
 }
 
@@ -416,6 +511,60 @@ pub async fn files_clear_recent<R: Runtime>(
 ) -> Result<(), ProtocolError> {
     platform.update_recent(&app, RecentList::clear);
     Ok(())
+}
+
+/// Overwrites the file previously opened or saved under this opaque token.
+#[tauri::command]
+pub async fn files_save(
+    token: String,
+    bytes: String,
+    platform: State<'_, DesktopFiles>,
+) -> Result<bool, ProtocolError> {
+    let path = lock(&platform.tokens)
+        .get(&token)
+        .cloned()
+        .ok_or_else(|| error(ErrorCode::FileWriteFailed, "unknown file token"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(bytes)
+            .map_err(|e| error(ErrorCode::FileWriteFailed, e.to_string()))?;
+        write_atomically(&path.target, decoded)
+            .map_err(|e| error(ErrorCode::FileWriteFailed, e.to_string()))?;
+        Ok(true)
+    })
+    .await
+    .map_err(join_failed)?
+}
+
+#[tauri::command]
+pub async fn confirm_discard<R: Runtime>(
+    app: AppHandle<R>,
+    platform: State<'_, DesktopFiles>,
+) -> Result<&'static str, ProtocolError> {
+    let l = menu::labels(*lock(&platform.language));
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = app
+            .dialog()
+            .message(l.unsaved)
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::YesNoCancelCustom(
+                l.save.into(),
+                l.discard.into(),
+                l.cancel.into(),
+            ));
+        if let Some(main) = app.get_webview_window("main") {
+            dialog = dialog.parent(&main);
+        }
+        match dialog.blocking_show_with_result() {
+            MessageDialogResult::Yes => "save",
+            MessageDialogResult::No => "discard",
+            MessageDialogResult::Custom(label) if label == l.save => "save",
+            MessageDialogResult::Custom(label) if label == l.discard => "discard",
+            _ => "cancel",
+        }
+    })
+    .await
+    .map_err(join_failed)
 }
 
 /// The native save dialog, then an atomic write. Returns the saved file's token for
@@ -449,13 +598,15 @@ pub async fn files_save_as<R: Runtime>(
     {
         return Ok(None);
     }
-    let path = with_sgf_extension(&path);
-    let write = path.clone();
-    tauri::async_runtime::spawn_blocking(move || write_atomically(&write, &text))
-        .await
-        .map_err(join_failed)?
-        .map_err(|e| error(ErrorCode::FileWriteFailed, e.to_string()))?;
-    Ok(Some(platform.token(path)))
+    let file = tauri::async_runtime::spawn_blocking(move || {
+        let file = GameFile::for_save(with_sgf_extension(&path))?;
+        write_atomically(&file.target, &text)?;
+        Ok::<_, io::Error>(file)
+    })
+    .await
+    .map_err(join_failed)?
+    .map_err(|e| error(ErrorCode::FileWriteFailed, e.to_string()))?;
+    Ok(Some(platform.token(file)))
 }
 
 /// Copies a screenshot to the system clipboard (P2 M1 design 5.9). The app writes it rather than
@@ -690,7 +841,17 @@ mod tests {
             Some(MenuAction::ClearRecent)
         );
         assert_eq!(MenuAction::from_id("about"), None);
-        for action in [MenuAction::New(19), MenuAction::Open, MenuAction::Recent(0)] {
+        for action in [
+            MenuAction::New(19),
+            MenuAction::Open,
+            MenuAction::Recent(0),
+            MenuAction::Save,
+            MenuAction::SaveBranch,
+            MenuAction::SaveClean,
+            MenuAction::Quit,
+            MenuAction::Undo,
+            MenuAction::Redo,
+        ] {
             assert_eq!(MenuAction::from_id(&action.id()), Some(action));
         }
     }

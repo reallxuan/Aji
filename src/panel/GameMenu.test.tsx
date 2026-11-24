@@ -24,14 +24,15 @@ async function openSub(menu: HTMLElement, name: string) {
   return screen.getAllByRole('menu').at(-1) as HTMLElement;
 }
 
-it('lists the items with macOS shortcuts, save-as disabled for an empty game', async () => {
+it('lists the items with macOS shortcuts, saving available for a header-only game', async () => {
   renderWithGame(<GameMenu />, { snapshot: makeSnapshot({ hasMoves: false }), os: 'macos' });
   await act(async () => {});
   const menu = await openMenu('未命名棋局');
   expect(within(menu).getByRole('menuitem', { name: /打开棋谱…/ })).toHaveTextContent('⌘O');
   const save = within(menu).getByRole('menuitem', { name: /另存为…/ });
   expect(save).toHaveTextContent('⇧⌘S');
-  expect(save).toHaveAttribute('data-disabled');
+  expect(save).not.toHaveAttribute('data-disabled');
+  expect(within(menu).getByRole('menuitem', { name: /保存.*⌘S/ })).toBeEnabled();
 });
 
 it('shows Ctrl shortcuts elsewhere', async () => {
@@ -50,7 +51,7 @@ it('starts a new game of the chosen size', async () => {
   await act(async () => {
     fireEvent.click(within(sizes).getByRole('menuitem', { name: /13 路/ }));
   });
-  expect(requests).toContainEqual({ type: 'gameNew', size: 13 });
+  expect(requests).toContainEqual({ type: 'gameNew', size: 13, expectedRevision: 1 });
 });
 
 it('lists recent files in order, greys a missing one, and opens the chosen entry', async () => {
@@ -115,7 +116,10 @@ it('game menu has the m2 items in order', async () => {
       '新建棋局',
       '打开棋谱…',
       '打开最近',
+      '保存',
       '另存为…',
+      '另存当前分支…',
+      '另存为纯净棋谱…',
       '棋局信息',
       '分析全局…',
       '清除分析结果',
@@ -185,7 +189,7 @@ it('offers sizes 5 through 18 under other sizes', async () => {
   const menu = await openSub(await openSub(await openMenu('未命名棋局'), '新建棋局'), '其他路数');
   expect(within(menu).getAllByRole('menuitem')).toHaveLength(14);
   await act(async () => fireEvent.click(within(menu).getByRole('menuitem', { name: '18 路' })));
-  expect(requests).toContainEqual({ type: 'gameNew', size: 18 });
+  expect(requests).toContainEqual({ type: 'gameNew', size: 18, expectedRevision: 1 });
 });
 it('opens game information from the title as a full sheet in a narrow frame', async () => {
   renderWithGame(<GameMenu narrow />);

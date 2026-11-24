@@ -3,4 +3,4 @@
 /**
  * A menu item the UI acts on, sent on [`MENU_CHANNEL`].
  */
-export type MenuAction = { "new": number } | "open" | "saveAs" | { "recent": number } | "clearRecent" | { "layout": string } | { "saveImage": string } | { "copyImage": string } | "analyseGame" | "stopGame" | "clearPosition" | "clearGame" | "finalScoring" | "estimate";
+export type MenuAction = { "new": number } | "open" | "saveAs" | "save" | "saveBranch" | "saveClean" | "undo" | "redo" | "quit" | { "recent": number } | "clearRecent" | { "layout": string } | { "saveImage": string } | { "copyImage": string } | "analyseGame" | "stopGame" | "clearPosition" | "clearGame" | "finalScoring" | "estimate";

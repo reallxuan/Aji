@@ -1,7 +1,7 @@
 import { useDeviceStore } from '../device/deviceStore';
 import { useEstimateStore } from '../analysis/estimateStore';
 import { useViewStore } from '../analysis/viewStore';
-import { openFromPicker, saveAs, startNewGame } from '../game/actions';
+import { openFromPicker, save, saveAs, saveBranch, saveClean, startNewGame } from '../game/actions';
 import { edit, undo, redo } from '../game/editActions';
 import { useModeStore } from '../edit/modeStore';
 import { useGameStore } from '../game/gameStore';
@@ -88,6 +88,9 @@ export const BUILTINS: Command[] = [
   page('nav.pageBack', -PAGE),
   page('nav.pageForward', PAGE),
   press('file.open', (ctx) => void openFromPicker(ctx.actions)),
+  press('file.save', (ctx) => void save(ctx.actions)),
+  press('file.saveBranch', (ctx) => void saveBranch(ctx.actions)),
+  press('file.saveClean', (ctx) => void saveClean(ctx.actions)),
   press('file.saveAs', (ctx) => void saveAs(ctx.actions)),
   press('file.new19', (ctx) => void startNewGame(ctx.actions, 19)),
   // What a click on the engine indicator does, except opening the wizard.
