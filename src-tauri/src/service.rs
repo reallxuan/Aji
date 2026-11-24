@@ -564,7 +564,7 @@ async fn game_export(ctx: &AppContext) -> Result<Response, ProtocolError> {
     let session = ctx.game.lock().await;
     let lz = match ui_settings(ctx).save_analysis {
         true => {
-            let line = session.line();
+            let line = session.main_line_analysis();
             let keys = line
                 .iter()
                 .map(|n| n.key.unwrap_or(PositionKey(0)))
@@ -2102,7 +2102,7 @@ mod tests {
         let session = ctx.game.lock().await;
         let plan = ctx.follow.lock().unwrap().flow.start(
             session.line(),
-            session.index(),
+            session.line_index(),
             JobOptions::default(),
         );
         plan.id

@@ -1,6 +1,7 @@
 //! A game built from an SGF tree: nodes in an arena, boards per node, the main line, and the
 //! positions KataGo analyses.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
@@ -65,6 +66,7 @@ struct Node {
 }
 
 /// What follows from playing the path to a node; computed when first asked for.
+#[derive(Clone)]
 struct NodeState {
     board: Board,
     mv: Option<(Color, Move)>,
@@ -409,10 +411,7 @@ impl Game {
         self.states[node].get().expect("computed")
     }
 
-    fn compute(&self, id: NodeId, parent: Option<&NodeState>) -> NodeState {
-        let sgf = &self.nodes[id].sgf;
-        let mut board = parent.map_or_else(|| Board::new(self.size), |p| p.board.clone());
-        let setup = has_setup(sgf);
+    fn apply_setup(&self, sgf: &SgfNode, board: &mut Board) {
         for (prop, stone) in [
             ("AB", Some(Color::Black)),
             ("AW", Some(Color::White)),
@@ -428,30 +427,60 @@ impl Game {
                 }
             }
         }
+    }
 
-        let mv = [("B", Color::Black), ("W", Color::White)]
+    fn recorded_move(&self, node: NodeId) -> Result<Option<(Color, Move)>, Illegal> {
+        let sgf = self.sgf(node);
+        let Some((color, value)) = [("B", Color::Black), ("W", Color::White)]
             .into_iter()
-            .find_map(|(prop, color)| sgf.first(prop).map(|v| (color, v.trim())));
-        let mut illegal = None;
-        let mut played = None;
-        if let Some((color, value)) = mv {
-            let n = self.size.get();
-            let mv = if value.is_empty() || (value == "tt" && n <= 19) {
-                Some(Move::Pass)
-            } else {
-                match expand_points(value, self.size).as_slice() {
-                    [p] if !value.contains(':') => Some(Move::Play(*p)),
-                    _ => None,
+            .find_map(|(id, color)| sgf.first(id).map(|v| (color, v.trim())))
+        else {
+            return Ok(None);
+        };
+        let mv = if value.is_empty() || (value == "tt" && self.size.get() <= 19) {
+            Move::Pass
+        } else {
+            match expand_points(value, self.size).as_slice() {
+                [p] if !value.contains(':') => Move::Play(*p),
+                _ => return Err(Illegal::OffBoard),
+            }
+        };
+        Ok(Some((color, mv)))
+    }
+
+    /// Looks ahead for a move without retaining the boards of intervening SGF nodes.
+    pub fn next_move_on_line(
+        &self,
+        current: NodeId,
+        following: &[NodeId],
+    ) -> Option<(NodeId, Move)> {
+        for &id in following {
+            if let Some(mv) = self.last_move(id) {
+                return Some((id, mv));
+            }
+            let sgf = self.sgf(id);
+            if has_setup(sgf) {
+                let here = self.board_at(current);
+                let mut after = here.clone();
+                self.apply_setup(sgf, &mut after);
+                if after.stones() != here.stones() {
+                    return None;
                 }
-            };
-            match mv {
-                Some(mv) => {
-                    illegal = board.play(color, mv, false).illegal;
-                    played = Some((color, mv));
-                }
-                None => illegal = Some(Illegal::OffBoard),
             }
         }
+        None
+    }
+
+    fn compute(&self, id: NodeId, parent: Option<&NodeState>) -> NodeState {
+        let sgf = &self.nodes[id].sgf;
+        let mut board = parent.map_or_else(|| Board::new(self.size), |p| p.board.clone());
+        let setup = has_setup(sgf);
+        self.apply_setup(sgf, &mut board);
+        let (played, illegal) = match self.recorded_move(id) {
+            Ok(Some((color, mv))) => (Some((color, mv)), board.play(color, mv, false).illegal),
+            Ok(None) => (None, None),
+            Err(illegal) => (None, Some(illegal)),
+        };
 
         let move_number = parent.map_or(0, |p| p.move_number) + u32::from(played.is_some());
         let to_play = if let Some(pl) = sgf.first("PL").and_then(color_of) {
@@ -496,7 +525,7 @@ impl Game {
 
     /// The node's own move.
     pub fn last_move(&self, node: NodeId) -> Option<Move> {
-        self.state(node).mv.map(|(_, mv)| mv)
+        self.recorded_move(node).ok().flatten().map(|(_, mv)| mv)
     }
 
     /// The colour of the node's own move.
@@ -606,7 +635,26 @@ impl Game {
     /// The position KataGo analyses at `node`; `None` on an illegal node. After setup stones or
     /// an illegal move, the position starts from that node's board (design 5.2).
     pub fn position_at(&self, node: NodeId, rules: &AnalysisRules) -> Option<Position> {
-        let state = self.state(node);
+        self.position_from_state(node, self.state(node), rules)
+    }
+
+    fn transient_state(&self, node: NodeId) -> Cow<'_, NodeState> {
+        self.states[node]
+            .get()
+            .map_or_else(|| Cow::Owned(self.replay_uncached(node)), Cow::Borrowed)
+    }
+
+    /// Builds an engine hint without retaining boards beyond the current path.
+    pub fn position_at_uncached(&self, node: NodeId, rules: &AnalysisRules) -> Option<Position> {
+        self.position_from_state(node, &self.transient_state(node), rules)
+    }
+
+    fn position_from_state(
+        &self,
+        node: NodeId,
+        state: &NodeState,
+        rules: &AnalysisRules,
+    ) -> Option<Position> {
         if state.illegal.is_some() {
             return None;
         }
@@ -614,14 +662,21 @@ impl Game {
         let mut moves = Vec::new();
         let mut at = node;
         while at != base {
-            if let Some(mv) = self.state(at).mv {
+            let mv = self.states[at]
+                .get()
+                .map_or_else(|| self.recorded_move(at).ok().flatten(), |state| state.mv);
+            if let Some(mv) = mv {
                 moves.push(mv);
             }
             at = self.nodes[at].parent.expect("the base is an ancestor");
         }
         moves.reverse();
 
-        let base_state = self.state(base);
+        let base_state = if base == node {
+            Cow::Borrowed(state)
+        } else {
+            self.transient_state(base)
+        };
         let n = usize::from(self.size.get());
         let setup: Vec<(Color, Point)> = base_state
             .board
@@ -858,6 +913,36 @@ mod tests {
         g.invalidate(tip);
         assert_eq!(g.illegal_nodes(), [tip]);
         assert_eq!(g.states.iter().filter(|s| s.get().is_some()).count(), 0);
+    }
+
+    #[test]
+    fn reading_line_moves_keeps_distant_nodes_uncached() {
+        let g = game(&format!(
+            "(;AB[aa]{};AB[aa];B[bad];W[tt])",
+            ";C[note]".repeat(5000)
+        ));
+        let line = g.main_line();
+        assert_eq!(line.iter().filter_map(|&id| g.last_move(id)).count(), 1);
+        assert_eq!(
+            g.next_move_on_line(line[0], &line[1..]),
+            Some((5003, Move::Pass))
+        );
+        assert!(g.states[1..].iter().all(|state| state.get().is_none()));
+    }
+
+    #[test]
+    fn distant_next_position_does_not_cache_intervening_nodes() {
+        let g = game(&format!(
+            "(;SZ[9];B[aa]{};PL[W];W[bb])",
+            ";C[note]".repeat(5000)
+        ));
+        let tip = last(&g);
+        let next = g
+            .position_at_uncached(tip, &AnalysisRules::Chinese)
+            .unwrap();
+        assert_eq!(next.moves.len(), 2);
+        assert!(g.states[1..].iter().all(|state| state.get().is_none()));
+        assert_eq!(Some(next), g.position_at(tip, &AnalysisRules::Chinese));
     }
 
     #[test]

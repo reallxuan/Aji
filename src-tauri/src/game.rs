@@ -1,4 +1,4 @@
-//! The open game (design 5.4): one game at a time, its current node on the main line, the rules
+//! The open game (design 5.4): one game at a time, its current node and line, the rules
 //! KataGo analyses it with, and what reading the file repaired. `service` holds it behind a
 //! mutex and tells the engine about every change.
 
@@ -13,7 +13,7 @@ use crate::protocol::GameSnapshot;
 /// The largest file Aji opens.
 pub const MAX_SGF_BYTES: usize = 20 * 1024 * 1024;
 
-/// Where `gameNavigate` goes, along the main line.
+/// Where `gameNavigate` goes in the record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -24,6 +24,11 @@ pub enum NavTarget {
     Next,
     /// The node where move `n` was played; past the end, the last node.
     Move(u32),
+    Node(u32),
+    PreviousSibling,
+    NextSibling,
+    BranchPoint,
+    MainLine,
 }
 
 /// Something reading the file repaired or guessed. The UI shows one line for them.
@@ -82,8 +87,11 @@ pub struct GameSession {
     game: Game,
     /// The file's other games, written back on export.
     others: Vec<SgfTree>,
-    /// The current node's index on the main line.
-    index: usize,
+    current: NodeId,
+    tip: NodeId,
+    /// Remember the old path across edits, including when a removed subtree loses its parent.
+    selected_line: Vec<NodeId>,
+    pub line_revision: u64,
     /// The file name without `.sgf`; `None` for a new game.
     name: Option<String>,
     rules: AnalysisRules,
@@ -114,9 +122,10 @@ fn stem(name: &str) -> Option<String> {
     (!stem.is_empty()).then(|| stem.to_owned())
 }
 
-/// One main-line node, for the trend graph (design 5.3).
+/// One current-line node, for the trend graph (design 5.3).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineNode {
+    pub node: NodeId,
     pub move_number: u32,
     pub mover: Option<Color>,
     pub mv: Option<Move>,
@@ -155,9 +164,12 @@ impl GameSession {
         };
         let (game, reading) = Game::from_sgf(tree, rules)?;
         Ok(GameSession {
+            current: game.root(),
+            tip: game.root(),
+            selected_line: game.main_line().to_vec(),
+            line_revision: 0,
             game,
             others: Vec::new(),
-            index: 0,
             name: None,
             rules: reading.rules,
             from_file: reading.rules,
@@ -216,9 +228,12 @@ impl GameSession {
         }
 
         Ok(GameSession {
+            current: game.root(),
+            tip: game.root(),
+            selected_line: game.main_line().to_vec(),
+            line_revision: 0,
             game,
             others,
-            index: 0,
             name: stem(name),
             rules: reading.rules,
             from_file: reading.rules,
@@ -232,21 +247,71 @@ impl GameSession {
     /// Takes `next`'s place, keeping the revision increasing across games.
     pub fn replace(&mut self, next: GameSession) {
         let revision = self.revision + 1;
+        let line_revision = self.line_revision + 1;
         *self = next;
+        self.line_revision = line_revision;
         self.revision = revision;
     }
 
-    fn node(&self) -> NodeId {
-        self.game.main_line()[self.index]
+    pub fn current_line(&self) -> Vec<NodeId> {
+        self.selected_line.clone()
     }
 
-    fn last_index(&self) -> usize {
-        self.game.main_line().len() - 1
+    pub fn line_index(&self) -> usize {
+        self.selected_line
+            .iter()
+            .position(|&id| id == self.current)
+            .expect("current belongs to the line")
+    }
+
+    fn refresh_line(&mut self) {
+        let line = self.game.line_through(self.tip);
+        if self.selected_line != line {
+            self.selected_line = line;
+            self.line_revision += 1;
+        }
+    }
+
+    pub fn retip_after_detach(&mut self) {
+        let old_index = self.line_index();
+        if !self.game.is_attached(self.current) {
+            self.current = self.selected_line[..old_index]
+                .iter()
+                .rev()
+                .copied()
+                .find(|&id| self.game.is_attached(id))
+                .unwrap_or(self.game.root());
+        }
+        if !self.game.is_attached(self.tip) {
+            self.tip = self
+                .selected_line
+                .iter()
+                .rev()
+                .copied()
+                .find(|&id| self.game.is_attached(id))
+                .unwrap_or(self.game.root());
+        }
+        self.refresh_line();
+    }
+
+    pub fn trim(&mut self) {
+        self.game.trim(&self.game.path_to(self.current));
+    }
+
+    pub fn open_at_end(&mut self) {
+        let node = self
+            .selected_line
+            .iter()
+            .rev()
+            .copied()
+            .find(|&id| self.game.last_move(id).is_some())
+            .unwrap_or(self.game.root());
+        self.navigate(NavTarget::Node(node as u32));
     }
 
     /// What KataGo analyses now; `None` on an illegal node.
     pub fn position(&self) -> Option<Position> {
-        self.game.position_at(self.node(), &self.rules)
+        self.game.position_at(self.current, &self.rules)
     }
 
     /// Increases on every change; a client ignores an event older than what it has.
@@ -254,14 +319,9 @@ impl GameSession {
         self.revision
     }
 
-    /// The current node's index on the main line.
-    pub fn index(&self) -> usize {
-        self.index
-    }
-
     /// The board at the current node, with its capture counts.
     pub fn board(&self) -> &aji_core::game::Board {
-        self.game.board_at(self.node())
+        self.game.board_at(self.current)
     }
 
     pub fn rules(&self) -> AnalysisRules {
@@ -272,11 +332,10 @@ impl GameSession {
         self.game.size()
     }
 
-    /// Each main-line node's LizzieYzy analysis as the file had it: the root's `LZOP`, every
+    /// Each selected node's LizzieYzy analysis as the file had it: the root's `LZOP`, every
     /// other node's `LZ` (design 5.11).
     pub fn lizzie(&self) -> Vec<Option<String>> {
-        self.game
-            .main_line()
+        self.selected_line
             .iter()
             .enumerate()
             .map(|(i, &node)| {
@@ -286,13 +345,11 @@ impl GameSession {
             .collect()
     }
 
-    /// The position after the next main-line move, with that move, for the next-move hint;
-    /// `None` at the end, before a node without a move, or when it is illegal.
+    /// The position after the next current-line move, with that move, for the next-move hint;
+    /// `None` at the end, across a setup change, or when the move is illegal.
     pub fn next(&self) -> Option<(Position, Move)> {
-        let line = self.game.main_line();
-        let &node = line.get(self.index + 1)?;
-        let mv = self.game.last_move(node)?;
-        Some((self.game.position_at(node, &self.rules)?, mv))
+        let (node, mv) = self.next_move()?;
+        Some((self.game.position_at_uncached(node, &self.rules)?, mv))
     }
 
     pub fn warnings(&self) -> &[GameWarning] {
@@ -301,24 +358,60 @@ impl GameSession {
 
     /// Moves the current node. Returns whether it moved.
     pub fn navigate(&mut self, to: NavTarget) -> bool {
-        let last = self.last_index();
-        let index = match to {
-            NavTarget::First => 0,
-            NavTarget::Last => last,
-            NavTarget::Previous => self.index.saturating_sub(1),
-            NavTarget::Next => (self.index + 1).min(last),
-            NavTarget::Move(n) => self
-                .game
-                .main_line()
+        let line = &self.selected_line;
+        let index = self.line_index();
+        let last = line.len() - 1;
+        let target = match to {
+            NavTarget::First => line[0],
+            NavTarget::Last => line[last],
+            NavTarget::Previous => line[index.saturating_sub(1)],
+            NavTarget::Next => line[(index + 1).min(last)],
+            NavTarget::Move(0) => line[0],
+            NavTarget::Move(n) => line
                 .iter()
-                .position(|&node| self.game.move_number(node) >= n)
-                .unwrap_or(last),
+                .copied()
+                .filter(|&id| self.game.last_move(id).is_some())
+                .nth((n - 1) as usize)
+                .unwrap_or(line[last]),
+            NavTarget::Node(id) if self.game.is_attached(id as usize) => id as usize,
+            NavTarget::Node(_) => self.current,
+            NavTarget::PreviousSibling | NavTarget::NextSibling => self
+                .game
+                .parent(self.current)
+                .and_then(|parent| {
+                    let siblings = self.game.children(parent);
+                    let index = siblings.iter().position(|&id| id == self.current)?;
+                    let offset = if to == NavTarget::NextSibling { 1 } else { -1 };
+                    siblings.get(index.checked_add_signed(offset)?).copied()
+                })
+                .unwrap_or(self.current),
+            NavTarget::BranchPoint => line[..=index]
+                .windows(2)
+                .rev()
+                .find_map(|pair| {
+                    (self.game.children(pair[0]).first() != Some(&pair[1])).then_some(pair[0])
+                })
+                .unwrap_or(self.current),
+            NavTarget::MainLine => line
+                .iter()
+                .zip(self.game.main_line())
+                .take(index + 1)
+                .take_while(|(a, b)| a == b)
+                .last()
+                .map(|(&id, _)| id)
+                .unwrap_or(self.game.root()),
         };
-        let moved = index != self.index;
+        let old_revision = self.line_revision;
+        if (to == NavTarget::MainLine && line != self.game.main_line()) || !line.contains(&target) {
+            self.tip = target;
+            self.refresh_line();
+        }
+        let moved = self.current != target || self.line_revision != old_revision;
+        self.current = target;
         if moved {
-            self.index = index;
             self.revision += 1;
         }
+        self.trim();
         moved
     }
 
@@ -339,7 +432,7 @@ impl GameSession {
 
     /// The board after `moves` from the current node; nothing changes.
     pub fn preview(&self, moves: &[Move]) -> Preview {
-        self.game.preview(self.node(), moves)
+        self.game.preview(self.current, moves)
     }
 
     /// The file name and UTF-8 text to save; `None` when the game holds nothing to save. The
@@ -379,14 +472,23 @@ impl GameSession {
         Some((name, aji_core::sgf::write_sgf(&trees)))
     }
 
-    /// Every main-line node, first to last.
+    /// Every node of the selected line, first to last.
     pub fn line(&self) -> Vec<LineNode> {
-        self.game
-            .main_line()
+        self.line_nodes(&self.selected_line)
+    }
+
+    /// The main-line analysis written to the file's main-line nodes.
+    pub fn main_line_analysis(&self) -> Vec<LineNode> {
+        self.line_nodes(self.game.main_line())
+    }
+
+    fn line_nodes(&self, nodes: &[NodeId]) -> Vec<LineNode> {
+        nodes
             .iter()
             .map(|&node| {
                 let position = self.game.position_at(node, &self.rules);
                 LineNode {
+                    node,
                     move_number: self.game.move_number(node),
                     mover: self.game.last_color(node),
                     mv: self.game.last_move(node),
@@ -397,27 +499,18 @@ impl GameSession {
             .collect()
     }
 
-    /// The next main-line move, skipping nodes without one as long as they leave the board as it
+    /// The next current-line move, skipping nodes without one as long as they leave the board as it
     /// is (comments); a node that changes it (setup stones) ends the search.
-    fn next_move(&self) -> Option<Move> {
-        let line = self.game.main_line();
-        let here = self.game.board_at(self.node()).stones();
-        for &node in &line[self.index + 1..] {
-            if let Some(mv) = self.game.last_move(node) {
-                return Some(mv);
-            }
-            if self.game.board_at(node).stones() != here {
-                return None;
-            }
-        }
-        None
+    fn next_move(&self) -> Option<(NodeId, Move)> {
+        self.game
+            .next_move_on_line(self.current, &self.selected_line[self.line_index() + 1..])
     }
 
     pub fn snapshot(&self) -> GameSnapshot {
-        let node = self.node();
+        let node = self.current;
         let board = self.game.board_at(node);
         let (black, white) = board.captures();
-        let last = *self.game.main_line().last().expect("never empty");
+        let index = self.line_index();
         GameSnapshot {
             revision: self.revision,
             name: self.name.clone(),
@@ -434,11 +527,15 @@ impl GameSession {
             last_move: self.game.last_move(node),
             next_color: self.game.to_play(node),
             move_number: self.game.move_number(node),
-            line_index: self.index as u32,
-            next_move: self.next_move(),
-            main_line_length: self.game.move_number(last),
-            at_start: self.index == 0,
-            at_end: self.index == self.last_index(),
+            line_index: index as u32,
+            next_move: self.next_move().map(|(_, mv)| mv),
+            main_line_length: self
+                .selected_line
+                .iter()
+                .filter(|&&id| self.game.last_move(id).is_some())
+                .count() as u32,
+            at_start: index == 0,
+            at_end: index + 1 == self.selected_line.len(),
             illegal: self.illegal(),
             captures: [black, white],
             position_key: self.position().map(|p| p.key()),
@@ -447,13 +544,165 @@ impl GameSession {
     }
 
     fn illegal(&self) -> Option<Illegal> {
-        self.game.illegal(self.node())
+        self.game.illegal(self.current)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Main 0-1-2-3, variation 1-4-5 with a nested variation 4-6.
+    fn branches() -> GameSession {
+        GameSession::open(
+            "branches.sgf",
+            b"(;SZ[9];B[aa](;W[bb];B[cc])(;W[dd](;B[ee])(;B[ff])))",
+            AnalysisRules::Chinese,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn going_back_before_a_branch_keeps_the_variation() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.navigate(NavTarget::First);
+        assert_eq!(s.current_line(), [0, 1, 4, 6]);
+        assert_eq!(s.line_index(), 0);
+    }
+
+    #[test]
+    fn next_after_the_branch_point_returns_into_the_variation() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(4));
+        s.navigate(NavTarget::Previous);
+        s.navigate(NavTarget::Next);
+        assert_eq!(s.snapshot().last_move, Some(play(3, 3)));
+    }
+
+    #[test]
+    fn entering_another_node_moves_the_tip() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        assert!(s.navigate(NavTarget::Node(2)));
+        assert_eq!(s.current_line(), [0, 1, 2, 3]);
+        assert!(!s.navigate(NavTarget::Node(u32::MAX)));
+        s.open_at_end();
+        assert_eq!(s.current, 3);
+    }
+
+    #[test]
+    fn siblings_switch_continuations_of_the_previous_move() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(2));
+        assert!(s.navigate(NavTarget::NextSibling));
+        assert_eq!(s.current, 4);
+        assert!(!s.navigate(NavTarget::NextSibling));
+        assert!(s.navigate(NavTarget::PreviousSibling));
+        assert_eq!(s.current, 2);
+    }
+
+    #[test]
+    fn branch_point_and_main_line_targets() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.navigate(NavTarget::BranchPoint);
+        assert_eq!(s.current, 4);
+        assert_eq!(s.tip, 6);
+        s.navigate(NavTarget::MainLine);
+        assert_eq!(s.current, 1);
+        assert_eq!(s.current_line(), [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn main_line_only_retips_when_leaving_a_selected_variation() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(4));
+        s.navigate(NavTarget::PreviousSibling);
+        s.navigate(NavTarget::First);
+        assert!(!s.navigate(NavTarget::MainLine));
+        assert_eq!(s.tip, 2);
+        s.navigate(NavTarget::Node(6));
+        s.navigate(NavTarget::First);
+        assert!(s.navigate(NavTarget::MainLine));
+        assert_eq!(s.current_line(), [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn move_n_follows_the_current_line() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.navigate(NavTarget::Move(2));
+        assert_eq!(s.current, 4);
+        s.navigate(NavTarget::Move(100));
+        assert_eq!(s.line()[s.line_index()].node, 6);
+    }
+
+    #[test]
+    fn line_revision_changes_only_with_the_line() {
+        let mut s = branches();
+        let rev = s.line_revision;
+        s.navigate(NavTarget::Next);
+        s.navigate(NavTarget::Node(2));
+        assert_eq!(s.line_revision, rev);
+        s.navigate(NavTarget::NextSibling);
+        assert_eq!(s.line_revision, rev + 1);
+        s.navigate(NavTarget::Node(5));
+        assert_eq!(s.line_revision, rev + 1);
+    }
+
+    #[test]
+    fn detaching_the_variation_recovers_its_old_ancestors() {
+        let mut s = branches();
+        s.navigate(NavTarget::Node(6));
+        s.game
+            .edit(&aji_core::game::Edit::Delete { node: 4 })
+            .unwrap();
+        s.retip_after_detach();
+        assert_eq!((s.current, s.tip), (1, 1));
+        assert_eq!(s.current_line(), [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn next_move_skips_pl_only_nodes() {
+        let s = GameSession::open(
+            "pl.sgf",
+            b"(;SZ[9];C[note];PL[W];W[cc])",
+            AnalysisRules::Chinese,
+        )
+        .unwrap();
+        assert_eq!(s.snapshot().next_move, Some(play(2, 2)));
+        assert_eq!(
+            s.next(),
+            Some((s.game.position_at(3, &s.rules).unwrap(), play(2, 2)))
+        );
+    }
+
+    #[test]
+    fn opening_at_end_skips_trailing_comments() {
+        let mut s = GameSession::open(
+            "end.sgf",
+            b"(;SZ[9];B[bb];W[];C[note])",
+            AnalysisRules::Chinese,
+        )
+        .unwrap();
+        s.open_at_end();
+        assert_eq!(s.current, 2);
+        s.navigate(NavTarget::Last);
+        assert_eq!(s.current, 3);
+    }
+
+    #[test]
+    fn opening_at_end_of_a_moveless_record_stays_at_root() {
+        let mut s = GameSession::open(
+            "empty.sgf",
+            b"(;SZ[9];PL[W];C[note])",
+            AnalysisRules::Chinese,
+        )
+        .unwrap();
+        s.open_at_end();
+        assert_eq!(s.current, s.game.root());
+    }
 
     #[test]
     fn stems() {
@@ -598,5 +847,6 @@ mod tests {
         let mut session = GameSession::open("setup.sgf", text, AnalysisRules::Chinese).unwrap();
         session.navigate(NavTarget::Move(1));
         assert_eq!(session.snapshot().next_move, None);
+        assert_eq!(session.next(), None);
     }
 }

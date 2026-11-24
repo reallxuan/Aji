@@ -346,16 +346,26 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       case 'gameNavigate': {
         const last = nodes.length - 1;
         const to = request.to;
-        const target =
-          to === 'first'
-            ? 0
-            : to === 'last'
-              ? last
-              : to === 'previous'
-                ? Math.max(0, index - 1)
-                : to === 'next'
-                  ? Math.min(last, index + 1)
-                  : Math.min(last, to.move);
+        let target = index;
+        if (typeof to === 'object') {
+          if ('move' in to) target = Math.min(last, to.move);
+          else if (to.node >= 0 && to.node <= last) target = to.node;
+        } else {
+          switch (to) {
+            case 'first':
+              target = 0;
+              break;
+            case 'last':
+              target = last;
+              break;
+            case 'previous':
+              target = Math.max(0, index - 1);
+              break;
+            case 'next':
+              target = Math.min(last, index + 1);
+              break;
+          }
+        }
         if (target === index) return { type: 'game', snapshot: snapshot(), warnings: [] };
         index = target;
         return changed();

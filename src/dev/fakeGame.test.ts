@@ -36,6 +36,21 @@ describe('the scenarios’ fake game', () => {
     expect(events.map((e) => e.type)).toEqual(['gameSnapshot', 'gameTrend', 'gameSnapshot']);
   });
 
+  it('navigates by node and stays put on a linear fixture without siblings', () => {
+    const { ask } = setUp();
+    ask({ type: 'gameOpen', name: 'samsung.sgf', bytes: '' });
+    for (const to of [
+      { node: 2 },
+      'nextSibling',
+      'previousSibling',
+      'branchPoint',
+      'mainLine',
+      { node: 999 },
+    ] as const) {
+      expect(ask({ type: 'gameNavigate', to }).snapshot.lineIndex).toBe(2);
+    }
+  });
+
   it('flags a move onto an occupied point and gives it no position', () => {
     const { ask } = setUp();
     const opened = ask({ type: 'gameOpen', name: 'illegal-ko.sgf', bytes: '' });

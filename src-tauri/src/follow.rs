@@ -284,7 +284,7 @@ pub(crate) async fn start_on(
     options.boost.visits = options.boost.visits.max(1);
     let plan = lock(ctx)
         .flow
-        .start(session.line(), session.index(), options);
+        .start(session.line(), session.line_index(), options);
     if let Err(e) = ctx.engine.run_job(plan).await {
         lock(ctx).flow.stop();
         return Err(e.into());
