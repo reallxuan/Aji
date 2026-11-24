@@ -217,6 +217,7 @@ pub struct GameSession {
     tip: NodeId,
     /// Remember the old path across edits, including when a removed subtree loses its parent.
     selected_line: Vec<NodeId>,
+    game_revision: u64,
     pub line_revision: u64,
     pub tree_revision: u64,
     source: Source,
@@ -352,6 +353,7 @@ impl GameSession {
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
+            game_revision: 0,
             line_revision: 0,
             tree_revision: 0,
             game,
@@ -432,6 +434,7 @@ impl GameSession {
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
+            game_revision: 0,
             line_revision: 0,
             tree_revision: 0,
             game,
@@ -479,6 +482,7 @@ impl GameSession {
         let line_revision = self.line_revision + 1;
         let tree_revision = self.tree_revision + 1;
         *self = next;
+        self.game_revision = revision;
         self.tree_revision = tree_revision;
         self.line_revision = line_revision;
         self.revision = revision;
@@ -1135,6 +1139,7 @@ impl GameSession {
         let index = self.line_index();
         GameSnapshot {
             revision: self.revision,
+            game_revision: self.game_revision,
             node: node as u32,
             line_revision: self.line_revision,
             tree_revision: self.tree_revision,
@@ -1848,6 +1853,7 @@ mod tests {
         session.revision = 7;
         session.replace(GameSession::new(9, AnalysisRules::Chinese).unwrap());
         assert_eq!(session.snapshot().revision, 8);
+        assert_eq!(session.snapshot().game_revision, 8);
         assert_eq!(session.snapshot().size, 9);
     }
 

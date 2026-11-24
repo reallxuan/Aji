@@ -274,3 +274,101 @@ it('discs_wait_for_all_fonts', async () => {
   delete (document as { fonts?: unknown }).fonts;
   vi.unstubAllGlobals();
 });
+
+it('marked stones retain their labels and trial ring without overlapping move numbers', () => {
+  const a = { x: 2, y: 2 },
+    b = { x: 3, y: 3 },
+    c = { x: 4, y: 4 };
+  const status = empty(9);
+  status[20] = 'black';
+  status[30] = 'white';
+  status[40] = 'black';
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      stones={status}
+      lastMove={null}
+      marks={[
+        { point: a, mark: { kind: 'label', text: 'A' } },
+        { point: b, mark: { kind: 'label', text: 'B' } },
+      ]}
+      numbers={[
+        { point: a, n: 12 },
+        { point: c, n: 13 },
+      ]}
+      tryoutNumbers={[{ point: b, n: 1 }]}
+    />,
+  );
+  const calls = (layer: string) =>
+    (
+      container
+        .querySelector<HTMLCanvasElement>(`[data-layer="${layer}"]`)!
+        .getContext('2d') as unknown as {
+        __getDrawCalls(): { type: string; props: { text?: string } }[];
+      }
+    ).__getDrawCalls();
+  const labels = (layer: string) =>
+    calls(layer)
+      .filter((c) => c.type === 'fillText')
+      .map((c) => c.props.text);
+  expect(labels('marks')).toEqual(['A', 'B']);
+  expect(labels('editing')).toEqual(['13']);
+  expect(calls('editing').filter((c) => c.type === 'stroke')).toHaveLength(1);
+});
+
+it('a variation number leaves the saved label visible on a preview stone', () => {
+  const saved = { x: 1, y: 1 },
+    next = { x: 2, y: 2 };
+  const status = empty(9);
+  status[10] = 'black';
+  status[20] = 'white';
+  const { container } = render(
+    <BoardCanvas
+      cssSize={400}
+      boardSize={9}
+      stones={status}
+      lastMove={null}
+      marks={[{ point: saved, mark: { kind: 'label', text: 'A' } }]}
+      variation={{
+        numbers: [
+          { point: saved, n: 1 },
+          { point: next, n: 2 },
+        ],
+        newest: next,
+      }}
+    />,
+  );
+  const labels = (layer: string) =>
+    (
+      container
+        .querySelector<HTMLCanvasElement>(`[data-layer="${layer}"]`)!
+        .getContext('2d') as unknown as {
+        __getDrawCalls(): { type: string; props: { text?: string } }[];
+      }
+    )
+      .__getDrawCalls()
+      .filter((c) => c.type === 'fillText')
+      .map((c) => c.props.text);
+  expect(labels('marks')).toEqual(['A']);
+  expect(labels('candidates')).toEqual(['2']);
+});
+
+it('the last-move dot gives way to a mark on its stone and returns when the mark clears', () => {
+  const point = { x: 1, y: 1 };
+  const status = empty(9);
+  status[10] = 'black';
+  const props = {
+    cssSize: 400,
+    boardSize: 9,
+    stones: status,
+    lastMove: { type: 'play' as const, ...point },
+  };
+  const { container, rerender } = render(
+    <BoardCanvas {...props} marks={[{ point, mark: { kind: 'cross' } }]} />,
+  );
+  const stoneLayer = container.querySelectorAll('canvas')[1];
+  expect(drawCalls(stoneLayer).filter((c) => c.type === 'fill')).toHaveLength(0);
+  rerender(<BoardCanvas {...props} />);
+  expect(drawCalls(stoneLayer).filter((c) => c.type === 'fill')).toHaveLength(1);
+});

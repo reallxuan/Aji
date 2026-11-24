@@ -482,6 +482,9 @@ pub struct GameSnapshot {
     pub position_key: Option<PositionKey>,
     /// The game holds a move or a setup stone, so it can be saved.
     pub has_moves: bool,
+    // Revision at which this game replaced the previous one (node IDs are local to a game).
+    #[ts(type = "number")]
+    pub game_revision: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]

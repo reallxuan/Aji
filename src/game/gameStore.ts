@@ -1,3 +1,4 @@
+import { useFreehandStore } from '../edit/freehandStore';
 import { useModeStore } from '../edit/modeStore';
 import { create } from 'zustand';
 import { useViewStore } from '../analysis/viewStore';
@@ -7,6 +8,8 @@ import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 export interface GameState {
   /** The open game at its current node; `null` until the first snapshot arrives. */
   snapshot: GameSnapshot | null;
+  /** Changes on navigation or game replacement, even when returning to the same node. */
+  nodeVisit: number;
   /** True once the first snapshot request has settled, answered or not. */
   loaded: boolean;
   /** The engine store that follows the game's position. */
@@ -21,7 +24,7 @@ export interface GameState {
   markLoaded(): void;
 }
 
-const initial = { snapshot: null, loaded: false, engine: null };
+const initial = { snapshot: null, nodeVisit: 0, loaded: false, engine: null };
 
 export const useGameStore = create<GameState>()((set, get) => ({
   ...initial,
@@ -29,8 +32,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
   apply: (snapshot) => {
     const current = get().snapshot;
     if (current && snapshot.revision <= current.revision) return;
+    const moved = current?.node !== snapshot.node || current.gameRevision !== snapshot.gameRevision;
+    if (moved) useFreehandStore.getState().clear();
     if (snapshot.tryout !== null) useModeStore.getState().setMode('normal');
-    set({ snapshot, loaded: true });
+    set({ snapshot, loaded: true, nodeVisit: moved ? snapshot.revision : get().nodeVisit });
     // A hover and its line belong to the old position.
     useViewStore.getState().reset();
     const engine = get().engine?.getState();

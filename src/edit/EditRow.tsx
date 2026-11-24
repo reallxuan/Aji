@@ -1,3 +1,4 @@
+import { MarkupTools } from './MarkupTools';
 import { cn } from 'cn';
 import { Undo2, Redo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -25,54 +26,57 @@ export function EditRow({ touch = false }: { touch?: boolean }) {
     'border border-hairline bg-panel text-text aria-pressed:border-text aria-pressed:bg-text aria-pressed:text-panel',
   );
   return (
-    <div
-      role="group"
-      aria-label={t('edit.tools')}
-      className={cn(
-        'flex shrink-0 items-center gap-1 border-b border-hairline px-3',
-        !touch && 'py-1.5',
-      )}
-    >
-      <button
-        type="button"
-        className={toggle}
-        aria-pressed={tryout}
-        disabled={!snapshot || scoring}
-        onClick={() => run('edit.tryout')}
+    <>
+      <div
+        role="group"
+        aria-label={t('edit.tools')}
+        className={cn(
+          'flex shrink-0 items-center gap-1 border-b border-hairline px-3',
+          !touch && 'py-1.5',
+        )}
       >
-        {t('edit.tryout')}
-      </button>
-      {MODES.map((tool) => (
         <button
           type="button"
-          key={tool}
           className={toggle}
-          aria-pressed={mode === tool}
-          disabled={!snapshot || tryout || scoring}
-          title={tryout ? t('notice.endTryoutFirst') : undefined}
-          onClick={() => useModeStore.getState().toggle(tool)}
+          aria-pressed={tryout}
+          disabled={!snapshot || scoring}
+          onClick={() => run('edit.tryout')}
         >
-          {t(`edit.${tool}`)}
+          {t('edit.tryout')}
         </button>
-      ))}
-      <span className="flex-1" />
-      {HISTORY.map((action) => {
-        const Icon = action === 'undo' ? Undo2 : Redo2;
-        const label = t(`commands.edit.${action}`);
-        return (
+        {MODES.map((tool) => (
           <button
             type="button"
-            key={action}
-            className={button}
-            title={label}
-            aria-label={label}
-            disabled={!(action === 'undo' ? snapshot?.canUndo : snapshot?.canRedo)}
-            onClick={() => run(`edit.${action}`)}
+            key={tool}
+            className={toggle}
+            aria-pressed={mode === tool}
+            disabled={!snapshot || tryout || scoring}
+            title={tryout ? t('notice.endTryoutFirst') : undefined}
+            onClick={() => useModeStore.getState().toggle(tool)}
           >
-            <Icon aria-hidden className="size-4" />
+            {t(`edit.${tool}`)}
           </button>
-        );
-      })}
-    </div>
+        ))}
+        <span className="flex-1" />
+        {HISTORY.map((action) => {
+          const Icon = action === 'undo' ? Undo2 : Redo2;
+          const label = t(`commands.edit.${action}`);
+          return (
+            <button
+              type="button"
+              key={action}
+              className={button}
+              title={label}
+              aria-label={label}
+              disabled={!(action === 'undo' ? snapshot?.canUndo : snapshot?.canRedo)}
+              onClick={() => run(`edit.${action}`)}
+            >
+              <Icon aria-hidden className="size-4" />
+            </button>
+          );
+        })}
+      </div>
+      {mode === 'markup' && !scoring && <MarkupTools touch={touch} />}
+    </>
   );
 }

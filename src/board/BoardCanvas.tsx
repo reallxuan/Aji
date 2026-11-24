@@ -1,3 +1,5 @@
+import type { MarkAt } from '../transport/generated/MarkAt';
+import { drawMarks } from './marks';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sameMove, type ShownCandidate } from '../analysis/candidates';
 import { CATCHING_UP_FADE_MS, CATCHING_UP_OPACITY } from '../analysis/constants';
@@ -64,6 +66,7 @@ export interface BoardCanvasProps {
   onContextPoint?(point: Point, at: Point): void;
   onClickBadge?(badge: Badge, at: Point): void;
   onContextBadge?(badge: Badge, at: Point): void;
+  marks?: readonly MarkAt[];
   badges?: readonly Badge[];
   tryoutNumbers?: readonly StoneNumber[];
   numbers?: readonly StoneNumber[];
@@ -108,10 +111,12 @@ export function BoardCanvas({
   onClickBadge,
   onContextPoint,
   onContextBadge,
+  marks = NONE,
   badges = NONE,
   tryoutNumbers = NONE,
   numbers = NONE,
 }: BoardCanvasProps) {
+  const markLayer = useRef<HTMLCanvasElement>(null);
   const editLayer = useRef<HTMLCanvasElement>(null);
   const board = useRef<HTMLCanvasElement>(null);
   const stoneLayer = useRef<HTMLCanvasElement>(null);
@@ -151,6 +156,13 @@ export function BoardCanvas({
     [spacing, dpr, stoneStyle],
   );
 
+  const marked = useMemo(
+    () => new Set(marks.map(({ point }) => point.y * boardSize + point.x)),
+    [marks, boardSize],
+  );
+  const visibleLastMove =
+    lastMove?.type === 'play' && marked.has(lastMove.y * boardSize + lastMove.x) ? null : lastMove;
+
   useEffect(() => {
     const ctx = stoneLayer.current?.getContext('2d');
     if (ctx && cssSize > 0) {
@@ -158,12 +170,12 @@ export function BoardCanvas({
         ctx,
         { cssSize, dpr, boardSize, coordinates },
         stones,
-        lastMove,
+        visibleLastMove,
         sprites,
         ownership?.dead,
       );
     }
-  }, [cssSize, dpr, boardSize, coordinates, stones, lastMove, sprites, ownership]);
+  }, [cssSize, dpr, boardSize, coordinates, stones, visibleLastMove, sprites, ownership]);
 
   useEffect(() => {
     const ctx = ownershipLayer.current?.getContext('2d');
@@ -172,12 +184,19 @@ export function BoardCanvas({
     drawOwnership(ctx, view, ownership?.owners ?? []);
   }, [cssSize, dpr, boardSize, coordinates, ownership]);
 
+  useEffect(() => {
+    const ctx = markLayer.current?.getContext('2d');
+    if (ctx)
+      drawMarks(ctx, marks, { cssSize, dpr, boardSize, coordinates, style: boardStyle }, stones);
+  }, [cssSize, dpr, boardSize, coordinates, boardStyle, stones, marks, fontsLoaded]);
+
   const [first, second] = discLines;
   useEffect(() => {
     const ctx = candidateLayer.current?.getContext('2d');
     if (!ctx) return;
     const view = { cssSize, dpr, boardSize, coordinates, style: boardStyle };
-    if (variation) drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones);
+    if (variation)
+      drawVariationNumbers(ctx, view, variation.numbers, variation.newest, stones, marked);
     else {
       drawCandidates(ctx, view, candidates, [first, second], lang);
       if (nextRing) drawNextRing(ctx, view, nextRing);
@@ -195,6 +214,7 @@ export function BoardCanvas({
     lang,
     fontsLoaded,
     variation,
+    marked,
     stones,
   ]);
 
@@ -218,6 +238,7 @@ export function BoardCanvas({
         badges,
         tryoutNumbers,
         numbers,
+        marked,
       );
   }, [
     showEdits,
@@ -230,6 +251,7 @@ export function BoardCanvas({
     badges,
     tryoutNumbers,
     numbers,
+    marked,
     fontsLoaded,
   ]);
   const view = { cssSize, boardSize, coordinates };
@@ -322,6 +344,17 @@ export function BoardCanvas({
         style={style}
         aria-hidden
       />
+      {marks.length > 0 && (
+        <canvas
+          ref={markLayer}
+          data-layer="marks"
+          width={backing}
+          height={backing}
+          className="absolute inset-0 pointer-events-none"
+          style={style}
+          aria-hidden
+        />
+      )}
       <canvas
         ref={candidateLayer}
         data-layer="candidates"

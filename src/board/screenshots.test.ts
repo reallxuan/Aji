@@ -21,6 +21,8 @@ import { type BoardView, drawBoard } from './drawBoard';
 import { drawCandidates, drawNextRing, drawVariationNumbers } from './candidates';
 import { drawOwnership, scoredOwnership, type Settled, settledOwnership } from './ownership';
 import { C5, finishedStones, H4 } from '../scoring/testing';
+import { drawMarks } from './marks';
+import type { Mark } from '../transport/generated/Mark';
 import { drawEditOverlay } from './badges';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
@@ -532,5 +534,29 @@ describe('board screenshots', () => {
     const inside = (x: number, y: number) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= reach;
     const R = Math.ceil(g.stoneRadius * 2);
     expect(changed(bare, withStone, [c - R, c - R, c + R, c + R], inside)).toBe(0);
+  });
+
+  it('marks_on_stones_and_empty_points', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 1, boardSize: 9 };
+    const stones = empty(9);
+    const kinds: Mark[] = [
+      { kind: 'triangle' },
+      { kind: 'square' },
+      { kind: 'circle' },
+      { kind: 'cross' },
+      { kind: 'label', text: 'A' },
+      { kind: 'label', text: '1' },
+    ];
+    const marks = [2, 4, 6].flatMap((y, row) =>
+      kinds.map((mark, index) => {
+        const x = index + 1;
+        stones[y * 9 + x] = row === 0 ? 'black' : row === 1 ? 'white' : null;
+        return { point: { x, y }, mark };
+      }),
+    );
+    compare(
+      'marks_on_stones_and_empty_points',
+      render(view, stones, null, null, (ctx) => drawMarks(ctx, marks, view, stones)),
+    );
   });
 });

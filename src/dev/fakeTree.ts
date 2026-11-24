@@ -332,6 +332,7 @@ export function createFakeTree(size: number, moves: Move[], source: Source = {})
     }
     return {
       revision,
+      gameRevision: source.revision ?? 0,
       lineRevision,
       treeRevision,
       node: n.id,

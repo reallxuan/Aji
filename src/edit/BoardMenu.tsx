@@ -16,12 +16,11 @@ import { scoringInProgress } from '../scoring/scoringStore';
 import type { SessionEdit } from '../transport/generated/SessionEdit';
 import { useDeviceStore } from '../device/deviceStore';
 import { pointLabel } from '../board/coordinates';
-import { nextLabel } from '../board/marks';
+import { useMarkEdit } from './useMarkEdit';
 import { navigate } from '../game/actions';
 import { edit } from '../game/editActions';
 import { useActionContext } from '../game/useActionContext';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
-import type { Mark } from '../transport/generated/Mark';
 import type { Point } from '../transport/generated/Point';
 import type { BoardNode } from './boardNodes';
 
@@ -48,6 +47,7 @@ export function BoardMenu({
   onClose(): void;
 }) {
   const ctx = useActionContext();
+  const markEdit = useMarkEdit(ctx);
   const { t } = useTranslation();
   const run = useRunCommand();
   const showing = useDeviceStore((s) => s.settings.moveNumbers.mode !== 'off');
@@ -81,13 +81,8 @@ export function BoardMenu({
   const endTryout = () => void boardEdit({ kind: 'tryoutEnd' });
   const toggleNumbers = () => run('view.moveNumbers');
   const pass = () => void boardEdit({ kind: 'pass' });
-  const markAt = (kind: (typeof POINT_MARKS)[number]) => {
-    const mark: Mark =
-      kind === 'letter' || kind === 'number'
-        ? { kind: 'label', text: nextLabel(snapshot.marks, kind) }
-        : { kind };
-    void boardEdit({ kind: 'setMark', point, node: snapshot.node, mark });
-  };
+  const markAt = (tool: (typeof POINT_MARKS)[number]) =>
+    void markEdit({ kind: 'place', tool, point });
   const branchLabel = (b: { letter: string; tryout: boolean }) =>
     t(b.tryout ? 'edit.tryBranch' : 'edit.branch', { letter: b.letter });
   const branchItems = (id: number, tryout: boolean) => {

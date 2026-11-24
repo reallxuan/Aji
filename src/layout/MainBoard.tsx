@@ -1,3 +1,5 @@
+import { useMarkEdit } from '../edit/useMarkEdit';
+import { FreehandOverlay } from '../edit/FreehandOverlay';
 import { badgesFor, branchLetter, type Badge } from '../board/badges';
 import { numbersFor } from '../board/moveNumbers';
 import { BoardMenu, type BoardMenuTarget } from '../edit/BoardMenu';
@@ -48,7 +50,9 @@ export function MainBoard({
 }) {
   const snapshot = useGameStore((s) => s.snapshot);
   const ctx = useActionContext();
+  const markEdit = useMarkEdit(ctx);
   const mode = useModeStore((s) => s.mode);
+  const markupTool = useModeStore((s) => s.markupTool);
   const tree = useTreeStore((s) => s.tree);
   const nodes = useMemo(() => boardNodes(tree), [tree]);
   const [menu, setMenu] = useState<BoardMenuTarget | null>(null);
@@ -179,6 +183,9 @@ export function MainBoard({
     (point: Point) => void useScoringStore.getState().toggle(transport, point),
     [transport],
   );
+  const markPoint = (point: Point) => {
+    if (markupTool !== 'freehand') void markEdit({ kind: 'toggle', point, tool: markupTool });
+  };
   const go = useFrameNavigate();
   const onSwipeStep = useCallback((forward: boolean) => stepLineOrGame(forward, go), [go]);
 
@@ -206,6 +213,7 @@ export function MainBoard({
             ? null
             : (snapshot?.lastMove ?? null)
         }
+        marks={snapshot?.marks}
         badges={badges}
         numbers={numbers}
         tryoutNumbers={tryoutNumbers}
@@ -225,11 +233,20 @@ export function MainBoard({
         catchingUp={fading}
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}
-        onTapPoint={scoring ? onTapPoint : undefined}
+        onTapPoint={scoring ? onTapPoint : mode === 'markup' ? markPoint : undefined}
         onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
         variation={line}
       />
+      {snapshot && !scoring && (
+        <FreehandOverlay
+          key={`${snapshot.gameRevision}:${snapshot.node}`}
+          active={mode === 'markup' && markupTool === 'freehand'}
+          cssSize={rect.width}
+          boardSize={snapshot.size}
+          coordinates={coordinates}
+        />
+      )}
       {menu && snapshot && menu.revision === snapshot.revision && editing && (
         <BoardMenu target={menu} nodes={nodes} snapshot={snapshot} onClose={() => setMenu(null)} />
       )}

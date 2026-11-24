@@ -1,3 +1,4 @@
+import { useModeStore } from '../edit/modeStore';
 import { EditRow } from '../edit/EditRow';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +63,7 @@ export function NarrowFrame({
   const notConfigured = useEngineStore((s) => s.engine?.state === 'notConfigured');
   const narrowTab = useDeviceStore((s) => s.settings.narrowTab);
   const update = useDeviceStore((s) => s.update);
+  const marking = useModeStore((s) => s.mode === 'markup');
   const phone = width < PHONE_WIDTH;
   const hasStatus = useGameStore((s) => s.snapshot?.tryout != null || !!s.snapshot?.changed);
   const headerHeight = phone ? HEADER.phone + (hasStatus ? PHONE_STATUS_HEIGHT : 0) : HEADER.tablet;
@@ -85,7 +87,12 @@ export function NarrowFrame({
   const barHeight = bar && !scoring ? BAR + (phone ? CAPTURES : 0) : 0;
   // The height left for the board and the panels; the panels keep 160 px of it only while the
   // board keeps its floor, so a small landscape window shows the board first.
-  const room = height - headerHeight - (phone ? NAV : 0) - barHeight - (scoring ? 0 : TOUCH_TARGET);
+  const room =
+    height -
+    headerHeight -
+    (phone ? NAV : 0) -
+    barHeight -
+    (scoring ? 0 : (marking ? 2 : 1) * TOUCH_TARGET);
   const boardRoom = Math.max(
     Math.min(BOARD_FLOOR, room),
     room - (scoring ? SCORING_ROOM : PANELS_MIN),

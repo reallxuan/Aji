@@ -147,6 +147,7 @@ export function drawVariationNumbers(
   numbers: ReadonlyArray<{ point: Point; n: number }>,
   newest: Point | null,
   stones: readonly (Color | null)[],
+  marked?: ReadonlySet<number>,
 ): void {
   const { cssSize, dpr, boardSize } = view;
   const size = Math.round(cssSize * dpr);
@@ -158,8 +159,9 @@ export function drawVariationNumbers(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const { point, n } of numbers) {
-    const stone = stones[point.y * boardSize + point.x];
-    if (!stone) continue;
+    const index = point.y * boardSize + point.x;
+    const stone = stones[index];
+    if (!stone || marked?.has(index)) continue;
     const ink = stone === 'black' ? NUMBER_ON_BLACK : NUMBER_ON_WHITE;
     const cx = geometry.lines[point.x] * dpr;
     const cy = geometry.lines[point.y] * dpr;

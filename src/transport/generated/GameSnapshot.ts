@@ -53,4 +53,4 @@ positionKey: PositionKey | null,
 /**
  * The game holds a move or a setup stone, so it can be saved.
  */
-hasMoves: boolean, };
+hasMoves: boolean, gameRevision: number, };

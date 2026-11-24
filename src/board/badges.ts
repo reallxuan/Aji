@@ -57,6 +57,7 @@ export function drawEditOverlay(
   badges: readonly Badge[],
   tryout: readonly StoneNumber[],
   numbers: readonly StoneNumber[] = [],
+  marked?: ReadonlySet<number>,
 ) {
   const g = boardGeometry(view.cssSize, view.boardSize, view.coordinates);
   if (g.spacing <= 0) return;
@@ -68,6 +69,7 @@ export function drawEditOverlay(
   const s = g.spacing;
   const amber = '#e2a33b';
   const number = ({ point, n }: StoneNumber) => {
+    if (marked?.has(point.y * view.boardSize + point.x)) return;
     ctx.fillStyle = stones[point.y * view.boardSize + point.x] === 'black' ? '#f2f0ea' : '#1a1a1a';
     ctx.font = `600 ${s * 0.42}px Inter`;
     ctx.fillText(String(n), g.lines[point.x], g.lines[point.y] + 0.5);

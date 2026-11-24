@@ -19,6 +19,7 @@ export const noInfo: GameInfo = {
 export function makeSnapshot(over: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
     revision: 1,
+    gameRevision: 0,
     node: 0,
     lineRevision: 0,
     treeRevision: 0,
