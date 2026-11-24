@@ -381,6 +381,14 @@ impl Game {
         self.nodes[node].parent
     }
 
+    /// Every attached record node, excluding temporary try-out nodes.
+    pub fn kept_nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(id, node)| (node.attached && !node.tryout).then_some(id))
+    }
+
     /// Whether the record holds no move and no setup stone.
     pub fn is_empty(&self) -> bool {
         self.nodes
@@ -737,6 +745,16 @@ impl Game {
     /// The game as an SGF tree to write. `CA` becomes `UTF-8`, `FF` and `GM` are added when
     /// missing, and with `rules` (the user changed them) `RU` and `KM` are replaced.
     pub fn to_sgf(&self, rules: Option<&AnalysisRules>) -> SgfTree {
+        self.to_sgf_with(rules, None, |_, _| {})
+    }
+
+    /// Writes a selected line or the entire kept tree, visiting each exported node by its stable ID.
+    pub fn to_sgf_with(
+        &self,
+        rules: Option<&AnalysisRules>,
+        line: Option<&[NodeId]>,
+        mut edit_node: impl FnMut(NodeId, &mut SgfNode),
+    ) -> SgfTree {
         let mut root = self.sgf(self.root).clone();
         set_prop(&mut root, "CA", "UTF-8");
         if root.get("FF").is_none() {
@@ -764,6 +782,20 @@ impl Game {
             set_prop(&mut root, "KM", &format_komi(rules.komi().points()));
         }
 
+        edit_node(self.root, &mut root);
+        if let Some(line) = line {
+            let mut nodes = vec![root];
+            for &id in line.iter().skip(1).take_while(|&&id| !self.is_tryout(id)) {
+                let mut sgf = self.sgf(id).clone();
+                edit_node(id, &mut sgf);
+                nodes.push(sgf);
+            }
+            return SgfTree {
+                nodes,
+                variations: Vec::new(),
+            };
+        }
+
         // Each sequence is completed after its variations. The stack also handles deep trees.
         enum Visit {
             Head(NodeId),
@@ -777,8 +809,11 @@ impl Game {
                 Visit::Head(mut at) => {
                     let mut tree = SgfTree::default();
                     loop {
-                        tree.nodes
-                            .push(root.take().unwrap_or_else(|| self.sgf(at).clone()));
+                        tree.nodes.push(root.take().unwrap_or_else(|| {
+                            let mut sgf = self.sgf(at).clone();
+                            edit_node(at, &mut sgf);
+                            sgf
+                        }));
                         let mut children = self
                             .children(at)
                             .iter()

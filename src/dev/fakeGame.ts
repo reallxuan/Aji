@@ -467,13 +467,18 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
         };
       case 'gameTrend':
         return { type: 'trend', revision: lineRevision, nodes: trend() };
-      case 'gameExport':
+      case 'gameExport': {
         if (nodes.length === 1) throw new TransportError('gameEmpty', 'nothing to save');
+        const text = '(;GM[1]FF[4]CA[UTF-8])\n';
         return {
           type: 'gameExport',
           name: `${record.name ?? 'game'}.sgf`,
-          text: '(;GM[1]FF[4])\n',
+          text: request.options.inPlace ? null : text,
+          bytes: request.options.inPlace ? btoa(text) : null,
+          editId: editId(),
+          fellBack: false,
         };
+      }
       default:
         return null;
     }

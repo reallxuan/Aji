@@ -3,6 +3,7 @@ import type { EngineStore } from '../engine/engineStore';
 import type { MenuCommand, OpenedFile, PlatformFiles } from '../platform/files';
 import {
   exportGame,
+  gameSaved,
   navigateGame,
   newGame,
   openGame,
@@ -13,7 +14,7 @@ import type { AnalysisRules } from '../transport/generated/AnalysisRules';
 import type { GameSnapshot } from '../transport/generated/GameSnapshot';
 import type { GameWarning } from '../transport/generated/GameWarning';
 import type { NavTarget } from '../transport/generated/NavTarget';
-import type { Transport } from '../transport/transport';
+import { TransportError, type Transport } from '../transport/transport';
 import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
 import { errorNotice, warningNotice } from './notices';
@@ -110,22 +111,21 @@ export async function openRecent(ctx: ActionContext, index: number): Promise<voi
 /** Exports the game, asks where to save it under its title, writes it and remembers it. */
 export async function saveAs(ctx: ActionContext): Promise<void> {
   const failed = (error: unknown) => fail(ctx.t, ctx.t('notice.saveFailed'), error);
-  let text: string;
   try {
-    ({ text } = await exportGame(ctx.transport));
+    const { text, editId } = await exportGame(ctx.transport, {
+      scope: 'game',
+      clean: false,
+      inPlace: false,
+    });
+    if (text === null) throw new TransportError('internal', 'Save As export is missing text');
+    const title = gameTitle(useGameStore.getState().snapshot, ctx.t);
+    const token = await ctx.files.saveAs(fileNameFor(title), text);
+    if (!token) return;
+    apply(await gameSaved(ctx.transport, editId, true));
+    await ctx.files.remember(token, title).catch(() => {});
   } catch (error) {
     failed(error);
-    return;
   }
-  const title = gameTitle(useGameStore.getState().snapshot, ctx.t);
-  let token: string | null;
-  try {
-    token = await ctx.files.saveAs(fileNameFor(title), text);
-  } catch (error) {
-    failed(error);
-    return;
-  }
-  if (token) await ctx.files.remember(token, title).catch(() => {});
 }
 
 async function change(ctx: ActionContext, request: () => Promise<GameReply>): Promise<void> {

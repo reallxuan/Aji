@@ -2,17 +2,24 @@
 //! KataGo analyses it with, and what reading the file repaired. `service` holds it behind a
 //! mutex and tells the engine about every change.
 
+use std::collections::HashMap;
+
 use aji_core::game::{
     AnalysisRules, Change, Edit, EditError, Game, GameError, Illegal, InfoField, Mark, NodeId, Op,
     Preview,
 };
-use aji_core::sgf::{EncodingSource, SgfError, SgfNode, SgfTree, SgfWarning, decode, parse_sgf};
+use aji_core::sgf::{
+    Encoded, EncodingSource, LzData, SgfError, SgfNode, SgfTree, SgfWarning, decode, encode_sgf,
+    parse_lz, parse_sgf,
+};
 use aji_core::{BoardSize, Color, Move, Point, Position, PositionKey};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::history::{EntryKind, History, Spot};
-use crate::protocol::{Continuation, GameSnapshot, GameTree, MarkAt, Placed, TreeNode};
+use crate::protocol::{
+    Continuation, ExportOptions, ExportScope, GameSnapshot, GameTree, MarkAt, Placed, TreeNode,
+};
 
 /// The largest file Aji opens.
 pub const MAX_SGF_BYTES: usize = 20 * 1024 * 1024;
@@ -166,6 +173,38 @@ impl From<GameError> for OpenError {
     }
 }
 
+struct Source {
+    encoding: &'static str,
+    ca: Option<String>,
+    needs_save_as: bool,
+}
+
+impl Source {
+    fn utf8() -> Self {
+        Self {
+            encoding: "UTF-8",
+            ca: Some("UTF-8".to_owned()),
+            needs_save_as: false,
+        }
+    }
+}
+
+fn clean_node(node: &mut SgfNode) {
+    node.props
+        .retain(|p| !matches!(p.id.as_str(), "C" | "LZ" | "LZOP" | "LZ2" | "LZOP2"));
+}
+
+/// Keep other games' existing declarations accurate when the whole file becomes UTF-8.
+fn declare_utf8(tree: &mut SgfTree) {
+    if let Some(ca) = tree
+        .nodes
+        .first_mut()
+        .and_then(|root| root.props.iter_mut().find(|p| p.id == "CA"))
+    {
+        ca.values = vec!["UTF-8".to_owned()];
+    }
+}
+
 /// The open game and where the user is in it.
 pub struct GameSession {
     game: Game,
@@ -179,7 +218,9 @@ pub struct GameSession {
     selected_line: Vec<NodeId>,
     pub line_revision: u64,
     pub tree_revision: u64,
-    save_as_first: bool,
+    source: Source,
+    /// The original position of each parseable primary analysis value. An illegal node has no key.
+    source_lz: HashMap<NodeId, Option<PositionKey>>,
     /// The file name without `.sgf`; `None` for a new game.
     name: Option<String>,
     rules: AnalysisRules,
@@ -221,17 +262,6 @@ pub struct LineNode {
     pub key: Option<PositionKey>,
     /// What KataGo analyses at the node; `None` on an illegal node.
     pub position: Option<Position>,
-}
-
-/// The nodes of a tree's main line, the first variation at every branch, in order.
-fn main_line_mut(tree: &mut SgfTree) -> Vec<&mut SgfNode> {
-    let mut out = Vec::new();
-    let mut at = Some(tree);
-    while let Some(tree) = at {
-        out.extend(tree.nodes.iter_mut());
-        at = tree.variations.first_mut();
-    }
-    out
 }
 
 /// A rules edit affects every position. For an in-place record edit, compare the
@@ -314,7 +344,8 @@ impl GameSession {
             ru: None,
             km: None,
             revision: 0,
-            save_as_first: false,
+            source: Source::utf8(),
+            source_lz: HashMap::new(),
             warnings: Vec::new(),
         })
     }
@@ -325,6 +356,16 @@ impl GameSession {
         name: &str,
         bytes: &[u8],
         default_rules: AnalysisRules,
+    ) -> Result<GameSession, OpenError> {
+        Self::open_with_analysis(name, bytes, default_rules, |_, _, _, _| {})
+    }
+
+    /// While opening, hand each readable source annotation to the caller with its original position.
+    pub fn open_with_analysis(
+        name: &str,
+        bytes: &[u8],
+        default_rules: AnalysisRules,
+        mut import: impl FnMut(&LzData, PositionKey, BoardSize, Color),
     ) -> Result<GameSession, OpenError> {
         if bytes.len() > MAX_SGF_BYTES {
             return Err(OpenError::TooLarge);
@@ -366,7 +407,7 @@ impl GameSession {
             warnings.push(GameWarning::KomiUnreadable);
         }
 
-        Ok(GameSession {
+        let mut session = GameSession {
             history: History::default(),
             tryout: None,
             current: game.root(),
@@ -382,11 +423,28 @@ impl GameSession {
             ru: trimmed(&root, "RU"),
             km: trimmed(&root, "KM"),
             revision: 0,
-            save_as_first: warnings
-                .iter()
-                .any(|w| matches!(w, GameWarning::Truncated | GameWarning::Repaired)),
+            source_lz: HashMap::new(),
+            source: Source {
+                encoding: decoded.source_encoding(bytes),
+                ca: root.first("CA").map(str::to_owned),
+                needs_save_as: warnings
+                    .iter()
+                    .any(|w| matches!(w, GameWarning::Truncated | GameWarning::Repaired)),
+            },
             warnings,
-        })
+        };
+        let size = session.size();
+        let points = usize::from(size.get()).pow(2);
+        for (id, text) in session.lizzie() {
+            if let Some(data) = parse_lz(&text, points) {
+                let position = session.analysis_key(id);
+                session.source_lz.insert(id, position.map(|(key, _)| key));
+                if let Some((key, player)) = position {
+                    import(&data, key, size, player);
+                }
+            }
+        }
+        Ok(session)
     }
 
     /// Takes `next`'s place, keeping the revision increasing across games.
@@ -483,15 +541,41 @@ impl GameSession {
         self.game.size()
     }
 
-    /// Each selected node's LizzieYzy analysis as the file had it: the root's `LZOP`, every
-    /// other node's `LZ` (design 5.11).
-    pub fn lizzie(&self) -> Vec<Option<String>> {
-        self.selected_line
-            .iter()
-            .enumerate()
-            .map(|(i, &node)| {
-                let id = if i == 0 { "LZOP" } else { "LZ" };
-                self.game.sgf(node).first(id).map(str::to_owned)
+    /// Original analysis values keyed by their attached record nodes.
+    pub fn lizzie(&self) -> HashMap<NodeId, String> {
+        self.game
+            .kept_nodes()
+            .filter_map(|node| {
+                let prop = if node == self.game.root() {
+                    "LZOP"
+                } else {
+                    "LZ"
+                };
+                Some((node, self.game.sgf(node).first(prop)?.to_owned()))
+            })
+            .collect()
+    }
+
+    fn analysis_key(&self, node: NodeId) -> Option<(PositionKey, Color)> {
+        let position = self.game.position_at_uncached(node, &self.rules)?;
+        Some((position.key(), position.to_move()))
+    }
+
+    /// Retain only keys and sides to move when querying the cache for many nodes.
+    pub fn analysis_keys(&self, scope: ExportScope) -> Vec<(NodeId, PositionKey, Color)> {
+        let nodes: Box<dyn Iterator<Item = NodeId> + '_> = match scope {
+            ExportScope::Game => Box::new(self.game.kept_nodes()),
+            ExportScope::Branch => Box::new(
+                self.selected_line
+                    .iter()
+                    .copied()
+                    .take_while(|&id| !self.game.is_tryout(id)),
+            ),
+        };
+        nodes
+            .filter_map(|id| {
+                let (key, player) = self.analysis_key(id)?;
+                Some((id, key, player))
             })
             .collect()
     }
@@ -821,11 +905,17 @@ impl GameSession {
         self.history.last_kept()
     }
 
-    pub fn mark_saved(&mut self, id: u64) -> bool {
+    pub fn mark_saved(&mut self, id: u64, utf8: bool) -> bool {
         let changed = self.changed();
         self.history.mark_saved(id);
-        let updated = changed != self.changed() || self.save_as_first;
-        self.save_as_first = false;
+        let updated = changed != self.changed() || self.source.needs_save_as;
+        self.source.needs_save_as = false;
+        if utf8 {
+            self.source = Source::utf8();
+            for other in &mut self.others {
+                declare_utf8(other);
+            }
+        }
         self.revision += u64::from(updated);
         updated
     }
@@ -835,51 +925,85 @@ impl GameSession {
         self.game.preview(self.current, moves)
     }
 
-    /// The file name and UTF-8 text to save; `None` when the game holds nothing to save. The
-    /// file's other games follow the open one.
+    /// The filename and UTF-8 text for a full Save As without added analysis.
     pub fn export(&self) -> Option<(String, String)> {
-        self.export_with(&[])
+        let (name, data) = self.export_with(ExportOptions::default(), &HashMap::new())?;
+        Some((
+            name,
+            String::from_utf8(data.bytes).expect("Save As always encodes UTF-8"),
+        ))
     }
 
-    /// `export`, with `lz[i]` written as main-line node `i`'s LizzieYzy analysis (`LZOP` on the
-    /// root, `LZ` elsewhere), replacing what the file had there.
-    pub fn export_with(&self, lz: &[Option<String>]) -> Option<(String, String)> {
-        if self.game.is_empty() {
+    /// Exports the kept record or the selected line. Unopened games accompany a full export.
+    pub fn export_with(
+        &self,
+        options: ExportOptions,
+        lz: &HashMap<NodeId, String>,
+    ) -> Option<(String, Encoded)> {
+        let changed = !self.rules.same_effect(&self.from_file);
+        let branch = options.scope == ExportScope::Branch;
+        let edited = self.last_kept() != 0;
+        let tree = self.game.to_sgf_with(
+            changed.then_some(&self.rules),
+            branch.then_some(&self.selected_line[..]),
+            |id, node| {
+                let prop = if id == self.game.root() { "LZOP" } else { "LZ" };
+                if options.clean {
+                    clean_node(node);
+                } else if let Some(text) = lz.get(&id) {
+                    node.props.retain(|p| p.id != prop);
+                    node.push(prop, [text.clone()]);
+                } else if edited
+                    && let Some(original) = self.source_lz.get(&id)
+                    && self.analysis_key(id).map(|(key, _)| key) != *original
+                {
+                    node.props.retain(|p| p.id != prop);
+                }
+            },
+        );
+        // Determine emptiness from the original record: a clean copy can legitimately
+        // omit the comment that made a header-only record worth saving.
+        let bare_root = tree.nodes.len() == 1
+            && tree.variations.is_empty()
+            && self
+                .game
+                .sgf(self.game.root())
+                .props
+                .iter()
+                .all(|p| matches!(p.id.as_str(), "CA" | "FF" | "GM" | "SZ"));
+        if !changed && bare_root && (branch || self.others.is_empty()) && lz.is_empty() {
             return None;
         }
-        let changed = !self.rules.same_effect(&self.from_file);
-        let mut tree = self.game.to_sgf(changed.then_some(&self.rules));
-        for (i, node) in main_line_mut(&mut tree).into_iter().enumerate() {
-            if let Some(Some(text)) = lz.get(i) {
-                let id = if i == 0 { "LZOP" } else { "LZ" };
-                node.props.retain(|p| p.id != id);
-                node.push(id, [text.clone()]);
-            }
+        let mut games = vec![tree];
+        if !branch {
+            games.extend(self.others.iter().cloned().map(|mut other| {
+                if !options.in_place {
+                    declare_utf8(&mut other);
+                }
+                if options.clean {
+                    let mut stack = vec![&mut other];
+                    while let Some(tree) = stack.pop() {
+                        for node in &mut tree.nodes {
+                            clean_node(node);
+                        }
+                        stack.extend(&mut tree.variations);
+                    }
+                }
+                other
+            }));
         }
-        let mut trees = vec![tree];
-        // The whole file is written in UTF-8, so a game that names its encoding now names that.
-        trees.extend(self.others.iter().cloned().map(|mut tree| {
-            if let Some(ca) = tree
-                .nodes
-                .first_mut()
-                .and_then(|root| root.props.iter_mut().find(|p| p.id == "CA"))
-            {
-                ca.values = vec!["UTF-8".to_owned()];
-            }
-            tree
-        }));
+        let (encoding, ca) = if options.in_place {
+            (self.source.encoding, self.source.ca.as_deref())
+        } else {
+            ("UTF-8", Some("UTF-8"))
+        };
         let name = format!("{}.sgf", self.name.as_deref().unwrap_or("game"));
-        Some((name, aji_core::sgf::write_sgf(&trees)))
+        Some((name, encode_sgf(&games, encoding, ca)))
     }
 
     /// Every node of the selected line, first to last.
     pub fn line(&self) -> Vec<LineNode> {
         self.line_nodes(&self.selected_line)
-    }
-
-    /// The main-line analysis written to the file's main-line nodes.
-    pub fn main_line_analysis(&self) -> Vec<LineNode> {
-        self.line_nodes(self.game.main_line())
     }
 
     fn line_nodes(&self, nodes: &[NodeId]) -> Vec<LineNode> {
@@ -970,7 +1094,7 @@ impl GameSession {
             changed: self.changed(),
             can_undo: self.history.can_undo(),
             can_redo: self.history.can_redo(),
-            save_as_first: self.save_as_first,
+            save_as_first: self.source.needs_save_as,
             placed: self
                 .game
                 .placed_by(node)
@@ -1096,7 +1220,7 @@ mod tests {
         let mut s = branches();
         s.edit(comment("one")).unwrap();
         let saved = s.last_kept();
-        s.mark_saved(saved);
+        s.mark_saved(saved, false);
         s.edit(comment("two")).unwrap();
         assert!(s.changed());
         assert!(s.undo());
@@ -1108,7 +1232,7 @@ mod tests {
     fn a_dropped_redo_past_the_save_stays_changed() {
         let mut s = branches();
         s.edit(comment("one")).unwrap();
-        s.mark_saved(s.last_kept());
+        s.mark_saved(s.last_kept(), false);
         s.undo();
         s.edit(comment("two")).unwrap();
         assert!(s.changed());
@@ -1283,7 +1407,7 @@ mod tests {
     fn an_unchanged_comment_or_rules_value_is_not_an_edit() {
         let mut s = branches();
         s.edit(comment("one")).unwrap();
-        s.mark_saved(s.last_kept());
+        s.mark_saved(s.last_kept(), false);
         assert_eq!(s.edit(comment("one")), Ok(false));
         let equivalent = AnalysisRules::Custom {
             komi: s.rules().komi(),

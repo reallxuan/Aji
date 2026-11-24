@@ -2,12 +2,14 @@
 //! writing it back.
 
 mod decode;
+mod encode;
 mod lizzie;
 mod parse;
 mod tree;
 mod write;
 
 pub use decode::*;
+pub use encode::*;
 pub use lizzie::*;
 pub use parse::*;
 pub use tree::*;

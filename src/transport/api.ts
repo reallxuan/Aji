@@ -4,6 +4,7 @@ import type { AppInfo } from './generated/AppInfo';
 import type { Backend } from './generated/Backend';
 import type { BackendRecommendation } from './generated/BackendRecommendation';
 import type { CacheScope } from './generated/CacheScope';
+import type { ExportOptions } from './generated/ExportOptions';
 import type { CacheStats } from './generated/CacheStats';
 import type { EngineVersionChoice } from './generated/EngineVersionChoice';
 import type { HardwareReport } from './generated/HardwareReport';
@@ -199,14 +200,11 @@ export async function previewGame(transport: Transport, moves: Move[]): Promise<
   return (await expectType(transport, { type: 'gamePreview', moves }, 'gamePreview')).preview;
 }
 
-export async function exportGame(transport: Transport): Promise<{ name: string; text: string }> {
-  const { name, text } = await expectType(
-    transport,
-    { type: 'gameExport', options: { scope: 'game', clean: false, inPlace: false } },
-    'gameExport',
-  );
-  return { name, text };
-}
+export const exportGame = (transport: Transport, options: ExportOptions) =>
+  expectType(transport, { type: 'gameExport', options }, 'gameExport');
+
+export const gameSaved = (transport: Transport, editId: number, utf8: boolean) =>
+  gameReply(transport, { type: 'gameSaved', editId, utf8 });
 
 /** One entry per main-line node, with the engine's cached result where it has one. */
 export async function getTrend(

@@ -122,15 +122,7 @@ pub struct JobProgress {
 
 /// The side to move in a node's position; `None` on an illegal node.
 pub(crate) fn to_move(node: &LineNode) -> Option<Color> {
-    let position = node.position.as_ref()?;
-    Some(
-        position
-            .moves
-            .last()
-            .map(|&(c, _)| c.opponent())
-            .or(position.initial_player)
-            .unwrap_or(Color::Black),
-    )
+    node.position.as_ref().map(|position| position.to_move())
 }
 
 fn side_is(side: JobSide, color: Color) -> bool {

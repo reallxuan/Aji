@@ -70,6 +70,15 @@ impl Position {
         }
     }
 
+    /// The player to move at the end of this engine position.
+    pub fn to_move(&self) -> Color {
+        self.moves
+            .last()
+            .map(|&(mover, _)| mover.opponent())
+            .or(self.initial_player)
+            .unwrap_or(Color::Black)
+    }
+
     /// Checks that every point lies on the board.
     pub fn validate(&self) -> Result<(), CoreError> {
         let n = self.size.get();

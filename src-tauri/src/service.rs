@@ -1,11 +1,10 @@
 //! The dispatcher behind every transport. It knows nothing about Tauri, so the WebSocket server of
 //! Phase 3 can call the same [`handle`] with the same messages.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use aji_core::PositionKey;
 use aji_core::game::{AnalysisRules, estimate, final_score, suggested_dead};
 use aji_core::{Move, ScoringRule};
 use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles, Row};
@@ -19,14 +18,14 @@ use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::game::{GameSession, OpenError, Refusal};
 use crate::protocol::{
-    AppEvent, AppInfo, CacheScope, ErrorCode, OsKind, ProtocolError, Request, Response,
-    RunningEngine, ScoreMode, ScoreView,
+    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, ExportScope, OsKind, ProtocolError,
+    Request, Response, RunningEngine, ScoreMode, ScoreView,
 };
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
     update_settings,
 };
-use crate::{follow, job, lizzie};
+use crate::{follow, lizzie};
 
 /// Facts about this installation, and the services, that requests may need.
 #[derive(Clone)]
@@ -225,8 +224,8 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::GameEdit { edit } => return update_game(ctx, |s| s.edit(edit)).await,
         Request::GameUndo => return update_game(ctx, |s| Ok(s.undo())).await,
         Request::GameRedo => return update_game(ctx, |s| Ok(s.redo())).await,
-        Request::GameSaved { edit_id, utf8: _ } => {
-            return update_game(ctx, |s| Ok(s.mark_saved(edit_id))).await;
+        Request::GameSaved { edit_id, utf8 } => {
+            return update_game(ctx, |s| Ok(s.mark_saved(edit_id, utf8))).await;
         }
         Request::GameTree => return Ok(Response::GameTree(ctx.game.lock().await.tree())),
         Request::GameTrend => {
@@ -242,7 +241,7 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
                 warnings: session.warnings().to_vec(),
             })
         }
-        Request::GameExport { options: _ } => return game_export(ctx).await,
+        Request::GameExport { options } => return game_export(ctx, options).await,
         Request::JobStart { options } => return follow::job_start(ctx, options).await,
         Request::JobStop => {
             follow::stop_job(ctx).await;
@@ -363,27 +362,6 @@ fn default_rules(ctx: &AppContext) -> AnalysisRules {
     ui_settings(ctx).default_rules
 }
 
-/// The file's LizzieYzy analysis as imported rows for the main line's positions (design 5.11).
-/// Values that do not read are skipped.
-fn lizzie_rows(session: &GameSession) -> Vec<Row> {
-    let size = session.size();
-    let points = usize::from(size.get()) * usize::from(size.get());
-    session
-        .line()
-        .iter()
-        .zip(session.lizzie())
-        .filter_map(|(node, text)| {
-            let data = aji_core::sgf::parse_lz(&text?, points)?;
-            let update = lizzie::update_from_lz(&data, node.key?, size, job::to_move(node)?);
-            Some(Row {
-                update,
-                imported: true,
-                katago_version: String::new(),
-            })
-        })
-        .collect()
-}
-
 /// Tells every client of the current node, then hands its position to the engine (or idles it
 /// on an illegal node). Called with the session locked, so engines and clients see nodes in the
 /// same order. The snapshot goes first: an engine that has analysed the position answers at once
@@ -455,12 +433,19 @@ async fn game_open(
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(bytes.as_bytes())
             .map_err(|e| error(ErrorCode::Internal, format!("bytes are not base64: {e}")))?;
+        let mut rows = Vec::new();
         let mut session =
-            GameSession::open(&name, &bytes, defaults).map_err(ProtocolError::from)?;
+            GameSession::open_with_analysis(&name, &bytes, defaults, |data, key, size, player| {
+                rows.push(Row {
+                    update: lizzie::update_from_lz(data, key, size, player),
+                    imported: true,
+                    katago_version: String::new(),
+                });
+            })
+            .map_err(ProtocolError::from)?;
         if at_end {
             session.open_at_end();
         }
-        let rows = lizzie_rows(&session);
         Ok::<_, ProtocolError>((session, rows))
     })
     .await
@@ -528,7 +513,13 @@ async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, Pr
         },
         CacheScope::Game => {
             follow::stop_job(ctx).await;
-            ClearScope::Keys(session.line().iter().filter_map(|n| n.key).collect())
+            ClearScope::Keys(
+                session
+                    .analysis_keys(ExportScope::Game)
+                    .into_iter()
+                    .map(|(_, key, _)| key)
+                    .collect(),
+            )
         }
         CacheScope::All => {
             follow::stop_job(ctx).await;
@@ -603,34 +594,45 @@ async fn game_preview(ctx: &AppContext, moves: &[Move]) -> Response {
     }
 }
 
-/// With `saveAnalysis` on, every main-line node with a kept result carries it as LizzieYzy's
-/// `LZ` (design 5.11).
-async fn game_export(ctx: &AppContext) -> Result<Response, ProtocolError> {
+/// A save acknowledgement refers to exactly the edits in this export.
+async fn game_export(ctx: &AppContext, options: ExportOptions) -> Result<Response, ProtocolError> {
     let session = ctx.game.lock().await;
-    let lz = match ui_settings(ctx).save_analysis {
-        true => {
-            let line = session.main_line_analysis();
-            let keys = line
-                .iter()
-                .map(|n| n.key.unwrap_or(PositionKey(0)))
-                .collect();
-            let updates = ctx.engine.updates(keys).await;
-            line.iter()
-                .zip(updates)
-                .map(|(node, update)| {
-                    node.key?;
-                    let data =
-                        lizzie::lz_from_update(&update?, session.size(), job::to_move(node)?);
-                    Some(aji_core::sgf::write_lz(&data))
-                })
-                .collect()
+    let mut lz = HashMap::new();
+    if !options.clean && ui_settings(ctx).save_analysis {
+        let nodes = session.analysis_keys(options.scope);
+        let keys = nodes.iter().map(|(_, key, _)| *key).collect();
+        let updates = ctx.engine.updates(keys).await;
+        for ((id, _, player), update) in nodes.into_iter().zip(updates) {
+            if let Some(update) = update {
+                let data = lizzie::lz_from_update(&update, session.size(), player);
+                lz.insert(id, aji_core::sgf::write_lz(&data));
+            }
         }
-        false => Vec::new(),
+    }
+    let (name, encoded) = session
+        .export_with(options, &lz)
+        .ok_or_else(|| error(ErrorCode::GameEmpty, "the record is empty"))?;
+    let (text, bytes) = if options.in_place {
+        if encoded.bytes.len() > crate::game::MAX_SGF_BYTES {
+            return Err(OpenError::TooLarge.into());
+        }
+        (
+            None,
+            Some(base64::engine::general_purpose::STANDARD.encode(encoded.bytes)),
+        )
+    } else {
+        (
+            Some(String::from_utf8(encoded.bytes).expect("Save As always encodes UTF-8")),
+            None,
+        )
     };
-    let (name, text) = session
-        .export_with(&lz)
-        .ok_or_else(|| error(ErrorCode::GameEmpty, "the game holds no move"))?;
-    Ok(Response::GameExport { name, text })
+    Ok(Response::GameExport {
+        name,
+        text,
+        bytes,
+        fell_back: encoded.fell_back,
+        edit_id: session.last_kept(),
+    })
 }
 
 fn unknown_engine(engine: &str) -> ProtocolError {
@@ -1564,6 +1566,425 @@ mod tests {
         handle(ctx, serde_json::from_value(request).unwrap()).await
     }
 
+    async fn exported(
+        ctx: &AppContext,
+        scope: &str,
+        clean: bool,
+        in_place: bool,
+    ) -> serde_json::Value {
+        let request = serde_json::json!({"type":"gameExport","options":{
+            "scope":scope,"clean":clean,"inPlace":in_place
+        }});
+        serde_json::to_value(wire(ctx, request).await.unwrap()).unwrap()
+    }
+
+    fn exported_bytes(reply: &serde_json::Value) -> Vec<u8> {
+        assert!(reply["text"].is_null());
+        base64::engine::general_purpose::STANDARD
+            .decode(reply["bytes"].as_str().unwrap())
+            .unwrap()
+    }
+
+    // Map each byte to one code point so equality compares the original value bytes.
+    // These fixtures have no multibyte character ending in an SGF delimiter.
+    async fn assert_in_place_values(bytes: &[u8], encoding: &str) {
+        let decoded = aji_core::sgf::decode(bytes);
+        assert_eq!(decoded.encoding, encoding);
+        assert!(!decoded.replaced);
+        let ctx = ctx();
+        assert!(
+            !snap(open(&ctx, "roundtrip.sgf", bytes).await)
+                .0
+                .save_as_first
+        );
+        let reply = exported(&ctx, "game", false, true).await;
+        assert_eq!(reply["fellBack"], false);
+        let parsed = |raw: &[u8]| {
+            let text: String = raw.iter().copied().map(char::from).collect();
+            parse_sgf(&text).unwrap().games
+        };
+        let mut original = parsed(bytes);
+        let root = &mut original[0].nodes[0];
+        for (id, value) in [("FF", "4"), ("GM", "1")] {
+            if root.get(id).is_none() {
+                root.push(id, [value.to_owned()]);
+            }
+        }
+        assert_eq!(original, parsed(&exported_bytes(&reply)));
+    }
+
+    #[tokio::test]
+    async fn in_place_export_checks_encoded_length_including_the_exact_limit() {
+        let ctx = ctx();
+        open(&ctx, "size.sgf", b"(;CA[UTF-8]C[x])").await.unwrap();
+        let initial = exported_bytes(&exported(&ctx, "game", false, true).await).len();
+        let limit = crate::game::MAX_SGF_BYTES;
+        // SGF escaping doubles each closing bracket in the comment.
+        for extra in [0, 1] {
+            let needed = limit - initial + 1 + extra;
+            let comment = "]".repeat(needed / 2) + &"x".repeat(needed % 2);
+            let edited = snap(
+                handle(
+                    &ctx,
+                    Request::GameEdit {
+                        edit: SessionEdit::SetComment {
+                            node: 0,
+                            text: Some(comment),
+                        },
+                    },
+                )
+                .await,
+            )
+            .0;
+            assert!(edited.changed);
+            let result = handle(
+                &ctx,
+                Request::GameExport {
+                    options: ExportOptions {
+                        in_place: true,
+                        ..Default::default()
+                    },
+                },
+            )
+            .await;
+            if extra == 0 {
+                let Ok(Response::GameExport {
+                    bytes: Some(bytes), ..
+                }) = result
+                else {
+                    panic!("the exact limit should be writable");
+                };
+                assert_eq!(
+                    base64::engine::general_purpose::STANDARD
+                        .decode(bytes)
+                        .unwrap()
+                        .len(),
+                    limit
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(ProtocolError {
+                        code: ErrorCode::SgfTooLarge,
+                        ..
+                    })
+                ));
+                assert!(ctx.game.lock().await.changed());
+                assert!(export_text(&ctx).await.len() > limit);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn gbk_values_round_trip_in_place() {
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/fox-chinese.sgf"),
+            "GBK",
+        )
+        .await;
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/gbk-ca-gb2312.sgf"),
+            "GBK",
+        )
+        .await;
+        assert_in_place_values(
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/gb18030-rare.sgf"),
+            "GBK",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_wrong_guess_still_round_trips_values() {
+        for bytes in [
+            include_bytes!("../../crates/aji-core/tests/fixtures/sgf/translated-fujitsu-2008.sgf")
+                .as_slice(),
+            include_bytes!(
+                "../../crates/aji-core/tests/fixtures/sgf/translated-samsung-2009-1.sgf"
+            )
+            .as_slice(),
+            include_bytes!(
+                "../../crates/aji-core/tests/fixtures/sgf/translated-samsung-2009-2.sgf"
+            )
+            .as_slice(),
+        ] {
+            assert_in_place_values(bytes, "EUC-KR").await;
+        }
+    }
+
+    #[tokio::test]
+    async fn a_shift_jis_yen_sign_cannot_escape_the_following_node() {
+        let ctx = ctx();
+        // The original comment is the single Shift_JIS character U+65E5.
+        let original = b"(;CA[Shift_JIS]C[\x93\xfa];B[aa])";
+        open(&ctx, "japanese.sgf", original).await.unwrap();
+        wire(
+            &ctx,
+            serde_json::json!({
+                "type":"gameEdit", "edit":{"kind":"setComment","node":0,"text":"100¥"}
+            }),
+        )
+        .await
+        .unwrap();
+        let reply = exported(&ctx, "game", false, true).await;
+        let bytes = exported_bytes(&reply);
+        let decoded = aji_core::sgf::decode(&bytes);
+        let game = parse_sgf(&decoded.text).unwrap().games.remove(0);
+        assert_eq!(game.nodes[0].first("C"), Some("100¥"));
+        assert_eq!(game.nodes[1].first("B"), Some("aa"));
+        assert_eq!(game.nodes[0].first("CA"), Some("UTF-8"));
+        assert_eq!(reply["fellBack"], true);
+    }
+
+    #[tokio::test]
+    async fn the_source_is_utf8_after_save_as_or_a_fallback() {
+        for in_place in [true, false] {
+            let ctx = ctx();
+            open(&ctx, "gbk.sgf", GBK_NO_CA).await.unwrap();
+            if in_place {
+                wire(&ctx, serde_json::json!({"type":"gameEdit","edit":{"kind":"setComment","node":0,"text":"🎲"}})).await.unwrap();
+            }
+            let reply = exported(&ctx, "game", false, in_place).await;
+            assert_eq!(reply["fellBack"], in_place);
+            let text = if in_place {
+                String::from_utf8(exported_bytes(&reply)).unwrap()
+            } else {
+                reply["text"].as_str().unwrap().to_owned()
+            };
+            assert!(text.contains("CA[UTF-8]"));
+            wire(
+                &ctx,
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"utf8":true}),
+            )
+            .await
+            .unwrap();
+            let again = exported(&ctx, "game", false, true).await;
+            assert_eq!(again["fellBack"], false);
+            assert_eq!(exported_bytes(&again), text.as_bytes());
+        }
+    }
+
+    #[tokio::test]
+    async fn branch_export_writes_the_path_and_the_line() {
+        let ctx = ctx();
+        open(
+            &ctx,
+            "branches.sgf",
+            b"(;SZ[9];B[aa](;W[bb])(;W[dd];B[ee]))(;GN[other])",
+        )
+        .await
+        .unwrap();
+        navigate(&ctx, NavTarget::Node(3)).await;
+        let reply = exported(&ctx, "branch", false, false).await;
+        let games = parse_sgf(reply["text"].as_str().unwrap()).unwrap().games;
+        assert_eq!(games.len(), 1);
+        assert!(games[0].variations.is_empty());
+        assert_eq!(
+            games[0].nodes[1..]
+                .iter()
+                .map(|n| &n.props[0].values[0][..])
+                .collect::<Vec<_>>(),
+            ["aa", "dd", "ee"]
+        );
+    }
+
+    #[tokio::test]
+    async fn clean_export_has_no_comments_or_analysis() {
+        let ctx = ctx();
+        open(
+            &ctx,
+            "branches.sgf",
+            b"(;SZ[9]LZOP[root]LZOP2[opaque root]C[root];B[aa](;W[bb]LZ[x]LZ2[opaque move])(;W[dd]C[y]XX[z]))(;GN[other]C[other]LZ2[opaque other])",
+        )
+        .await
+        .unwrap();
+        let reply = exported(&ctx, "game", true, false).await;
+        let text = reply["text"].as_str().unwrap();
+        assert!(!text.contains("C[") && !text.contains("LZ"), "{text}");
+        assert!(text.contains("XX[z]"));
+        let normal = export_text(&ctx).await;
+        for original in [
+            "LZOP2[opaque root]",
+            "LZ2[opaque move]",
+            "LZ2[opaque other]",
+            "C[other]",
+        ] {
+            assert!(normal.contains(original));
+        }
+        let branch = exported(&ctx, "branch", false, false).await;
+        let branch = branch["text"].as_str().unwrap();
+        assert!(branch.contains("LZOP2[opaque root]") && branch.contains("LZ2[opaque move]"));
+    }
+
+    #[tokio::test]
+    async fn an_edit_after_export_stays_unsaved() {
+        let ctx = ctx();
+        for i in 1..=7 {
+            wire(&ctx, serde_json::json!({"type":"gameEdit","edit":{"kind":"setComment","node":0,"text":i.to_string()}})).await.unwrap();
+        }
+        let reply = exported(&ctx, "game", false, false).await;
+        assert_eq!(reply["editId"], 7);
+        wire(
+            &ctx,
+            serde_json::json!({"type":"gameEdit","edit":{"kind":"pass"}}),
+        )
+        .await
+        .unwrap();
+        let s = snap(
+            wire(
+                &ctx,
+                serde_json::json!({"type":"gameSaved","editId":reply["editId"],"utf8":true}),
+            )
+            .await,
+        )
+        .0;
+        assert!(s.changed);
+    }
+
+    #[tokio::test]
+    async fn a_header_only_game_saves() {
+        let ctx = ctx();
+        open(&ctx, "header.sgf", b"(;GN[final])").await.unwrap();
+        assert!(export_text(&ctx).await.contains("GN[final]"));
+    }
+
+    #[tokio::test]
+    async fn edited_positions_do_not_reimport_stale_analysis_and_undo_restores_it() {
+        let lz = "KataGo 51.3 800 -0.5 15.0\nmove D4 visits 700 winrate 4870 prior 2010 scoreMean -0.5 pv D4";
+        let original = format!("(;SZ[9]RU[Chinese]LZOP[{lz}](;B[bb]LZ[opaque])(;B[dd]LZ[{lz}]))");
+        for write_analysis in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = ctx_in(dir.path(), None);
+            open(&ctx, "analysis.sgf", original.as_bytes())
+                .await
+                .unwrap();
+            let original_branch = navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap();
+            let mut replacement = ctx
+                .engine
+                .updates(vec![original_branch])
+                .await
+                .remove(0)
+                .unwrap();
+            navigate(&ctx, NavTarget::First).await;
+            save_analysis(&ctx, write_analysis).await;
+            let edited = snap(
+                handle(
+                    &ctx,
+                    Request::GameEdit {
+                        edit: SessionEdit::SetRules {
+                            rules: Some(AnalysisRules::JapaneseKorean),
+                        },
+                    },
+                )
+                .await,
+            )
+            .0;
+            let edited_root = edited.position_key.unwrap();
+            let edited_branch = navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap();
+            let text = export_text(&ctx).await;
+            let again = ctx_in(&dir.path().join("reopen"), None);
+            open(&again, "export.sgf", text.as_bytes()).await.unwrap();
+            assert!(
+                again
+                    .engine
+                    .updates(vec![edited_root, edited_branch])
+                    .await
+                    .iter()
+                    .all(Option::is_none)
+            );
+            assert!(text.contains("LZ[opaque]"));
+            assert!(!text.contains("LZOP[") && !text.contains(lz));
+
+            // A fresh cached result for the edited key takes precedence on an analysis export.
+            replacement.position = edited_branch;
+            replacement.winrate = 0.75;
+            replacement.root_visits = 600;
+            ctx.engine
+                .import(vec![Row {
+                    update: replacement,
+                    imported: false,
+                    katago_version: "test".into(),
+                }])
+                .await;
+            let text = export_text(&ctx).await;
+            let game = parse_sgf(&text).unwrap().games.remove(0);
+            let written = game.variations[1].nodes[0].first("LZ");
+            assert_eq!(written.is_some(), write_analysis);
+            if let Some(written) = written {
+                assert!(written.starts_with("KataGo 75.0 600"));
+            }
+
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            save_analysis(&ctx, false).await;
+            let text = export_text(&ctx).await;
+            let restored = parse_sgf(&text).unwrap().games.remove(0);
+            assert_eq!(restored.nodes[0].first("LZOP"), Some(lz));
+            assert_eq!(restored.variations[1].nodes[0].first("LZ"), Some(lz));
+
+            // Inserting above the branches changes their positions while the root still matches.
+            navigate(&ctx, NavTarget::First).await;
+            handle(
+                &ctx,
+                Request::GameEdit {
+                    edit: SessionEdit::InsertMove {
+                        color: aji_core::Color::Black,
+                        mv: Move::Pass,
+                    },
+                },
+            )
+            .await
+            .unwrap();
+            let text = export_text(&ctx).await;
+            let inserted = parse_sgf(&text).unwrap().games.remove(0);
+            assert_eq!(inserted.nodes[0].first("LZOP"), Some(lz));
+            assert_eq!(inserted.variations[1].nodes[0].first("LZ"), None);
+        }
+    }
+
+    #[tokio::test]
+    async fn lz_on_branch_nodes_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[bb])(;B[dd]))")
+            .await
+            .unwrap();
+        let key = navigate(&ctx, NavTarget::Node(2))
+            .await
+            .position_key
+            .unwrap();
+        let mut row = kept(key, 0.42, None);
+        row.update.candidates.push(aji_engine::Candidate {
+            mv: Move::Pass,
+            order: 0,
+            visits: 600,
+            winrate: 0.42,
+            score_lead: 0.0,
+            prior: 0.1,
+            pv: vec![Move::Pass],
+        });
+        ctx.engine.import(vec![row]).await;
+        save_analysis(&ctx, true).await;
+        let text = export_text(&ctx).await;
+        let game = parse_sgf(&text).unwrap().games.remove(0);
+        assert!(game.variations[0].nodes[0].get("LZ").is_none());
+        assert!(game.variations[1].nodes[0].get("LZ").is_some());
+        let other = ctx_in(&dir.path().join("again"), None);
+        open(&other, "again.sgf", text.as_bytes()).await.unwrap();
+        assert_eq!(
+            other.engine.updates(vec![key]).await[0]
+                .as_ref()
+                .unwrap()
+                .root_visits,
+            600
+        );
+    }
+
     #[tokio::test]
     async fn edit_undo_redo_answer_with_snapshots() {
         use serde_json::json;
@@ -1803,7 +2224,11 @@ mod tests {
         let s = navigate(&ctx, NavTarget::Next).await;
         assert_eq!(s.move_number, 2);
 
-        let Ok(Response::GameExport { name, text }) = handle(
+        let Ok(Response::GameExport {
+            name,
+            text: Some(text),
+            ..
+        }) = handle(
             &ctx,
             Request::GameExport {
                 options: Default::default(),
@@ -1968,7 +2393,9 @@ mod tests {
         assert_eq!(expected.komi, Komi::new(7.0).unwrap());
         assert_eq!(expected.rules, aji_core::Rules::Japanese.into());
         assert_eq!(ctx.engine.status().position, Some(expected.key()));
-        let Ok(Response::GameExport { text, .. }) = handle(
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
             &ctx,
             Request::GameExport {
                 options: Default::default(),
@@ -1995,7 +2422,9 @@ mod tests {
         .0;
         assert!(!s.rules.changed);
         assert_eq!(s.rules.current, s.rules.from_file);
-        let Ok(Response::GameExport { text, .. }) = handle(
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
             &ctx,
             Request::GameExport {
                 options: Default::default(),
@@ -2115,7 +2544,9 @@ mod tests {
         let (s, warnings) = snap(open(&ctx, "two.sgf", COLLECTION).await);
         assert_eq!(warnings, [GameWarning::ExtraGames { count: 1 }]);
         assert_eq!(s.info.game_name.as_deref(), Some("first"));
-        let Ok(Response::GameExport { text, .. }) = handle(
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
             &ctx,
             Request::GameExport {
                 options: Default::default(),
@@ -2639,10 +3070,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cache_clear_game_clears_the_main_line_keys() {
+    async fn clear_game_clears_every_node() {
         let dir = tempfile::tempdir().unwrap();
         let (ctx, recorded) = nine(dir.path()).await;
-        let keys = line_keys(&ctx).await;
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[bb])(;B[dd]))")
+            .await
+            .unwrap();
+        let mut keys = line_keys(&ctx).await;
+        keys.push(
+            navigate(&ctx, NavTarget::Node(2))
+                .await
+                .position_key
+                .unwrap(),
+        );
+        navigate(&ctx, NavTarget::MainLine).await;
         let elsewhere = PositionKey(0x1234);
         let mut rows: Vec<Row> = keys.iter().map(|&k| kept(k, 0.5, None)).collect();
         rows.push(kept(elsewhere, 0.5, None));
@@ -2790,7 +3231,9 @@ mod tests {
     }
 
     async fn export_text(ctx: &AppContext) -> String {
-        let Ok(Response::GameExport { text, .. }) = handle(
+        let Ok(Response::GameExport {
+            text: Some(text), ..
+        }) = handle(
             ctx,
             Request::GameExport {
                 options: Default::default(),

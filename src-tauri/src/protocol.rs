@@ -239,7 +239,11 @@ pub enum Response {
     },
     GameExport {
         name: String,
-        text: String,
+        text: Option<String>,
+        bytes: Option<String>,
+        fell_back: bool,
+        #[ts(type = "number")]
+        edit_id: u64,
     },
     Trend {
         /// The session revision the line was read at; `trendNodes` with another are stale.

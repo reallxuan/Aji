@@ -157,14 +157,25 @@ describe('opening', () => {
 describe('saving', () => {
   it('exports, writes under the title and remembers the saved file', async () => {
     useGameStore.getState().apply(samsung);
-    const { ctx, files } = setup(
+    const { ctx, files, requests } = setup(
       (request) =>
         request.type === 'gameExport'
-          ? { type: 'gameExport', name: 'samsung.sgf', text: '(;GM[1])\n' }
+          ? {
+              type: 'gameExport',
+              name: 'samsung.sgf',
+              text: '(;GM[1])\n',
+              bytes: null,
+              editId: 7,
+              fellBack: false,
+            }
           : opened(),
       { savePath: '/out/丁浩 对 廖元赫.sgf' },
     );
     await saveAs(ctx);
+    expect(requests).toEqual([
+      { type: 'gameExport', options: { scope: 'game', clean: false, inPlace: false } },
+      { type: 'gameSaved', editId: 7, utf8: true },
+    ]);
     expect(files.saveRequests).toEqual(['丁浩 对 廖元赫.sgf']);
     expect(files.written.get('/out/丁浩 对 廖元赫.sgf')).toBe('(;GM[1])\n');
     expect(files.remembered).toEqual([
@@ -174,10 +185,21 @@ describe('saving', () => {
 
   it('does nothing when the save dialog is cancelled', async () => {
     useGameStore.getState().apply(samsung);
-    const { ctx, files } = setup(() => ({ type: 'gameExport', name: 'a.sgf', text: '(;)' }), {
-      savePath: null,
-    });
+    const { ctx, files, requests } = setup(
+      () => ({
+        type: 'gameExport',
+        name: 'a.sgf',
+        text: '(;)',
+        bytes: null,
+        editId: 0,
+        fellBack: false,
+      }),
+      {
+        savePath: null,
+      },
+    );
     await saveAs(ctx);
+    expect(requests.map((request) => request.type)).toEqual(['gameExport']);
     expect(files.written.size).toBe(0);
     expect(files.remembered).toEqual([]);
     expect(useNoticeStore.getState().notice).toBeNull();
