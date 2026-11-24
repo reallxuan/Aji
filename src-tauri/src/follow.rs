@@ -13,7 +13,7 @@ use tokio::time::Instant;
 
 use crate::game::{GameSession, LineNode};
 use crate::job::{JobFlow, JobOptions, JobProgress, JobState, Step, line_losses};
-use crate::protocol::{AppEvent, ProtocolError, Response, TrendNode, TrendNodeUpdate};
+use crate::protocol::{AppEvent, ProtocolError, Response, TrendChange, TrendNode, TrendNodeUpdate};
 use crate::service::AppContext;
 
 /// Trend nodes and job progress go out at most this often.
@@ -23,9 +23,9 @@ pub const THROTTLE: Duration = Duration::from_millis(250);
 #[derive(Debug, Default)]
 struct TrendLine {
     revision: u64,
-    line: Vec<LineNode>,
+    line: Vec<LineNode<()>>,
     stats: Vec<Option<TrendStats>>,
-    /// Main-line indexes by position: comment nodes share their position.
+    /// Selected-line slots by position, including comment nodes that share their parent’s key.
     at: HashMap<PositionKey, Vec<usize>>,
 }
 
@@ -34,6 +34,8 @@ struct TrendLine {
 pub struct Follow {
     pub flow: JobFlow,
     trend: TrendLine,
+    /// A full broadcast supersedes in-flight deltas, including clears at the same line revision.
+    publication: u64,
     /// Nodes whose result or loss changed since the last push.
     dirty: BTreeSet<usize>,
     /// The latest job progress not pushed yet.
@@ -46,7 +48,7 @@ pub(crate) fn lock(ctx: &AppContext) -> MutexGuard<'_, Follow> {
 
 /// The keys of the positions before nodes whose loss needs the candidate list: the node has
 /// no result of its own but the position before has one.
-fn fallback_keys(line: &[LineNode], stats: &[Option<TrendStats>]) -> Vec<PositionKey> {
+fn fallback_keys(line: &[LineNode<()>], stats: &[Option<TrendStats>]) -> Vec<PositionKey> {
     let mut keys: Vec<PositionKey> = (1..line.len())
         .filter(|&i| line[i].mv.is_some() && stats[i].is_none() && stats[i - 1].is_some())
         .filter_map(|i| line[i - 1].key)
@@ -72,15 +74,15 @@ async fn updates_of(
 }
 
 /// The kept stats of each node; `None` on an illegal one.
-async fn stats_of(ctx: &AppContext, line: &[LineNode]) -> Vec<Option<TrendStats>> {
+async fn stats_of(ctx: &AppContext, keys: &[Option<PositionKey>]) -> Vec<Option<TrendStats>> {
     // An illegal node has no position; a key no position can have keeps the order.
-    let keys = line
+    let queries = keys
         .iter()
-        .map(|n| n.key.unwrap_or(PositionKey(0)))
+        .map(|key| key.unwrap_or(PositionKey(0)))
         .collect();
-    let mut stats = ctx.engine.summaries(keys).await;
-    for (slot, node) in stats.iter_mut().zip(line) {
-        if node.key.is_none() {
+    let mut stats = ctx.engine.summaries(queries).await;
+    for (slot, key) in stats.iter_mut().zip(keys) {
+        if key.is_none() {
             *slot = None;
         }
     }
@@ -89,7 +91,7 @@ async fn stats_of(ctx: &AppContext, line: &[LineNode]) -> Vec<Option<TrendStats>
 
 async fn losses_of(
     ctx: &AppContext,
-    line: &[LineNode],
+    line: &[LineNode<()>],
     stats: &[Option<TrendStats>],
 ) -> Vec<Option<Loss>> {
     let before = updates_of(ctx, fallback_keys(line, stats)).await;
@@ -97,15 +99,16 @@ async fn losses_of(
 }
 
 /// The session's trend, which the follower then keeps current. Called with the session locked.
-/// With `push`, it also goes to every client, sent under the follower's lock so no
+/// With a change reason it goes to every client, sent under the follower's lock so no
 /// `trendNodes` for the new line can go out before it.
 pub(crate) async fn trend_of(
     ctx: &AppContext,
     session: &GameSession,
-    push: bool,
+    reason: Option<TrendChange>,
 ) -> (u64, Vec<TrendNode>) {
     let line = session.line();
-    let stats = stats_of(ctx, &line).await;
+    let keys: Vec<_> = line.iter().map(|n| n.key).collect();
+    let stats = stats_of(ctx, &keys).await;
     let losses = losses_of(ctx, &line, &stats).await;
     let revision = session.line_revision;
     let nodes: Vec<TrendNode> = line
@@ -113,6 +116,8 @@ pub(crate) async fn trend_of(
         .zip(&stats)
         .zip(losses)
         .map(|((node, &stats), loss)| TrendNode {
+            node: node.node as u32,
+            key: node.key,
             move_number: node.move_number,
             mover: node.mover,
             mv: node.mv,
@@ -133,9 +138,11 @@ pub(crate) async fn trend_of(
         stats,
         at,
     };
-    follow.dirty.clear();
-    if push {
+    if let Some(reason) = reason {
+        follow.publication += 1;
+        follow.dirty.clear();
         ctx.events.emit(AppEvent::GameTrend {
+            reason,
             revision,
             nodes: nodes.clone(),
         });
@@ -163,7 +170,7 @@ pub(crate) fn stored(ctx: &AppContext, key: PositionKey, stats: TrendStats) -> b
 
 /// Pushes the pending job progress and the changed trend nodes.
 pub(crate) async fn flush(ctx: &AppContext) {
-    let (revision, dirty, keys) = {
+    let (publication, dirty, keys) = {
         let mut follow = lock(ctx);
         if let Some(progress) = follow.progress.take() {
             ctx.events.emit(AppEvent::JobProgress { progress });
@@ -174,7 +181,7 @@ pub(crate) async fn flush(ctx: &AppContext) {
         let dirty: Vec<usize> = std::mem::take(&mut follow.dirty).into_iter().collect();
         let trend = &follow.trend;
         (
-            trend.revision,
+            follow.publication,
             dirty,
             fallback_keys(&trend.line, &trend.stats),
         )
@@ -182,8 +189,8 @@ pub(crate) async fn flush(ctx: &AppContext) {
     let before = updates_of(ctx, keys).await;
     let follow = lock(ctx);
     let trend = &follow.trend;
-    if trend.revision != revision {
-        // A new line went out whole meanwhile.
+    if follow.publication != publication {
+        // A full trend went out while reading the candidate lists.
         return;
     }
     let losses = line_losses(&trend.line, &trend.stats, &|k| before.get(&k).cloned());
@@ -195,7 +202,10 @@ pub(crate) async fn flush(ctx: &AppContext) {
             loss: losses[i],
         })
         .collect();
-    ctx.events.emit(AppEvent::TrendNodes { revision, nodes });
+    ctx.events.emit(AppEvent::TrendNodes {
+        revision: trend.revision,
+        nodes,
+    });
 }
 
 /// Whether an event left something to push at the next throttle tick. Final job states are
@@ -213,6 +223,7 @@ fn push_now(ctx: &AppContext, progress: JobProgress) {
 
 /// A job status from the engine: progress to show, or the next pass to start.
 pub(crate) async fn on_job(ctx: &AppContext, status: JobStatus) -> Push {
+    let session = ctx.game.lock().await;
     let step = lock(ctx).flow.on_status(&status);
     match step {
         Step::Ignore => Push::None,
@@ -225,6 +236,7 @@ pub(crate) async fn on_job(ctx: &AppContext, status: JobStatus) -> Push {
             Push::Later
         }
         Step::PassDone => {
+            drop(session);
             next_pass(ctx, status.id).await;
             Push::None
         }
@@ -233,15 +245,22 @@ pub(crate) async fn on_job(ctx: &AppContext, status: JobStatus) -> Push {
 
 /// Plans and starts the pass after plan `id`'s, from the line's results now.
 async fn next_pass(ctx: &AppContext, id: u64) {
-    let Some(line) = lock(ctx).flow.line().map(<[LineNode]>::to_vec) else {
+    let Some(line) = lock(ctx)
+        .flow
+        .line()
+        .map(|line| line.iter().map(|n| n.key).collect::<Vec<_>>())
+    else {
         return;
     };
     let stats = stats_of(ctx, &line).await;
     // The fill pass reads every move's candidate list.
-    let mut keys: Vec<PositionKey> = line.iter().filter_map(|n| n.key).collect();
+    let mut keys: Vec<PositionKey> = line.into_iter().flatten().collect();
     keys.sort_unstable_by_key(|k| k.0);
     keys.dedup();
     let before = updates_of(ctx, keys).await;
+    // Read the cache without holding up edits, then serialize the ID check and
+    // engine submission with a rules change, replacement job or explicit stop.
+    let _session = ctx.game.lock().await;
     let next = {
         let mut follow = lock(ctx);
         if follow.flow.plan_id() != Some(id) {
@@ -264,7 +283,7 @@ async fn next_pass(ctx: &AppContext, id: u64) {
     }
 }
 
-/// Starts a job on the session's main line, replacing a running one.
+/// Starts a job on the selected line or all kept branches, replacing a running one.
 pub(crate) async fn job_start(
     ctx: &AppContext,
     options: JobOptions,
@@ -282,9 +301,9 @@ pub(crate) async fn start_on(
 ) -> Result<(), ProtocolError> {
     options.visits = options.visits.max(1);
     options.boost.visits = options.boost.visits.max(1);
-    let plan = lock(ctx)
-        .flow
-        .start(session.line(), session.line_index(), options);
+    let nodes = session.job_nodes(options.scope);
+    let current = session.position().map(|position| position.key());
+    let plan = lock(ctx).flow.start(nodes, current, options);
     if let Err(e) = ctx.engine.run_job(plan).await {
         lock(ctx).flow.stop();
         return Err(e.into());
@@ -319,10 +338,26 @@ pub async fn follow_engine(ctx: AppContext, mut events: mpsc::UnboundedReceiver<
         };
         let Some(event) = event else { break };
         let push = match event {
-            EngineEvent::Stored { key, stats } => match stored(&ctx, key, stats) {
-                true => Push::Later,
-                false => Push::None,
-            },
+            EngineEvent::Stored { key, .. } => {
+                // A queued notification can precede a cache clear or a newer result.
+                // Only the current cache value belongs on the currently published line.
+                let _session = ctx.game.lock().await;
+                if !lock(&ctx).trend.at.contains_key(&key) {
+                    continue;
+                }
+                let summary = ctx
+                    .engine
+                    .summaries(vec![key])
+                    .await
+                    .into_iter()
+                    .next()
+                    .flatten();
+                if summary.is_some_and(|stats| stored(&ctx, key, stats)) {
+                    Push::Later
+                } else {
+                    Push::None
+                }
+            }
             EngineEvent::Job(status) => on_job(&ctx, status).await,
             _ => Push::None,
         };
@@ -330,4 +365,9 @@ pub async fn follow_engine(ctx: AppContext, mut events: mpsc::UnboundedReceiver<
             due.get_or_insert_with(|| Instant::now() + THROTTLE);
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn trend_length(ctx: &AppContext) -> usize {
+    lock(ctx).trend.line.len()
 }

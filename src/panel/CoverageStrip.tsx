@@ -9,7 +9,7 @@ const TALL = 8;
 type Cell = 'working' | 'boost' | 'result' | 'queued';
 
 /**
- * The coverage strip under the graph's 0% line (P2 M2 design 5.3): one cell per main-line node,
+ * The coverage strip under the graph's 0% line (P2 M2 design 5.3): one cell per selected-line node,
  * centred on its move. Solid with a result, faint when queued, green while searched; during the
  * boost pass its queued cells stand taller, and drop back once done. It shows from a job's start
  * until the game is closed.
@@ -37,10 +37,11 @@ export function CoverageStrip({
   const w = span / nodes.length;
 
   const kind = (i: number): Cell | null => {
-    if (i === working) return 'working';
-    if (boosting && queued.has(i)) return 'boost';
+    const { key } = nodes[i];
+    if (key !== null && key === working) return 'working';
+    if (boosting && key !== null && queued.has(key)) return 'boost';
     if (nodes[i].stats) return 'result';
-    return queued.has(i) ? 'queued' : null;
+    return key !== null && queued.has(key) ? 'queued' : null;
   };
 
   return (

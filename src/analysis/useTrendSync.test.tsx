@@ -28,6 +28,8 @@ const key = (i: number) => (0x1000 + i).toString(16).padStart(16, '0');
 
 const line = (length: number, stats: (i: number) => TrendStats | null = () => null) =>
   Array.from({ length }, (_, i): TrendNode => ({
+    node: i,
+    key: key(i),
     moveNumber: i,
     mover: i === 0 ? null : i % 2 ? 'black' : 'white',
     move: null,
@@ -102,7 +104,7 @@ it('fetches on mount and replaces on event', async () => {
   expect(trendRequests()).toBe(1);
   expect(useTrendStore.getState().nodes).toHaveLength(3);
   expect(useTrendStore.getState().nodes[1].stats).toEqual(statsOf(1));
-  act(() => transport.emit({ type: 'gameTrend', revision: 1, nodes: line(5) }));
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 1, nodes: line(5) }));
   expect(useTrendStore.getState().nodes).toHaveLength(5);
   expect(useTrendStore.getState().nodes[1].stats).toBeNull();
 });
@@ -184,7 +186,7 @@ it('a new game starts the shared-key group afresh', async () => {
     moveNumber: 2,
   });
   act(() => transport.emit({ type: 'gameSnapshot', snapshot: elsewhere }));
-  act(() => transport.emit({ type: 'gameTrend', revision: 2, nodes: line(6) }));
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 2, nodes: line(6) }));
   act(() => transport.emit({ type: 'analysisUpdate', analysis: update(5, 200) }));
   expect(useTrendStore.getState().nodes[2].stats).toEqual(statsOf(5, 200));
   expect(useTrendStore.getState().nodes[5].stats).toBeNull();
@@ -204,7 +206,7 @@ it('applies trend nodes for the line it holds', async () => {
   );
   expect(useTrendStore.getState().nodes[2]).toMatchObject({ stats: statsOf(2), loss });
   // A line pushed later: nodes for the old one no longer apply.
-  act(() => transport.emit({ type: 'gameTrend', revision: 3, nodes: line(3) }));
+  act(() => transport.emit({ type: 'gameTrend', reason: 'reset', revision: 3, nodes: line(3) }));
   act(() =>
     transport.emit({
       type: 'trendNodes',

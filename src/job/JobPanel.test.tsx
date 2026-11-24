@@ -28,6 +28,8 @@ const settings = (jobOptions: JobOptions): UiSettings => ({
 });
 
 const nodes = Array.from({ length: 41 }, (_, i): TrendNode => ({
+  node: i,
+  key: i.toString(16).padStart(16, '0'),
   moveNumber: i,
   mover: i === 0 ? null : i % 2 ? 'black' : 'white',
   move: null,
@@ -63,6 +65,7 @@ const started = (requests: Request[]) =>
 
 it('job panel starts with the saved options', async () => {
   const saved: JobOptions = {
+    scope: 'line',
     range: { kind: 'whole' },
     side: 'white',
     visits: 800,

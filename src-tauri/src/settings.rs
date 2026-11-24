@@ -680,7 +680,7 @@ mod tests {
                 "defaultRules":{"kind":"custom","komi":7.0,"scoring":"territory","details":null},
                 "showCoordinates":false,"perspective":"white","showNextMove":true,
                 "analyseOnOpen":false,"cacheCapMb":1024,"saveAnalysis":false,
-                "jobOptions":{"range":{"kind":"whole"},"side":"both","visits":500,
+                "jobOptions":{"scope":"line","range":{"kind":"whole"},"side":"both","visits":500,
                     "boost":{"on":true,"threshold":10.0,"visits":3000}}})
         );
         assert_eq!(

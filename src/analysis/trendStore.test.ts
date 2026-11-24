@@ -5,6 +5,8 @@ import { resetTrendStore, useTrendStore } from './trendStore';
 afterEach(() => resetTrendStore());
 
 const node = (moveNumber: number): TrendNode => ({
+  node: moveNumber,
+  key: moveNumber.toString(16).padStart(16, '0'),
   moveNumber,
   mover: moveNumber === 0 ? null : moveNumber % 2 ? 'black' : 'white',
   move: null,

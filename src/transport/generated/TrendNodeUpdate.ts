@@ -3,6 +3,6 @@ import type { Loss } from "./Loss";
 import type { TrendStats } from "./TrendStats";
 
 /**
- * A trend node whose result changed, by its index on the main line.
+ * A trend node whose result changed, by its index on the selected line.
  */
 export type TrendNodeUpdate = { lineIndex: number, stats: TrendStats | null, loss: Loss | null, };

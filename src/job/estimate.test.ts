@@ -5,6 +5,8 @@ import { DEFAULT_JOB_OPTIONS, jobEstimate } from './estimate';
 /** `count` nodes of a plain game; `analysed` of them hold results at `visits`. */
 function line(count: number, analysed: (i: number) => boolean = () => false, visits = 500) {
   return Array.from({ length: count }, (_, i): TrendNode => ({
+    node: i,
+    key: i.toString(16).padStart(16, '0'),
     moveNumber: i,
     mover: i === 0 ? null : i % 2 ? 'black' : 'white',
     move: i === 0 ? null : { type: 'pass' },

@@ -2,11 +2,11 @@
 //! KataGo analyses it with, and what reading the file repaired. `service` holds it behind a
 //! mutex and tells the engine about every change.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use aji_core::game::{
     AnalysisRules, Change, Edit, EditError, Game, GameError, Illegal, InfoField, Mark, NodeId, Op,
-    Preview,
+    PositionScope, Preview,
 };
 use aji_core::sgf::{
     Encoded, EncodingSource, LzData, SgfError, SgfNode, SgfTree, SgfWarning, decode, encode_sgf,
@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::history::{EntryKind, History, Spot};
+use crate::job::JobScope;
 use crate::protocol::{
     Continuation, ExportOptions, ExportScope, GameSnapshot, GameTree, MarkAt, Placed, TreeNode,
 };
@@ -219,6 +220,8 @@ pub struct GameSession {
     pub line_revision: u64,
     pub tree_revision: u64,
     source: Source,
+    /// Flatten copies the source root properties even as its node ID changes.
+    source_root: NodeId,
     /// The original position of each parseable primary analysis value. An illegal node has no key.
     source_lz: HashMap<NodeId, Option<PositionKey>>,
     /// The file name without `.sgf`; `None` for a new game.
@@ -239,6 +242,11 @@ fn trimmed(root: &SgfNode, id: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+fn source_annotation(game: &Game, node: NodeId) -> Option<&str> {
+    game.sgf(node)
+        .first(if node == game.root() { "LZOP" } else { "LZ" })
+}
+
 /// `name` without a final `.sgf`, any case; `None` when nothing is left.
 fn stem(name: &str) -> Option<String> {
     let stem = match name.len().checked_sub(4) {
@@ -251,17 +259,19 @@ fn stem(name: &str) -> Option<String> {
     (!stem.is_empty()).then(|| stem.to_owned())
 }
 
-/// One current-line node, for the trend graph (design 5.3).
+/// One node in a depth-first traversal of the selected line or the kept tree.
 #[derive(Debug, Clone, PartialEq)]
-pub struct LineNode {
+pub struct LineNode<P = Option<Position>> {
+    /// Parent slot in the same traversal, including across variations.
+    pub parent: Option<usize>,
     pub node: NodeId,
     pub move_number: u32,
     pub mover: Option<Color>,
     pub mv: Option<Move>,
     /// `None` on an illegal node.
     pub key: Option<PositionKey>,
-    /// What KataGo analyses at the node; `None` on an illegal node.
-    pub position: Option<Position>,
+    /// Jobs retain the legal engine position. Trend nodes carry only metadata (`()`).
+    pub position: P,
 }
 
 /// A rules edit affects every position. For an in-place record edit, compare the
@@ -331,6 +341,7 @@ impl GameSession {
         Ok(GameSession {
             history: History::default(),
             tryout: None,
+            source_root: game.root(),
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
@@ -410,6 +421,7 @@ impl GameSession {
         let mut session = GameSession {
             history: History::default(),
             tryout: None,
+            source_root: game.root(),
             current: game.root(),
             tip: game.root(),
             selected_line: game.main_line().to_vec(),
@@ -435,14 +447,21 @@ impl GameSession {
         };
         let size = session.size();
         let points = usize::from(size.get()).pow(2);
-        for (id, text) in session.lizzie() {
-            if let Some(data) = parse_lz(&text, points) {
-                let position = session.analysis_key(id);
-                session.source_lz.insert(id, position.map(|(key, _)| key));
-                if let Some((key, player)) = position {
-                    import(&data, key, size, player);
-                }
-            }
+        let annotation = |id| source_annotation(&session.game, id);
+        if session.game.kept_nodes().any(|id| annotation(id).is_some()) {
+            session.game.visit_positions(
+                &session.rules,
+                PositionScope::Kept,
+                |id, _, _, position| {
+                    if let Some(data) = annotation(id).and_then(|text| parse_lz(text, points)) {
+                        let key = position.map(Position::key);
+                        session.source_lz.insert(id, key);
+                        if let Some((position, key)) = position.zip(key) {
+                            import(&data, key, size, position.to_move());
+                        }
+                    }
+                },
+            );
         }
         Ok(session)
     }
@@ -545,39 +564,20 @@ impl GameSession {
     pub fn lizzie(&self) -> HashMap<NodeId, String> {
         self.game
             .kept_nodes()
-            .filter_map(|node| {
-                let prop = if node == self.game.root() {
-                    "LZOP"
-                } else {
-                    "LZ"
-                };
-                Some((node, self.game.sgf(node).first(prop)?.to_owned()))
-            })
+            .filter_map(|id| Some((id, source_annotation(&self.game, id)?.to_owned())))
             .collect()
-    }
-
-    fn analysis_key(&self, node: NodeId) -> Option<(PositionKey, Color)> {
-        let position = self.game.position_at_uncached(node, &self.rules)?;
-        Some((position.key(), position.to_move()))
     }
 
     /// Retain only keys and sides to move when querying the cache for many nodes.
-    pub fn analysis_keys(&self, scope: ExportScope) -> Vec<(NodeId, PositionKey, Color)> {
-        let nodes: Box<dyn Iterator<Item = NodeId> + '_> = match scope {
-            ExportScope::Game => Box::new(self.game.kept_nodes()),
-            ExportScope::Branch => Box::new(
-                self.selected_line
-                    .iter()
-                    .copied()
-                    .take_while(|&id| !self.game.is_tryout(id)),
-            ),
-        };
-        nodes
-            .filter_map(|id| {
-                let (key, player) = self.analysis_key(id)?;
-                Some((id, key, player))
-            })
-            .collect()
+    pub fn analysis_keys(&self, scope: PositionScope<'_>) -> Vec<(NodeId, PositionKey, Color)> {
+        let mut keys = Vec::new();
+        self.game
+            .visit_positions(&self.rules, scope, |id, _, _, position| {
+                if let Some(position) = position {
+                    keys.push((id, position.key(), position.to_move()));
+                }
+            });
+        keys
     }
 
     /// The position after the next current-line move, with that move, for the next-move hint;
@@ -942,7 +942,24 @@ impl GameSession {
     ) -> Option<(String, Encoded)> {
         let changed = !self.rules.same_effect(&self.from_file);
         let branch = options.scope == ExportScope::Branch;
-        let edited = self.last_kept() != 0;
+        let mut stale = HashSet::new();
+        if self.last_kept() != 0 && !options.clean && !self.source_lz.is_empty() {
+            let scope = self.export_scope(options.scope);
+            self.game
+                .visit_positions(&self.rules, scope, |id, _, _, position| {
+                    let source = if id == self.game.root() {
+                        self.source_root
+                    } else {
+                        id
+                    };
+                    if let Some(original) = self.source_lz.get(&source)
+                        && !lz.contains_key(&id)
+                        && position.map(Position::key) != *original
+                    {
+                        stale.insert(id);
+                    }
+                });
+        }
         let tree = self.game.to_sgf_with(
             changed.then_some(&self.rules),
             branch.then_some(&self.selected_line[..]),
@@ -953,10 +970,7 @@ impl GameSession {
                 } else if let Some(text) = lz.get(&id) {
                     node.props.retain(|p| p.id != prop);
                     node.push(prop, [text.clone()]);
-                } else if edited
-                    && let Some(original) = self.source_lz.get(&id)
-                    && self.analysis_key(id).map(|(key, _)| key) != *original
-                {
+                } else if stale.contains(&id) {
                     node.props.retain(|p| p.id != prop);
                 }
             },
@@ -1001,26 +1015,68 @@ impl GameSession {
         Some((name, encode_sgf(&games, encoding, ca)))
     }
 
-    /// Every node of the selected line, first to last.
-    pub fn line(&self) -> Vec<LineNode> {
-        self.line_nodes(&self.selected_line)
+    /// Trend metadata for the selected line, including a visible try-out.
+    pub fn line(&self) -> Vec<LineNode<()>> {
+        self.line_nodes(PositionScope::Line(&self.selected_line), |_| ())
     }
 
-    fn line_nodes(&self, nodes: &[NodeId]) -> Vec<LineNode> {
-        nodes
+    /// The immutable positions to search, in kept depth-first order.
+    pub fn tree_line_nodes(&self) -> Vec<LineNode> {
+        self.line_nodes(PositionScope::Kept, |p| p.cloned())
+    }
+
+    pub fn job_nodes(&self, scope: JobScope) -> Vec<LineNode> {
+        match scope {
+            JobScope::Line => {
+                self.line_nodes(PositionScope::Line(self.kept_line()), |p| p.cloned())
+            }
+            JobScope::AllBranches => self.tree_line_nodes(),
+        }
+    }
+
+    pub fn export_scope(&self, scope: ExportScope) -> PositionScope<'_> {
+        match scope {
+            ExportScope::Branch => PositionScope::Line(self.kept_line()),
+            ExportScope::Game => PositionScope::Kept,
+        }
+    }
+
+    fn kept_line(&self) -> &[NodeId] {
+        let end = self
+            .selected_line
             .iter()
-            .map(|&node| {
-                let position = self.game.position_at(node, &self.rules);
-                LineNode {
+            .position(|&id| self.game.is_tryout(id))
+            .unwrap_or(self.selected_line.len());
+        &self.selected_line[..end]
+    }
+
+    fn line_nodes<P>(
+        &self,
+        scope: PositionScope<'_>,
+        project: impl Fn(Option<&Position>) -> P,
+    ) -> Vec<LineNode<P>> {
+        let mut nodes = Vec::new();
+        let mut slots = HashMap::new();
+        self.game
+            .visit_positions(&self.rules, scope, |node, move_number, played, position| {
+                let parent = self.game.parent(node).map(|id| slots[&id]);
+                slots.insert(node, nodes.len());
+                nodes.push(LineNode {
                     node,
-                    move_number: self.game.move_number(node),
-                    mover: self.game.last_color(node),
-                    mv: self.game.last_move(node),
-                    key: position.as_ref().map(Position::key),
-                    position,
-                }
-            })
-            .collect()
+                    parent,
+                    move_number,
+                    mover: played.map(|p| p.0),
+                    mv: played.map(|p| p.1),
+                    key: position.map(Position::key),
+                    position: project(position),
+                });
+            });
+        nodes
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cached_states(&self) -> usize {
+        self.game.cached_states()
     }
 
     /// The next current-line move, skipping nodes without one as long as they leave the board as it
@@ -1304,6 +1360,27 @@ mod tests {
             assert!(s.redo());
             assert_eq!(s.current, scratch);
             assert!(!s.changed());
+        }
+    }
+
+    #[test]
+    fn changing_to_play_rebases_live_and_job_positions_and_undo_restores_the_key() {
+        let mut s = branches();
+        s.edit(SessionEdit::Play { mv: play(2, 2) }).unwrap();
+        let previous = s.position().unwrap();
+        assert_eq!(previous.to_move(), Color::White);
+        for color in [Color::Black, Color::White] {
+            s.edit(SessionEdit::SetToPlay { color }).unwrap();
+            let live = s.position().unwrap();
+            assert_eq!(live.to_move(), color);
+            assert_eq!(live.key() == previous.key(), color == Color::White);
+            for scope in [JobScope::Line, JobScope::AllBranches] {
+                let entries = s.job_nodes(scope);
+                let entry = entries.iter().find(|n| n.node == s.current).unwrap();
+                assert_eq!(entry.position.as_ref(), Some(&live));
+            }
+            assert!(s.undo());
+            assert_eq!(s.position(), Some(previous.clone()));
         }
     }
 

@@ -120,6 +120,7 @@ export function JobPanelContent({ onDone }: { onDone(): void }) {
   const options = (): JobOptions => {
     const first = Math.min(number(from, 1), Math.max(1, last));
     return {
+      scope: saved.scope,
       range:
         range === 'whole'
           ? { kind: 'whole' }

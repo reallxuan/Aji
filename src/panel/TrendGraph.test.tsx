@@ -30,6 +30,8 @@ function line(): TrendNode[] {
   return Array.from({ length: 101 }, (_, i) => {
     const plotted = i <= 40 || i === 42 || i >= 60;
     return {
+      node: i,
+      key: i.toString(16).padStart(16, '0'),
       moveNumber: i,
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move:
@@ -238,8 +240,8 @@ const job = (
   total: 20,
   boostDone: 0,
   boostTotal: 3,
-  working,
-  queued,
+  working: working === null ? null : working.toString(16).padStart(16, '0'),
+  queued: queued.map((i) => i.toString(16).padStart(16, '0')),
   etaSeconds: 20,
 });
 

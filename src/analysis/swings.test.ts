@@ -6,6 +6,8 @@ import { swings } from './swings';
 /** A main line whose move `n` lost `losses[n]` for its mover; Black plays the odd moves. */
 function line(losses: Record<number, Loss>, length = 12): TrendNode[] {
   return Array.from({ length }, (_, i) => ({
+    node: i,
+    key: i.toString(16).padStart(16, '0'),
     moveNumber: i,
     mover: i === 0 ? null : i % 2 ? 'black' : 'white',
     move: i === 0 ? null : { type: 'play', x: i, y: 3 },

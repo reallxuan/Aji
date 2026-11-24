@@ -294,6 +294,10 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     return result.reverse();
   }
 
+  function positionKey(i: number) {
+    return nodes[i].illegal ? null : (0x1000 + i).toString(16).padStart(16, '0');
+  }
+
   function snapshot(): GameSnapshot {
     const node = nodes[index];
     const last = nodes.length - 1;
@@ -330,7 +334,7 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
       atEnd: index === last,
       illegal: node.illegal,
       captures: node.captures,
-      positionKey: node.illegal ? null : (0x1000 + index).toString(16).padStart(16, '0'),
+      positionKey: positionKey(index),
       hasMoves: last > 0,
     });
   }
@@ -338,6 +342,8 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
   /** One node per main-line node; the backend fills in its cached stats, the fake has none. */
   function trend(): TrendNode[] {
     return nodes.map((node, i) => ({
+      node: i,
+      key: positionKey(i),
       moveNumber: i,
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move: node.lastMove,
@@ -353,7 +359,8 @@ export function createFakeGame(emit: (event: AppEvent) => void) {
     const next = snapshot();
     emit({ type: 'gameSnapshot', snapshot: next });
     if (withTree) emit({ type: 'gameTree', tree: tree() });
-    if (withTrend) emit({ type: 'gameTrend', revision: lineRevision, nodes: trend() });
+    if (withTrend)
+      emit({ type: 'gameTrend', reason: 'reset', revision: lineRevision, nodes: trend() });
     return { type: 'game', snapshot: next, warnings: withWarnings ? warnings : [] };
   }
 

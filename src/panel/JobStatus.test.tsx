@@ -18,8 +18,8 @@ const progress = (state: JobProgress['state'], extra: Partial<JobProgress> = {})
   total: 248,
   boostDone: 0,
   boostTotal: 0,
-  working: 160,
-  queued: [161],
+  working: '00000000000000a0',
+  queued: ['00000000000000a1'],
   etaSeconds: 110,
   ...extra,
 });

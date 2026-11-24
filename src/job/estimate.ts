@@ -3,6 +3,7 @@ import type { TrendNode } from '../transport/generated/TrendNode';
 
 /** The panel's choices before any are remembered (P2 M2 design 5.3). */
 export const DEFAULT_JOB_OPTIONS: JobOptions = {
+  scope: 'line',
   range: { kind: 'whole' },
   side: 'both',
   visits: 500,

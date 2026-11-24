@@ -141,6 +141,8 @@ describe('the scenarios’ fake game', () => {
     if (reply?.type !== 'trend') throw new Error('no trend');
     expect(reply.nodes).toHaveLength(243);
     expect(reply.nodes[0]).toEqual({
+      node: 0,
+      key: '0000000000001000',
       moveNumber: 0,
       mover: null,
       move: null,

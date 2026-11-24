@@ -117,9 +117,9 @@ pub enum Request {
     GameExport {
         options: ExportOptions,
     },
-    /// The cached result of every main-line node, for the trend graph.
+    /// The cached result of every selected-line node, for the trend graph.
     GameTrend,
-    /// Analyses the main line (P2 M2 design 5.3), replacing a running job.
+    /// Analyses the selected line or all kept branches, replacing a running job.
     JobStart {
         options: JobOptions,
     },
@@ -142,7 +142,7 @@ pub enum Request {
 pub enum CacheScope {
     /// The current position's.
     Position,
-    /// The main line's positions.
+    /// All kept positions in the record.
     Game,
     /// Every result, for every engine.
     All,
@@ -256,12 +256,14 @@ pub enum Response {
     Ok,
 }
 
-/// One main-line node in the trend graph (design 5.3). Several nodes can share a move number:
+/// One selected-line node in the trend graph (design 5.3). Several nodes can share a move number:
 /// setup and comment-only nodes carry no move.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TrendNode {
+    pub node: u32,
+    pub key: Option<PositionKey>,
     pub move_number: u32,
     /// Who played the node's move; `null` on a node without one.
     pub mover: Option<Color>,
@@ -274,7 +276,7 @@ pub struct TrendNode {
     pub loss: Option<Loss>,
 }
 
-/// A trend node whose result changed, by its index on the main line.
+/// A trend node whose result changed, by its index on the selected line.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -292,6 +294,17 @@ pub struct RunningEngine {
     /// `null` for a development engine.
     pub backend: Option<Backend>,
     pub network_name: String,
+}
+
+/// Why every node in the selected trend is being published again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TrendChange {
+    /// Another line of the same game, including edits to that line.
+    LineChanged,
+    /// A replacement game, effective rules change, or cleared analysis.
+    Reset,
 }
 
 /// A message the engine side pushes to the UI without being asked, tagged the same way.
@@ -324,9 +337,9 @@ pub enum AppEvent {
     GameTree {
         tree: GameTree,
     },
-    /// The current line's positions, or the engine's results, changed wholesale: a game was opened
-    /// or created, its rules changed, or the engine's files changed.
+    /// The full trend for the selected line.
     GameTrend {
+        reason: TrendChange,
         #[ts(type = "number")]
         revision: u64,
         nodes: Vec<TrendNode>,
@@ -684,6 +697,7 @@ mod tests {
     fn job_request_json_shapes() {
         use crate::job::{BoostOptions, JobOptions, JobRange, JobSide};
         let options = JobOptions {
+            scope: crate::job::JobScope::Line,
             range: JobRange::Moves { from: 3, to: 40 },
             side: JobSide::Black,
             visits: 500,
@@ -766,15 +780,15 @@ mod tests {
             total: 9,
             boost_done: 1,
             boost_total: 2,
-            working: Some(4),
-            queued: vec![5],
+            working: Some(PositionKey(4)),
+            queued: vec![PositionKey(5)],
             eta_seconds: Some(12),
         };
         assert_eq!(
             serde_json::to_value(AppEvent::JobProgress { progress }).unwrap(),
             json!({"type": "jobProgress", "progress": {"state": "boosting", "done": 9,
-                   "total": 9, "boostDone": 1, "boostTotal": 2, "working": 4,
-                   "queued": [5], "etaSeconds": 12}})
+                   "total": 9, "boostDone": 1, "boostTotal": 2, "working": "0000000000000004",
+                   "queued": ["0000000000000005"], "etaSeconds": 12}})
         );
         assert_eq!(
             serde_json::to_value(AppEvent::TrendNodes {
@@ -820,6 +834,8 @@ mod tests {
     #[test]
     fn trend_json_shapes() {
         let node = TrendNode {
+            node: 7,
+            key: Some(PositionKey(12)),
             move_number: 3,
             mover: Some(Color::White),
             mv: Some(Move::Pass),
@@ -830,7 +846,7 @@ mod tests {
             }),
             loss: None,
         };
-        let want = json!({"moveNumber": 3, "mover": "white", "move": {"type": "pass"},
+        let want = json!({"node": 7, "key": "000000000000000c", "moveNumber": 3, "mover": "white", "move": {"type": "pass"},
                           "stats": {"winrate": 0.25, "scoreLead": -1.5, "visits": 80},
                           "loss": null});
         assert_eq!(
@@ -843,11 +859,12 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(AppEvent::GameTrend {
+                reason: TrendChange::Reset,
                 revision: 4,
                 nodes: vec![node]
             })
             .unwrap(),
-            json!({"type": "gameTrend", "revision": 4, "nodes": [want]})
+            json!({"type": "gameTrend", "reason": "reset", "revision": 4, "nodes": [want]})
         );
     }
 
@@ -970,7 +987,7 @@ mod tests {
                        "defaultRules": {"kind": "japaneseKorean"}, "showCoordinates": false,
                        "perspective": "white", "showNextMove": false, "analyseOnOpen": true,
                        "cacheCapMb": 2048, "saveAnalysis": true,
-                       "jobOptions": {"range": {"kind": "whole"}, "side": "both",
+                       "jobOptions": {"scope": "line", "range": {"kind": "whole"}, "side": "both",
                            "visits": 500, "boost": {"on": true, "threshold": 10.0,
                            "visits": 3000}}}}),
                 Request::SettingsSet {
@@ -1188,7 +1205,7 @@ mod tests {
                    "defaultRules": {"kind": "chinese"}, "showCoordinates": true,
                    "perspective": "black", "showNextMove": true, "analyseOnOpen": false,
                    "cacheCapMb": 1024, "saveAnalysis": false,
-                   "jobOptions": {"range": {"kind": "whole"}, "side": "both", "visits": 500,
+                   "jobOptions": {"scope": "line", "range": {"kind": "whole"}, "side": "both", "visits": 500,
                        "boost": {"on": true, "threshold": 10.0, "visits": 3000}}}})
         );
         assert_eq!(

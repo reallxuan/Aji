@@ -73,9 +73,16 @@ struct NodeState {
     illegal: Option<Illegal>,
     move_number: u32,
     to_play: Color,
-    /// The latest node on the path that a move list cannot express (setup stones or an
-    /// illegal move), else the root.
+    /// The latest setup, illegal move or player override that a move list cannot express.
     base: NodeId,
+}
+
+/// Which attached positions to replay for a trend, a job, an export or a cache clear.
+#[derive(Clone, Copy)]
+pub enum PositionScope<'a> {
+    Line(&'a [NodeId]),
+    Kept,
+    All,
 }
 
 /// A game: the SGF nodes in an arena, with boards and positions derived along any path.
@@ -492,9 +499,7 @@ impl Game {
         };
 
         let move_number = parent.map_or(0, |p| p.move_number) + u32::from(played.is_some());
-        let to_play = if let Some(pl) = sgf.first("PL").and_then(color_of) {
-            pl
-        } else if let Some((color, _)) = played {
+        let natural_next = if let Some((color, _)) = played {
             color.opponent()
         } else if let Some(p) = parent {
             p.to_play
@@ -508,7 +513,8 @@ impl Game {
         } else {
             Color::Black
         };
-        let base = if setup || illegal.is_some() {
+        let to_play = sgf.first("PL").and_then(color_of).unwrap_or(natural_next);
+        let base = if setup || illegal.is_some() || to_play != natural_next {
             id
         } else {
             parent.map_or(id, |p| p.base)
@@ -686,8 +692,19 @@ impl Game {
         } else {
             self.transient_state(base)
         };
+        let mut position = self.base_position(&base_state, rules);
+        if position.initial_player.is_some()
+            && let Some(&(color, _)) = moves.first()
+        {
+            position.initial_player = Some(color);
+        }
+        position.moves = moves;
+        Some(position)
+    }
+
+    fn base_position(&self, state: &NodeState, rules: &AnalysisRules) -> Position {
         let n = usize::from(self.size.get());
-        let setup: Vec<(Color, Point)> = base_state
+        let setup: Vec<(Color, Point)> = state
             .board
             .stones()
             .iter()
@@ -702,22 +719,96 @@ impl Game {
                 })
             })
             .collect();
-        let plain_root = base == self.root()
+        let plain_root = state.base == self.root()
             && setup.is_empty()
-            && self.nodes[base].sgf.get("PL").is_none()
-            && base_state.mv.is_none();
-        // The first move's colour when there is one (a file may continue with either colour
-        // after setup stones), else whoever is to play at the base.
-        let initial_player = if plain_root {
-            None
-        } else {
-            Some(moves.first().map_or(base_state.to_play, |&(c, _)| c))
-        };
+            && state.to_play == Color::Black
+            && state.mv.is_none();
         let mut position = Position::empty(self.size, rules.kata_rules(), rules.komi());
         position.setup = setup;
-        position.moves = moves;
-        position.initial_player = initial_player;
-        Some(position)
+        position.initial_player = (!plain_root).then_some(state.to_play);
+        position
+    }
+
+    /// Replays the requested positions in depth-first order.
+    /// The visitor borrows the mutable move prefix. Forks save a board and a bookmark
+    /// into that prefix. Setup, an illegal move or a change of player starts a new base.
+    pub fn visit_positions(
+        &self,
+        rules: &AnalysisRules,
+        scope: PositionScope<'_>,
+        mut visit: impl FnMut(NodeId, u32, Option<(Color, Move)>, Option<&Position>),
+    ) {
+        let mut at = self.root;
+        let mut state = self.compute(at, None);
+        let mut bases: Vec<Position> = Vec::new();
+        let mut forks = Vec::new();
+        let mut index = 0;
+        loop {
+            if state.base == at {
+                let saved = forks.last().map_or(0, |(_, _, depth, _, _)| *depth);
+                bases.truncate(saved);
+                bases.push(self.base_position(&state, rules));
+            } else if let Some(played) = state.mv {
+                let position = bases.last_mut().expect("root has a base");
+                if position.moves.is_empty() && position.initial_player.is_some() {
+                    position.initial_player = Some(played.0);
+                }
+                position.moves.push(played);
+            }
+            let position = bases.last().expect("root has a base");
+            visit(
+                at,
+                state.move_number,
+                state.mv,
+                state.illegal.is_none().then_some(position),
+            );
+
+            index += 1;
+            let mut children = self
+                .children(at)
+                .iter()
+                .copied()
+                .filter(move |&child| match scope {
+                    PositionScope::Line(ids) => ids.get(index) == Some(&child),
+                    PositionScope::Kept => self.is_attached(child) && !self.is_tryout(child),
+                    PositionScope::All => self.is_attached(child),
+                })
+                .peekable();
+            if let Some(child) = children.next() {
+                let next = self.compute(child, Some(&state));
+                if children.peek().is_some() {
+                    forks.push((
+                        children,
+                        state,
+                        bases.len(),
+                        position.moves.len(),
+                        position.initial_player,
+                    ));
+                }
+                at = child;
+                state = next;
+            } else if let Some((mut siblings, parent, depth, len, player)) = forks.pop() {
+                bases.truncate(depth);
+                let position = bases.last_mut().expect("fork has a base");
+                position.moves.truncate(len);
+                position.initial_player = player;
+                at = siblings.next().expect("fork has a remaining child");
+                state = self.compute(at, Some(&parent));
+                if siblings.peek().is_some() {
+                    forks.push((siblings, parent, depth, len, player));
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Number of boards retained by navigation.
+    pub fn cached_states(&self) -> usize {
+        self.states
+            .iter()
+            .filter(|state| state.get().is_some())
+            .count()
     }
 
     /// The board after `moves` from `node`, colours alternating from the player to move there.
@@ -952,6 +1043,27 @@ mod tests {
     }
 
     #[test]
+    fn replayed_tree_positions_match_individual_queries_across_rebases() {
+        let g = game(
+            "(;SZ[9]AB[aa]PL[W](;B[bb](;W[bb];W[])(;AB[ee]B[dd];W[tt]))(;C[quiet](;W[cc])(;B[bad];W[ff])))",
+        );
+        let mut visited = Vec::new();
+        g.visit_positions(
+            &AnalysisRules::Chinese,
+            PositionScope::Kept,
+            |id, _, _, position| {
+                assert_eq!(
+                    position,
+                    g.position_at_uncached(id, &AnalysisRules::Chinese).as_ref()
+                );
+                visited.push(id);
+            },
+        );
+        assert_eq!(visited, (0..10).collect::<Vec<_>>());
+        assert_eq!(g.cached_states(), 0);
+    }
+
+    #[test]
     fn reading_line_moves_keeps_distant_nodes_uncached() {
         let g = game(&format!(
             "(;AB[aa]{};AB[aa];B[bad];W[tt])",
@@ -1169,6 +1281,16 @@ mod tests {
         assert!(p.setup.is_empty());
         assert_eq!(p.rules, crate::Rules::Japanese.into());
         assert_eq!(p.komi.points(), 6.5);
+    }
+
+    #[test]
+    fn a_redundant_black_label_on_an_empty_root_keeps_its_position_key() {
+        let plain = game("(;SZ[9];B[dd])");
+        let labelled = game("(;SZ[9]PL[B];B[dd])");
+        for id in [0, 1] {
+            let key = |g: &Game| g.position_at(id, &AnalysisRules::Chinese).unwrap().key();
+            assert_eq!(key(&plain), key(&labelled));
+        }
     }
 
     #[test]

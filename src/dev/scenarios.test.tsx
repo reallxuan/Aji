@@ -190,7 +190,17 @@ describe('development scenarios', () => {
       await transport.request({ type: 'jobStop' });
       const last = events.flatMap((e) => (e.type === 'jobProgress' ? [e.progress] : [])).at(-1);
       expect(last?.state).toBe('stopped');
+      await transport.request({ type: 'cacheClear', scope: 'position' });
+      const one = events.at(-1);
+      expect(one).toMatchObject({ type: 'gameTrend', reason: 'reset' });
+      if (one?.type !== 'gameTrend') throw new Error('no trend');
+      expect(one.nodes[0].stats).toBeNull();
+      expect(one.nodes[1].stats).not.toBeNull();
       await transport.request({ type: 'cacheClear', scope: 'game' });
+      const cleared = events.at(-1);
+      expect(cleared).toMatchObject({ type: 'gameTrend', reason: 'reset' });
+      if (cleared?.type !== 'gameTrend') throw new Error('no trend');
+      expect(cleared.nodes.every((node) => node.stats === null)).toBe(true);
       await expect(transport.request({ type: 'cacheStats' })).resolves.toMatchObject({
         type: 'cacheStats',
         persistent: true,

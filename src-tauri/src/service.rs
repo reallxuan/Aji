@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use aji_core::game::{AnalysisRules, estimate, final_score, suggested_dead};
+use aji_core::game::{AnalysisRules, PositionScope, estimate, final_score, suggested_dead};
 use aji_core::{Move, ScoringRule};
 use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles, Row};
 use aji_manager::Setup;
@@ -18,8 +18,8 @@ use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::game::{GameSession, OpenError, Refusal};
 use crate::protocol::{
-    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, ExportScope, OsKind, ProtocolError,
-    Request, Response, RunningEngine, ScoreMode, ScoreView,
+    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, OsKind, ProtocolError, Request,
+    Response, RunningEngine, ScoreMode, ScoreView, TrendChange,
 };
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
@@ -85,8 +85,8 @@ pub fn running_engine(settings: &Settings, installed: &Installed) -> Option<Runn
 }
 
 /// Pushes the session's trend to every client. Called with the session locked.
-async fn push_trend(ctx: &AppContext, session: &GameSession) {
-    follow::trend_of(ctx, session, true).await;
+async fn push_trend(ctx: &AppContext, session: &GameSession, reason: TrendChange) {
+    follow::trend_of(ctx, session, Some(reason)).await;
 }
 
 /// Where pushed events go: the Tauri webview now, a WebSocket in Phase 3.
@@ -230,7 +230,7 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::GameTree => return Ok(Response::GameTree(ctx.game.lock().await.tree())),
         Request::GameTrend => {
             let session = ctx.game.lock().await;
-            let (revision, nodes) = follow::trend_of(ctx, &session, false).await;
+            let (revision, nodes) = follow::trend_of(ctx, &session, None).await;
             return Ok(Response::Trend { revision, nodes });
         }
         Request::GamePreview { moves } => return Ok(game_preview(ctx, &moves).await),
@@ -244,6 +244,7 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::GameExport { options } => return game_export(ctx, options).await,
         Request::JobStart { options } => return follow::job_start(ctx, options).await,
         Request::JobStop => {
+            let _session = ctx.game.lock().await;
             follow::stop_job(ctx).await;
             Ok(Response::Ok)
         }
@@ -411,7 +412,7 @@ async fn game_new(ctx: &AppContext, size: u8) -> Result<Response, ProtocolError>
     ctx.events.emit(AppEvent::GameTree {
         tree: session.tree(),
     });
-    push_trend(ctx, &session).await;
+    push_trend(ctx, &session, TrendChange::Reset).await;
     Ok(reply)
 }
 
@@ -461,7 +462,7 @@ async fn game_open(
     ctx.events.emit(AppEvent::GameTree {
         tree: session.tree(),
     });
-    push_trend(ctx, &session).await;
+    push_trend(ctx, &session, TrendChange::Reset).await;
     if ui.analyse_on_open
         && let Err(e) = follow::start_on(ctx, &session, ui.job_options).await
     {
@@ -481,7 +482,8 @@ async fn update_game(
     if !update(&mut session)? {
         return Ok(unchanged(&session));
     }
-    if !rules.same_effect(&session.rules()) {
+    let rules_changed = !rules.same_effect(&session.rules());
+    if rules_changed {
         follow::stop_job(ctx).await;
     }
     let line_changed = session.line_revision != line;
@@ -498,7 +500,12 @@ async fn update_game(
         });
     }
     if line_changed {
-        push_trend(ctx, &session).await;
+        let reason = if rules_changed {
+            TrendChange::Reset
+        } else {
+            TrendChange::LineChanged
+        };
+        push_trend(ctx, &session, reason).await;
     }
     Ok(reply)
 }
@@ -515,7 +522,7 @@ async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, Pr
             follow::stop_job(ctx).await;
             ClearScope::Keys(
                 session
-                    .analysis_keys(ExportScope::Game)
+                    .analysis_keys(PositionScope::All)
                     .into_iter()
                     .map(|(_, key, _)| key)
                     .collect(),
@@ -527,7 +534,7 @@ async fn cache_clear(ctx: &AppContext, scope: CacheScope) -> Result<Response, Pr
         }
     };
     ctx.engine.clear(cleared).await;
-    push_trend(ctx, &session).await;
+    push_trend(ctx, &session, TrendChange::Reset).await;
     ctx.events.emit(AppEvent::CacheStatus {
         status: ctx.engine.cache_stats().await,
     });
@@ -599,7 +606,7 @@ async fn game_export(ctx: &AppContext, options: ExportOptions) -> Result<Respons
     let session = ctx.game.lock().await;
     let mut lz = HashMap::new();
     if !options.clean && ui_settings(ctx).save_analysis {
-        let nodes = session.analysis_keys(options.scope);
+        let nodes = session.analysis_keys(session.export_scope(options.scope));
         let keys = nodes.iter().map(|(_, key, _)| *key).collect();
         let updates = ctx.engine.updates(keys).await;
         for ((id, _, player), update) in nodes.into_iter().zip(updates) {
@@ -1849,6 +1856,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn flatten_checks_the_source_roots_analysis_before_export_and_reopen() {
+        let lz = "KataGo 51.3 800 -0.5 15.0\nmove D4 visits 700 winrate 4870 prior 2010 scoreMean -0.5 pv D4";
+        let input = format!("(;SZ[9]AB[aa]PL[W]LZOP[{lz}]LZOP2[opaque];W[bb])");
+        for write_analysis in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = ctx_in(dir.path(), None);
+            open(&ctx, "flatten.sgf", input.as_bytes()).await.unwrap();
+            save_analysis(&ctx, write_analysis).await;
+            let flatten = Request::GameEdit {
+                edit: SessionEdit::Flatten,
+            };
+            // Rebuilding an identical setup root preserves its analysis.
+            let unchanged = snap(handle(&ctx, flatten.clone()).await).0;
+            assert!(export_text(&ctx).await.contains("LZOP[KataGo "));
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            navigate(&ctx, NavTarget::Last).await;
+            let changed = snap(handle(&ctx, flatten).await).0;
+            assert_ne!(changed.position_key, unchanged.position_key);
+            let text = export_text(&ctx).await;
+            assert!(text.contains("LZOP2[opaque]"));
+            let again = ctx_in(&dir.path().join("reopen"), None);
+            let reopened = snap(open(&again, "copy.sgf", text.as_bytes()).await).0;
+            assert!(
+                again
+                    .engine
+                    .updates(vec![reopened.position_key.unwrap()])
+                    .await[0]
+                    .is_none()
+            );
+            assert!(!text.contains("LZOP["));
+            handle(&ctx, Request::GameUndo).await.unwrap();
+            save_analysis(&ctx, false).await;
+            assert!(export_text(&ctx).await.contains(lz));
+        }
+    }
+
+    #[tokio::test]
+    async fn clearing_the_game_also_clears_attached_tryout_positions() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        for edit in [
+            SessionEdit::TryoutStart,
+            SessionEdit::Play { mv: Move::Pass },
+        ] {
+            handle(&ctx, Request::GameEdit { edit }).await.unwrap();
+        }
+        let scratch = ctx.game.lock().await.position().unwrap().key();
+        ctx.engine.import(vec![kept(scratch, 0.61, None)]).await;
+        assert!(ctx.engine.summaries(vec![scratch]).await[0].is_some());
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(ctx.engine.summaries(vec![scratch]).await[0].is_none());
+    }
+
+    #[tokio::test]
     async fn edited_positions_do_not_reimport_stale_analysis_and_undo_restores_it() {
         let lz = "KataGo 51.3 800 -0.5 15.0\nmove D4 visits 700 winrate 4870 prior 2010 scoreMean -0.5 pv D4";
         let original = format!("(;SZ[9]RU[Chinese]LZOP[{lz}](;B[bb]LZ[opaque])(;B[dd]LZ[{lz}]))");
@@ -2814,8 +2882,8 @@ mod tests {
     async fn started(ctx: &AppContext) -> u64 {
         let session = ctx.game.lock().await;
         let plan = ctx.follow.lock().unwrap().flow.start(
-            session.line(),
-            session.line_index(),
+            session.job_nodes(crate::job::JobScope::Line),
+            session.position().map(|p| p.key()),
             JobOptions::default(),
         );
         plan.id
@@ -2831,6 +2899,271 @@ mod tests {
             working: None,
             queued: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn trend_follows_the_new_line_after_entering_a_variation() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "fork.sgf", b"(;SZ[9];B[aa](;W[bb];B[cc])(;W[dd]))")
+            .await
+            .unwrap();
+        let old = line_keys(&ctx).await;
+        let switched = navigate(&ctx, NavTarget::Node(4)).await;
+        let key = switched.position_key.unwrap();
+        assert!(follow::stored(&ctx, key, trend_stats(0.7)));
+        assert!(follow::stored(&ctx, old[1], trend_stats(0.5)));
+        assert!(!follow::stored(&ctx, old[2], trend_stats(0.1)));
+        follow::flush(&ctx).await;
+        let (revision, changed) = trend_node_events(&recorded).pop().unwrap();
+        assert_eq!(revision, switched.line_revision);
+        assert!((changed.last().unwrap().loss.unwrap().winrate.abs() - 20.0).abs() < 0.001);
+        let events = recorded.0.lock().unwrap();
+        let nodes = events
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                AppEvent::GameTrend { nodes, .. } => Some(nodes),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(serde_json::to_value(nodes).unwrap()[2]["node"], 4);
+        assert_eq!(
+            serde_json::to_value(nodes).unwrap()[2]["key"],
+            key.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn streamed_result_during_line_rebuild_reaches_the_new_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "fork.sgf", b"(;SZ[9];B[aa](;W[bb])(;W[dd]))")
+            .await
+            .unwrap();
+        let mut session = ctx.game.lock().await;
+        assert!(session.navigate(NavTarget::Node(3)));
+        let key = session.position().unwrap().key();
+        ctx.engine.import(vec![kept(key, 0.7, None)]).await;
+        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
+        send.send(aji_engine::EngineEvent::Stored {
+            key,
+            stats: trend_stats(0.7),
+        })
+        .unwrap();
+        drop(send);
+        let mut receiver = Box::pin(follow::follow_engine(ctx.clone(), recv));
+        // Poll the real event handler while the session is switching lines.
+        let finished = tokio::time::timeout(std::time::Duration::from_millis(1), &mut receiver)
+            .await
+            .is_ok();
+        let revision = session.line_revision;
+        push_trend(&ctx, &session, TrendChange::LineChanged).await;
+        drop(session);
+        if !finished {
+            receiver.await;
+        }
+        follow::flush(&ctx).await;
+        let (at, updates) = trend_node_events(&recorded).pop().unwrap();
+        assert_eq!(at, revision);
+        assert_eq!(updates.last().unwrap().stats, Some(trend_stats(0.7)));
+    }
+
+    #[tokio::test]
+    async fn delayed_stored_events_do_not_restore_cleared_stats_or_losses() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut ctx, recorded) = nine(dir.path()).await;
+        let keys = line_keys(&ctx).await;
+        let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
+        let position = ctx.game.lock().await.position().unwrap();
+        ctx.engine = Engine::spawn(
+            None,
+            position,
+            aji_engine::EngineOptions::default(),
+            forward_engine_events(ctx.events.clone(), send),
+        );
+        ctx.engine
+            .import(vec![kept(keys[0], 0.5, None), kept(keys[1], 0.7, None)])
+            .await;
+        recv.close();
+        assert_eq!(recv.len(), 2);
+
+        // The engine's two stored notifications are already queued when the clear runs.
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::Game,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(ctx.engine.summaries(keys[..2].to_vec()).await, [None, None]);
+        follow::follow_engine(ctx.clone(), recv).await;
+        follow::flush(&ctx).await;
+        assert!(
+            trend_node_events(&recorded)
+                .iter()
+                .flat_map(|(_, nodes)| nodes)
+                .all(|node| node.stats.is_none() && node.loss.is_none())
+        );
+    }
+
+    #[tokio::test]
+    async fn private_trend_read_preserves_other_clients_pending_updates() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let key = line_keys(&ctx).await[1];
+        ctx.engine.import(vec![kept(key, 0.7, None)]).await;
+        assert!(follow::stored(&ctx, key, trend_stats(0.7)));
+        let Ok(Response::Trend { revision, nodes }) = handle(&ctx, Request::GameTrend).await else {
+            panic!("expected trend")
+        };
+        assert_eq!(nodes[1].stats, Some(trend_stats(0.7)));
+        follow::flush(&ctx).await;
+        assert!(trend_node_events(&recorded).iter().any(|(at, nodes)| {
+            *at == revision
+                && nodes
+                    .iter()
+                    .any(|node| node.line_index == 1 && node.stats == Some(trend_stats(0.7)))
+        }));
+    }
+
+    #[tokio::test]
+    async fn trend_reason_distinguishes_navigation_from_resets() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[aa])(;B[bb]))")
+            .await
+            .unwrap();
+        navigate(&ctx, NavTarget::Node(2)).await;
+        handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &ctx,
+            Request::CacheClear {
+                scope: CacheScope::All,
+            },
+        )
+        .await
+        .unwrap();
+        handle(&ctx, Request::GameNew { size: 9 }).await.unwrap();
+        let reasons: Vec<_> = recorded
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|event| {
+                let value = serde_json::to_value(event).unwrap();
+                (value["type"] == "gameTrend").then(|| value["reason"].clone())
+            })
+            .collect();
+        assert_eq!(
+            reasons,
+            ["reset", "reset", "lineChanged", "reset", "reset", "reset"]
+        );
+    }
+
+    #[tokio::test]
+    async fn edits_do_not_stop_the_job_but_rules_do() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _) = nine(dir.path()).await;
+        let id = started(&ctx).await;
+        let original = line_keys(&ctx).await;
+        for edit in [
+            SessionEdit::DeleteFrom { node: 2 },
+            SessionEdit::Play { mv: Move::Pass },
+        ] {
+            handle(&ctx, Request::GameEdit { edit }).await.unwrap();
+            let follow = follow::lock(&ctx);
+            assert_eq!(follow.flow.plan_id(), Some(id));
+            assert_eq!(
+                follow
+                    .flow
+                    .line()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|n| n.key)
+                    .collect::<Vec<_>>(),
+                original
+            );
+        }
+        handle(
+            &ctx,
+            Request::GameEdit {
+                edit: SessionEdit::SetRules {
+                    rules: Some(AnalysisRules::JapaneseKorean),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!follow::lock(&ctx).flow.is_running());
+    }
+
+    #[tokio::test]
+    async fn a_rules_change_wins_over_a_finishing_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, recorded) = nine(dir.path()).await;
+        let id = started(&ctx).await;
+        let mut session = ctx.game.lock().await;
+        session
+            .edit(SessionEdit::SetRules {
+                rules: Some(AnalysisRules::JapaneseKorean),
+            })
+            .unwrap();
+        let mut finishing = Box::pin(follow::on_job(&ctx, status(id, JobRun::Done, 5, 5)));
+        // Deliver the final status in the interval between applying the edit and stopping its job.
+        let finished = tokio::time::timeout(std::time::Duration::from_millis(10), &mut finishing)
+            .await
+            .is_ok();
+        follow::stop_job(&ctx).await;
+        drop(session);
+        if !finished {
+            finishing.await;
+        }
+        let states: Vec<_> = progress_events(&recorded)
+            .into_iter()
+            .map(|progress| progress.state)
+            .collect();
+        assert_eq!(states, [JobState::Stopped]);
+    }
+
+    #[tokio::test]
+    async fn long_line_service_open_keeps_trend_and_boards_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        // A real 20 MiB record with a long selected line at the root and 500 variations.
+        let mut sgf = String::from("(;SZ[19]");
+        let comment = "x".repeat(2080);
+        for _ in 0..5000 {
+            for color in ["B", "W"] {
+                sgf.push(';');
+                sgf.push_str(color);
+                sgf.push_str("[]C[");
+                sgf.push_str(&comment);
+                sgf.push(']');
+            }
+        }
+        sgf.push_str(&"(;B[aa])".repeat(499));
+        sgf.push_str("(;B[bb]C[");
+        sgf.extend(std::iter::repeat_n(
+            'y',
+            crate::game::MAX_SGF_BYTES - sgf.len() - 3,
+        ));
+        sgf.push_str("]))");
+        assert_eq!(sgf.len(), 20 * 1024 * 1024);
+        let reply = open(&ctx, "long.sgf", sgf.as_bytes()).await.unwrap();
+        assert!(matches!(reply, Response::Game { snapshot, .. } if snapshot.at_start));
+        assert_eq!(follow::trend_length(&ctx), 10_002);
+        assert!(ctx.game.lock().await.cached_states() <= 1 + 4096);
     }
 
     #[tokio::test]
@@ -3181,6 +3514,7 @@ mod tests {
             |_| {},
         );
         let options = JobOptions {
+            scope: crate::job::JobScope::AllBranches,
             side: crate::job::JobSide::Black,
             visits: 200,
             ..JobOptions::default()
@@ -3199,8 +3533,18 @@ mod tests {
             .await
             .unwrap();
         open(&ctx, "nine.sgf", NINE.as_bytes()).await.unwrap();
-        let running = ctx.follow.lock().unwrap().flow.options();
-        assert_eq!(running, Some(options));
+        assert_eq!(follow::lock(&ctx).flow.options(), Some(options));
+        open(&ctx, "branches.sgf", b"(;SZ[9](;B[aa])(;B[bb]))")
+            .await
+            .unwrap();
+        let ids: Vec<_> = follow::lock(&ctx)
+            .flow
+            .line()
+            .unwrap()
+            .iter()
+            .map(|node| node.node)
+            .collect();
+        assert_eq!(ids, [0, 1, 2]);
         ctx.engine.shutdown().await;
     }
 

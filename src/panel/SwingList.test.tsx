@@ -27,6 +27,8 @@ function line(losses: Record<number, Loss> = SWINGS, analysedTo = 12): TrendNode
   return Array.from({ length: 12 }, (_, i) => {
     const analysed = i < analysedTo;
     return {
+      node: i,
+      key: i.toString(16).padStart(16, '0'),
       moveNumber: i,
       mover: i === 0 ? null : i % 2 ? 'black' : 'white',
       move: i === 0 ? null : { type: 'play', x: i, y: 3 },

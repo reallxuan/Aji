@@ -62,6 +62,7 @@ function mount(
       cacheCapMb: 1024,
       saveAnalysis: false,
       jobOptions: {
+        scope: 'line',
         range: { kind: 'whole' },
         side: 'both',
         visits: 500,
@@ -151,7 +152,7 @@ const job = (state: JobProgress['state']): JobProgress => ({
   total: 248,
   boostDone: 0,
   boostTotal: 0,
-  working: 200,
+  working: '00000000000000c8',
   queued: [],
   etaSeconds: 60,
 });

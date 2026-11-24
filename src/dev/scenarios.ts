@@ -429,6 +429,7 @@ export function scenarioTransport(
     cacheCapMb: 1024,
     saveAnalysis: false,
     jobOptions: {
+      scope: 'line',
       range: { kind: 'whole' },
       side: 'both',
       visits: 500,
@@ -446,7 +447,7 @@ export function scenarioTransport(
   transport.unhandled = unhandled;
   const game = createFakeGame((event) => {
     // A new game or an effective rules change replaces the linear scenario's trend.
-    if (event.type === 'gameTrend') {
+    if (event.type === 'gameTrend' && event.reason === 'reset') {
       stopFakeJob();
       results.clear();
     }
@@ -461,11 +462,15 @@ export function scenarioTransport(
     if (reply?.type !== 'trend') throw new Error('the fake game has no trend');
     return reply;
   };
+  const analysedTrend = () => {
+    const trend = trendOf();
+    return { ...trend, nodes: trend.nodes.map((node, i) => ({ ...node, ...results.get(i) })) };
+  };
   const startFakeJob = (options: UiSettings['jobOptions']) => {
     fakeJob?.stop();
     const { revision, nodes } = trendOf();
     fakeJob = playFakeJob({
-      count: nodes.length,
+      keys: nodes.map((node) => node.key),
       options,
       revision,
       stepMs: Math.max(10, tick / 5),
@@ -799,12 +804,19 @@ export function scenarioTransport(
       case 'jobStop':
         stopFakeJob();
         return { type: 'ok' };
-      case 'cacheClear':
-        if (request.scope !== 'position') {
+      case 'cacheClear': {
+        if (request.scope === 'position') {
+          const reply = game({ type: 'gameSnapshot' });
+          if (reply?.type !== 'game' || reply.snapshot.positionKey === null) return { type: 'ok' };
+          results.delete(reply.snapshot.lineIndex);
+        } else {
           stopFakeJob();
           results.clear();
         }
+        const { revision, nodes } = analysedTrend();
+        transport.emit({ type: 'gameTrend', reason: 'reset', revision, nodes });
         return { type: 'ok' };
+      }
       case 'cacheStats':
         return {
           type: 'cacheStats',
@@ -819,13 +831,8 @@ export function scenarioTransport(
           throw new TransportError('scoreUnavailable', 'the scenarios have no ownership');
         return { type: 'score', ...finalCount(reply.snapshot, request.mode.dead) };
       }
-      case 'gameTrend': {
-        const trend = trendOf();
-        return {
-          ...trend,
-          nodes: trend.nodes.map((node, i) => ({ ...node, ...results.get(i) })),
-        };
-      }
+      case 'gameTrend':
+        return analysedTrend();
       default: {
         const answer = game(request);
         if (answer) return answer;

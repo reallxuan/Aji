@@ -40,27 +40,28 @@ export interface FakeJob {
  * `onResult` hears every result, for the scenario's trend.
  */
 export function playFakeJob({
-  count,
+  keys,
   options,
   revision,
   stepMs,
   emit,
   onResult,
 }: {
-  count: number;
+  keys: (string | null)[];
   options: JobOptions;
   revision: number;
   stepMs: number;
   emit: (event: AppEvent) => void;
   onResult: (lineIndex: number, result: FakeResult) => void;
 }): FakeJob {
+  const count = keys.length;
   const [from, to] =
     options.range.kind === 'whole' ? [0, count - 1] : [options.range.from - 1, options.range.to];
   const inRange = (i: number) => i >= from && i <= Math.min(to, count - 1);
   // Black is to move at even indexes.
   const sideOk = (i: number) =>
     options.side === 'both' || (options.side === 'black') === (i % 2 === 0);
-  const first = [...Array(count).keys()].filter((i) => inRange(i) && sideOk(i));
+  const first = [...Array(count).keys()].filter((i) => keys[i] !== null && inRange(i) && sideOk(i));
   let boost: number[] = [];
   let pass: 'first' | 'boost' = 'first';
   let at = 0;
@@ -75,8 +76,8 @@ export function playFakeJob({
       total: first.length,
       boostDone: pass === 'boost' ? at : 0,
       boostTotal: boost.length,
-      working: queue[at] ?? null,
-      queued: queue.slice(at + 1),
+      working: keys[queue[at]] ?? null,
+      queued: queue.slice(at + 1).flatMap((i) => keys[i] ?? []),
       etaSeconds: state === 'done' ? null : Math.round((left * stepMs) / 1000),
     };
   };
