@@ -31,6 +31,11 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   fileNotSgf: true,
   fileMissing: true,
   scoreUnavailable: true,
+  engineProfileCurrent: true,
+  engineNoSuchProfile: true,
+  engineDevOverride: true,
+  engineOwnFile: true,
+  engineConsoleRefused: true,
 };
 
 const FAILURE_CODES: Record<FailureCode, true> = {

@@ -7,6 +7,7 @@
 
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
 import { finalCount } from './finalCount';
+import { createFakeConsole, createFakeProfiles, PICKED } from './fakeEngines';
 import { createFakeGame, fakeAnalysis } from './fakeGame';
 import { fakeResult, playFakeJob, type FakeJob } from './fakeJob';
 import type { ActiveSummary } from '../transport/generated/ActiveSummary';
@@ -418,6 +419,7 @@ export function scenarioTransport(
   let hardware = script.hardware(false);
   let engine: EngineState = script.engine;
   let active = script.active;
+  let unusedBytes = active ? 1.3 * GiB : 0;
   let settings: UiSettings = {
     language: 'system',
     theme: 'system',
@@ -447,6 +449,19 @@ export function scenarioTransport(
 
   const transport = createFakeTransport((request) => handle(request)) as ScenarioTransport;
   transport.unhandled = unhandled;
+  const emitEvent = transport.emit;
+  transport.emit = (event) => {
+    emitEvent(event);
+    if (event.type === 'analysisUpdate') fakeConsole.analysed(event.analysis);
+  };
+  const profiles = createFakeProfiles(active);
+  const fakeConsole = createFakeConsole(
+    (event) => emitEvent(event),
+    () =>
+      engine.state !== 'notConfigured' && engine.state !== 'stopped' && engine.state !== 'crashed',
+  );
+  if (active)
+    fakeConsole.started(`/Applications/Aji.app/engines/${active.engine}/katago`, active.network);
   const game = createFakeGame((event) => {
     if (event.type === 'gameTrend') {
       if (event.reason === 'reset') {
@@ -461,7 +476,14 @@ export function scenarioTransport(
     }
   });
 
-  const results = new Map<string, TrendStats>();
+  // Results per profile, as the cache keys them by engine identity (P2 M4 design 6.2).
+  const resultsByProfile = new Map<string, Map<string, TrendStats>>();
+  const resultsFor = (id: string | undefined) => {
+    const key = id ?? '';
+    if (!resultsByProfile.has(key)) resultsByProfile.set(key, new Map());
+    return resultsByProfile.get(key)!;
+  };
+  let results = resultsFor(profiles.current()?.id);
   let fakeJob: FakeJob | null = null;
   let jobSearching = false;
   const trendOf = () => {
@@ -772,6 +794,27 @@ export function scenarioTransport(
     timer = setTimeout(step, tick);
   }
 
+  /** As the service does on a switch: stop a job, restart KataGo, and reset the trend. */
+  function switchedProfile() {
+    if (fakeJob) {
+      stopFakeJob();
+      jobSearching = false;
+    }
+    const current = profiles.current();
+    results = resultsFor(current?.id);
+    feed?.clear();
+    if (current)
+      fakeConsole.started(
+        current.source.kind === 'own'
+          ? current.source.katago
+          : `/Applications/Aji.app/engines/${current.source.engine}/katago`,
+        current.source.kind === 'own' ? current.source.model : current.source.network,
+      );
+    startEngine();
+    const { revision, nodes } = analysedTrend();
+    transport.emit({ type: 'gameTrend', reason: 'reset', revision, nodes });
+  }
+
   function handle(request: Request): Response {
     switch (request.type) {
       case 'appInfo':
@@ -788,7 +831,7 @@ export function scenarioTransport(
           position: '0000000000000000',
           analysis: null,
           rejected: null,
-          running: active ? { backend: active.backend, networkName: active.networkName } : null,
+          running: profiles.running(),
         };
       case 'engineRestart':
         if (!active) throw new TransportError('engineNotConfigured', 'no engine');
@@ -859,10 +902,55 @@ export function scenarioTransport(
           type: 'setupImportNetwork',
           network: { id: 'imported-0123456789abcdef', name: 'my-network', sizeBytes: 98_000_000 },
         };
-      case 'setupInstalled':
-        return { type: 'setupInstalled', active, unusedBytes: active ? 1.3 * GiB : 0 };
-      case 'setupRemoveUnused':
-        return { type: 'setupRemoved', freedBytes: 1.3 * GiB };
+      case 'setupInstalled': {
+        // Like the record: the current managed profile is the active set, an own one has none.
+        const current = profiles.current();
+        const summary =
+          current?.source.kind === 'managed'
+            ? {
+                engine: current.source.engine,
+                version: current.source.version,
+                backend: current.source.backend,
+                network: current.source.network,
+                networkName: current.source.networkName,
+                threads: current.source.threads,
+                visitsPerSecond: current.source.visitsPerSecond,
+              }
+            : null;
+        return { type: 'setupInstalled', active: active && summary, unusedBytes };
+      }
+      case 'setupRemoveUnused': {
+        const freedBytes = unusedBytes;
+        unusedBytes = 0;
+        return { type: 'setupRemoved', freedBytes };
+      }
+      case 'setupPickFile':
+        return { type: 'setupPickFile', path: PICKED[request.purpose] };
+      case 'engineProfiles':
+        return { type: 'engineProfiles', profiles: profiles.list(), devOverride: false };
+      case 'engineProfileSwitch':
+        profiles.switchTo(request.id);
+        switchedProfile();
+        return { type: 'ok' };
+      case 'engineProfileRename':
+        profiles.rename(request.id, request.name);
+        return { type: 'ok' };
+      case 'engineProfileRemove':
+        profiles.remove(request.id);
+        // Its network, used by no other profile, is now unused.
+        unusedBytes += 0.8 * GiB;
+        return { type: 'ok' };
+      case 'engineProfileAddOwn':
+        profiles.addOwn(request);
+        switchedProfile();
+        return { type: 'engineProfiles', profiles: profiles.list(), devOverride: false };
+      case 'engineConsoleOpen':
+        fakeConsole.setOpen(request.open);
+        return { type: 'ok' };
+      case 'engineConsoleLines':
+        return { type: 'engineConsoleLines', lines: fakeConsole.linesAfter(request.after) };
+      case 'engineConsoleSend':
+        return { type: 'engineConsoleSent', id: fakeConsole.send(request.query) };
       case 'settingsGet':
         return { type: 'settings', settings };
       case 'settingsSet':

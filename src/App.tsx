@@ -6,6 +6,8 @@ import { usePanelStore } from './app/panelStore';
 import { useKeyDispatcher } from './commands/useKeyDispatcher';
 import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
+import { useConsoleSync } from './engine/consoleStore';
+import { useProfileSync } from './engine/profileStore';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { LayoutFrame } from './layout/LayoutFrame';
@@ -30,6 +32,8 @@ export default function App() {
   const { ready } = useGameSync();
   useTrendSync();
   useJobSync();
+  useProfileSync();
+  useConsoleSync();
   useCacheSync();
   usePlatformSync();
   const engine = useEngineStore((s) => s.engine);

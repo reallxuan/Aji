@@ -53,7 +53,12 @@
     "fileWriteFailed": "无法保存文件。",
     "fileNotSgf": "只能打开 .sgf 文件。",
     "fileMissing": "文件已移动或删除。",
-    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。"
+    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。",
+    "engineProfileCurrent": "正在使用的引擎不能移除，请先切换到其他引擎。",
+    "engineNoSuchProfile": "这个引擎已不在列表中。",
+    "engineDevOverride": "settings.json 里设置了开发引擎，这里不能切换引擎。",
+    "engineOwnFile": "所选的文件中有一个不能使用。",
+    "engineConsoleRefused": "控制台没有发送这条查询。"
   },
   "engine": {
     "state": {
@@ -493,7 +498,8 @@
       "suicide": "这一步会自杀。",
       "ko": "不能立即回提。",
       "offBoard": "落点在棋盘之外。"
-    }
+    },
+    "switchFailed": "切换引擎失败"
   },
   "rules": {
     "title": "分析规则",
@@ -716,6 +722,12 @@
     },
     "replay": {
       "toggle": "开始或暂停自动播放"
+    },
+    "engine": {
+      "profile": {
+        "next": "下一个引擎",
+        "previous": "上一个引擎"
+      }
     }
   },
   "screenshot": {

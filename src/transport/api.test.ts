@@ -46,7 +46,7 @@ it('sends each engine request and checks the response type', async () => {
           position: '4d325c64abd378a1',
           analysis: null,
           rejected: { position: '4d325c64abd378a1', message: 'illegal' },
-          running: { backend: 'metal', networkName: 'kata1' },
+          running: { backend: 'metal', networkName: 'kata1', profile: 'kata1' },
         }
       : { type: 'ok' };
   });
@@ -55,7 +55,7 @@ it('sends each engine request and checks the response type', async () => {
     position: '4d325c64abd378a1',
     analysis: null,
     rejected: { position: '4d325c64abd378a1', message: 'illegal' },
-    running: { backend: 'metal', networkName: 'kata1' },
+    running: { backend: 'metal', networkName: 'kata1', profile: 'kata1' },
   });
   await pauseAnalysis(t);
   await resumeAnalysis(t);

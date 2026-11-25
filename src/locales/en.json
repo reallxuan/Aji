@@ -53,7 +53,12 @@
     "fileWriteFailed": "The file could not be saved.",
     "fileNotSgf": "Only .sgf files can be opened.",
     "fileMissing": "The file has been moved or deleted.",
-    "scoreUnavailable": "There is no analysis of this position to estimate the score from yet."
+    "scoreUnavailable": "There is no analysis of this position to estimate the score from yet.",
+    "engineProfileCurrent": "The engine in use cannot be removed. Switch to another one first.",
+    "engineNoSuchProfile": "That engine is no longer in the list.",
+    "engineDevOverride": "A development engine is set in settings.json, so engines cannot be switched here.",
+    "engineOwnFile": "One of the chosen files cannot be used.",
+    "engineConsoleRefused": "The console did not send that query."
   },
   "engine": {
     "state": {
@@ -493,7 +498,8 @@
       "suicide": "That move is suicide.",
       "ko": "You cannot retake the ko yet.",
       "offBoard": "That point is outside the board."
-    }
+    },
+    "switchFailed": "Could not switch engines"
   },
   "rules": {
     "title": "Analysis rules",
@@ -716,6 +722,12 @@
     },
     "replay": {
       "toggle": "Play or pause replay"
+    },
+    "engine": {
+      "profile": {
+        "next": "Next engine",
+        "previous": "Previous engine"
+      }
     }
   },
   "screenshot": {
