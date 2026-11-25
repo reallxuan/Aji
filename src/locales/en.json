@@ -379,7 +379,6 @@
     "visitLimitNote": "Analysis stops at the limit and the graphics card idles; it starts again on the next move.",
     "engine": "Engine",
     "engineLine": "KataGo {{version}} ({{backend}})",
-    "networkLine": "Network {{network}}",
     "threadsDefault": "Search threads: {{threads}} (default, not measured)",
     "threadsMeasured": "Search threads: {{threads}} (measured, {{speed}} visits/s)",
     "benchmark": "Measure speed",
@@ -457,7 +456,16 @@
     "recentMoves": "Recent moves to number",
     "replaySeconds": "Replay interval (seconds)",
     "openAt": "Open records at",
-    "gameStart": "Start of game"
+    "gameStart": "Start of game",
+    "profile": {
+      "detail": "{{build}}, {{network}}, {{threads}} threads, {{speed}}",
+      "ownDetail": "{{katago}}, threads set by its config file",
+      "more": "More",
+      "rename": "Rename",
+      "remove": "Remove",
+      "removeCurrent": "The engine in use cannot be removed. Switch to another one first.",
+      "name": "Profile name"
+    }
   },
   "game": {
     "players": "{{black}} vs {{white}}"

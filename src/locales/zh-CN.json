@@ -379,7 +379,6 @@
     "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
     "engine": "引擎",
     "engineLine": "KataGo {{version}}（{{backend}}）",
-    "networkLine": "权重 {{network}}",
     "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
     "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
     "benchmark": "测速",
@@ -457,7 +456,16 @@
     "recentMoves": "最近显示手数",
     "replaySeconds": "自动播放间隔（秒）",
     "openAt": "打开棋谱时显示",
-    "gameStart": "棋局开始"
+    "gameStart": "棋局开始",
+    "profile": {
+      "detail": "{{build}}　{{network}}　{{threads}} 线程，{{speed}}",
+      "ownDetail": "{{katago}}　线程由配置文件决定",
+      "more": "更多",
+      "rename": "重命名",
+      "remove": "移除",
+      "removeCurrent": "当前配置不能移除，请先切换",
+      "name": "配置名字"
+    }
   },
   "game": {
     "players": "{{black}} 对 {{white}}"

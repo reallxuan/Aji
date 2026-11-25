@@ -29,6 +29,13 @@ const active = {
   threads: 4,
   visitsPerSecond: null as number | null,
 };
+/** The active set as the profile list shows it. */
+const profileOf = (summary: typeof active, current = true) => ({
+  id: `${summary.engine}/${summary.network}`,
+  name: summary.networkName,
+  current,
+  source: { kind: 'managed' as const, ...summary },
+});
 const sets = (requests: Request[]) =>
   requests.flatMap((r) => (r.type === 'settingsSet' ? [r.settings] : []));
 
@@ -38,6 +45,11 @@ function mount(
 ) {
   const transport = setupTransport({
     setupInstalled: () => ({ type: 'setupInstalled', active, unusedBytes: 0 }),
+    engineProfiles: () => ({
+      type: 'engineProfiles',
+      profiles: [profileOf(active)],
+      devOverride: false,
+    }),
     ...overrides,
   });
   renderWithProviders(<SettingsPanel />, transport, engine);
@@ -275,8 +287,12 @@ describe('SettingsPanel', () => {
 
   it('names the active engine and runs the engine actions', async () => {
     const transport = mount();
-    expect(await screen.findByText('KataGo 1.18.2（Metal）')).toBeInTheDocument();
-    expect(screen.getByText('权重 kata1-tf3-b11c768-s12382M-d6533M')).toBeInTheDocument();
+    const current = await screen.findByRole('radio', { name: active.networkName });
+    expect(current).toBeChecked();
+    expect(current.closest('[data-profile]')).toHaveTextContent(
+      'KataGo 1.18.2（Metal）\u3000kata1-tf3-b11c768-s12382M-d6533M\u30004 线程，未测速',
+      { normalizeWhitespace: false },
+    );
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '重启引擎' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '停止引擎' })));
     expect(transport.requests.map((r) => r.type)).toEqual(
@@ -402,9 +418,30 @@ describe('SettingsPanel', () => {
     expect(useWizardStore.getState().open).toBe(false);
   });
 
-  it('disables restart while the engine starts, and shows engineBusy when refused', async () => {
+  it('keeps restart and stop while the engine starts (M5 minor 7)', async () => {
     mount({}, { state: 'starting' });
-    expect(await screen.findByRole('button', { name: '重启引擎' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: '重启引擎' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '停止引擎' })).toBeEnabled();
+  });
+
+  it('has no benchmark row for an own-files profile', async () => {
+    mount({
+      engineProfiles: () => ({
+        type: 'engineProfiles',
+        profiles: [
+          profileOf(active, false),
+          {
+            id: 'own-1',
+            name: 'brew',
+            current: true,
+            source: { kind: 'own', katago: '/k', model: '/m.bin.gz', config: '/a.cfg' },
+          },
+        ],
+        devOverride: false,
+      }),
+    });
+    expect(await screen.findByRole('radio', { name: 'brew' })).toBeChecked();
+    expect(screen.queryByText(/搜索线程/)).toBeNull();
   });
 
   it('shows the engineBusy text when a restart is refused', async () => {
@@ -427,7 +464,7 @@ describe('Unused downloaded files', () => {
 
   it('is hidden when nothing is unused', async () => {
     mount();
-    await screen.findByText('KataGo 1.18.2（Metal）');
+    await screen.findByRole('radio', { name: active.networkName });
     expect(screen.queryByText('未使用的已下载文件')).not.toBeInTheDocument();
   });
 
@@ -449,6 +486,61 @@ describe('Unused downloaded files', () => {
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '删除' })));
     expect(transport.requests.some((r) => r.type === 'setupRemoveUnused')).toBe(true);
     await waitFor(() => expect(screen.queryByText('未使用的已下载文件')).not.toBeInTheDocument());
+  });
+
+  it('shows what a removed profile leaves unused without reopening settings', async () => {
+    const other = { ...active, network: 'zhizi', networkName: 'zhizi b40' };
+    let profiles = [profileOf(active), profileOf(other, false)];
+    let unusedBytes = 0;
+    mount({
+      setupInstalled: () => ({ type: 'setupInstalled', active, unusedBytes }),
+      engineProfiles: () => ({ type: 'engineProfiles', profiles, devOverride: false }),
+      engineProfileRemove: () => {
+        profiles = [profileOf(active)];
+        unusedBytes = 2 * 1024 ** 3;
+        return { type: 'ok' };
+      },
+    });
+    const row = (await screen.findByRole('radio', { name: 'zhizi b40' })).closest(
+      '[data-profile]',
+    ) as HTMLElement;
+    await act(async () =>
+      fireEvent.keyDown(within(row).getByRole('button', { name: '更多' }), { key: 'Enter' }),
+    );
+    await act(async () =>
+      fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: '移除' })),
+    );
+    expect(await screen.findByText('未使用的已下载文件')).toBeInTheDocument();
+  });
+});
+
+describe('Settings after a profile switch', () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ settings: storedSettings });
+    useBenchmarkStore.setState({ job: null });
+    usePanelStore.setState({ view: 'settings' });
+  });
+
+  it('reads the install record again, so 测速 measures the profile now running', async () => {
+    const other = { ...active, network: 'zhizi', networkName: 'zhizi b40' };
+    let current = active;
+    const transport = mount({
+      setupInstalled: () => ({ type: 'setupInstalled', active: current, unusedBytes: 0 }),
+      engineProfiles: () => ({
+        type: 'engineProfiles',
+        profiles: [profileOf(active, current === active), profileOf(other, current === other)],
+        devOverride: false,
+      }),
+      engineProfileSwitch: () => {
+        current = other;
+        return { type: 'ok' };
+      },
+    });
+    await act(async () => fireEvent.click(await screen.findByRole('radio', { name: 'zhizi b40' })));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'zhizi b40' })).toBeChecked());
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '测速' })));
+    const installs = transport.requests.filter((r) => r.type === 'setupInstall');
+    expect(installs.at(-1)).toMatchObject({ network: 'zhizi' });
   });
 });
 
