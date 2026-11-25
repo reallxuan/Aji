@@ -180,3 +180,44 @@ it('shares the engine key with its parent after the last setup stone is removed'
   });
   expect(t.exportText({ clean: true })).not.toContain('C[a comment-only node]');
 });
+
+it('moves the last move, asking first when later moves would turn illegal', () => {
+  const t = createFakeTree(9, [stone(0, 0), stone(1, 1), stone(2, 2)]);
+  t.navigate('first');
+  t.navigate('next');
+  t.navigate('next');
+  t.play(stone(3, 3));
+  t.play(stone(2, 2));
+  t.navigate('first');
+  t.navigate('next');
+  t.navigate('next');
+  const moved = t.snapshot().node;
+  const move = (x: number, y: number, allowIllegal = false) =>
+    t.edit({ kind: 'moveLastMove', to: { x, y }, allowIllegal });
+
+  expect(() => move(0, 0)).toThrow(expect.objectContaining({ code: 'gameIllegalMove' }));
+  expect(() => move(2, 2)).toThrow(
+    expect.objectContaining({ code: 'gameLaterMovesIllegal', detail: '2' }),
+  );
+  expect(t.snapshot().lastMove).toEqual(stone(1, 1));
+
+  move(4, 4);
+  expect(t.snapshot()).toMatchObject({ node: moved, lastMove: stone(4, 4), changed: true });
+  expect(t.tree().nodes).toHaveLength(6);
+  move(2, 2, true);
+  expect(t.tree().nodes.filter((n) => n.flags & 8)).toHaveLength(2);
+  t.undo();
+  t.undo();
+  expect(t.snapshot().lastMove).toEqual(stone(1, 1));
+});
+
+it('moves only a try-out move during try-out', () => {
+  const t = createFakeTree(9, [stone(0, 0)]);
+  t.edit({ kind: 'tryoutStart' });
+  expect(() => t.edit({ kind: 'moveLastMove', to: stone(4, 4), allowIllegal: false })).toThrow(
+    expect.objectContaining({ code: 'gameEndTryoutFirst' }),
+  );
+  t.play(stone(1, 1));
+  t.edit({ kind: 'moveLastMove', to: { x: 5, y: 5 }, allowIllegal: false });
+  expect(t.snapshot().lastMove).toEqual(stone(5, 5));
+});

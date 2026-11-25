@@ -7,6 +7,7 @@ import { useGameStore } from './gameStore';
 import { useNoticeStore } from './noticeStore';
 import { recordLocked, trackMutation } from './recordMutations';
 import { errorNotice } from './notices';
+import { useMoveMoveStore } from '../edit/moveMoveStore';
 
 async function applyChange(
   ctx: Pick<ActionContext, 't' | 'transport'>,
@@ -20,6 +21,11 @@ async function applyChange(
     return { visit: state.snapshot?.revision === snapshot.revision ? state.nodeVisit : null };
   } catch (cause) {
     const error = toTransportError(cause);
+    if (error.code === 'gameLaterMovesIllegal') {
+      // Moving the last move asks first (move-last-move design); the dialog takes it from here.
+      useMoveMoveStore.getState().ask(Number(error.detail) || 0);
+      return null;
+    }
     let label: string | undefined;
     switch (error.code) {
       case 'gameIllegalMove':

@@ -25,6 +25,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   gameEndTryoutFirst: true,
   gameNoSuchNode: true,
   gameChanged: true,
+  gameLaterMovesIllegal: true,
   fileReadFailed: true,
   fileWriteFailed: true,
   fileNotSgf: true,

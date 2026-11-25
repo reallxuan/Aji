@@ -7,6 +7,8 @@ import { numbersFor } from '../board/moveNumbers';
 import { BoardMenu, type BoardMenuTarget } from '../edit/BoardMenu';
 import { boardNodes } from '../edit/boardNodes';
 import { useModeStore } from '../edit/modeStore';
+import { MoveMovePrompt } from '../edit/MoveMovePrompt';
+import { moveLastMove, useMoveMoveStore } from '../edit/moveMoveStore';
 import type { Color } from '../transport/generated/Color';
 import { edit } from '../game/editActions';
 import { navigate } from '../game/actions';
@@ -58,6 +60,9 @@ export function MainBoard({
   const mode = useModeStore((s) => s.mode);
   const markupTool = useModeStore((s) => s.markupTool);
   const setupTool = useModeStore((s) => s.setupTool);
+  // Moving the last move: the board waits for its new point (move-last-move design).
+  const picking = useMoveMoveStore((s) => s.picking);
+  const sending = useMoveMoveStore((s) => s.pending !== null);
   const alternate = useModeStore((s) => s.takeAlternateColor);
   // Subscribed so the square follows each alternate stone placed.
   useModeStore((s) => s.alternateTaken);
@@ -133,11 +138,24 @@ export function MainBoard({
   };
   const showNext = useSettingsStore((s) => s.settings?.showNextMove ?? true);
   const editing = !scoring && mode === 'normal';
-  const discs = hidden || !editing ? NO_DISCS : shown;
+  const discs = hidden || !editing || picking ? NO_DISCS : shown;
   const badges = useMemo(
-    () => (editing && snapshot ? badgesFor(snapshot.continuations, discs) : []),
-    [editing, snapshot, discs],
+    () => (editing && !picking && snapshot ? badgesFor(snapshot.continuations, discs) : []),
+    [editing, picking, snapshot, discs],
   );
+  // Leaving the position, editing the record (undo included), entering or leaving try-out,
+  // changing mode or starting to score ends the picking, and drops a question about the move.
+  useEffect(() => {
+    const { picking, pending, confirm, cancel } = useMoveMoveStore.getState();
+    if (picking || pending || confirm) cancel();
+  }, [
+    snapshot?.node,
+    snapshot?.gameRevision,
+    snapshot?.treeRevision,
+    snapshot?.tryout,
+    mode,
+    scoring,
+  ]);
   const tryoutNumbers = useMemo(
     () =>
       snapshot?.tryout == null || scoring || snapshot.treeRevision !== tree?.revision
@@ -162,6 +180,11 @@ export function MainBoard({
     branches?: BoardMenuTarget['branches'],
     chooseMove = false,
   ) => {
+    // A right click while picking cancels it, as Esc does.
+    if (useMoveMoveStore.getState().picking) {
+      useMoveMoveStore.getState().cancel();
+      return;
+    }
     if (!snapshot || mode === 'markup' || scoringInProgress()) return;
     if (mode === 'setup' && !snapshot.stones[point.y * snapshot.size + point.x]) return;
     useViewStore.getState().setHover(null);
@@ -223,15 +246,17 @@ export function MainBoard({
   // The colour a click on an empty point places, for the hover square (polish design 2).
   const hoverColor: Color | null = !snapshot
     ? null
-    : editing
-      ? snapshot.nextColor
-      : setup
-        ? setupTool === 'black' || setupTool === 'white'
-          ? setupTool
-          : setupTool === 'alternate'
-            ? alternate.peek(snapshot.nextColor)
-            : snapshot.nextColor
-        : null;
+    : picking
+      ? picking
+      : editing
+        ? snapshot.nextColor
+        : setup
+          ? setupTool === 'black' || setupTool === 'white'
+            ? setupTool
+            : setupTool === 'alternate'
+              ? alternate.peek(snapshot.nextColor)
+              : snapshot.nextColor
+          : null;
   const moveStone = (from: Point, to: Point) =>
     setupEdit(ctx, () => ({ kind: 'moveStone', from, to }));
   const go = useFrameNavigate();
@@ -291,7 +316,17 @@ export function MainBoard({
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}
         onTapPoint={
-          scoring ? onTapPoint : mode === 'markup' ? markPoint : setup ? setupPoint : undefined
+          scoring
+            ? onTapPoint
+            : picking
+              ? (point: Point) => void moveLastMove(ctx, point)
+              : sending
+                ? () => {}
+                : mode === 'markup'
+                  ? markPoint
+                  : setup
+                    ? setupPoint
+                    : undefined
         }
         onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
@@ -320,6 +355,7 @@ export function MainBoard({
             onClose={() => setMenu(null)}
           />
         )}
+      <MoveMovePrompt />
       {overlay}
     </div>
   );
