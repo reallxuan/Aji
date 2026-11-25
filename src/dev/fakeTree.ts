@@ -450,6 +450,7 @@ export function createFakeTree(size: number, moves: Move[], source: Source = {})
         e.kind === 'play' ||
         e.kind === 'pass' ||
         e.kind === 'tryoutEnd' ||
+        (e.kind === 'moveLastMove' && n.tryout) ||
         (['setComment', 'deleteFrom', 'tryoutKeep'].includes(e.kind) && target.tryout)
       )
     )
@@ -557,6 +558,31 @@ export function createFakeTree(size: number, moves: Move[], source: Source = {})
             setup.setup[at] = e.stone;
           else delete setup.setup[at];
         }
+        return;
+      }
+      case 'moveLastMove': {
+        checkPoint(e.to);
+        if (n.mv?.type !== 'play' || !n.color || n.parent === null) throw noNode();
+        if (samePoint(n.mv, e.to)) return;
+        const mv: Move = { type: 'play', ...e.to };
+        const board = structuredClone(position(n.parent));
+        applyMove(board, size, n.color, mv);
+        if (board.illegal)
+          throw new TransportError('gameIllegalMove', board.illegal, board.illegal);
+        // Later nodes, in every branch, that are legal now and would not be after the move.
+        const later = preorder(n.id).slice(1);
+        const illegal = () => new Set(later.filter((id) => position(id).illegal));
+        const before = illegal();
+        n.mv = mv;
+        positions.clear();
+        const count = [...illegal()].filter((id) => !before.has(id)).length;
+        positions.clear();
+        if (count && !e.allowIllegal)
+          throw new TransportError(
+            'gameLaterMovesIllegal',
+            `${count} later moves would become illegal`,
+            String(count),
+          );
         return;
       }
       case 'insertMove':

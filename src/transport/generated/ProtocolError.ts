@@ -6,6 +6,7 @@ import type { ErrorCode } from "./ErrorCode";
  */
 export type ProtocolError = { code: ErrorCode, message: string, 
 /**
- * An unsupported size (such as `19x13`), or the camelCase illegal move reason.
+ * An unsupported size (such as `19x13`), the camelCase illegal move reason, or how many
+ * later moves an edit would make illegal.
  */
 detail?: string, };

@@ -104,6 +104,14 @@ pub enum SessionEdit {
     TryoutKeep {
         node: u32,
     },
+    /// Puts the current node's own move on `to`, keeping every later move (move-last-move
+    /// design). Refused with `LaterMovesIllegal` when that makes later moves illegal, unless
+    /// `allow_illegal`.
+    #[serde(rename_all = "camelCase")]
+    MoveLastMove {
+        to: Point,
+        allow_illegal: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +120,8 @@ pub enum Refusal {
     EndTryoutFirst,
     NoSuchNode,
     InvalidRules,
+    /// How many later moves, legal now, the edit would make illegal.
+    LaterMovesIllegal(u32),
 }
 
 impl From<EditError> for Refusal {
@@ -119,6 +129,7 @@ impl From<EditError> for Refusal {
         match error {
             EditError::Illegal(reason) => Self::Illegal(reason),
             EditError::NoSuchNode | EditError::NotTryout => Self::NoSuchNode,
+            EditError::LaterMovesIllegal(count) => Self::LaterMovesIllegal(count),
         }
     }
 }
@@ -316,6 +327,13 @@ fn edited_tree(change: &Change, old_illegal: &[NodeId], game: &Game) -> bool {
             .and_then(|p| p.values.first())
             .is_some_and(|s| !s.is_empty())
     }
+    // The tree shows each node's move, so a move put on another point is a new tree.
+    fn moved(props: &[aji_core::sgf::SgfProp]) -> Option<(&str, Option<&String>)> {
+        props
+            .iter()
+            .find(|p| p.id == "B" || p.id == "W")
+            .map(|p| (p.id.as_str(), p.values.first()))
+    }
     old_illegal != game.illegal_nodes()
         || change
             .forward
@@ -323,7 +341,7 @@ fn edited_tree(change: &Change, old_illegal: &[NodeId], game: &Game) -> bool {
             .zip(change.inverse.iter().rev())
             .any(|(op, inverse)| match (op, inverse) {
                 (Op::SetProps { props, .. }, Op::SetProps { props: old, .. }) => {
-                    has_comment(props) != has_comment(old)
+                    has_comment(props) != has_comment(old) || moved(props) != moved(old)
                 }
                 _ => true,
             })
@@ -700,6 +718,8 @@ impl GameSession {
         use SessionEdit::*;
         match *edit {
             TryoutEnd | Pass | Play { .. } => Ok(()),
+            // Only a try-out move may be moved during try-out.
+            MoveLastMove { .. } if self.game.is_tryout(self.current) => Ok(()),
             SetComment { node, .. } | DeleteFrom { node } | TryoutKeep { node } => {
                 let id = node as NodeId;
                 if !self.game.is_attached(id) {
@@ -809,6 +829,11 @@ impl GameSession {
             },
             SetupStone { point, stone } => Edit::SetupStone { at, point, stone },
             MoveStone { from, to } => Edit::MoveStone { at, from, to },
+            MoveLastMove { to, allow_illegal } => Edit::MovePlay {
+                node: at,
+                to,
+                allow_illegal,
+            },
             SetToPlay { color } => Edit::SetToPlay { at, color },
             Flatten => Edit::Flatten { at },
             SetInfo { field, value } => Edit::SetInfo { field, value },
@@ -1653,6 +1678,57 @@ mod tests {
         assert_eq!(s.current, 4);
         s.navigate(NavTarget::Move(100));
         assert_eq!(s.line()[s.line_index()].node, 6);
+    }
+
+    #[test]
+    fn moving_the_last_move_asks_before_making_later_moves_illegal() {
+        let mut s = GameSession::open(
+            "move.sgf",
+            b"(;SZ[9];B[aa];W[bb];B[cc];W[dd])",
+            AnalysisRules::Chinese,
+        )
+        .unwrap();
+        s.navigate(NavTarget::Node(1));
+        let to = |x, y, allow_illegal| SessionEdit::MoveLastMove {
+            to: Point { x, y },
+            allow_illegal,
+        };
+        // B[cc] at node 3 would land on the moved stone.
+        assert_eq!(s.edit(to(2, 2, false)), Err(Refusal::LaterMovesIllegal(1)));
+        assert_eq!(s.game.sgf(1).first("B"), Some("aa"));
+        let tree = s.tree_revision;
+        assert_eq!(s.edit(to(4, 4, false)), Ok(true));
+        assert_eq!(s.game.sgf(1).first("B"), Some("ee"));
+        assert_eq!(s.current, 1);
+        assert!(s.tree_revision > tree, "the tree shows each node's move");
+        assert!(s.undo());
+        assert_eq!(s.game.sgf(1).first("B"), Some("aa"));
+        assert_eq!(s.edit(to(2, 2, true)), Ok(true));
+        assert_eq!(s.game.illegal_nodes(), [3]);
+        assert_eq!(
+            s.edit(to(9, 0, true)),
+            Err(Refusal::Illegal(Illegal::OffBoard))
+        );
+    }
+
+    #[test]
+    fn during_try_out_only_a_try_out_move_moves() {
+        let mut s = GameSession::open("t.sgf", b"(;SZ[9];B[aa])", AnalysisRules::Chinese).unwrap();
+        s.navigate(NavTarget::Node(1));
+        assert_eq!(s.edit(SessionEdit::TryoutStart), Ok(true));
+        let edit = SessionEdit::MoveLastMove {
+            to: Point { x: 4, y: 4 },
+            allow_illegal: false,
+        };
+        assert_eq!(s.edit(edit.clone()), Err(Refusal::EndTryoutFirst));
+        assert_eq!(
+            s.edit(SessionEdit::Play {
+                mv: Move::Play(Point { x: 2, y: 2 })
+            }),
+            Ok(true)
+        );
+        assert_eq!(s.edit(edit), Ok(true));
+        assert_eq!(s.game.sgf(s.current).first("W"), Some("ee"));
     }
 
     #[test]

@@ -511,7 +511,8 @@ pub struct AppInfo {
 pub struct ProtocolError {
     pub code: ErrorCode,
     pub message: String,
-    /// An unsupported size (such as `19x13`), or the camelCase illegal move reason.
+    /// An unsupported size (such as `19x13`), the camelCase illegal move reason, or how many
+    /// later moves an edit would make illegal.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub detail: Option<String>,
@@ -549,6 +550,8 @@ pub enum ErrorCode {
     GameEndTryoutFirst,
     GameNoSuchNode,
     GameChanged,
+    /// Moving the last move would make later moves illegal; `detail` is how many.
+    GameLaterMovesIllegal,
     FileReadFailed,
     FileWriteFailed,
     /// The file's name does not end in `.sgf`.

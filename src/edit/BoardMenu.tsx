@@ -19,6 +19,7 @@ import type { SessionEdit } from '../transport/generated/SessionEdit';
 import { useDeviceStore } from '../device/deviceStore';
 import { pointLabel } from '../board/coordinates';
 import { useMarkEdit } from './useMarkEdit';
+import { useMoveMoveStore } from './moveMoveStore';
 import { useGameStore } from '../game/gameStore';
 import { navigate } from '../game/actions';
 import { edit } from '../game/editActions';
@@ -91,6 +92,17 @@ export function BoardMenu({
       stone: stone === 'black' ? 'white' : 'black',
     }));
   const toggleNumbers = () => run('view.moveNumbers');
+  // The current node's own move may move (move-last-move design); in try-out, a try-out move only.
+  const last = snapshot.lastMove;
+  const movable =
+    !!stone &&
+    last?.type === 'play' &&
+    last.x === point.x &&
+    last.y === point.y &&
+    (!trying || !!nodes.get(snapshot.node)?.tryout);
+  const startMove = () => {
+    if (!scoringInProgress() && stone) useMoveMoveStore.getState().start(stone);
+  };
   const pass = () => void boardEdit({ kind: 'pass' });
   const markAt = (tool: (typeof POINT_MARKS)[number]) =>
     void markEdit({ kind: 'place', tool, point });
@@ -124,6 +136,12 @@ export function BoardMenu({
         <div className="px-2 py-1 text-xs text-text-muted">
           {t(`edit.${stone ?? 'empty'}`, { point: pointLabel(point, snapshot.size) })}
         </div>
+        {target.mode === 'normal' && movable && (
+          <>
+            <ContextMenuItem onSelect={startMove}>{t('edit.moveMove')}</ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         {target.mode === 'setup' ? (
           <>
             <ContextMenuItem onSelect={removeStone}>{t('edit.removeStone')}</ContextMenuItem>
