@@ -13,7 +13,7 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 
 ## Engine and engine manager
 
-- **M2 N1 (re-check):** no deadline after killing a KataGo that does not die. Assigned to M4.
+- ~~**M2 N1 (re-check):** no deadline after killing a KataGo that does not die.~~ Re-checked in Phase 2 M4: the engine already gives up 5 s after a kill; M4 added a process-level deadline as a backstop (`a_child_that_ignores_kill_is_given_up`).
 - **M2 N2:** the watchdog's unbiased `select!` can pick the timer over a queued reply. Fix only if Windows CI flakes.
 - **M2 N3 (re-checked in Phase 2 M2, left as it is):** the 100 ms throttle equals the report interval, so updates may drop to 5–10 per second. That reads smoothly on the Mac and no test shows a problem. Assigned to M4 if the live numbers ever look choppy.
 - **M2 N4:** subscribing before reading the status relies on IPC ordering. This matters for Phase 3's WebSocket transport.
@@ -35,8 +35,8 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
   - a non-flaky `status_carries_the_latest_analysis`.
 - **M4 minor 12:** the test-only fake KataGo is a normal `[[bin]]` of `aji-manager`, built by every release build. It is not bundled into the app. Consider `required-features`.
 - **M4 minor 13:** if the download HTTP client cannot be built, the app does not start (`src-tauri/src/lib.rs`, `start_installer`). Degrading to an installer whose jobs fail would be kinder.
-- **M5 minor 10:** the declined-licence offer uses `recommendation.backends`, while the server's offer uses default plus fallbacks. Neither skips a backend that needs the same licence.
-- **M5 minor 11:** `remove_unused` holds the jobs lock through deletion and can race `import_network`'s unlocked copy.
+- ~~**M5 minor 10:** the declined-licence offer uses `recommendation.backends`, while the server's offer uses default plus fallbacks. Neither skips a backend that needs the same licence.~~ Fixed in Phase 2 M4: the wizard follows default then fallbacks and skips a backend whose engine needs a declined licence (`StepLicence` tests marked M5 minor 10).
+- ~~**M5 minor 11:** `remove_unused` holds the jobs lock through deletion and can race `import_network`'s unlocked copy.~~ Fixed in Phase 2 M4: removal waits for an import in progress (`remove_unused_waits_for_an_import`).
 - **M5 minor 12:** a write failure during download is `downloadFailed`, not `diskError`.
 - ~~**M7 minor 2:** `continue_analysis` does not resubmit while a query is in flight.~~ Fixed in Phase 2 M2 (`continue_analysis_resubmits_while_a_query_is_in_flight`).
 - ~~**M7 minor 11, test gaps:**~~ Closed in Phase 2 M2:
@@ -72,7 +72,7 @@ Two gaps in the sources: M5's plan counts sixteen minors but the notes list thir
 - **M5 minor 3:** `settingsSet` replaces the whole object and does not validate (visit limit 0, two equal disc lines from a non-UI client).
 - **M5 minor 4:** the focus 4 test has no write half for an unreadable `downloadSource`.
 - **M5 minor 5:** the first frame uses the system language and theme before settings arrive, and the analysis panel flashes before the first `engineStatus`. Partly fixed in Phase 2 M1: the panels wait for the device settings and the first game snapshot, so nothing flashes in the side; the header may still show the system language for a frame.
-- **M5 minor 7:** Restart and Stop disable on `starting` only, and Stop stays disabled for an engine hanging at start.
+- ~~**M5 minor 7:** Restart and Stop disable on `starting` only, and Stop stays disabled for an engine hanging at start.~~ Fixed in Phase 2 M4: both stay enabled while KataGo starts (`keeps restart and stop while the engine starts`).
 - **M5 minor 8:**
   - a job resumed after a reload loses `rerun` (the left link reads 暂不设置, not 取消);
   - a failed job reappears after every reload.

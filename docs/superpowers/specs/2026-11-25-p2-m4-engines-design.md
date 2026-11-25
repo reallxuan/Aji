@@ -196,3 +196,13 @@ On the Mac, in `pnpm tauri dev`, both themes, desktop and phone width:
 - remove a profile and see its network listed as unused, then delete it;
 - open the console, see stderr and protocol lines, send `{"action":"query_version"}` and see the reply, and see `terminate_all` and a search query refused;
 - the four backlog items, each with a test.
+
+## 12. Built
+
+Built on 2026-11-26 as designed; the plan's Status has the checks, the review and what is outstanding. Where the build differs from the sections above:
+
+- **6.2.** Choosing the profile already running does nothing, from the chip, the list or a command. A switch or an add is refused while an install or benchmark job runs, before any whole-game job is stopped, and one lock covers the record write and the hand-off to KataGo.
+- **6.3.** Adding one's own KataGo asks no question while a whole-game job runs; it is the user's explicit choice, and the job's results are kept.
+- **6.5.** A query typed with its own id goes out as `console-<id>`, so no reply reaches Aji's queries. The interface keeps 1,000 log and 5,000 protocol lines, like the backend. A refused query is noted in the console only, as an Aji line. The list is not virtualised.
+- **8.** Removing unused files keeps any file of Aji's that an own-files profile uses (its top-level entry in Aji's folders); files outside Aji's folders are never touched.
+- **9.** M2 N1 was already met by the engine giving up 5 s after a kill; the new process-level deadline is a backstop.
