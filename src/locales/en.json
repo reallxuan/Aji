@@ -119,6 +119,21 @@
         "resume": "Click to resume",
         "continue": "Click to search {{visits}} more visits"
       }
+    },
+    "profile": {
+      "menuTitle": "Engine profiles",
+      "dev": "Development engine",
+      "devEntry": "Development engine (settings.json)",
+      "ownFiles": "Own files",
+      "detail": "{{network}}, {{speed}}",
+      "speed": "about {{speed}} visits/s",
+      "unmeasured": "speed not measured",
+      "add": "Add engine…",
+      "manage": "Manage engines…",
+      "switchTitle": "Switch to {{name}}",
+      "switchBody": "Switching engines stops the game analysis ({{done}} / {{total}} done). The results so far are kept and are still there when you switch back. Switch anyway?",
+      "cancel": "Cancel",
+      "switch": "Switch"
     }
   },
   "analysis": {

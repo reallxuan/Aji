@@ -415,9 +415,24 @@ function PositiveNumber({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  focus = false,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Scroll here once, as 管理引擎… asks (P2 M4 design 6.2). */
+  focus?: boolean;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    ref.current?.scrollIntoView?.({ block: 'start' });
+    usePanelStore.setState({ section: null });
+  }, [focus]);
   return (
-    <section className="border-b border-hairline px-6 py-5">
+    <section ref={ref} className="border-b border-hairline px-6 py-5">
       <h3 className="mb-3 text-[0.75rem] text-text-muted">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
@@ -604,6 +619,7 @@ function EngineSection({ transport }: { transport: Transport }) {
     setRefresh((n) => n + 1);
   };
 
+  const focused = usePanelStore((s) => s.section === 'engine');
   const state = engine?.state ?? null;
   const noEngine = state === null || state === 'notConfigured';
   // A benchmark started here holds the engine and the files until it ends, as the backend
@@ -616,7 +632,7 @@ function EngineSection({ transport }: { transport: Transport }) {
   const unusedSize = unused === null ? '' : formatBytes(unused, i18n.language);
 
   return (
-    <Section title={t('settings.engine')}>
+    <Section title={t('settings.engine')} focus={focused}>
       <div className="text-[0.875rem]">
         {active ? (
           <>

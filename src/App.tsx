@@ -8,6 +8,7 @@ import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
 import { useConsoleSync } from './engine/consoleStore';
 import { useProfileSync } from './engine/profileStore';
+import { SwitchConfirm } from './engine/SwitchConfirm';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { LayoutFrame } from './layout/LayoutFrame';
@@ -74,11 +75,14 @@ export default function App() {
       : undefined;
 
   return (
-    <LayoutFrame
-      boardOverlay={<DropOverlay />}
-      side={side}
-      onCloseSide={closeSide}
-      sideLocked={installing}
-    />
+    <>
+      <LayoutFrame
+        boardOverlay={<DropOverlay />}
+        side={side}
+        onCloseSide={closeSide}
+        sideLocked={installing}
+      />
+      <SwitchConfirm />
+    </>
   );
 }

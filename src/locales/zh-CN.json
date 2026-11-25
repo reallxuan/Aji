@@ -119,6 +119,21 @@
         "resume": "点击继续",
         "continue": "点击继续计算 {{visits}} 次"
       }
+    },
+    "profile": {
+      "menuTitle": "引擎配置",
+      "dev": "开发引擎",
+      "devEntry": "开发引擎 (settings.json)",
+      "ownFiles": "自己的文件",
+      "detail": "{{network}}　{{speed}}",
+      "speed": "约 {{speed}} 次/秒",
+      "unmeasured": "未测速",
+      "add": "添加引擎…",
+      "manage": "管理引擎…",
+      "switchTitle": "切换到 {{name}}",
+      "switchBody": "切换引擎会停止整盘分析（已完成 {{done}} / {{total}}）。已有结果会保留，切回来时还在。仍然切换吗？",
+      "cancel": "取消",
+      "switch": "切换"
     }
   },
   "analysis": {
