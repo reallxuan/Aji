@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2 UI polish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0e0e10; --page:#ECEAE4; --cap:#c9c7c0; --muted:#9a988f; --frame:#2a2a2e; --call:#e8c27a; }
+  body.light { --bg:#E3E3E0; --page:#1d1d1b; --cap:#3d3d3a; --muted:#5e5e5a; --frame:#c9c9c4; --call:#9a6a12; }
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted2:#a3a19a; --line:#5a5a61; --btn:#2c2c31; --chg:#E2A33B; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--page); font-family:Inter,'LXGW WenKai TC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro, .section { max-width:1240px; margin:0 auto 48px; }
+  .intro { color:var(--cap); font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:var(--page); font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; }
+  .section h3 { font-size:13px; font-weight:600; margin:22px 0 6px; }
+  .cap { font-size:13px; color:var(--cap); margin:0 0 14px; line-height:1.6; max-width:1060px; }
+  .cap b { color:var(--page); }
+  .call { color:var(--call); }
+  .pick { display:inline-block; font-size:11px; color:#141416; background:#e8c27a; border-radius:999px; padding:1px 8px; margin-left:6px; font-weight:600; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:var(--muted); margin:0 0 6px; }
+  .label b { color:var(--page); font-weight:600; }
+  .note { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.6; max-width:420px; }
+  .toggle { position:fixed; top:16px; right:20px; font-size:12px; color:var(--muted); border:1px solid var(--frame); border-radius:999px; padding:5px 12px; cursor:pointer; background:var(--bg); z-index:5; }
+
+  /* Panel pieces, as in the M3 editing mockup. */
+  .panel { background:var(--panel); color:var(--text); width:420px; font-size:13px; border-radius:8px; outline:1px solid var(--frame); overflow:hidden; }
+  .hdr { display:flex; align-items:center; gap:9px; padding:12px 14px 12px 18px; border-bottom:1px solid var(--hairline); height:50px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .chip { font-size:12px; color:var(--muted2); border:1px solid var(--hairline); border-radius:999px; padding:2px 8px; white-space:nowrap; }
+  .hdr .nav { color:var(--muted2); display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#1e8e5a; flex:none; }
+  .editbar { display:flex; align-items:center; gap:6px; padding:7px 14px 7px 18px; border-bottom:1px solid var(--hairline); }
+  .tg { font-size:13px; padding:3px 10px; border-radius:6px; border:1px solid var(--hairline); background:var(--btn); color:var(--text); white-space:nowrap; cursor:pointer; user-select:none; }
+  .tg.on { background:var(--text); color:var(--panel); border-color:var(--text); }
+  .div { width:1px; height:18px; background:var(--hairline); margin:0 4px; }
+  .sp { flex:1; }
+  .ic { width:28px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted2); }
+  .ic.dim { opacity:.35; }
+  .bar { display:flex; height:26px; margin:12px 18px 4px; border-radius:3px; overflow:hidden; font-size:12px; font-weight:600; }
+  .bar .b { background:#141414; color:#f2f0ea; display:flex; align-items:center; padding:0 8px; width:54.2%; }
+  .bar .w { background:#f2f0ea; color:#141414; display:flex; align-items:center; justify-content:flex-end; padding:0 8px; flex:1; }
+  .est { display:flex; gap:10px; align-items:center; padding:6px 18px 10px; font-size:12px; color:var(--muted2); }
+  .est b { color:var(--text); font-weight:500; }
+  .est .lead { color:#e2a33b; }
+  .est .x { margin-left:auto; cursor:pointer; }
+  .rest { height:60px; border-top:1px solid var(--hairline); margin-top:6px; padding:10px 18px; color:var(--muted2); font-size:12px; }
+  .phone { width:340px; background:var(--panel); color:var(--text); border-radius:22px; outline:1px solid var(--frame); overflow:hidden; font-size:13px; }
+  .phone .ph { display:flex; align-items:center; gap:8px; padding:12px 14px; }
+  .phone .ph .t { flex:1; font-weight:500; }
+  .phone .editbar { border-top:1px solid var(--hairline); padding:7px 8px; gap:4px; }
+  .phone .editbar .tg { padding:9px 9px; font-size:14px; }
+  .phone .editbar .ic { width:40px; height:40px; }
+  .phone .div { height:24px; margin:0 2px; }
+  .phone canvas { display:block; margin:0 auto; }
+
+  /* Boards. */
+  .tile { width:290px; }
+  .tile.big { width:400px; }
+  .tile.huge { width:520px; }
+  .tile canvas { width:100%; display:block; }
+  .tile .name { font-size:13px; font-weight:600; margin:10px 0 2px; }
+  .tile .tnote { font-size:12px; color:var(--muted); line-height:1.55; }
+  .well { padding:14px; border-radius:8px; background:var(--well, #141416); }
+  body.light .well { --well:#d6d6d2; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px 18px; font-size:13px; color:var(--cap); margin:0 0 12px; }
+  .controls label { display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .controls select { font:inherit; background:transparent; color:inherit; border:1px solid var(--frame); border-radius:6px; padding:2px 6px; }
+</style>
+</head>
+<body>
+<div class="toggle" onclick="document.body.classList.toggle('light'); redraw()">切换浅色 / 深色背景</div>
+
+<div class="intro">
+  <h1>Phase 2 UI polish: three small changes before M4</h1>
+  Position: move 58 of the M6 sample game (2025 Samsung Cup final, game 2), Black to move. Candidate and ownership data are made up.
+  <ul>
+    <li><b>1.</b> A <b>形势判断</b> switch in the edit row, next to 试下, 标记 and 摆子.</li>
+    <li><b>2.</b> A square on the point under the mouse, in the colour of the side to move, like Fox (野狐). Not a ghost stone.</li>
+    <li><b>3.</b> A sense of depth for the wood boards (蜜色, 榧木, 胡桃). The printed board (印刷) stays flat.</li>
+    <li>Boards in sections 2 and 3 react to the mouse. The page background switches between dark and light (top right).</li>
+  </ul>
+</div>
+
+<!-- 1 -->
+<div class="section">
+  <h2>1. 形势判断 in the edit row</h2>
+  <p class="cap">Today 形势判断 is reached only by T and the 显示 (视图) menu. The new button is the same switch: pressing it, pressing T or the ✕ on the line all turn the same thing on and off. It is disabled during 终局点目, like the other three. Hover shows <b>形势判断 (T)</b>.<br>
+  <b>A</b> puts it straight after 摆子. <b>B</b> puts a thin divider before it, because it is a view, not a board mode: 试下, 标记 and 摆子 exclude each other, while 形势判断 can stay on during any of them. <span class="call">Recommended: B.</span></p>
+  <div class="row dark">
+    <div>
+      <p class="label"><b>A</b> after 摆子, off</p>
+      <div class="panel">
+        <div class="hdr"><span class="t">三星杯决赛 第2局 <span style="color:var(--muted2)">▾</span></span><span class="chip">中国 7.5</span><span class="nav">‹ <b>58</b> / 247 ›</span><span class="dot"></span></div>
+        <div class="editbar"><span class="tg">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="tg">形势判断</span><span class="sp"></span><span class="ic" id="undo1"></span><span class="ic dim" id="redo1"></span></div>
+        <div class="bar"><span class="b">黑 54.2%</span><span class="w">45.8%</span></div>
+        <div class="rest">候选 列表</div>
+      </div>
+    </div>
+    <div>
+      <p class="label"><b>B</b> after a divider, on <span class="pick">推荐</span></p>
+      <div class="panel">
+        <div class="hdr"><span class="t">三星杯决赛 第2局 <span style="color:var(--muted2)">▾</span></span><span class="chip">中国 7.5</span><span class="nav">‹ <b>58</b> / 247 ›</span><span class="dot"></span></div>
+        <div class="editbar"><span class="tg">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="div"></span><span class="tg on" id="estB" onclick="this.classList.toggle('on'); document.getElementById('estLine').style.display = this.classList.contains('on') ? 'flex' : 'none'">形势判断</span><span class="sp"></span><span class="ic" id="undo2"></span><span class="ic dim" id="redo2"></span></div>
+        <div class="bar"><span class="b">黑 54.2%</span><span class="w">45.8%</span></div>
+        <div class="est" id="estLine"><b>形势判断</b><span>黑 185</span><span>白 176</span><span>贴目 7.5</span><span class="lead">黑领先 1.5 目</span><span class="x" onclick="document.getElementById('estB').click()">✕</span></div>
+        <div class="rest">候选 列表</div>
+      </div>
+      <p class="note">Click the button or the ✕: both turn the line off. Try-out on with 形势判断 on is allowed, and shows the estimate of the try-out position.</p>
+    </div>
+    <div>
+      <p class="label"><b>Phone</b>, B, 44 px targets</p>
+      <div class="phone">
+        <div class="ph"><span class="t">三星杯决赛 第2局</span><span style="color:var(--muted2)">58</span><span class="dot"></span></div>
+        <canvas id="phoneBoard"></canvas>
+        <div class="editbar"><span class="tg">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="div"></span><span class="tg on">形势判断</span><span class="sp"></span><span class="ic" id="undo3"></span><span class="ic dim" id="redo3"></span></div>
+      </div>
+      <p class="note">At 375 px wide the row still fits on one line with undo and redo. Below about 340 px the undo and redo icons would wrap first.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="section">
+  <h2>2. The point under the mouse</h2>
+  <p class="cap">A filled square on the empty point under the mouse, in the colour of the side to move. <b>Move the mouse over the boards.</b> It shows only where a click would place a stone: not on stones, not on candidate discs (they have their own hover, the line), not in 标记 mode, not during 终局点目, and never on touch.<br>
+  <span class="call">One thing to settle:</span> 形势判断 already draws squares on the board, at 36% of the spacing. A hover square of the same size would read as one more point of territory. <b>A</b> uses that size anyway. <b>B</b> is larger (52%) with a contrasting rim, so it stays distinct with the estimate on. <span class="call">Recommended: B.</span></p>
+  <div class="row">
+    <div class="tile big"><div class="well"><canvas id="hA"></canvas></div><div class="name">A: 36%, the estimate's size</div><div class="tnote">形势判断 on. With the mouse on an empty point inside Black's area, the hover square is hard to tell from the territory squares around it.</div></div>
+    <div class="tile big"><div class="well"><canvas id="hB"></canvas></div><div class="name">B: 52%, with a rim <span class="pick">推荐</span></div><div class="tnote">形势判断 on. Larger than a territory square, and its rim (light on black, dark on white) separates it from the squares next to it.</div></div>
+  </div>
+  <h3>B in other states</h3>
+  <div class="row">
+    <div class="tile"><div class="well"><canvas id="hW"></canvas></div><div class="name">White to move</div><div class="tnote">A white square with a dark rim.</div></div>
+    <div class="tile"><div class="well"><canvas id="hS"></canvas></div><div class="name">摆子, 放白子</div><div class="tnote">The colour that a click places, here white although Black is to move. With 交替 it follows the alternation.</div></div>
+    <div class="tile"><div class="well"><canvas id="hC"></canvas></div><div class="name">Candidates shown</div><div class="tnote">Over a disc the square disappears and the disc's own hover takes over. Elsewhere it shows as usual.</div></div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="section">
+  <h2>3. Depth for the wood boards</h2>
+  <p class="cap"><span class="call">Superseded.</span> The owner's goal was material quality, which thickness did not give. A throwaway page compared photographed grain instead, and the design (docs/superpowers/specs/2026-11-25-p2-ui-polish-design.md, section 3) follows it. This section is kept as the record of what was tried.</p>
+  <p class="cap">Four ingredients, each independent. <b>Shadow</b>: the board casts a soft shadow onto the window, so it sits above it. <b>Light</b>: a faint light from the upper left across the wood, and a bevelled rim (light top and left edge, dark bottom and right). <b>Thickness</b>: the board's front edge shows as a darker band of end grain; it costs the grid about 2.5% of its size. <b>Inlaid lines</b>: each grid line gets a faint light line below and right of it, as if cut into the wood. The stones already have shadows (slate and yunzi) and are unchanged.<br>
+  <span class="call">Recommended: shadow + light as the default for every wood board.</span> They change no geometry and cost nothing per frame, since the board is drawn once. Thickness and inlaid lines are shown so you can judge them.</p>
+  <div class="controls">
+    <label>Board <select id="pBoard"><option value="honey">蜜色</option><option value="kaya">榧木</option><option value="walnut">胡桃</option></select></label>
+    <label><input type="checkbox" id="pShadow" checked> Shadow</label>
+    <label><input type="checkbox" id="pLight" checked> Light</label>
+    <label><input type="checkbox" id="pThick"> Thickness</label>
+    <label><input type="checkbox" id="pInlay"> Inlaid lines</label>
+  </div>
+  <div class="row">
+    <div class="tile huge"><div class="well" style="padding:26px"><canvas id="play"></canvas></div><div class="name">Try the combinations</div><div class="tnote">Full 19×19 at roughly the desktop size. Switch the page background to see it on both themes.</div></div>
+    <div class="tile big"><div class="well" style="padding:26px"><canvas id="playZoom"></canvas></div><div class="name">Close-up, the same settings</div><div class="tnote">The lower-right corner, where the rim, the front edge and the inlay show most.</div></div>
+  </div>
+  <h3>Side by side, on 蜜色</h3>
+  <div class="row" id="depthRow"></div>
+  <h3>Recommended (shadow + light) on each wood board</h3>
+  <div class="row" id="depthBoards"></div>
+</div>
+
+<script>
+const MOVES = 'pd dd dp pq qo op cc dc cd cf ce de bf cb bb be bd bg ae cg qf fq cn nc kc ic ke pe qd ne oe ng ie kg gd gc fc fd fe ed nd md od lc jc hd ge he hf gf ff gg id hc ib fb ig hb lg lf le me kf lh mf nf kh ki jg mh eq fp jq lq hq fm hn dm cm dl'.split(' ');
+const N = 19, UPTO = 58, LET = 'ABCDEFGHJKLMNOPQRST';
+const pt = (s) => [LET.indexOf(s[0]), N - +s.slice(1)];
+
+function play(upto) {
+  const g = Array.from({length:N}, () => Array(N).fill(0));
+  const seq = MOVES.slice(0, upto).map((s, i) => ({ x:s.charCodeAt(0) - 97, y:s.charCodeAt(1) - 97, c:i % 2 === 0 ? 1 : 2 }));
+  let last = null;
+  for (const {x, y, c} of seq) {
+    g[y][x] = c; last = [x, y];
+    const other = 3 - c;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] !== other) continue;
+      const group = [], seen = new Set([nx+','+ny]), stack = [[nx,ny]]; let libs = 0;
+      while (stack.length) {
+        const [px, py] = stack.pop(); group.push([px,py]);
+        for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const qx = px+ex, qy = py+ey;
+          if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
+          if (g[qy][qx] === 0) libs++;
+          else if (g[qy][qx] === other && !seen.has(qx+','+qy)) { seen.add(qx+','+qy); stack.push([qx,qy]); }
+        }
+      }
+      if (libs === 0) for (const [px,py] of group) g[py][px] = 0;
+    }
+  }
+  return { g, last };
+}
+const BASE = play(UPTO);
+
+// Made-up ownership: a point is settled for a side when nearby stones clearly favour it.
+const OWN = (() => {
+  const o = Array.from({length:N}, () => Array(N).fill(0));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (BASE.g[y][x]) continue;
+    let s = 0;
+    for (let v = 0; v < N; v++) for (let u = 0; u < N; u++) {
+      const c = BASE.g[v][u]; if (!c) continue;
+      const d = Math.abs(u - x) + Math.abs(v - y); if (d > 5) continue;
+      s += (c === 1 ? 1 : -1) / (d * d);
+    }
+    if (Math.abs(s) > 0.32) o[y][x] = s > 0 ? 1 : 2;
+  }
+  return o;
+})();
+
+const CANDS = [
+  { p:'L14', w:54.2, s:1.8 }, { p:'M13', w:53.1, s:1.3 }, { p:'K12', w:52.4, s:0.9 },
+  { p:'Q10', w:50.9, s:0.2 }, { p:'C10', w:49.6, s:-0.4 },
+];
+const tier = (c) => { const loss = CANDS[0].w - c.w; return c === CANDS[0] ? 'best' : loss < 2 ? 'close' : loss <= 4 ? 'doubt' : 'poor'; };
+
+const BOARDS = {
+  honey:  { base:'#DDB067', grain:[[120,72,20],[255,236,190]], count:260, amp:.06, line:'#3A2A14', coord:'rgba(58,42,20,.8)', edge:'#9a6a2c', inlay:'rgba(255,238,200,.45)' },
+  kaya:   { base:'#E9C98A', grain:[[150,98,32],[255,244,210]], count:520, amp:.045, line:'#4A3518', coord:'rgba(74,53,24,.8)', edge:'#a8814a', inlay:'rgba(255,246,222,.55)' },
+  walnut: { base:'#6E4A2C', grain:[[40,22,8],[160,112,70]], count:300, amp:.09, line:'rgba(236,220,190,.78)', coord:'rgba(236,220,190,.7)', edge:'#3e2817', inlay:'rgba(20,10,2,.45)' },
+};
+
+function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function wood(ctx, x0, y0, W, H, b, vertical) {
+  ctx.fillStyle = b.base; ctx.fillRect(x0, y0, W, H);
+  const r = rand(7);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, W, H); ctx.clip();
+  for (let i = 0; i < b.count; i++) {
+    const x = x0 + r() * W, w = (0.6 + r() * 3.2) * W / 1736, a = 0.02 + r() * b.amp;
+    const [dk, lt] = b.grain; const c = r() > .5 ? dk : lt;
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+    ctx.beginPath(); ctx.moveTo(x, y0);
+    for (let y = 0; y <= H; y += W / 40) ctx.lineTo(x + Math.sin(y / (W / 9) + i) * W / 780, y0 + y);
+    ctx.lineTo(x + w * 2, y0 + H); ctx.lineTo(x + w * 2, y0); ctx.fill();
+  }
+  ctx.restore();
+}
+function stone(ctx, cx, cy, r, color, seed) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,24,6,.32)'; ctx.shadowBlur = r * .55; ctx.shadowOffsetX = r * .12; ctx.shadowOffsetY = r * .18;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, r * .97, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,18,4,.5)'; ctx.shadowBlur = r * .1; ctx.shadowOffsetX = r * .04; ctx.shadowOffsetY = r * .06;
+  let gr;
+  if (color === 1) {
+    gr = ctx.createRadialGradient(cx - r*.38, cy - r*.42, r*.05, cx, cy, r);
+    gr.addColorStop(0, '#6a6a68'); gr.addColorStop(.28, '#2c2c2b'); gr.addColorStop(.85, '#121212'); gr.addColorStop(1, '#0a0a0a');
+  } else {
+    gr = ctx.createRadialGradient(cx - r*.35, cy - r*.4, r*.1, cx, cy, r);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#f3f0e8'); gr.addColorStop(.9, '#d9d3c6'); gr.addColorStop(1, '#bfb8aa');
+  }
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  if (color === 1) {
+    const hl = ctx.createRadialGradient(cx - r*.4, cy - r*.45, 0, cx - r*.4, cy - r*.45, r*.5);
+    hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  } else {
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r * .96, 0, 7); ctx.clip();
+    ctx.translate(cx, cy); ctx.rotate(-0.7 + (seed % 4) * 0.12);
+    ctx.strokeStyle = 'rgba(150,135,110,.10)'; ctx.lineWidth = Math.max(.6, r * .035);
+    for (let k = -r; k < r; k += r * .16) { ctx.beginPath(); ctx.moveTo(-r, k); ctx.quadraticCurveTo(0, k + r*.08, r, k); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function disc(ctx, cx, cy, r, c) {
+  const t = tier(c), u = r / 19;
+  ctx.save();
+  if (t === 'best') { ctx.shadowColor = 'rgba(40,20,4,.35)'; ctx.shadowBlur = u * 6; ctx.shadowOffsetY = u * 2; }
+  ctx.globalAlpha = t === 'doubt' ? .85 : t === 'poor' ? .5 : 1;
+  ctx.fillStyle = t === 'best' ? '#FDF6E3' : '#FBF1D9';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.restore();
+  const ring = { best:[3.5,'#B8321F',1], close:[1.5,'#B8321F',1], doubt:[1.5,'#8A6A32',1], poor:[1,'#8A6A32',.6] }[t];
+  ctx.save(); ctx.globalAlpha = ring[2]; ctx.lineWidth = u * ring[0]; ctx.strokeStyle = ring[1];
+  ctx.beginPath(); ctx.arc(cx, cy, r - u * ring[0] / 2, 0, 7); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = '#2B1D0E'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${t === 'best' ? 700 : 600} ${r * .62}px Inter`; ctx.fillText(c.w.toFixed(1), cx, cy - r * .2);
+  ctx.font = `500 ${r * .48}px Inter`; ctx.fillText((c.s > 0 ? '+' : c.s < 0 ? '−' : '') + Math.abs(c.s).toFixed(1), cx, cy + r * .36);
+}
+// The estimate's territory square (ownership.ts: 36% of the spacing, a faint rim).
+function ownSquare(ctx, cx, cy, sp, color, dpr) {
+  const s = .36 * sp;
+  ctx.fillStyle = color === 1 ? 'rgba(18,18,18,.86)' : 'rgba(250,248,242,.92)';
+  ctx.fillRect(cx - s/2, cy - s/2, s, s);
+  ctx.lineWidth = .8 * dpr; ctx.strokeStyle = color === 1 ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.28)';
+  ctx.strokeRect(cx - s/2, cy - s/2, s, s);
+}
+// The hover square. Style A copies the estimate's; style B is larger with a contrasting rim.
+function hoverSquare(ctx, cx, cy, sp, color, style, dpr) {
+  if (style === 'A') return ownSquare(ctx, cx, cy, sp, color, dpr);
+  const s = .52 * sp;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = sp * .08; ctx.shadowOffsetY = sp * .03;
+  ctx.fillStyle = color === 1 ? '#151515' : '#f8f6ef';
+  ctx.fillRect(cx - s/2, cy - s/2, s, s);
+  ctx.restore();
+  ctx.lineWidth = Math.max(1.2 * dpr, sp * .045);
+  ctx.strokeStyle = color === 1 ? 'rgba(255,255,255,.85)' : 'rgba(25,20,12,.85)';
+  const i = ctx.lineWidth / 2;
+  ctx.strokeRect(cx - s/2 + i, cy - s/2 + i, s - 2*i, s - 2*i);
+}
+
+/*
+ * opt: board, view [x0, y0, cells], depth { shadow, light, thick, inlay }, own (estimate on),
+ * discs, hover { x, y, color, style }, coords.
+ * Returns the geometry so mouse handlers can find the point under the cursor.
+ */
+function draw(canvas, opt) {
+  const host = canvas.parentElement;
+  const pad = parseFloat(getComputedStyle(host).paddingLeft) || 0;
+  const css = (host.getBoundingClientRect().width - 2 * pad) || 290, dpr = Math.max(2, window.devicePixelRatio || 1);
+  const W = Math.round(css * dpr);
+  const d = opt.depth || {};
+  const thick = d.thick ? Math.round(W * .025) : 0;
+  const shadowPad = 0; // The shadow is CSS, outside the canvas, as the app would do it.
+  canvas.width = W; canvas.height = W;
+  canvas.style.boxShadow = d.shadow ? (document.body.classList.contains('light') ? '0 6px 18px rgba(60,40,10,.35), 0 1px 3px rgba(60,40,10,.3)' : '0 8px 22px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.5)') : 'none';
+  canvas.style.borderRadius = d.shadow || d.light ? '2px' : '3px';
+  const ctx = canvas.getContext('2d');
+  const b = BOARDS[opt.board || 'honey'];
+  const top = W - thick; // The playing surface is a square of side `top`; the front edge is the band below.
+  wood(ctx, 0, 0, W, top, b);
+  if (thick) {
+    // Front edge: darker end grain, lit from above, falling into shadow.
+    const g = ctx.createLinearGradient(0, top, 0, W);
+    g.addColorStop(0, b.edge); g.addColorStop(1, shade(b.edge, -.35));
+    ctx.fillStyle = g; ctx.fillRect(0, top, W, thick);
+    const r = rand(3);
+    for (let i = 0; i < 90; i++) { ctx.fillStyle = `rgba(0,0,0,${.04 + r() * .08})`; ctx.fillRect(r() * W, top, (1 + r() * 2) * dpr, thick); }
+    ctx.fillStyle = 'rgba(255,240,210,.35)'; ctx.fillRect(0, top, W, Math.max(1, dpr * .8));
+  }
+  const [x0, y0, cells] = opt.view || [0, 0, N];
+  const margin = top * (opt.view ? .06 : .048), sp = (top - 2 * margin) / (cells - 1);
+  const at = (i, o) => margin + (i - o) * sp;
+  const geo = { margin, sp, x0, y0, cells, dpr };
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, top); ctx.clip();
+  const lw = Math.max(1, dpr * (top / dpr / 434));
+  const grid = (style, off) => {
+    ctx.strokeStyle = style; ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      ctx.moveTo(at(i, x0) + off, at(0, y0) + off); ctx.lineTo(at(i, x0) + off, at(N - 1, y0) + off);
+      ctx.moveTo(at(0, x0) + off, at(i, y0) + off); ctx.lineTo(at(N - 1, x0) + off, at(i, y0) + off);
+    }
+    ctx.stroke();
+    ctx.lineWidth = lw * 1.6; ctx.strokeRect(at(0, x0) + off, at(0, y0) + off, (N - 1) * sp, (N - 1) * sp);
+  };
+  if (d.inlay) grid(b.inlay, Math.max(1, dpr * .9));
+  grid(b.line, 0);
+  ctx.fillStyle = b.line;
+  for (const a of [3, 9, 15]) for (const c of [3, 9, 15]) { ctx.beginPath(); ctx.arc(at(a, x0), at(c, y0), sp * .11, 0, 7); ctx.fill(); }
+  if (!opt.view && opt.coords !== false) {
+    ctx.fillStyle = b.coord; ctx.font = `${margin * .42}px Inter`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < N; i++) { ctx.fillText(LET[i], at(i, 0), margin * .45); ctx.fillText(String(N - i), margin * .45, at(i, 0)); }
+  }
+  if (d.light) {
+    // Light from the upper left across the surface, then a bevelled rim.
+    const g = ctx.createLinearGradient(0, 0, top, top);
+    g.addColorStop(0, 'rgba(255,244,220,.22)'); g.addColorStop(.5, 'rgba(255,244,220,0)'); g.addColorStop(1, 'rgba(30,15,0,.18)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, top);
+    const v = ctx.createRadialGradient(top * .42, top * .4, top * .35, top * .5, top * .5, top * .78);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(30,15,0,.10)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, top);
+    const e = Math.max(1.5 * dpr, top * .004);
+    ctx.fillStyle = 'rgba(255,246,226,.45)'; ctx.fillRect(0, 0, W, e); ctx.fillRect(0, 0, e, top);
+    ctx.fillStyle = 'rgba(40,20,0,.32)'; ctx.fillRect(0, top - e, W, e); ctx.fillRect(W - e, 0, e, top);
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (BASE.g[y][x]) stone(ctx, at(x, x0), at(y, y0), sp * .48, BASE.g[y][x], x * 7 + y * 3);
+  if (!opt.discs && BASE.last) {
+    const c = BASE.g[BASE.last[1]][BASE.last[0]];
+    ctx.fillStyle = c === 1 ? '#f2efe8' : '#1a1a1a';
+    ctx.beginPath(); ctx.arc(at(BASE.last[0], x0), at(BASE.last[1], y0), sp * .11, 0, 7); ctx.fill();
+  }
+  if (opt.own) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (OWN[y][x]) ownSquare(ctx, at(x, x0), at(y, y0), sp, OWN[y][x], dpr);
+  if (opt.discs) for (const c of CANDS) { const [x, y] = pt(c.p); disc(ctx, at(x, x0), at(y, y0), sp * .47, c); }
+  const h = opt.hover;
+  if (h && h.x != null && !BASE.g[h.y][h.x] && !(opt.discs && CANDS.some((c) => { const [x, y] = pt(c.p); return x === h.x && y === h.y; })))
+    hoverSquare(ctx, at(h.x, x0), at(h.y, y0), sp, h.color, h.style, dpr);
+  ctx.restore();
+  return geo;
+}
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16), f = (v) => Math.max(0, Math.min(255, Math.round(v * (1 + k))));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+
+// Tiles that redraw on resize and follow the mouse.
+const TILES = [];
+function tile(id, opt, hoverable) {
+  const canvas = document.getElementById(id);
+  const t = { canvas, opt };
+  TILES.push(t);
+  if (hoverable) {
+    canvas.addEventListener('mousemove', (e) => {
+      const g = t.geo; if (!g) return;
+      const box = canvas.getBoundingClientRect(), scale = canvas.width / box.width;
+      const px = (e.clientX - box.left) * scale, py = (e.clientY - box.top) * scale;
+      const x = Math.round((px - g.margin) / g.sp) + g.x0, y = Math.round((py - g.margin) / g.sp) + g.y0;
+      const inside = x >= g.x0 && y >= g.y0 && x < Math.min(N, g.x0 + g.cells) && y < Math.min(N, g.y0 + g.cells);
+      const nx = inside ? x : null, ny = inside ? y : null;
+      if (t.opt.hover.x === nx && t.opt.hover.y === ny) return;
+      t.opt.hover.x = nx; t.opt.hover.y = ny; t.geo = draw(canvas, t.opt);
+    });
+    canvas.addEventListener('mouseleave', () => { t.opt.hover.x = null; t.geo = draw(canvas, t.opt); });
+  }
+  return t;
+}
+function redraw() { for (const t of TILES) t.geo = draw(t.canvas, t.opt); }
+
+const icons = {
+  undo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  redo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
+};
+for (const n of [1, 2, 3]) { document.getElementById('undo' + n).innerHTML = icons.undo; document.getElementById('redo' + n).innerHTML = icons.redo; }
+
+// 1: the phone board, estimate on.
+const phone = document.getElementById('phoneBoard');
+phone.style.width = '320px';
+phone.parentElement.style.setProperty('padding', '0');
+TILES.push({ canvas: phone, opt: { board:'honey', own:true, coords:false }, fixed:320 });
+
+// 2: hover. The starting point sits in Black's area on the right, among territory squares.
+// The empty Black point in the view with the most Black territory squares around it.
+const inBlack = (() => {
+  let best = [14, 8], most = -1;
+  for (let y = 4; y < 12; y++) for (let x = 10; x < 18; x++) {
+    if (OWN[y][x] !== 1) continue;
+    let n = 0; for (let v = y - 1; v <= y + 1; v++) for (let u = x - 1; u <= x + 1; u++) if (OWN[v] && OWN[v][u] === 1) n++;
+    if (n > most) { most = n; best = [x, y]; }
+  }
+  return best;
+})();
+const emptyNear = (x, y) => { for (let r = 0; r < 6; r++) for (let v = y - r; v <= y + r; v++) for (let u = x - r; u <= x + r; u++) if (v >= 0 && u >= 0 && v < N && u < N && !BASE.g[v][u]) return [u, v]; return [x, y]; };
+const sPt = emptyNear(7, 7), wPt = emptyNear(5, 13), cPt = emptyNear(9, 9);
+tile('hA', { board:'honey', view:[9, 3, 10], own:true, hover:{ x:inBlack[0], y:inBlack[1], color:1, style:'A' } }, true);
+tile('hB', { board:'honey', view:[9, 3, 10], own:true, hover:{ x:inBlack[0], y:inBlack[1], color:1, style:'B' } }, true);
+tile('hW', { board:'honey', view:[0, 9, 10], hover:{ x:wPt[0], y:wPt[1], color:2, style:'B' } }, true);
+tile('hS', { board:'kaya', view:[0, 0, 10], hover:{ x:sPt[0], y:sPt[1], color:2, style:'B' } }, true);
+tile('hC', { board:'honey', view:[4, 1, 13], discs:true, hover:{ x:cPt[0], y:cPt[1], color:1, style:'B' } }, true);
+
+// 3: depth.
+const P = { board:'honey', depth:{ shadow:true, light:true, thick:false, inlay:false } };
+tile('play', P);
+tile('playZoom', { view:[10, 10, 9], get depth() { return P.depth; }, get board() { return P.board; } });
+const sync = () => {
+  P.board = document.getElementById('pBoard').value;
+  P.depth = { shadow:pShadow.checked, light:pLight.checked, thick:pThick.checked, inlay:pInlay.checked };
+  redraw();
+};
+for (const id of ['pBoard', 'pShadow', 'pLight', 'pThick', 'pInlay']) document.getElementById(id).addEventListener('change', sync);
+
+const SIDE = [
+  ['Today (flat)', {}],
+  ['Shadow + light (recommended)', { shadow:true, light:true }],
+  ['+ thickness', { shadow:true, light:true, thick:true }],
+  ['+ thickness + inlaid lines', { shadow:true, light:true, thick:true, inlay:true }],
+];
+for (const [name, depth] of SIDE) {
+  const d = document.createElement('div'); d.className = 'tile';
+  d.innerHTML = `<div class="well" style="padding:20px"><canvas></canvas></div><div class="name">${name}</div>`;
+  document.getElementById('depthRow').appendChild(d);
+  TILES.push({ canvas: d.querySelector('canvas'), opt: { board:'honey', depth } });
+}
+for (const [k, name] of [['honey', '蜜色'], ['kaya', '榧木'], ['walnut', '胡桃']]) {
+  const d = document.createElement('div'); d.className = 'tile';
+  d.innerHTML = `<div class="well" style="padding:20px"><canvas></canvas></div><div class="name">${name}</div>`;
+  document.getElementById('depthBoards').appendChild(d);
+  TILES.push({ canvas: d.querySelector('canvas'), opt: { board:k, depth:{ shadow:true, light:true } } });
+}
+
+window.addEventListener('load', () => document.fonts.ready.then(redraw));
+window.addEventListener('resize', redraw);
+</script>
+</body>
+</html>
