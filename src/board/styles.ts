@@ -1,15 +1,18 @@
 import type { BoardId, DeviceSettings, StoneId } from '../device/deviceSettings';
 
+export type GrainMapId = 'honey' | 'kaya' | 'walnut';
+
 /**
  * A board style is data (P2 M1 design 5.7): the base colour, the grain, the inks and the line
- * weight. The grain is today's procedural grain (M5), scaled: `density` shortens its periods for
- * a finer figure, `amplitude` deepens or softens it. Each wood's darker and lighter fibres are
- * its own base, shaded; `null` is a flat surface.
+ * weight. The grain is a photographed wood's light and dark (polish design 3): `map` names the
+ * grain map in `src/assets/wood`, and `contrast` is the brightness deviation it gives at full
+ * strength, multiplied into the base colour. A board with grain also gets the finish (light,
+ * sheen and rim). `null` is a flat surface.
  */
 export interface BoardStyle {
   id: BoardId;
   base: string;
-  grain: { density: number; amplitude: number } | null;
+  grain: { map: GrainMapId; contrast: number } | null;
   line: string;
   star: string;
   label: string;
@@ -22,7 +25,8 @@ export const BOARD_STYLES: Record<BoardId, BoardStyle> = {
   honey: {
     id: 'honey',
     base: '#DDB067',
-    grain: { density: 1, amplitude: 1 },
+    // Okoume: a flowing grain (板目).
+    grain: { map: 'honey', contrast: 0.1 },
     line: '#3A2A14',
     star: '#3A2A14',
     label: 'rgba(58, 42, 20, 0.8)',
@@ -31,8 +35,8 @@ export const BOARD_STYLES: Record<BoardId, BoardStyle> = {
   kaya: {
     id: 'kaya',
     base: '#E9C98A',
-    // The mockup's kaya has twice honey's fibres, at three quarters of their depth.
-    grain: { density: 2, amplitude: 0.75 },
+    // Ash: a straight grain (柾目), the usual figure of a kaya board.
+    grain: { map: 'kaya', contrast: 0.07 },
     line: '#4A3518',
     star: '#4A3518',
     label: 'rgba(74, 53, 24, 0.8)',
@@ -41,7 +45,7 @@ export const BOARD_STYLES: Record<BoardId, BoardStyle> = {
   walnut: {
     id: 'walnut',
     base: '#6E4A2C',
-    grain: { density: 1.15, amplitude: 1.5 },
+    grain: { map: 'walnut', contrast: 0.13 },
     line: 'rgba(236,220,190,.78)',
     star: 'rgba(236,220,190,.78)',
     label: 'rgba(236,220,190,.7)',
@@ -57,6 +61,12 @@ export const BOARD_STYLES: Record<BoardId, BoardStyle> = {
     lineWeight: 0.7,
   },
 };
+
+/**
+ * The grain strength out of the box (polish design 3): a share of each board's `contrast`. The
+ * owner found the grain most comfortable near the lowest setting of the comparison page.
+ */
+export const DEFAULT_GRAIN_STRENGTH = 0.35;
 
 export type StyleChoice = { board: BoardId; stones: StoneId };
 

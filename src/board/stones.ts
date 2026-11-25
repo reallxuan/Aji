@@ -21,6 +21,22 @@ export interface StoneSprites {
 }
 
 /**
+ * Where a stone rests on the wood (polish design 3): a tight dark ring just past its edge, offset
+ * a little down and right, so the stone sits on the board rather than above it.
+ */
+function paintContact(ctx: CanvasRenderingContext2D, c: number, r: number): void {
+  const x = c + r * 0.05;
+  const y = c + r * 0.08;
+  const ring = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 1.12);
+  ring.addColorStop(0, 'rgba(25,12,0,.45)');
+  ring.addColorStop(1, 'rgba(25,12,0,0)');
+  ctx.fillStyle = ring;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 1.12, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
  * Draws a stone centred at (c, c) with radius `r`, in the approved mockup's look: a soft offset
  * shadow and a tight contact shadow from a light at the upper left; black is matte slate with a
  * small highlight, white is shell with a faint diagonal grain (`rotation` turns the grain).
@@ -31,7 +47,9 @@ function paintSlate(
   r: number,
   color: Color,
   rotation: number,
+  contact: boolean,
 ): void {
+  if (contact) paintContact(ctx, c, r);
   ctx.save();
   ctx.shadowColor = 'rgba(40,24,6,.32)';
   ctx.shadowBlur = r * 0.55;
@@ -133,7 +151,14 @@ const YUNZI: Record<Color, Stops> = {
  * Yunzi (board styles mockup): matte, with no highlight or grain; a creamy white and a black
  * with a faint green edge; the same light as slate, its offset shadow lighter.
  */
-function paintYunzi(ctx: CanvasRenderingContext2D, c: number, r: number, color: Color): void {
+function paintYunzi(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  color: Color,
+  contact: boolean,
+): void {
+  if (contact) paintContact(ctx, c, r);
   ctx.save();
   ctx.shadowColor = 'rgba(40,24,6,.24)';
   ctx.shadowBlur = r * 0.45;
@@ -172,13 +197,14 @@ function sprite(
   color: Color,
   rotation: number,
   stones: StoneId,
+  contact: boolean,
 ): OffscreenCanvasLike {
   const canvas = create(half * 2, half * 2);
   const ctx = canvas.getContext('2d');
   if (!ctx || radius <= 0) return canvas;
-  if (stones === 'yunzi') paintYunzi(ctx, half, radius, color);
+  if (stones === 'yunzi') paintYunzi(ctx, half, radius, color, contact);
   else if (stones === 'flat') paintFlat(ctx, half, radius, color);
-  else paintSlate(ctx, half, radius, color, rotation);
+  else paintSlate(ctx, half, radius, color, rotation, contact);
   return canvas;
 }
 
@@ -192,14 +218,16 @@ export function makeStoneSprites(
   dpr: number,
   create: CanvasFactory,
   stones: StoneId = 'slate',
+  /** A contact shadow where the stone meets wood; none on the printed board. */
+  contact = true,
 ): StoneSprites {
   const radius = Math.max(0, spacing * STONE_RADIUS_SHARE * dpr);
   // The offset shadow reaches about 0.2 + 0.55 radii past the stone.
   const half = Math.max(1, Math.ceil(radius * 1.8));
   return {
-    black: sprite(create, half, radius, 'black', 0, stones),
+    black: sprite(create, half, radius, 'black', 0, stones, contact),
     white: Array.from({ length: WHITE_ROTATIONS }, (_, i) =>
-      sprite(create, half, radius, 'white', i, stones),
+      sprite(create, half, radius, 'white', i, stones, contact),
     ),
     radius,
   };

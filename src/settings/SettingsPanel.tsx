@@ -38,7 +38,7 @@ import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
 import { DiscPreview } from './DiscPreview';
 import { LayoutSettings } from '../layout/LayoutMenu';
-import { BoardStyleControl } from './BoardStyleControl';
+import { BoardStyleControl, GrainStrengthControl } from './BoardStyleControl';
 import { CacheRow } from './CacheRow';
 import { PanelTitle } from './NoticeView';
 import { RulesControl } from './RulesControl';
@@ -240,6 +240,9 @@ export function SettingsPanel() {
           </Row>
           <Row label={t('settings.board.title')}>
             <BoardStyleControl />
+          </Row>
+          <Row label={t('settings.board.grain')}>
+            <GrainStrengthControl />
           </Row>
           <LayoutSettings />
           {/* Its only place (owner, 2026-11-22): a window preference, not a game action. */}

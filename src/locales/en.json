@@ -377,6 +377,8 @@
       "board": "Board",
       "set": "{{board}} with {{stones}}",
       "custom": "Custom",
+      "grain": "Wood grain",
+      "noGrain": "The printed board has no grain",
       "boards": {
         "honey": "Honey",
         "kaya": "Kaya",
@@ -864,6 +866,8 @@
   },
   "edit": {
     "tools": "Editing tools",
+    "withKey": "{{label}} ({{key}})",
+    "estimate": "Estimate",
     "trying": "Trying moves",
     "markup": "Markup",
     "setup": "Setup",

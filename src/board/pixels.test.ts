@@ -36,23 +36,35 @@ function brightness(
 }
 
 describe('board pixels', () => {
-  it('the board is flat: no lit strip at the top, no dark strip at the bottom', () => {
+  // Columns between the A and B columns: clear of the coordinates and the grid.
+  const g = boardGeometry(VIEW.cssSize, VIEW.boardSize);
+  const columns: [number, number] = [
+    Math.round((g.lines[0] + g.spacing * 0.3) * VIEW.dpr),
+    Math.round((g.lines[0] + g.spacing * 0.7) * VIEW.dpr),
+  ];
+  const rows = (from: number, height = 2 * VIEW.dpr) => [from, from + height] as [number, number];
+
+  it('a wood board is flat inside its hairline rim (M7 design 13.5, polish design 3)', () => {
     const { ctx } = canvas();
     drawBoard(ctx, VIEW, skia);
-    const g = boardGeometry(VIEW.cssSize, VIEW.boardSize);
-    // Between the A and B columns: clear of the coordinates and the grid.
-    const columns: [number, number] = [
-      Math.round((g.lines[0] + g.spacing * 0.3) * VIEW.dpr),
-      Math.round((g.lines[0] + g.spacing * 0.7) * VIEW.dpr),
-    ];
-    const rows = (from: number) => [from, from + 2 * VIEW.dpr] as [number, number];
-    const top = brightness(ctx, columns, rows(0));
-    const bottom = brightness(ctx, columns, rows(SIZE - 2 * VIEW.dpr));
-    // The same columns a little inside each edge, still outside the grid.
+    // Past the outermost 2 CSS pixels, no lit strip at the top and no dark strip at the bottom.
+    const top = brightness(ctx, columns, rows(2 * VIEW.dpr));
     const belowTop = brightness(ctx, columns, rows(6 * VIEW.dpr));
+    const bottom = brightness(ctx, columns, rows(SIZE - 4 * VIEW.dpr));
     const aboveBottom = brightness(ctx, columns, rows(SIZE - 10 * VIEW.dpr));
     expect(Math.abs(top / belowTop - 1)).toBeLessThan(0.02);
     expect(Math.abs(bottom / aboveBottom - 1)).toBeLessThan(0.02);
+    // The rim itself: light along the top edge, shade along the bottom.
+    expect(brightness(ctx, columns, rows(0, 1))).toBeGreaterThan(belowTop * 1.05);
+    expect(brightness(ctx, columns, rows(SIZE - 1, 1))).toBeLessThan(aboveBottom * 0.95);
+  });
+
+  it('the printed board has no rim and no finish', () => {
+    const { ctx } = canvas();
+    drawBoard(ctx, { ...VIEW, style: 'printed' }, skia);
+    const top = brightness(ctx, columns, rows(0));
+    const bottom = brightness(ctx, columns, rows(SIZE - 2 * VIEW.dpr));
+    expect(Math.abs(top / bottom - 1)).toBeLessThan(0.005);
   });
 
   it('draws coordinates unless they are hidden', () => {

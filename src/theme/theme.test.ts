@@ -50,6 +50,10 @@ it('defines the light tokens from the interface design', () => {
 it('defines the dark tokens as the default before a theme is set', () => {
   expect(css).toMatch(/:root,\s*:root\[data-theme='dark'\]\s*\{/);
 });
+it('gives a wood board a shadow in each theme (UI polish design 3)', () => {
+  expect(css).toMatch(/:root,\s*:root\[data-theme='dark'\]\s*\{\s*--board-shadow:[^;]+;/);
+  expect(css).toMatch(/:root\[data-theme='light'\]\s*\{\s*--board-shadow:[^;]+;/);
+});
 it('defines the board base colour once for both themes', () => {
   expect(css).toMatch(/:root\s*\{[^}]*--board-base:\s*#DDB067;/i);
 });

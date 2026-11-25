@@ -10,7 +10,7 @@ describe('board styles', () => {
       star: '#3A2A14',
       label: 'rgba(58, 42, 20, 0.8)',
       lineWeight: 1,
-      grain: { density: 1, amplitude: 1 },
+      grain: { map: 'honey', contrast: 0.1 },
     });
   });
 

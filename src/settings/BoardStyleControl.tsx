@@ -9,9 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import { BoardCanvas } from '../board/BoardCanvas';
-import { sameStyle, SETS, type StyleChoice } from '../board/styles';
-import { useBoardStyle } from '../board/useBoardStyle';
+import { BOARD_STYLES, sameStyle, SETS, type StyleChoice } from '../board/styles';
+import { useBoardStyle, useGrainStrength } from '../board/useBoardStyle';
 import { BOARD_IDS, type BoardId, STONE_IDS, type StoneId } from '../device/deviceSettings';
 import { useDeviceStore } from '../device/deviceStore';
 import type { Color } from '../transport/generated/Color';
@@ -23,6 +24,7 @@ const SAMPLE: (Color | null)[] = Array.from({ length: 81 }, (_, i) =>
 );
 
 function Thumbnail({ style }: { style: StyleChoice }) {
+  const grain = useGrainStrength();
   return (
     <BoardCanvas
       cssSize={THUMB}
@@ -32,7 +34,42 @@ function Thumbnail({ style }: { style: StyleChoice }) {
       coordinates={false}
       boardStyle={style.board}
       stoneStyle={style.stones}
+      grainStrength={grain}
     />
+  );
+}
+
+/**
+ * 设置 → 界面 → 木纹强度 (UI polish design 3): one strength for every wood board, from none to the
+ * photographs' full grain, in steps of 5%. The boards follow it while it is dragged. The printed
+ * board has no grain, so the slider rests while it is chosen.
+ */
+export function GrainStrengthControl() {
+  const { t, i18n } = useTranslation();
+  const strength = useGrainStrength();
+  const board = useBoardStyle().board;
+  const update = useDeviceStore((s) => s.update);
+  const plain = !BOARD_STYLES[board].grain;
+  const percent = new Intl.NumberFormat(i18n.language, { style: 'percent' });
+  return (
+    <div
+      className="flex items-center gap-3"
+      title={plain ? t('settings.board.noGrain') : undefined}
+    >
+      <Slider
+        className="w-40"
+        aria-label={t('settings.board.grain')}
+        min={0}
+        max={1}
+        step={0.05}
+        value={[strength]}
+        disabled={plain}
+        onValueChange={([value]) => update({ grainStrength: Math.round(value * 20) / 20 })}
+      />
+      <span className="w-10 text-[0.8125rem] text-text-muted tabular-nums">
+        {percent.format(strength)}
+      </span>
+    </div>
   );
 }
 

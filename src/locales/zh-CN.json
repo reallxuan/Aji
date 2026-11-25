@@ -377,6 +377,8 @@
       "board": "棋盘",
       "set": "{{board}}配{{stones}}",
       "custom": "自定义",
+      "grain": "木纹强度",
+      "noGrain": "印刷棋盘没有木纹",
       "boards": {
         "honey": "蜜色",
         "kaya": "榧木",
@@ -864,6 +866,8 @@
   },
   "edit": {
     "tools": "编辑工具",
+    "withKey": "{{label}}（{{key}}）",
+    "estimate": "形势判断",
     "trying": "试下中",
     "markup": "标记",
     "setup": "摆子",
