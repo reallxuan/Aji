@@ -341,6 +341,11 @@ impl From<Refusal> for ProtocolError {
             Refusal::EndTryoutFirst => error(ErrorCode::GameEndTryoutFirst, "end try-out first"),
             Refusal::NoSuchNode => error(ErrorCode::GameNoSuchNode, "no such node"),
             Refusal::InvalidRules => error(ErrorCode::Internal, "komi out of range"),
+            Refusal::LaterMovesIllegal(count) => ProtocolError {
+                code: ErrorCode::GameLaterMovesIllegal,
+                message: format!("{count} later moves would become illegal"),
+                detail: Some(count.to_string()),
+            },
         }
     }
 }
