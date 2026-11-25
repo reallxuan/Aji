@@ -24,6 +24,7 @@ describe('parseDeviceSettings', () => {
       narrowTab: 'candidates',
       keymap: { ArrowLeft: 'nav.next' },
       boardStyle: { board: 'walnut', stones: 'yunzi' },
+      grainStrength: 0.6,
       startedNarrow: true,
       interfaceScale: 125,
       showCoordinates: false,
@@ -59,6 +60,12 @@ describe('parseDeviceSettings', () => {
     expect(parsed.boardStyle).toBeNull();
     expect(parsed.discLines).toEqual(['winrate', 'scoreLead']);
     expect(parsed.keymap).toEqual({});
+  });
+
+  it('a grain strength outside 0 to 1 reads as the default (UI polish design 3)', () => {
+    for (const grainStrength of [-0.1, 1.5, Number.NaN, '0.5'])
+      expect(parseDeviceSettings({ version: 1, grainStrength }).grainStrength).toBe(0.35);
+    expect(parseDeviceSettings({ version: 1, grainStrength: 0 }).grainStrength).toBe(0);
   });
 
   it('a newer version reads as defaults', () => {

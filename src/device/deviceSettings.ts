@@ -3,6 +3,7 @@ import type { DiscField } from '../transport/generated/DiscField';
 import type { CandidateSort, CandidateSortKey } from '../analysis/sortCandidates';
 import type { SwingBy } from '../analysis/swings';
 import { MAX_VARIATION } from '../analysis/constants';
+import { DEFAULT_GRAIN_STRENGTH } from '../board/styles';
 
 export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed';
 export type StoneId = 'slate' | 'yunzi' | 'flat';
@@ -57,6 +58,8 @@ export interface DeviceSettings {
   keymap: Record<string, string>;
   /** `null` is the default for the device (design 5.5). */
   boardStyle: { board: BoardId; stones: StoneId } | null;
+  /** The wood boards' grain, 0 (none) to 1 (UI polish design 3). */
+  grainStrength: number;
   /**
    * Whether the device first launched in the phone layout, which picks the default style; `null`
    * until the first launch decides it, so the default never changes with a later window size.
@@ -95,6 +98,7 @@ export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   narrowTab: null,
   keymap: {},
   boardStyle: null,
+  grainStrength: DEFAULT_GRAIN_STRENGTH,
   startedNarrow: null,
   interfaceScale: 100,
   showCoordinates: true,
@@ -195,6 +199,10 @@ export function parseDeviceSettings(raw: unknown): DeviceSettings {
     narrowTab: typeof raw.narrowTab === 'string' ? raw.narrowTab : d.narrowTab,
     keymap: parseKeymap(raw.keymap) ?? d.keymap,
     boardStyle: parseBoardStyle(raw.boardStyle) ?? d.boardStyle,
+    grainStrength:
+      typeof raw.grainStrength === 'number' && raw.grainStrength >= 0 && raw.grainStrength <= 1
+        ? raw.grainStrength
+        : d.grainStrength,
     startedNarrow: typeof raw.startedNarrow === 'boolean' ? raw.startedNarrow : d.startedNarrow,
     interfaceScale: oneOf(INTERFACE_SCALES, raw.interfaceScale)
       ? raw.interfaceScale

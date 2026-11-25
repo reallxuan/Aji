@@ -21,7 +21,7 @@ import { variationBoard } from '../analysis/variation';
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
 import { scoredOwnership, settledOwnership } from '../board/ownership';
-import { useBoardStyle } from '../board/useBoardStyle';
+import { useBoardStyle, useGrainStrength } from '../board/useBoardStyle';
 import { useEstimateStore } from '../analysis/estimateStore';
 import { stepLineOrGame, useWheelNavigation } from '../board/useWheelNavigation';
 import { useDeviceStore } from '../device/deviceStore';
@@ -75,6 +75,7 @@ export function MainBoard({
   const discLines = useDeviceStore((s) => s.settings.discLines);
   const coordinates = useDeviceStore((s) => s.settings.showCoordinates);
   const style = useBoardStyle();
+  const grainStrength = useGrainStrength();
   useVariation();
   useScoringSync();
   const transport = useTransport();
@@ -285,6 +286,7 @@ export function MainBoard({
         coordinates={coordinates}
         boardStyle={style.board}
         stoneStyle={style.stones}
+        grainStrength={grainStrength}
         lang={i18n.language}
         onHoverCandidate={onHoverCandidate}
         onTapCandidate={onTapCandidate}

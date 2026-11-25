@@ -11,3 +11,8 @@ export function useBoardStyle(): StyleChoice {
   // session's own.
   return effectiveStyle({ boardStyle }, boardStyle ? false : (stored ?? startedNarrow(layout)));
 }
+
+/** The wood boards' grain strength on this device (UI polish design 3). */
+export function useGrainStrength(): number {
+  return useDeviceStore((s) => s.settings.grainStrength);
+}

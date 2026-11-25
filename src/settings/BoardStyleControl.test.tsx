@@ -2,7 +2,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import { useDeviceStore } from '../device/deviceStore';
 import { renderWithGame } from '../game/renderWithGame';
-import { BoardStyleControl } from './BoardStyleControl';
+import { BoardStyleControl, GrainStrengthControl } from './BoardStyleControl';
 
 const stored = () => useDeviceStore.getState().settings.boardStyle;
 
@@ -59,4 +59,15 @@ it('the custom tile looks like the sets: a swatch with its name under it', () =>
     useDeviceStore.getState().update({ boardStyle: { board: 'printed', stones: 'slate' } }),
   );
   expect(swatch()!.querySelector('canvas')).not.toBeNull();
+});
+
+it('the grain slider sets the strength in steps of 5%, and rests on the printed board', () => {
+  renderWithGame(<GrainStrengthControl />);
+  const slider = screen.getByRole('slider', { name: '木纹强度' });
+  expect(slider).toHaveAttribute('aria-valuenow', '0.35');
+  expect(screen.getByText('35%')).toBeVisible();
+  fireEvent.keyDown(slider, { key: 'ArrowRight' });
+  expect(useDeviceStore.getState().settings.grainStrength).toBe(0.4);
+  act(() => useDeviceStore.getState().update({ boardStyle: { board: 'printed', stones: 'flat' } }));
+  expect(screen.getByRole('slider', { name: '木纹强度' })).toHaveAttribute('data-disabled');
 });

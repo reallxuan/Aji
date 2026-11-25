@@ -9,7 +9,7 @@ import { shownLength, type Variation, variationBoard } from '../analysis/variati
 import { useViewStore } from '../analysis/viewStore';
 import { BoardCanvas } from '../board/BoardCanvas';
 import { moveLabel } from '../board/coordinates';
-import { useBoardStyle } from '../board/useBoardStyle';
+import { useBoardStyle, useGrainStrength } from '../board/useBoardStyle';
 import { PIXELS_PER_MOVE } from '../board/useWheelNavigation';
 import { useGameStore } from '../game/gameStore';
 import { panelsOf } from '../layout/model';
@@ -88,6 +88,7 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
   const hoverLine = useViewStore((s) => s.variation);
   const hoverStep = useViewStore((s) => s.step);
   const style = useBoardStyle();
+  const grainStrength = useGrainStrength();
   const { width, height } = usePanelSize();
   const boardArea = useRef<HTMLDivElement>(null);
 
@@ -163,6 +164,7 @@ export function SubBoard({ rank }: { rank: 1 | 2 | 3 }) {
             lang={lang}
             boardStyle={style.board}
             stoneStyle={style.stones}
+            grainStrength={grainStrength}
           />
         )}
       </div>
