@@ -12,9 +12,10 @@ use std::time::Duration;
 
 use aji_core::{BoardSize, Color, Komi, Move, Point, Position, Rules};
 use aji_engine::{
-    AnalysisUpdate, ClearScope, CrashReason, Engine, EngineError, EngineEvent, EngineFiles,
-    EngineIdentity, EngineOptions, EngineState, JobItem, JobPlan, JobRun, JobStatus, NextResult,
-    Rejection, Row, Store, TrendStats, katago_launch, move_loss,
+    AnalysisUpdate, ClearScope, ConsoleKind, ConsoleLine, ConsoleNote, ConsoleRefusal,
+    ConsoleSendError, CrashReason, Engine, EngineError, EngineEvent, EngineFiles, EngineIdentity,
+    EngineOptions, EngineState, JobItem, JobPlan, JobRun, JobStatus, NextResult, Rejection, Row,
+    Store, TrendStats, katago_launch, move_loss,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::{Instant, timeout, timeout_at};
@@ -2330,5 +2331,95 @@ async fn an_identity_given_later_shows_the_stored_result() {
     .await;
     assert_eq!(found[0].as_ref().map(|u| u.root_visits), Some(50));
     assert!(found[1].is_none());
+    bounded(p.engine.shutdown()).await;
+}
+
+// ------------------------------------------------------------ P2 M4: the console
+
+/// Waits until the console holds a line matching `wanted`.
+async fn console_line(engine: &Engine, wanted: impl Fn(&ConsoleLine) -> bool) -> ConsoleLine {
+    let deadline = Instant::now() + WAIT;
+    loop {
+        if let Some(line) = engine
+            .console()
+            .lines_after(0)
+            .into_iter()
+            .find(|l| wanted(l))
+        {
+            return line;
+        }
+        assert!(Instant::now() < deadline, "no such console line");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn console_sees_stderr_sent_and_received() {
+    let mut p = start(Some(files("normal")), p1());
+    p.engine.console().set_open(true);
+    p.until_state(|s| *s == analysing()).await;
+    p.next_analysis().await;
+    let lines = p.engine.console().lines_after(0);
+    assert!(lines.iter().any(|l| l.kind == ConsoleKind::Stderr));
+    assert!(
+        lines
+            .iter()
+            .any(|l| matches!(l.note, Some(ConsoleNote::Started { .. })))
+    );
+    console_line(&p.engine, |l| {
+        l.kind == ConsoleKind::Sent && l.text.contains("\"aji-")
+    })
+    .await;
+    console_line(&p.engine, |l| {
+        l.kind == ConsoleKind::Received && l.text.contains("moveInfos")
+    })
+    .await;
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn console_send_fills_the_id_and_refuses() {
+    let mut p = start(Some(files("normal")), p1());
+    p.engine.console().set_open(true);
+    p.until_state(|s| *s == analysing()).await;
+    assert_eq!(
+        bounded(p.engine.console_send(r#"{"action":"query_version"}"#)).await,
+        Ok("console-1".to_string())
+    );
+    console_line(&p.engine, |l| {
+        l.kind == ConsoleKind::Received && l.text.contains("\"console-1\"")
+    })
+    .await;
+    for (text, refusal) in [
+        (
+            r#"{"action":"terminate_all"}"#,
+            ConsoleRefusal::TerminateAll,
+        ),
+        (
+            r#"{"action":"terminate","terminateId":"aji-3"}"#,
+            ConsoleRefusal::TerminateOther,
+        ),
+        (r#"{"moves":[]}"#, ConsoleRefusal::Search),
+        ("not json", ConsoleRefusal::NotJson),
+    ] {
+        assert_eq!(
+            bounded(p.engine.console_send(text)).await,
+            Err(ConsoleSendError::Refused(refusal))
+        );
+    }
+    // The board's analysis goes on after the console's query.
+    p.drain();
+    p.next_analysis().await;
+    assert_eq!(p.engine.state(), analysing());
+    bounded(p.engine.shutdown()).await;
+}
+
+#[tokio::test]
+async fn console_send_needs_a_running_katago() {
+    let p = start(None, p1());
+    assert_eq!(
+        bounded(p.engine.console_send(r#"{"action":"query_version"}"#)).await,
+        Err(ConsoleSendError::NotRunning)
+    );
     bounded(p.engine.shutdown()).await;
 }
