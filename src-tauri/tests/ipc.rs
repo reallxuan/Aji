@@ -69,6 +69,10 @@ impl FilePicker for Cancelled {
     fn pick_network(&self) -> Option<PathBuf> {
         None
     }
+
+    fn pick_file(&self, _: aji_lib::protocol::PickPurpose) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// A context whose folders do not exist; no request in these tests writes to them.

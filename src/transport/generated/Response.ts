@@ -4,6 +4,7 @@ import type { AnalysisUpdate } from "./AnalysisUpdate";
 import type { AppInfo } from "./AppInfo";
 import type { BackendRecommendation } from "./BackendRecommendation";
 import type { CacheStats } from "./CacheStats";
+import type { ConsoleLine } from "./ConsoleLine";
 import type { EngineState } from "./EngineState";
 import type { EngineVersionChoice } from "./EngineVersionChoice";
 import type { GameSnapshot } from "./GameSnapshot";
@@ -16,6 +17,7 @@ import type { LicenceInfo } from "./LicenceInfo";
 import type { NetworkList } from "./NetworkList";
 import type { PositionKey } from "./PositionKey";
 import type { Preview } from "./Preview";
+import type { ProfileSummary } from "./ProfileSummary";
 import type { Rejection } from "./Rejection";
 import type { RunningEngine } from "./RunningEngine";
 import type { ScoreView } from "./ScoreView";
@@ -57,4 +59,16 @@ snapshot: GameSnapshot, warnings: Array<GameWarning>, } | { "type": "gameTree" }
 /**
  * The session revision the line was read at; `trendNodes` with another are stale.
  */
-revision: number, nodes: Array<TrendNode>, } | { "type": "cacheStats" } & CacheStats | { "type": "score" } & ScoreView | { "type": "ok" };
+revision: number, nodes: Array<TrendNode>, } | { "type": "cacheStats" } & CacheStats | { "type": "score" } & ScoreView | { "type": "engineProfiles", profiles: Array<ProfileSummary>, 
+/**
+ * `devEngine` in `settings.json` decides what runs, so no profile can be switched to.
+ */
+devOverride: boolean, } | { "type": "setupPickFile", 
+/**
+ * `None` when the user cancelled the file dialog.
+ */
+path: string | null, } | { "type": "engineConsoleLines", lines: Array<ConsoleLine>, } | { "type": "engineConsoleSent", 
+/**
+ * The id KataGo's replies to the query carry.
+ */
+id: string, } | { "type": "ok" };

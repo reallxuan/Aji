@@ -8,4 +8,8 @@ export type RunningEngine = {
 /**
  * `null` for a development engine.
  */
-backend: Backend | null, networkName: string, };
+backend: Backend | null, networkName: string, 
+/**
+ * The current profile's name; `null` for a development engine.
+ */
+profile: string | null, };

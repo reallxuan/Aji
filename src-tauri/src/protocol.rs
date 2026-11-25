@@ -1,16 +1,19 @@
 //! Messages between the UI and the engine side (charter section 6.1).
 //!
 //! These types are the single source of the protocol: `ts-rs` generates the TypeScript types in
-//! `src/transport/generated/` from them. They cross a process or network boundary, so they never
-//! carry file paths, and errors carry a code rather than user-facing text.
+//! `src/transport/generated/` from them. They cross a process or network boundary, so the only
+//! file paths they carry are the engine machine's own, picked there for an own-files profile
+//! (P2 M4), and errors carry a code rather than user-facing text.
 
 use aji_core::game::{GameInfo, Illegal, Mark, Preview, Score};
 use aji_core::{Color, Move, Point, PositionKey};
-use aji_engine::{AnalysisUpdate, CacheStats, EngineState, Loss, Rejection, TrendStats};
+use aji_engine::{
+    AnalysisUpdate, CacheStats, ConsoleLine, EngineState, Loss, Rejection, TrendStats,
+};
 pub use aji_manager::OsKind;
 use aji_manager::hardware::HardwareReport;
 use aji_manager::install::{
-    ActiveSummary, DownloadSource, ImportedNetwork, JobSnapshot, LicenceInfo,
+    ActiveSummary, DownloadSource, ImportedNetwork, JobSnapshot, LicenceInfo, ProfileSummary,
 };
 use aji_manager::manifest::Backend;
 use aji_manager::recommend::{BackendRecommendation, EngineVersionChoice, NetworkList};
@@ -78,6 +81,49 @@ pub enum Request {
     SetupInstalled,
     /// Deletes everything the active set does not use.
     SetupRemoveUnused,
+    /// Asks the user for a file on the engine machine.
+    SetupPickFile {
+        purpose: PickPurpose,
+    },
+    /// The engine profiles (P2 M4 design 6.1).
+    EngineProfiles,
+    /// Stops a whole-game job, makes the profile current and runs it.
+    EngineProfileSwitch {
+        id: String,
+    },
+    /// Names a profile; an empty name goes back to the default.
+    EngineProfileRename {
+        id: String,
+        name: String,
+    },
+    /// Takes a profile off the list. Its files stay until `setupRemoveUnused`.
+    EngineProfileRemove {
+        id: String,
+    },
+    /// Checks one's own KataGo files, adds them as the current profile and runs it. The paths
+    /// are the engine machine's, as `setupPickFile` gave them.
+    EngineProfileAddOwn {
+        katago: String,
+        model: String,
+        config: String,
+        #[serde(default)]
+        #[ts(optional)]
+        name: Option<String>,
+    },
+    /// A console opened (`true`) or closed. KataGo's protocol lines are kept only while one is
+    /// open.
+    EngineConsoleOpen {
+        open: bool,
+    },
+    /// The console's kept lines after the line `after` (0 for all).
+    EngineConsoleLines {
+        #[ts(type = "number")]
+        after: u64,
+    },
+    /// A query typed into the console.
+    EngineConsoleSend {
+        query: String,
+    },
     SettingsGet,
     /// Replaces the interface preferences.
     SettingsSet {
@@ -141,6 +187,16 @@ pub enum Request {
     GameScore {
         mode: ScoreMode,
     },
+}
+
+/// The file `setupPickFile` asks for, which decides the dialog's filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum PickPurpose {
+    Katago,
+    Model,
+    Config,
 }
 
 /// Which results `cacheClear` forgets.
@@ -263,6 +319,22 @@ pub enum Response {
     },
     CacheStats(CacheStats),
     Score(ScoreView),
+    EngineProfiles {
+        profiles: Vec<ProfileSummary>,
+        /// `devEngine` in `settings.json` decides what runs, so no profile can be switched to.
+        dev_override: bool,
+    },
+    SetupPickFile {
+        /// `None` when the user cancelled the file dialog.
+        path: Option<String>,
+    },
+    EngineConsoleLines {
+        lines: Vec<ConsoleLine>,
+    },
+    EngineConsoleSent {
+        /// The id KataGo's replies to the query carry.
+        id: String,
+    },
     Ok,
 }
 
@@ -308,6 +380,8 @@ pub struct RunningEngine {
     /// `null` for a development engine.
     pub backend: Option<Backend>,
     pub network_name: String,
+    /// The current profile's name; `null` for a development engine.
+    pub profile: Option<String>,
 }
 
 /// Why every node in the selected trend is being published again.
@@ -370,6 +444,10 @@ pub enum AppEvent {
     /// The results cache changed size or fell back to memory.
     CacheStatus {
         status: CacheStats,
+    },
+    /// New console lines, batched.
+    EngineConsoleLines {
+        lines: Vec<ConsoleLine>,
     },
 }
 
@@ -560,6 +638,17 @@ pub enum ErrorCode {
     FileMissing,
     /// The position has no ownership yet to estimate a score from.
     ScoreUnavailable,
+    /// The current profile cannot be removed.
+    EngineProfileCurrent,
+    EngineNoSuchProfile,
+    /// `devEngine` in `settings.json` decides what runs.
+    EngineDevOverride,
+    /// An own-files profile's check failed; `detail` is `<file>:<problem>`, such as
+    /// `model:missing`.
+    EngineOwnFile,
+    /// The console refused a query; `detail` is why (`notJson`, `search`, `terminateAll`,
+    /// `terminateOther`).
+    EngineConsoleRefused,
 }
 
 #[cfg(test)]
@@ -918,7 +1007,8 @@ mod tests {
                 rejected: Some(rejection),
                 running: Some(RunningEngine {
                     backend: None,
-                    network_name: "m.bin.gz".into()
+                    network_name: "m.bin.gz".into(),
+                    profile: None,
                 }),
             })
             .unwrap(),
@@ -926,7 +1016,7 @@ mod tests {
                    "engine": {"state": "ready", "version": "1.18.2", "limitReached": true},
                    "position": null, "analysis": null,
                    "rejected": {"position": "0000000000000001", "message": "illegal"},
-                   "running": {"backend": null, "networkName": "m.bin.gz"}})
+                   "running": {"backend": null, "networkName": "m.bin.gz", "profile": null}})
         );
     }
 

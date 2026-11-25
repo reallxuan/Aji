@@ -7,19 +7,21 @@ use std::sync::Arc;
 
 use aji_core::game::{AnalysisRules, PositionScope, estimate, final_score, suggested_dead};
 use aji_core::{Move, ScoringRule};
-use aji_engine::{ClearScope, Engine, EngineError, EngineEvent, EngineFiles, Row};
+use aji_engine::{
+    ClearScope, ConsoleSendError, Engine, EngineError, EngineEvent, EngineFiles, Row,
+};
 use aji_manager::Setup;
 use aji_manager::install::{
-    DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, RemoveError,
-    StartError, active_summary, engine_files,
+    DownloadSource, ImportError, InstallRequest, InstallRoot, Installed, Installer, ProfileError,
+    ProfileSource, RemoveError, StartError, check_own, profile_files, summaries,
 };
 use base64::Engine as _;
 use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::game::{GameSession, OpenError, Refusal};
 use crate::protocol::{
-    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, OsKind, ProtocolError, Request,
-    Response, RunningEngine, ScoreMode, ScoreView, TrendChange,
+    AppEvent, AppInfo, CacheScope, ErrorCode, ExportOptions, OsKind, PickPurpose, ProtocolError,
+    Request, Response, RunningEngine, ScoreMode, ScoreView, TrendChange,
 };
 use crate::settings::{
     Settings, UiSettings, load_settings, record_accepted_licences, save_ui_settings,
@@ -53,10 +55,12 @@ pub struct AppContext {
 pub trait FilePicker: Send + Sync {
     /// A KataGo network file, or `None` when the user cancels.
     fn pick_network(&self) -> Option<PathBuf>;
+    /// One of an own-files profile's files, or `None` when the user cancels.
+    fn pick_file(&self, purpose: PickPurpose) -> Option<PathBuf>;
 }
 
 /// The files the engine starts with: the development engine named in the settings, else the
-/// active installed set, else none.
+/// current profile, else none.
 pub fn startup_files(
     settings: &Settings,
     installed: &Installed,
@@ -65,22 +69,39 @@ pub fn startup_files(
     if let Some(dev) = &settings.dev_engine {
         return Some(dev.files());
     }
-    engine_files(root, installed, installed.active_set()?)
+    profile_files(root, installed, &installed.current_key()?)
 }
 
-/// What the engine card names: the development engine named in the settings, else the active
-/// installed set, as [`startup_files`] chooses.
+/// What the engine card names: the development engine named in the settings, else the current
+/// profile, as [`startup_files`] chooses.
 pub fn running_engine(settings: &Settings, installed: &Installed) -> Option<RunningEngine> {
     if let Some(dev) = &settings.dev_engine {
         let network_name = dev.model.file_name()?.to_string_lossy().into_owned();
         return Some(RunningEngine {
             backend: None,
             network_name,
+            profile: None,
         });
     }
-    active_summary(installed).map(|active| RunningEngine {
-        backend: Some(active.backend),
-        network_name: active.network_name,
+    let current = summaries(installed).into_iter().find(|p| p.current)?;
+    let (backend, network_name) = match current.source {
+        ProfileSource::Managed {
+            backend,
+            network_name,
+            ..
+        } => (Some(backend), network_name),
+        ProfileSource::Own { model, .. } => (
+            None,
+            Path::new(&model)
+                .file_name()?
+                .to_string_lossy()
+                .into_owned(),
+        ),
+    };
+    Some(RunningEngine {
+        backend,
+        network_name,
+        profile: Some(current.name),
     })
 }
 
@@ -208,6 +229,53 @@ pub async fn handle(ctx: &AppContext, request: Request) -> Result<Response, Prot
         Request::SetupImportNetwork => return import_network(ctx).await,
         Request::SetupInstalled => return setup_installed(ctx).await,
         Request::SetupRemoveUnused => return remove_unused(ctx).await,
+        Request::SetupPickFile { purpose } => return pick_file(ctx, purpose).await,
+        Request::EngineProfiles => return Ok(engine_profiles(ctx)),
+        Request::EngineProfileSwitch { id } => return switch_profile(ctx, &id).await,
+        Request::EngineProfileRename { id, name } => {
+            return ctx
+                .installer
+                .rename_profile(&id, name)
+                .map(|()| Response::Ok)
+                .map_err(profile_error);
+        }
+        Request::EngineProfileRemove { id } => {
+            return ctx
+                .installer
+                .remove_profile(&id)
+                .map(|()| Response::Ok)
+                .map_err(profile_error);
+        }
+        Request::EngineProfileAddOwn {
+            katago,
+            model,
+            config,
+            name,
+        } => return add_own_profile(ctx, [katago, model, config], name).await,
+        Request::EngineConsoleOpen { open } => {
+            ctx.engine.console().set_open(open);
+            return Ok(Response::Ok);
+        }
+        Request::EngineConsoleLines { after } => {
+            return Ok(Response::EngineConsoleLines {
+                lines: ctx.engine.console().lines_after(after),
+            });
+        }
+        Request::EngineConsoleSend { query } => {
+            return match ctx.engine.console_send(&query).await {
+                Ok(id) => Ok(Response::EngineConsoleSent { id }),
+                Err(ConsoleSendError::Refused(refusal)) => Err(ProtocolError {
+                    detail: Some(camel_case(&refusal)),
+                    ..error(
+                        ErrorCode::EngineConsoleRefused,
+                        "the console refused the query",
+                    )
+                }),
+                Err(ConsoleSendError::NotRunning) => {
+                    Err(error(ErrorCode::EngineNotRunning, "KataGo is not running"))
+                }
+            };
+        }
         Request::SettingsGet => Ok(Response::Settings {
             settings: load_settings(&ctx.settings_path)
                 .map(|s| s.ui)
@@ -312,6 +380,124 @@ async fn remove_unused(ctx: &AppContext) -> Result<Response, ProtocolError> {
         Ok(Err(RemoveError::Io(e))) => Err(error(ErrorCode::Internal, e)),
         Err(e) => Err(error(ErrorCode::Internal, e.to_string())),
     }
+}
+
+/// The profile list, and whether `devEngine` overrides it.
+fn engine_profiles(ctx: &AppContext) -> Response {
+    Response::EngineProfiles {
+        profiles: ctx.installer.profiles(),
+        dev_override: dev_override(ctx),
+    }
+}
+
+fn dev_override(ctx: &AppContext) -> bool {
+    load_settings(&ctx.settings_path).is_ok_and(|settings| settings.dev_engine.is_some())
+}
+
+fn refuse_dev_override(ctx: &AppContext) -> Result<(), ProtocolError> {
+    match dev_override(ctx) {
+        true => Err(error(
+            ErrorCode::EngineDevOverride,
+            "devEngine in settings.json decides what runs",
+        )),
+        false => Ok(()),
+    }
+}
+
+/// Stops a whole-game job (its results stay), switches, and sends every client the trend read
+/// under the new engine (design 6.2). The profile already running is left as it is, and a
+/// refusal comes before the job is stopped.
+async fn switch_profile(ctx: &AppContext, id: &str) -> Result<Response, ProtocolError> {
+    refuse_dev_override(ctx)?;
+    let Some(profile) = ctx.installer.profiles().into_iter().find(|p| p.id == id) else {
+        return Err(profile_error(ProfileError::NoSuchProfile));
+    };
+    if profile.current {
+        return Ok(Response::Ok);
+    }
+    if ctx.installer.busy() {
+        return Err(profile_error(ProfileError::Busy));
+    }
+    ctx.engine.stop_job().await;
+    ctx.installer
+        .switch_profile(id)
+        .await
+        .map_err(profile_error)?;
+    reset_trend(ctx).await;
+    Ok(Response::Ok)
+}
+
+/// Checks the files and a running install first, so a refused add leaves a running whole-game
+/// job alone; then adds and runs
+/// them as [`switch_profile`] does.
+async fn add_own_profile(
+    ctx: &AppContext,
+    [katago, model, config]: [String; 3],
+    name: Option<String>,
+) -> Result<Response, ProtocolError> {
+    refuse_dev_override(ctx)?;
+    let (katago, model, config) = (
+        PathBuf::from(katago),
+        PathBuf::from(model),
+        PathBuf::from(config),
+    );
+    check_own(&katago, &model, &config)
+        .await
+        .map_err(|refusal| profile_error(ProfileError::Own(refusal)))?;
+    if ctx.installer.busy() {
+        return Err(profile_error(ProfileError::Busy));
+    }
+    ctx.engine.stop_job().await;
+    ctx.installer
+        .add_own_profile(katago, model, config, name)
+        .await
+        .map_err(profile_error)?;
+    reset_trend(ctx).await;
+    Ok(engine_profiles(ctx))
+}
+
+async fn reset_trend(ctx: &AppContext) {
+    let session = ctx.game.lock().await;
+    push_trend(ctx, &session, TrendChange::Reset).await;
+}
+
+fn profile_error(e: ProfileError) -> ProtocolError {
+    match e {
+        ProfileError::NoSuchProfile => error(ErrorCode::EngineNoSuchProfile, "no such profile"),
+        ProfileError::Current => error(
+            ErrorCode::EngineProfileCurrent,
+            "the current profile cannot be removed",
+        ),
+        ProfileError::Busy => error(ErrorCode::SetupBusy, "an install job is running"),
+        ProfileError::Own(refusal) => ProtocolError {
+            detail: Some(format!(
+                "{}:{}",
+                camel_case(&refusal.file),
+                camel_case(&refusal.problem)
+            )),
+            ..error(ErrorCode::EngineOwnFile, format!("{refusal:?}"))
+        },
+        ProfileError::Io(e) => error(ErrorCode::Internal, e),
+    }
+}
+
+/// A unit variant's serialised name, for an error's `detail`.
+fn camel_case(value: &impl serde::Serialize) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+/// Opens the file dialog on the blocking pool.
+async fn pick_file(ctx: &AppContext, purpose: PickPurpose) -> Result<Response, ProtocolError> {
+    let files = Arc::clone(&ctx.files);
+    let picked = tokio::task::spawn_blocking(move || files.pick_file(purpose))
+        .await
+        .map_err(|e| error(ErrorCode::Internal, e.to_string()))?;
+    Ok(Response::SetupPickFile {
+        path: picked.map(|p| p.to_string_lossy().into_owned()),
+    })
 }
 
 pub(crate) fn error(code: ErrorCode, message: impl Into<String>) -> ProtocolError {
@@ -825,12 +1011,17 @@ mod tests {
 
     use crate::settings::{DevEngine, Settings, load_settings};
     use crate::test_support::{apple_m5, installer, setup, unconfigured};
+    use aji_manager::install::{OwnProfile, ProfileKey, load_installed, own_files};
 
     /// The dialog's answer: a file, or `None` for a cancelled dialog.
     struct Picks(Option<PathBuf>);
 
     impl FilePicker for Picks {
         fn pick_network(&self) -> Option<PathBuf> {
+            self.0.clone()
+        }
+
+        fn pick_file(&self, _: PickPurpose) -> Option<PathBuf> {
             self.0.clone()
         }
     }
@@ -1215,7 +1406,8 @@ mod tests {
             running_engine(&settings, &installed),
             Some(RunningEngine {
                 backend: None,
-                network_name: "m.bin.gz".into()
+                network_name: "m.bin.gz".into(),
+                profile: None,
             })
         );
     }
@@ -1228,7 +1420,8 @@ mod tests {
             running_engine(&Settings::default(), &installed),
             Some(RunningEngine {
                 backend: Some(Backend::Metal),
-                network_name: "net".into()
+                network_name: "net".into(),
+                profile: Some("net".into()),
             })
         );
         assert_eq!(
@@ -3831,5 +4024,304 @@ mod tests {
             let (ao, bo) = (a.ownership.as_ref().unwrap(), b.ownership.as_ref().unwrap());
             assert!(ao.iter().zip(bo).all(|(x, y)| (x - y).abs() <= 1));
         }
+    }
+
+    // ------------------------------------------------------------ P2 M4: profiles and console
+
+    /// A record with two sets of one engine, the first current, saved under `dir`'s data
+    /// folder.
+    fn two_profiles(dir: &Path) -> InstallRoot {
+        let root = InstallRoot::new(dir.join("data"));
+        let mut installed = installed_with_an_active_set(&root);
+        installed.networks.insert(
+            "other".into(),
+            InstalledNetwork {
+                file: "other.bin.gz".into(),
+                name: "other".into(),
+                imported: false,
+            },
+        );
+        installed.put_set(EngineSet {
+            network: "other".into(),
+            config: "configs/eng/other.cfg".into(),
+            ..installed.sets[0].clone()
+        });
+        save_installed(&root.record_file(), &installed).unwrap();
+        root
+    }
+
+    fn code_and_detail(result: Result<Response, ProtocolError>) -> (ErrorCode, Option<String>) {
+        let error = result.unwrap_err();
+        (error.code, error.detail)
+    }
+
+    #[tokio::test]
+    async fn switching_profiles_resets_the_trend() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = two_profiles(dir.path());
+        let mut ctx = ctx_in(dir.path(), None);
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        let Ok(Response::EngineProfiles {
+            profiles,
+            dev_override,
+        }) = handle(&ctx, Request::EngineProfiles).await
+        else {
+            panic!("no profile list");
+        };
+        assert!(!dev_override);
+        assert_eq!(
+            profiles
+                .iter()
+                .map(|p| (p.id.as_str(), p.current))
+                .collect::<Vec<_>>(),
+            [("eng/net", true), ("eng/other", false)]
+        );
+
+        assert_eq!(
+            handle(
+                &ctx,
+                Request::EngineProfileSwitch {
+                    id: "eng/other".into()
+                }
+            )
+            .await,
+            Ok(Response::Ok)
+        );
+        assert_eq!(
+            load_installed(&root.record_file()).current_key(),
+            Some(ProfileKey::Set {
+                engine: "eng".into(),
+                network: "other".into()
+            })
+        );
+        let events = recorded.0.lock().unwrap().clone();
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                AppEvent::GameTrend {
+                    reason: TrendChange::Reset,
+                    ..
+                }
+            )),
+            "{events:?}"
+        );
+        assert_eq!(
+            code_and_detail(handle(&ctx, Request::EngineProfileSwitch { id: "nope".into() }).await)
+                .0,
+            ErrorCode::EngineNoSuchProfile
+        );
+        assert_eq!(
+            code_and_detail(
+                handle(
+                    &ctx,
+                    Request::EngineProfileRemove {
+                        id: "eng/other".into()
+                    }
+                )
+                .await
+            )
+            .0,
+            ErrorCode::EngineProfileCurrent
+        );
+        assert_eq!(
+            handle(
+                &ctx,
+                Request::EngineProfileRename {
+                    id: "eng/net".into(),
+                    name: "主力".into()
+                }
+            )
+            .await,
+            Ok(Response::Ok)
+        );
+    }
+
+    #[tokio::test]
+    async fn switching_to_the_current_profile_does_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = two_profiles(dir.path());
+        let mut ctx = ctx_in(dir.path(), None);
+        let recorded = Arc::new(Recorded::default());
+        ctx.events = recorded.clone();
+        let before = std::fs::read(root.record_file()).unwrap();
+        assert_eq!(
+            handle(
+                &ctx,
+                Request::EngineProfileSwitch {
+                    id: "eng/net".into()
+                }
+            )
+            .await,
+            Ok(Response::Ok)
+        );
+        assert_eq!(std::fs::read(root.record_file()).unwrap(), before);
+        let events = recorded.0.lock().unwrap().clone();
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, AppEvent::GameTrend { .. })),
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_dev_engine_locks_the_profiles() {
+        let dir = tempfile::tempdir().unwrap();
+        two_profiles(dir.path());
+        let ctx = ctx_in(dir.path(), None);
+        std::fs::create_dir_all(ctx.settings_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &ctx.settings_path,
+            serde_json::json!({
+                "devEngine": {
+                    "katago": dir.path().join("k").to_string_lossy(),
+                    "model": dir.path().join("m.bin.gz").to_string_lossy(),
+                    "config": dir.path().join("a.cfg").to_string_lossy(),
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let Ok(Response::EngineProfiles { dev_override, .. }) =
+            handle(&ctx, Request::EngineProfiles).await
+        else {
+            panic!("no profile list");
+        };
+        assert!(dev_override);
+        assert_eq!(
+            code_and_detail(
+                handle(
+                    &ctx,
+                    Request::EngineProfileSwitch {
+                        id: "eng/other".into()
+                    }
+                )
+                .await
+            )
+            .0,
+            ErrorCode::EngineDevOverride
+        );
+    }
+
+    #[tokio::test]
+    async fn an_own_profile_refusal_names_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ctx_in(dir.path(), None);
+        let missing = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
+        assert_eq!(
+            code_and_detail(
+                handle(
+                    &ctx,
+                    Request::EngineProfileAddOwn {
+                        katago: missing("katago"),
+                        model: missing("m.bin.gz"),
+                        config: missing("a.cfg"),
+                        name: None,
+                    }
+                )
+                .await
+            ),
+            (ErrorCode::EngineOwnFile, Some("katago:missing".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn pick_file_answers_with_a_path_or_none() {
+        let picked = PathBuf::from("/opt/homebrew/bin/katago");
+        let picking = ctx_in(Path::new("no-such-aji-folder"), Some(picked.clone()));
+        assert_eq!(
+            handle(
+                &picking,
+                Request::SetupPickFile {
+                    purpose: PickPurpose::Katago
+                }
+            )
+            .await,
+            Ok(Response::SetupPickFile {
+                path: Some(picked.to_string_lossy().into_owned())
+            })
+        );
+        assert_eq!(
+            handle(
+                &ctx(),
+                Request::SetupPickFile {
+                    purpose: PickPurpose::Config
+                }
+            )
+            .await,
+            Ok(Response::SetupPickFile { path: None })
+        );
+    }
+
+    #[test]
+    fn startup_runs_the_current_profile() {
+        let base = std::env::temp_dir().join("aji-startup-own");
+        let root = InstallRoot::new(base.join("data"));
+        let mut installed = installed_with_an_active_set(&root);
+        let own = OwnProfile {
+            id: "own-1".into(),
+            name: "brew".into(),
+            katago: base.join("katago"),
+            model: base.join("own").join("m.bin.gz"),
+            config: base.join("own").join("a.cfg"),
+        };
+        installed.own.push(own.clone());
+        installed.set_current(ProfileKey::Own { id: "own-1".into() });
+        assert_eq!(
+            startup_files(&Settings::default(), &installed, &root),
+            Some(own_files(&own.katago, &own.model, &own.config))
+        );
+        assert_eq!(
+            running_engine(&Settings::default(), &installed),
+            Some(RunningEngine {
+                backend: None,
+                network_name: "m.bin.gz".into(),
+                profile: Some("brew".into()),
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn console_queries_and_refusals_cross_the_protocol() {
+        let ctx = ctx();
+        assert_eq!(
+            handle(&ctx, Request::EngineConsoleOpen { open: true }).await,
+            Ok(Response::Ok)
+        );
+        ctx.engine
+            .console()
+            .push(aji_engine::ConsoleKind::Stderr, "hello".into());
+        let Ok(Response::EngineConsoleLines { lines }) =
+            handle(&ctx, Request::EngineConsoleLines { after: 0 }).await
+        else {
+            panic!("no lines");
+        };
+        assert_eq!(lines.last().unwrap().text, "hello");
+        assert_eq!(
+            code_and_detail(
+                handle(
+                    &ctx,
+                    Request::EngineConsoleSend {
+                        query: r#"{"action":"terminate_all"}"#.into()
+                    }
+                )
+                .await
+            ),
+            (ErrorCode::EngineConsoleRefused, Some("terminateAll".into()))
+        );
+        assert_eq!(
+            code_and_detail(
+                handle(
+                    &ctx,
+                    Request::EngineConsoleSend {
+                        query: r#"{"action":"query_version"}"#.into()
+                    }
+                )
+                .await
+            )
+            .0,
+            ErrorCode::EngineNotRunning
+        );
     }
 }
