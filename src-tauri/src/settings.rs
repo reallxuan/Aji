@@ -138,28 +138,7 @@ impl DevEngine {
     /// its command line (roadmap 3.3). A model elsewhere keeps its absolute path. The KataGo binary
     /// is the program, not an argument, and stays absolute.
     pub fn files(&self) -> EngineFiles {
-        let working_dir = self
-            .config
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default();
-        let config = self
-            .config
-            .file_name()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| self.config.clone());
-        let model = self
-            .model
-            .strip_prefix(&working_dir)
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|_| self.model.clone());
-        EngineFiles {
-            katago: self.katago.clone(),
-            model,
-            config,
-            working_dir,
-            path_prepend: Vec::new(),
-        }
+        aji_manager::install::own_files(&self.katago, &self.model, &self.config)
     }
 }
 

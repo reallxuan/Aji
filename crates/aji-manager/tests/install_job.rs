@@ -18,7 +18,7 @@ use aji_manager::install::{
     ImportError, InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork,
     Installer, InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent,
     RemoveError, SPACE_MARGIN, SetKey, StartError, TaskKind, TaskState, import_network,
-    load_installed,
+    load_installed, update_installed,
 };
 use aji_manager::manifest::{
     Archive, Backend, ClientOptions, Digest, Engine, FileRef, Licence, Manifest, ManifestStore,
@@ -1251,7 +1251,7 @@ fn dir_bytes(path: &Path) -> u64 {
 }
 
 #[tokio::test]
-async fn unused_counts_everything_outside_the_active_set() {
+async fn unused_counts_only_what_no_set_uses() {
     let w = world(Spec::default());
     assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
     assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
@@ -1261,6 +1261,13 @@ async fn unused_counts_everything_outside_the_active_set() {
     std::fs::write(staging.join("big"), vec![0u8; 1000]).unwrap();
     std::fs::create_dir_all(w.root.downloads_dir()).unwrap();
     std::fs::write(w.root.downloads_dir().join("y.part"), vec![0u8; 300]).unwrap();
+    // Both sets are profiles (P2 M4 design 6.4): only the leftovers count.
+    assert_eq!(w.installer.unused_bytes(), 1000 + 300);
+    // Once the OpenCL profile is removed, its engine and configs count too.
+    update_installed(&w.root.record_file(), |r| {
+        r.sets.retain(|s| s.engine != OPENCL)
+    })
+    .unwrap();
     let expected = dir_bytes(&w.root.engine_dir(OPENCL))
         + 1000
         + 300
@@ -1270,11 +1277,22 @@ async fn unused_counts_everything_outside_the_active_set() {
 }
 
 #[tokio::test]
-async fn remove_unused_deletes_them_and_keeps_the_active_set() {
+async fn remove_unused_deletes_what_no_set_uses_and_keeps_every_profile() {
     let w = world(Spec::default());
     assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
     assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
     std::fs::create_dir_all(w.root.root().join("staging").join("x")).unwrap();
+    assert!(w.installer.remove_unused().is_ok());
+    assert!(
+        w.root.engine_dir(OPENCL).exists(),
+        "a profile's engine was deleted"
+    );
+    assert_eq!(w.record().sets.len(), 2);
+
+    update_installed(&w.root.record_file(), |r| {
+        r.sets.retain(|s| s.engine != OPENCL)
+    })
+    .unwrap();
     let unused = w.installer.unused_bytes();
     assert_eq!(w.installer.remove_unused(), Ok(unused));
     assert_eq!(w.installer.unused_bytes(), 0);

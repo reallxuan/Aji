@@ -522,7 +522,7 @@ impl Installer {
                 .map_err(|e| RemoveError::Io(format!("{}: {e}", unused.display())))?;
             freed += size;
         }
-        let kept = super::unused::only_active(&installed);
+        let kept = super::unused::only_used(&installed);
         update_installed(&path, |record| *record = kept)
             .map_err(|e| RemoveError::Io(format!("{}: {e}", path.display())))?;
         drop(jobs);
@@ -883,6 +883,7 @@ impl Installer {
             config: String::new(),
             threads: 0,
             benchmark: Vec::new(),
+            name: None,
         };
         let (threads, speeds) = if job.benchmark {
             self.measure(job, &installed, &set, cores).await?

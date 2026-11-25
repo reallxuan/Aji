@@ -1163,6 +1163,7 @@ mod tests {
             config: "configs/eng/net.cfg".into(),
             threads: 8,
             benchmark: vec![],
+            name: None,
         };
         installed.active = Some(set.key());
         installed.put_set(set);
