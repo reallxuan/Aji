@@ -1,3 +1,4 @@
+import { cn } from 'cn';
 import type { Orientation } from './orientation';
 import type { MarkAt } from '../transport/generated/MarkAt';
 import { drawMarks } from './marks';
@@ -13,7 +14,7 @@ import { drawOwnership, type Settled } from './ownership';
 import { domCanvas } from './canvasFactory';
 import { badgeAt, drawEditOverlay, type Badge, type StoneNumber } from './badges';
 import { drawBoard } from './drawBoard';
-import { boardGeometry, pointAt, STONE_RADIUS_SHARE } from './geometry';
+import { boardGeometry, gridPosition, pointAt, STONE_RADIUS_SHARE } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
@@ -75,6 +76,11 @@ export interface BoardCanvasProps {
   /** The board and stone styles (P2 M1 design 5.7). Default honey with slate. */
   boardStyle?: BoardId;
   stoneStyle?: StoneId;
+  /**
+   * The colour a click on an empty point would place, for the square under the mouse (polish
+   * design 2); `null` when a click places nothing. Mouse only, never on touch.
+   */
+  hoverColor?: Color | null;
 }
 
 const NONE: never[] = [];
@@ -82,6 +88,11 @@ const NO_CANDIDATES: readonly ShownCandidate[] = [];
 /** The Inter faces the layers draw with: coordinates 400, disc lines 500 to 700. */
 const FONT_FACES = ['400 12px Inter', '500 12px Inter', '600 12px Inter', '700 12px Inter'];
 const DEFAULT_LINES: [DiscField, DiscField] = ['winrate', 'scoreLead'];
+/**
+ * The hover square's side as a share of the spacing (polish design 2): larger than the estimate's
+ * territory squares (`OWNER_SQUARE`, 0.36), and rimmed, so the two never read alike.
+ */
+export const HOVER_SQUARE = 0.52;
 
 /**
  * The board surface, `cssSize` CSS pixels square: the wood and grid on one canvas, the stones on
@@ -119,6 +130,7 @@ export function BoardCanvas({
   badges = NONE,
   tryoutNumbers = NONE,
   numbers = NONE,
+  hoverColor = null,
 }: BoardCanvasProps) {
   const markLayer = useRef<HTMLCanvasElement>(null);
   const editLayer = useRef<HTMLCanvasElement>(null);
@@ -127,6 +139,10 @@ export function BoardCanvas({
   const ownershipLayer = useRef<HTMLCanvasElement>(null);
   const candidateLayer = useRef<HTMLCanvasElement>(null);
   const hovered = useRef<Move | null>(null);
+  // The point under the mouse, off every disc and badge, on the grid it was found on; drives the
+  // hover square. A new size, rotation or coordinate band leaves it until the mouse moves again.
+  const grid = `${cssSize}:${boardSize}:${orientation}:${coordinates}`;
+  const [pointer, setPointer] = useState<{ point: Point; grid: string } | null>(null);
   const dpr = useDevicePixelRatio();
   // Coordinates, discs and line numbers are drawn in Inter; redraw once every face they use has
   // loaded (M7 minor 10).
@@ -345,8 +361,31 @@ export function BoardCanvas({
     const box = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - box.left;
     const y = event.clientY - box.top;
-    hover(hitBadge(x, y) ? null : candidateAt(x, y, view, candidates));
+    const badge = hitBadge(x, y);
+    const disc = badge ? null : candidateAt(x, y, view, candidates);
+    hover(disc);
+    const point = badge || disc ? null : pointAt(x, y, view);
+    setPointer((old) =>
+      old?.grid === grid && old.point.x === point?.x && old.point.y === point.y
+        ? old
+        : point && { point, grid },
+    );
   };
+  const geometry = boardGeometry(cssSize, boardSize, coordinates, orientation);
+  const under =
+    pointer?.grid === grid && pointer.point.x < boardSize && pointer.point.y < boardSize
+      ? pointer.point
+      : null;
+  // Not while a stone is dragged: the drop moves that stone, whatever the tool's colour.
+  const square =
+    hoverColor &&
+    under &&
+    !variation &&
+    !gestures.ghost &&
+    !stones[under.y * boardSize + under.x] &&
+    !candidates.some(({ move }) => move.type === 'play' && move.x === under.x && move.y === under.y)
+      ? { at: gridPosition(geometry, under), color: hoverColor }
+      : null;
 
   const backing = Math.max(0, Math.round(cssSize * dpr));
   const style = { width: cssSize, height: cssSize, display: 'block' } as const;
@@ -356,7 +395,12 @@ export function BoardCanvas({
       // Sideways swipes are the board's; the page may still scroll up and down.
       style={{ width: cssSize, height: cssSize, touchAction: onDragStone ? 'none' : 'pan-y' }}
       onMouseMove={onMouseMove}
-      onMouseLeave={() => !gestures.afterTouch() && hover(null)}
+      // A finger has no hover: a touch clears the mouse's square.
+      onPointerDownCapture={(event) => event.pointerType !== 'mouse' && setPointer(null)}
+      onMouseLeave={() => {
+        setPointer(null);
+        if (!gestures.afterTouch()) hover(null);
+      }}
       onClick={onClick}
       onContextMenu={(event) => {
         if (!onContextPoint && !onContextBadge) return;
@@ -421,6 +465,26 @@ export function BoardCanvas({
               stones[gestures.ghost.from.y * boardSize + gestures.ghost.from.x] === 'black'
                 ? 'white'
                 : 'black',
+          }}
+        />
+      )}
+      {square && (
+        <span
+          aria-hidden
+          data-layer="hover-square"
+          data-color={square.color}
+          className={cn(
+            'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 shadow-[0_1px_2px_rgba(0,0,0,0.25)]',
+            square.color === 'black'
+              ? 'border-white/85 bg-[#151515]'
+              : 'border-[#19140c]/85 bg-[#f8f6ef]',
+          )}
+          style={{
+            left: square.at.x,
+            top: square.at.y,
+            width: geometry.spacing * HOVER_SQUARE,
+            height: geometry.spacing * HOVER_SQUARE,
+            borderWidth: Math.max(1.2, geometry.spacing * 0.045),
           }}
         />
       )}

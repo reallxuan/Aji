@@ -2,7 +2,7 @@ import { createFakeGame } from '../dev/fakeGame';
 import { connectReplay } from '../game/actions';
 import { createI18n } from '../i18n/createI18n';
 import { act, fireEvent, screen } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetScoringStore, useScoringStore } from '../scoring/scoringStore';
 import { boardGeometry } from '../board/geometry';
 import { resetGameStore, useGameStore } from '../game/gameStore';
@@ -12,6 +12,9 @@ import { MainBoard } from '../layout/MainBoard';
 import { HeaderPanel } from '../panel/HeaderPanel';
 import { useTreeStore } from '../game/treeStore';
 import { resetEstimateStore, useEstimateStore } from '../analysis/estimateStore';
+import { HOVER_SQUARE } from '../board/BoardCanvas';
+import { OWNER_SQUARE } from '../board/ownership';
+import { useModeStore } from './modeStore';
 
 beforeEach(() => {
   resetGameStore();
@@ -311,3 +314,42 @@ it.each(['click', 'pointer', 'frame'] as const)(
     }
   },
 );
+
+describe('the square under the mouse', () => {
+  const square = () => document.querySelector<HTMLElement>('[data-layer="hover-square"]');
+  const move = (x: number, y: number) => fireEvent.mouseMove(surface(), at(x, y));
+  beforeEach(() => useModeStore.setState({ mode: 'normal', setupTool: 'black' }));
+
+  it('shows the side to move on an empty point, and nothing on a stone or off the board', () => {
+    const snapshot = makeSnapshot({ nextColor: 'white' });
+    snapshot.stones[3 * 19 + 4] = 'black';
+    renderWithGame(board, { snapshot });
+    move(2, 7);
+    expect(square()).toHaveAttribute('data-color', 'white');
+    move(4, 3);
+    expect(square()).toBeNull();
+    move(2, 7);
+    fireEvent.mouseLeave(surface());
+    expect(square()).toBeNull();
+  });
+
+  it('is larger than a territory square', () => {
+    expect(HOVER_SQUARE).toBeGreaterThan(OWNER_SQUARE);
+  });
+
+  it('is hidden in markup and follows the setup tool', async () => {
+    renderWithGame(board, { snapshot: makeSnapshot({ nextColor: 'black' }) });
+    act(() => useModeStore.setState({ mode: 'markup' }));
+    move(2, 7);
+    expect(square()).toBeNull();
+    act(() => useModeStore.getState().setMode('setup'));
+    act(() => useModeStore.getState().setSetupTool('white'));
+    move(3, 7);
+    expect(square()).toHaveAttribute('data-color', 'white');
+    act(() => useModeStore.getState().setSetupTool('alternate'));
+    move(2, 7);
+    expect(square()).toHaveAttribute('data-color', 'black');
+    act(() => void useModeStore.getState().takeAlternateColor('black'));
+    expect(square()).toHaveAttribute('data-color', 'white');
+  });
+});

@@ -7,6 +7,7 @@ import { numbersFor } from '../board/moveNumbers';
 import { BoardMenu, type BoardMenuTarget } from '../edit/BoardMenu';
 import { boardNodes } from '../edit/boardNodes';
 import { useModeStore } from '../edit/modeStore';
+import type { Color } from '../transport/generated/Color';
 import { edit } from '../game/editActions';
 import { navigate } from '../game/actions';
 import { useActionContext } from '../game/useActionContext';
@@ -56,6 +57,10 @@ export function MainBoard({
   const markEdit = useMarkEdit(ctx);
   const mode = useModeStore((s) => s.mode);
   const markupTool = useModeStore((s) => s.markupTool);
+  const setupTool = useModeStore((s) => s.setupTool);
+  const alternate = useModeStore((s) => s.takeAlternateColor);
+  // Subscribed so the square follows each alternate stone placed.
+  useModeStore((s) => s.alternateTaken);
   const tree = useTreeStore((s) => s.tree);
   const currentTree = tree?.revision === snapshot?.treeRevision ? tree : null;
   const nodes = useMemo(() => boardNodes(currentTree), [currentTree]);
@@ -214,6 +219,18 @@ export function MainBoard({
       };
     });
   };
+  // The colour a click on an empty point places, for the hover square (polish design 2).
+  const hoverColor: Color | null = !snapshot
+    ? null
+    : editing
+      ? snapshot.nextColor
+      : setup
+        ? setupTool === 'black' || setupTool === 'white'
+          ? setupTool
+          : setupTool === 'alternate'
+            ? alternate.peek(snapshot.nextColor)
+            : snapshot.nextColor
+        : null;
   const moveStone = (from: Point, to: Point) =>
     setupEdit(ctx, () => ({ kind: 'moveStone', from, to }));
   const go = useFrameNavigate();
@@ -277,6 +294,7 @@ export function MainBoard({
         onSwipeStep={onSwipeStep}
         hoveredCandidate={hoveredCandidate}
         variation={line}
+        hoverColor={hoverColor}
       />
       {snapshot && !scoring && (
         <FreehandOverlay
