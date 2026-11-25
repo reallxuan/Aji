@@ -134,6 +134,40 @@
       "switchBody": "切换引擎会停止整盘分析（已完成 {{done}} / {{total}}）。已有结果会保留，切回来时还在。仍然切换吗？",
       "cancel": "取消",
       "switch": "切换"
+    },
+    "add": {
+      "title": "添加引擎",
+      "ways": {
+        "download": "下载权重",
+        "import": "导入权重文件",
+        "own": "使用自己的 KataGo"
+      },
+      "build": "使用 KataGo {{version}}（{{backend}}）",
+      "inUse": "已有",
+      "downloadUse": "下载并使用",
+      "importNote": "选择一个 KataGo 权重文件（.bin.gz），复制到 Aji 里，用下面的 KataGo 运行。",
+      "chooseFile": "选择权重文件…",
+      "files": {
+        "katago": "KataGo 程序",
+        "model": "权重",
+        "config": "配置文件"
+      },
+      "browse": "浏览…",
+      "name": "名字",
+      "namePlaceholder": "可选，默认用权重的名字",
+      "check": "检查并添加",
+      "problems": {
+        "missing": "找不到这个文件。",
+        "notKatago": "这不是 KataGo 程序。",
+        "unreadable": "读不了这个文件。"
+      },
+      "noBuild": "还没有安装 KataGo。设置向导会安装 KataGo 和权重。",
+      "openWizard": "打开设置向导",
+      "networksFailed": "权重列表加载失败。",
+      "failed": "添加引擎失败：{{reason}}",
+      "cancelInstall": "取消",
+      "back": "返回",
+      "cancel": "取消"
     }
   },
   "analysis": {

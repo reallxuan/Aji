@@ -9,6 +9,7 @@ import { useEngineSync } from './engine/useEngineSync';
 import { useConsoleSync } from './engine/consoleStore';
 import { useProfileSync } from './engine/profileStore';
 import { SwitchConfirm } from './engine/SwitchConfirm';
+import { AddEngineDialog } from './engine/AddEngineDialog';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { LayoutFrame } from './layout/LayoutFrame';
@@ -83,6 +84,7 @@ export default function App() {
         sideLocked={installing}
       />
       <SwitchConfirm />
+      <AddEngineDialog />
     </>
   );
 }

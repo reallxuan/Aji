@@ -82,6 +82,15 @@ export function createFakeProfiles(active: ActiveSummary | null) {
       find(id);
       makeCurrent(id);
     },
+    /** An install job's set: a profile, or the existing one with the new speed, made current. */
+    installed(set: ActiveSummary) {
+      const id = `${set.engine}/${set.network}`;
+      const source = { kind: 'managed' as const, ...set };
+      const known = profiles.find((p) => p.id === id);
+      if (known) known.source = source;
+      else profiles.push({ id, name: set.networkName, current: false, source });
+      makeCurrent(id);
+    },
     rename(id: string, name: string) {
       const profile = find(id);
       const trimmed = name.trim();

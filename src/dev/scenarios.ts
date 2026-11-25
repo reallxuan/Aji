@@ -777,6 +777,9 @@ export function scenarioTransport(
           // A measured count names its speed, as the backend reads it from the benchmark.
           visitsPerSecond: benchmark ? 180 : null,
         };
+        // The installed set is a profile, and the current one (P2 M4 design 6.1).
+        profiles.installed(active);
+        results = resultsFor(profiles.current()?.id);
       });
     }
 

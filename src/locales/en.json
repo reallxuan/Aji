@@ -134,6 +134,40 @@
       "switchBody": "Switching engines stops the game analysis ({{done}} / {{total}} done). The results so far are kept and are still there when you switch back. Switch anyway?",
       "cancel": "Cancel",
       "switch": "Switch"
+    },
+    "add": {
+      "title": "Add engine",
+      "ways": {
+        "download": "Download a network",
+        "import": "Import a network file",
+        "own": "Use my own KataGo"
+      },
+      "build": "Uses KataGo {{version}} ({{backend}})",
+      "inUse": "Added",
+      "downloadUse": "Download and use",
+      "importNote": "Choose a KataGo network file (.bin.gz). It is copied into Aji and runs on the build below.",
+      "chooseFile": "Choose network file…",
+      "files": {
+        "katago": "KataGo program",
+        "model": "Network",
+        "config": "Config file"
+      },
+      "browse": "Browse…",
+      "name": "Name",
+      "namePlaceholder": "Optional, the network by default",
+      "check": "Check and add",
+      "problems": {
+        "missing": "This file cannot be found.",
+        "notKatago": "This is not a KataGo program.",
+        "unreadable": "This file cannot be read."
+      },
+      "noBuild": "No KataGo is installed yet. The setup wizard installs one with a network.",
+      "openWizard": "Open the setup wizard",
+      "networksFailed": "The network list could not be loaded.",
+      "failed": "Adding the engine failed: {{reason}}",
+      "cancelInstall": "Cancel",
+      "back": "Back",
+      "cancel": "Cancel"
     }
   },
   "analysis": {

@@ -16,25 +16,40 @@ vi.mock('../platform/openExternal', () => ({ openExternal: (url: string) => open
 
 const installs = (requests: Request[]) => requests.filter((r) => r.type === 'setupInstall');
 
-function licenceTransport() {
+/** Each backend's newest engine; `licensed` backends need the CUDA licences too. */
+function licenceTransport(licensed: string[] = []) {
+  const engineOf = (backend: string) => `katago-v1.18.2-${backend}-windows-x64`;
   return setupTransport({
-    setupLicences: () => ({ type: 'setupLicences', licences: cudaLicences, accepted: [] }),
+    setupLicences: (request) => ({
+      type: 'setupLicences',
+      licences:
+        request.type === 'setupLicences' &&
+        (request.engine.includes('cuda') || licensed.some((b) => request.engine === engineOf(b)))
+          ? cudaLicences
+          : [],
+      accepted: [],
+    }),
     setupVersions: (request) => ({
       type: 'setupVersions',
       versions:
-        request.type === 'setupVersions' && request.backend === 'directml'
+        request.type === 'setupVersions' && request.backend !== 'cuda'
           ? [
               {
                 ...versions[0],
-                engine: 'katago-v1.18.2-directml-windows-x64',
+                engine: engineOf(request.backend),
                 runtimeBytes: null,
-                downloadBytes: 24 * 1024 * 1024,
+                downloadBytes: (request.backend === 'directml' ? 24 : 31) * 1024 * 1024,
               },
             ]
           : versions,
     }),
   });
 }
+
+const decline = async () => {
+  const button = await screen.findByRole('button', { name: '不接受' });
+  await act(async () => fireEvent.click(button));
+};
 
 describe('StepLicence', () => {
   beforeEach(() => {
@@ -89,6 +104,32 @@ describe('StepLicence', () => {
     expect(await screen.findByText('此后端需要的许可协议尚未接受。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '改用 DirectML（24 MB）' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重试' })).not.toBeInTheDocument();
+  });
+
+  it("offers the next backend in the server's order, default then fallbacks (M5 minor 10)", async () => {
+    const transport = licenceTransport();
+    // The display order puts OpenCL before DirectML; the server falls back to DirectML first.
+    const recommendation = {
+      ...nvidiaRecommendation,
+      backends: [
+        nvidiaRecommendation.backends[0],
+        nvidiaRecommendation.backends[2],
+        nvidiaRecommendation.backends[1],
+        nvidiaRecommendation.backends[3],
+      ],
+    };
+    renderSetup(transport, { step: 'licence', recommendation, ...chosen });
+    await decline();
+    expect(
+      await screen.findByRole('button', { name: '改用 DirectML（24 MB）' }),
+    ).toBeInTheDocument();
+  });
+
+  it('skips a backend that needs the licence just declined (M5 minor 10)', async () => {
+    const transport = licenceTransport(['directml']);
+    renderSetup(transport, { step: 'licence', recommendation: nvidiaRecommendation, ...chosen });
+    await decline();
+    expect(await screen.findByRole('button', { name: '改用 OpenCL（31 MB）' })).toBeInTheDocument();
   });
 
   it('starts at once when every licence is already accepted', async () => {
