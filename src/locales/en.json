@@ -864,6 +864,8 @@
   },
   "edit": {
     "tools": "Editing tools",
+    "withKey": "{{label}} ({{key}})",
+    "estimate": "Estimate",
     "trying": "Trying moves",
     "markup": "Markup",
     "setup": "Setup",

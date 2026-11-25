@@ -11,6 +11,7 @@ import { makeSnapshot } from '../game/testing';
 import { MainBoard } from '../layout/MainBoard';
 import { HeaderPanel } from '../panel/HeaderPanel';
 import { useTreeStore } from '../game/treeStore';
+import { resetEstimateStore, useEstimateStore } from '../analysis/estimateStore';
 
 beforeEach(() => {
   resetGameStore();
@@ -33,6 +34,21 @@ it('header shows try-out and modified tags, guards modes at root zero and expose
   expect(screen.getByRole('button', { name: '重做' })).toBeDisabled();
   expect(screen.getByText('试下中')).toBeVisible();
   expect(screen.getByText('已修改')).toBeVisible();
+});
+
+it('the edit row switches the position estimate, with its key in the hint', () => {
+  resetEstimateStore();
+  renderWithGame(<HeaderPanel />, { snapshot: makeSnapshot({ tryout: 0 }) });
+  const button = screen.getByRole('button', { name: '形势判断' });
+  expect(button).toHaveAttribute('aria-pressed', 'false');
+  expect(button).toHaveAttribute('title', '形势判断（T）');
+  // Try-out does not lock it: it is a view, not a board mode.
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  expect(useEstimateStore.getState().on).toBe(true);
+  expect(button).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(button);
+  expect(useEstimateStore.getState().on).toBe(false);
 });
 
 it('a click on a stone does nothing, and its menu navigates to its placing node', async () => {
