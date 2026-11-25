@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use aji_engine::{EngineState, Throttle};
@@ -19,9 +19,10 @@ use super::unused::{ActiveSummary, RemoveError};
 use super::{
     BenchmarkProgress, DownloadError, DownloadItem, DownloadOptions, DownloadSource, Downloader,
     EngineSet, FailureCode, FreeSpace, ImportError, ImportedNetwork, InstallRoot, Installed,
-    InstalledEngine, InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, ThreadSpeed,
-    UnpackError, analysis_config, benchmark_config, benchmark_plan, check_space, choose_threads,
-    default_threads, engine_files, extract_size, load_installed, run_benchmark, run_test_query,
+    InstalledEngine, InstalledNetwork, InstalledRuntime, NotEnoughSpace, Origin, OwnProfile,
+    ProfileError, ProfileKey, ProfileSummary, ThreadSpeed, UnpackError, analysis_config,
+    benchmark_config, benchmark_plan, check_space, choose_threads, default_threads, engine_files,
+    extract_size, load_installed, profile_files, run_benchmark, run_test_query,
     runtime_is_complete, unpack_engine, unpack_runtime, update_installed,
 };
 use crate::atomic::write_atomically;
@@ -218,6 +219,12 @@ pub struct Installer {
     jobs: Mutex<Jobs>,
     /// Held across every read-modify-write of `installed.json`.
     record: Mutex<()>,
+    /// Imports hold it shared through their copy; removing unused files holds it alone, so a
+    /// half-copied network is never taken for an unused file (M5 minor 11).
+    files: RwLock<()>,
+    /// Held by a profile switch or add from its record write until the engine has the files,
+    /// so two switches cannot cross and no job starts in between (P2 M4 review).
+    switching: tokio::sync::Mutex<()>,
     /// True while no job runs.
     idle: watch::Sender<bool>,
     /// True while a job has the GPU for its benchmark and test query.
@@ -311,6 +318,8 @@ impl Installer {
                 last: None,
             }),
             record: Mutex::new(()),
+            files: RwLock::new(()),
+            switching: tokio::sync::Mutex::new(()),
             idle: watch::Sender::new(true),
             holds_engine: AtomicBool::new(false),
             #[cfg(feature = "test-seams")]
@@ -381,7 +390,7 @@ impl Installer {
         let cancel = CancellationToken::new();
         let snapshot = {
             let mut jobs = lock(&self.jobs);
-            if jobs.current.is_some() {
+            if jobs.current.is_some() || self.switching.try_lock().is_err() {
                 return Err(StartError::Busy);
             }
             jobs.next_id += 1;
@@ -481,6 +490,7 @@ impl Installer {
 
     /// See `import_network`. Blocking: call it off the async runtime.
     pub fn import_network(&self, file: &Path) -> Result<ImportedNetwork, ImportError> {
+        let _files = self.files.read().unwrap_or_else(|e| e.into_inner());
         // The copy can take a while: only the record write holds the lock.
         let (imported, network) = super::copy_network(&self.root, file)?;
         let _record = lock(&self.record);
@@ -509,6 +519,11 @@ impl Installer {
         if jobs.current.is_some() {
             return Err(RemoveError::Busy);
         }
+        let _files = match self.files.try_write() {
+            Ok(files) => files,
+            Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Err(RemoveError::Busy),
+        };
         let _record = lock(&self.record);
         let path = self.root.record_file();
         // Strict: a record that cannot be read would look like one with no active set, and
@@ -532,6 +547,170 @@ impl Installer {
     pub fn installed(&self) -> Installed {
         let _record = lock(&self.record);
         load_installed(&self.root.record_file())
+    }
+
+    /// The engine profiles (P2 M4 design 6).
+    pub fn profiles(&self) -> Vec<ProfileSummary> {
+        super::summaries(&self.installed())
+    }
+
+    /// True while an install or benchmark job runs: profile switches and adds are refused.
+    pub fn busy(&self) -> bool {
+        lock(&self.jobs).current.is_some()
+    }
+
+    /// Makes the profile `id` current and runs its files. Refused while a job runs; the
+    /// profile already current is left running as it is.
+    pub async fn switch_profile(&self, id: &str) -> Result<(), ProfileError> {
+        let _switching = self.switching.lock().await;
+        if self.busy() {
+            return Err(ProfileError::Busy);
+        }
+        let record = self.installed();
+        if record
+            .profile_key(id)
+            .is_some_and(|key| Some(key) == record.current_key())
+        {
+            return Ok(());
+        }
+        let (installed, key) = self.change_profiles(true, |installed| {
+            let key = installed
+                .profile_key(id)
+                .ok_or(ProfileError::NoSuchProfile)?;
+            installed.set_current(key.clone());
+            Ok(key)
+        })?;
+        self.run_profile(&installed, &key).await
+    }
+
+    /// Names the profile `id`; an empty name goes back to the default.
+    pub fn rename_profile(&self, id: &str, name: String) -> Result<(), ProfileError> {
+        let name = name.trim().to_string();
+        self.change_profiles(false, |installed| {
+            match installed
+                .profile_key(id)
+                .ok_or(ProfileError::NoSuchProfile)?
+            {
+                ProfileKey::Set { engine, network } => {
+                    let set = installed
+                        .sets
+                        .iter_mut()
+                        .find(|s| s.engine == engine && s.network == network)
+                        .ok_or(ProfileError::NoSuchProfile)?;
+                    set.name = (!name.is_empty()).then_some(name);
+                }
+                ProfileKey::Own { id } => {
+                    let own = installed
+                        .own
+                        .iter_mut()
+                        .find(|o| o.id == id)
+                        .ok_or(ProfileError::NoSuchProfile)?;
+                    if !name.is_empty() {
+                        own.name = name;
+                    } else {
+                        own.name = super::model_name(&own.model);
+                    }
+                }
+            }
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    /// Takes the profile `id` off the list. Its files stay until Remove unused, and only when
+    /// no other profile uses them.
+    pub fn remove_profile(&self, id: &str) -> Result<(), ProfileError> {
+        self.change_profiles(false, |installed| {
+            let key = installed
+                .profile_key(id)
+                .ok_or(ProfileError::NoSuchProfile)?;
+            if installed.current_key().as_ref() == Some(&key) {
+                return Err(ProfileError::Current);
+            }
+            match key {
+                ProfileKey::Set { engine, network } => installed
+                    .sets
+                    .retain(|s| !(s.engine == engine && s.network == network)),
+                ProfileKey::Own { id } => installed.own.retain(|o| o.id != id),
+            }
+            Ok(())
+        })
+        .map(|_| ())
+    }
+
+    /// Checks one's own KataGo, network and config, adds them as a profile named `name` (or
+    /// after the network), makes it current and runs it. Refused while a job runs.
+    pub async fn add_own_profile(
+        &self,
+        katago: PathBuf,
+        model: PathBuf,
+        config: PathBuf,
+        name: Option<String>,
+    ) -> Result<ProfileSummary, ProfileError> {
+        let _switching = self.switching.lock().await;
+        if lock(&self.jobs).current.is_some() {
+            return Err(ProfileError::Busy);
+        }
+        super::check_own(&katago, &model, &config)
+            .await
+            .map_err(ProfileError::Own)?;
+        let name = name
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| super::model_name(&model));
+        let (installed, key) = self.change_profiles(true, |installed| {
+            let id = installed.next_own_id();
+            installed.own.push(OwnProfile {
+                id: id.clone(),
+                name,
+                katago,
+                model,
+                config,
+            });
+            let key = ProfileKey::Own { id };
+            installed.set_current(key.clone());
+            Ok(key)
+        })?;
+        self.run_profile(&installed, &key).await?;
+        super::summaries(&installed)
+            .into_iter()
+            .find(|p| p.id == key.id())
+            .ok_or(ProfileError::NoSuchProfile)
+    }
+
+    /// Reads the record strictly, applies `change` and saves it, under the record lock (and,
+    /// with `idle`, only while no job runs).
+    fn change_profiles<T>(
+        &self,
+        idle: bool,
+        change: impl FnOnce(&mut Installed) -> Result<T, ProfileError>,
+    ) -> Result<(Installed, T), ProfileError> {
+        let jobs = lock(&self.jobs);
+        if idle && jobs.current.is_some() {
+            return Err(ProfileError::Busy);
+        }
+        let _record = lock(&self.record);
+        let path = self.root.record_file();
+        let io = |e: std::io::Error| ProfileError::Io(format!("{}: {e}", path.display()));
+        let mut installed = super::record::read_installed(&path).map_err(io)?;
+        let value = change(&mut installed)?;
+        super::save_installed(&path, &installed).map_err(io)?;
+        drop(jobs);
+        Ok((installed, value))
+    }
+
+    /// Hands the profile's files to the engine.
+    async fn run_profile(
+        &self,
+        installed: &Installed,
+        key: &ProfileKey,
+    ) -> Result<(), ProfileError> {
+        let files = profile_files(&self.root, installed, key).ok_or(ProfileError::NoSuchProfile)?;
+        let identity = aji_engine::identity_for(&files).await;
+        self.engine
+            .set_files(Some(files), identity)
+            .await
+            .map_err(|e| ProfileError::Io(e.to_string()))
     }
 
     async fn run(self: Arc<Self>, job: Job) {
@@ -888,7 +1067,22 @@ impl Installer {
         let (threads, speeds) = if job.benchmark {
             self.measure(job, &installed, &set, cores).await?
         } else {
-            (default_threads(job.engine.backend, cores), Vec::new())
+            // A new network on the build that runs now keeps its thread count (design 6.3).
+            let current = match installed.current_key() {
+                Some(ProfileKey::Set {
+                    engine: e,
+                    network: n,
+                }) if e == engine => installed
+                    .sets
+                    .iter()
+                    .find(|s| s.engine == e && s.network == n)
+                    .map(|s| s.threads),
+                _ => None,
+            };
+            (
+                current.unwrap_or_else(|| default_threads(job.engine.backend, cores)),
+                Vec::new(),
+            )
         };
 
         self.set_row(
@@ -985,7 +1179,10 @@ impl Installer {
         let record = self
             .write_record(|r| {
                 r.put_set(set.clone());
-                r.active = Some(key);
+                r.set_current(ProfileKey::Set {
+                    engine: key.engine,
+                    network: key.network,
+                });
             })
             .map_err(|line| disk_stop(line, None))?;
         match engine_files(&self.root, &record, &set) {

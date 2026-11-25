@@ -16,9 +16,9 @@ use aji_manager::hardware::{CpuReport, GpuReport, GpuVendor, HardwareReport, OsK
 use aji_manager::install::{
     ActiveSummary, DownloadOptions, DownloadSource, FailureCode, FallbackOffer, FreeSpace,
     ImportError, InstallOptions, InstallRequest, InstallRoot, Installed, InstalledNetwork,
-    Installer, InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent,
-    RemoveError, SPACE_MARGIN, SetKey, StartError, TaskKind, TaskState, import_network,
-    load_installed, update_installed,
+    Installer, InstallerParts, JobOutcome, JobSnapshot, LicenceInfo, LicensedComponent, OwnFile,
+    OwnProblem, OwnRefusal, ProfileError, ProfileKey, RemoveError, SPACE_MARGIN, SetKey,
+    StartError, TaskKind, TaskState, import_network, load_installed, update_installed,
 };
 use aji_manager::manifest::{
     Archive, Backend, ClientOptions, Digest, Engine, FileRef, Licence, Manifest, ManifestStore,
@@ -1407,4 +1407,280 @@ async fn holds_engine_is_true_only_during_the_benchmark_and_test() {
         "{seen:?}"
     );
     assert!(!w.installer.holds_engine());
+}
+
+// ---------------------------------------------------------------- P2 M4: engine profiles
+
+fn set_id(engine: &str) -> String {
+    format!("{engine}/{NET}")
+}
+
+/// Waits until the fake in `dir` has written a pid that is alive.
+async fn fake_runs_in(dir: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Ok(text) = std::fs::read_to_string(dir.join("fake-katago.pid"))
+            && let Ok(pid) = text.trim().parse::<u32>()
+            && common::fake::alive(pid)
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "no fake runs in {}",
+            dir.display()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn switching_runs_the_new_profiles_files() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.engine_runs().await;
+    let _ = std::fs::remove_file(w.root.engine_dir(OPENCL).join("fake-katago.pid"));
+
+    w.installer.switch_profile(&set_id(OPENCL)).await.unwrap();
+    let record = w.record();
+    assert_eq!(record.active, key(OPENCL));
+    assert_eq!(
+        record.current,
+        Some(ProfileKey::Set {
+            engine: OPENCL.into(),
+            network: NET.into()
+        })
+    );
+    fake_runs_in(&w.root.engine_dir(OPENCL)).await;
+    let profiles = w.installer.profiles();
+    assert_eq!(profiles.len(), 2);
+    assert!(profiles.iter().any(|p| p.id == set_id(OPENCL) && p.current));
+    assert_eq!(
+        w.installer.switch_profile("nope").await,
+        Err(ProfileError::NoSuchProfile)
+    );
+}
+
+#[tokio::test]
+async fn the_current_profile_cannot_be_removed() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(
+        w.installer.remove_profile(&set_id(EIGEN)),
+        Err(ProfileError::Current)
+    );
+    w.installer.remove_profile(&set_id(OPENCL)).unwrap();
+    assert_eq!(w.record().sets.len(), 1);
+    // Removing deletes nothing: the files wait for Remove unused.
+    assert!(w.root.engine_dir(OPENCL).exists());
+    assert!(w.installer.unused_bytes() > 0);
+}
+
+#[tokio::test]
+async fn a_removed_profiles_network_stays_while_another_uses_it() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.installer.remove_profile(&set_id(OPENCL)).unwrap();
+    w.installer.remove_unused().unwrap();
+    assert!(w.root.network_file("net.bin.gz").exists());
+    assert!(!w.root.engine_dir(OPENCL).exists());
+}
+
+#[tokio::test]
+async fn profiles_are_renamed_and_named_by_their_network() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.installer.profiles()[0].name, NET);
+    w.installer
+        .rename_profile(&set_id(EIGEN), "  b28 主力 ".into())
+        .unwrap();
+    assert_eq!(w.installer.profiles()[0].name, "b28 主力");
+    w.installer
+        .rename_profile(&set_id(EIGEN), " ".into())
+        .unwrap();
+    assert_eq!(w.installer.profiles()[0].name, NET);
+    assert_eq!(
+        w.installer.rename_profile("own-4", "x".into()),
+        Err(ProfileError::NoSuchProfile)
+    );
+}
+
+#[tokio::test]
+async fn an_own_profile_names_the_failing_file() {
+    let w = world(Spec::default());
+    let (dir, files) = common::fake::install(
+        &json!({ "transcript": common::fake::transcript() }),
+        common::fake::ANALYSIS_CONFIG,
+    );
+    let katago = files.katago.clone();
+    let model = dir.path().join("model.bin.gz");
+    let config = dir.path().join("engine.cfg");
+
+    let refused = |file, problem| Err(ProfileError::Own(OwnRefusal { file, problem }));
+    assert_eq!(
+        w.installer
+            .add_own_profile(
+                katago.clone(),
+                dir.path().join("missing.bin.gz"),
+                config.clone(),
+                None
+            )
+            .await,
+        refused(OwnFile::Model, OwnProblem::Missing)
+    );
+    let script = dir.path().join("not-katago.sh");
+    std::fs::write(&script, "#!/bin/sh\necho hello\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    assert_eq!(
+        w.installer
+            .add_own_profile(script, model.clone(), config.clone(), None)
+            .await,
+        refused(OwnFile::Katago, OwnProblem::NotKatago)
+    );
+
+    let added = w
+        .installer
+        .add_own_profile(katago, model, config, None)
+        .await
+        .unwrap();
+    assert_eq!(added.id, "own-1");
+    assert_eq!(added.name, "model");
+    assert!(added.current);
+    assert_eq!(
+        w.record().current,
+        Some(ProfileKey::Own { id: "own-1".into() })
+    );
+    w.engine_runs().await;
+}
+
+#[tokio::test]
+async fn a_job_without_benchmark_takes_the_current_threads() {
+    // More threads barely help, so the benchmark picks fewer than OpenCL's default of 16.
+    let w = world(Spec {
+        opencl: working(json!({ "8": 100.0, "16": 101.0, "32": 101.5 })),
+        ..Spec::default()
+    });
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    let measured = w.record().sets[0].threads;
+    assert_ne!(
+        measured, 16,
+        "the test needs a count other than the default"
+    );
+    w.installer
+        .start(InstallRequest {
+            benchmark: false,
+            ..request(OPENCL, NET, &[])
+        })
+        .unwrap();
+    assert_eq!(w.finished().await.outcome, Some(JobOutcome::Installed));
+    let record = w.record();
+    assert_eq!(record.sets.len(), 1);
+    assert_eq!(record.sets[0].threads, measured);
+}
+
+#[tokio::test]
+async fn switching_while_a_job_runs_is_busy() {
+    let w = world(Spec {
+        download_stall: Duration::from_secs(30),
+        modes: HashMap::from([("/eigen.zip", FileMode::StallAfter(1000))]),
+        ..Spec::default()
+    });
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    w.installer.start(request(EIGEN, NET, &[])).unwrap();
+    assert!(w.installer.busy());
+    assert_eq!(
+        w.installer.switch_profile(&set_id(OPENCL)).await,
+        Err(ProfileError::Busy)
+    );
+    w.installer.cancel();
+    w.finished().await;
+    assert!(!w.installer.busy());
+}
+
+#[tokio::test]
+async fn switching_to_the_current_profile_leaves_katago_running() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.engine_runs().await;
+    let pid = w.engine.pid();
+    let current = w
+        .installer
+        .profiles()
+        .into_iter()
+        .find(|p| p.current)
+        .unwrap();
+    w.installer.switch_profile(&current.id).await.unwrap();
+    assert!(
+        matches!(
+            w.engine.state(),
+            EngineState::Ready { .. } | EngineState::Analysing { .. }
+        ),
+        "{:?}",
+        w.engine.state()
+    );
+    assert_eq!(w.engine.pid(), pid);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn crossing_switches_leave_the_record_and_katago_agreeing() {
+    let w = world(Spec::default());
+    assert_eq!(w.install(OPENCL).await.outcome, Some(JobOutcome::Installed));
+    assert_eq!(w.install(EIGEN).await.outcome, Some(JobOutcome::Installed));
+    w.engine_runs().await;
+    for round in 0..6 {
+        let (a, b) = if round % 2 == 0 {
+            (OPENCL, EIGEN)
+        } else {
+            (EIGEN, OPENCL)
+        };
+        let (a, b) = (set_id(a), set_id(b));
+        let (first, second) = tokio::join!(
+            w.installer.switch_profile(&a),
+            w.installer.switch_profile(&b)
+        );
+        first.unwrap();
+        second.unwrap();
+        w.engine_runs().await;
+        let Some(ProfileKey::Set { engine, .. }) = w.record().current else {
+            panic!("no current set");
+        };
+        let pid = w.engine.pid().unwrap();
+        let written = std::fs::read_to_string(w.root.engine_dir(&engine).join("fake-katago.pid"))
+            .unwrap_or_default();
+        assert_eq!(
+            written.trim(),
+            pid.to_string(),
+            "round {round}: record names {engine}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn remove_unused_waits_for_an_import() {
+    use std::io::Write;
+    let w = world(Spec::default());
+    let dir = tempfile::tempdir().unwrap();
+    let fifo = dir.path().join("net.bin.gz");
+    let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    let installer = Arc::clone(&w.installer);
+    let source = fifo.clone();
+    let import = std::thread::spawn(move || installer.import_network(&source));
+    let mut writer = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+    writer.write_all(&[0x1f, 0x8b, 1, 2, 3]).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(w.installer.remove_unused(), Err(RemoveError::Busy));
+    drop(writer);
+    let imported = import.join().unwrap().unwrap();
+    assert!(w.record().networks.contains_key(&imported.id));
+    assert!(w.installer.remove_unused().is_ok());
 }
