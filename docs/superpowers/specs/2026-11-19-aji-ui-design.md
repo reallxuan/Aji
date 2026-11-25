@@ -124,7 +124,7 @@ Columns: rank chip, point, win rate, score lead, visits, the share of visits, di
 
 ### 5.1 Surface
 
-- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain. **[Decided]** as a direction. Since Phase 2 M1 it is the default of four board and stone sets (honey, kaya, walnut, printed; P2 M1 design 5.7). It is a flat surface: the lit top edge and darker lower edge were removed after the M7 build. Other grains come with board themes, later.
+- A wooden board in a warm honey tone (`#DDB067` base) with a straight grain. **[Decided]** as a direction. Since Phase 2 M1 it is the default of four board and stone sets (honey, kaya, walnut, printed; P2 M1 design 5.7). It is a flat surface: the lit top edge and darker lower edge were removed after the M7 build. **[Decided, the owner's choice, 2026-11-25]** Since the Phase 2 UI polish the wood boards take their grain from CC0 photographs, with a faint light, a varnish sheen, a hairline rim within the outermost 2 CSS pixels and a shadow onto the window; a 木纹强度 setting sets the grain ([UI polish design](2026-11-25-p2-ui-polish-design.md), section 3). The printed board stays flat.
 - Grid lines and star points in dark brown; coordinates (A–T without I, 1–19) in the margin on the top and left, unless hidden in settings, when the margin shrinks to a thin edge.
 - The mockups build the grain from CSS gradients. Reviewed on screen it reads as a fairly even yellow panel with mechanical stripes. M5 replaced it with a procedural straight grain from summed value noise, generated once per size and pixel ratio from a fixed seed. **[Proposed]**
 

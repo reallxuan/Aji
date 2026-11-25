@@ -1,7 +1,7 @@
 # Phase 2 UI polish: design
 
 - Date: 2026-11-25
-- Status: Waiting for the owner's approval
+- Status: Approved by the owner on 2026-11-25 and built on `feat/p2-ui-polish`. Results under **Built** at the end.
 - Placement: one small branch, `feat/p2-ui-polish`, between Phase 2 M3 and M4. It does not change M4's scope.
 - Mockup: [`docs/design/mockups/p2-polish/ui-polish.html`](../../design/mockups/p2-polish/ui-polish.html), sections 1 and 2. Section 3 there (thickness, inlaid lines) was superseded by the photographed-grain spike described in section 3 below.
 
@@ -89,3 +89,22 @@ The owner compared A against today's boards in a throwaway page and chose it, wi
 ## Exit check
 
 On the Mac, in `pnpm dev` and the built app: the button by mouse and by touch, at desktop and phone widths, both themes; the hover square in each state above, with the estimate on and off; the three wood boards in both themes, compared against today's; the 木纹强度 slider at 0, the default and 1, surviving a restart. Then the owner's walk.
+
+## Built
+
+Built on 2026-11-25. The owner asked to skip the written plan and build straight from this design.
+
+- **Checks.** 1001 frontend tests, lint, formatting and type checking pass. The board screenshot baselines were regenerated with the grain maps loaded and reviewed. No Rust, dependency or binding changed.
+- **Browser, `pnpm dev`, `?scenario=analysing`.** At 1440 × 900: the 形势判断 button turns the estimate line on and off, its hover text is `Position estimate (T)`, and the divider shows. The hover square shows black on an empty point and gives way to a disc's line over a candidate. The 木纹强度 slider shows under the style tiles at 35%, and the main board follows it at 0% (plain wood with its finish) and 100%. At the header's minimum width (280 px) and at 375 × 812, the English row wraps instead of squeezing a label.
+- **Changes from the design, made while building:**
+  - The English label is `Estimate`; the hover text keeps `Position estimate (T)`. The full label wrapped at narrow widths. The Chinese label stays 形势判断.
+  - The edit row wraps on narrow widths, and undo and redo wrap together, to the right.
+  - The grain maps are 1024 px, JPEG quality 80, about 0.8 MB for the three. At 1434 px and quality 88 they were 2.2 MB, more than the bundle should carry for a grain drawn faintly.
+  - The rim is a hairline (at most 2 CSS px), and the pixel test now checks the surface inside it is flat. This reverses part of M7 design 13.5 (no lit or dark edge) for the wood boards, as this design asked; the printed board keeps no rim.
+  - CC0 asks for no notice, so the About page and the third-party notices are unchanged; `src/assets/wood/SOURCE.md` records the provenance.
+- **Review.** A fresh review of the branch found nothing severe. Three fixes were folded into the commits they correct:
+  - the hover square kept a point from an earlier board size, rotation or coordinate band, and stayed after a touch; it now drops a point found on another grid and clears on any touch;
+  - the square no longer shows under a stone being dragged in 摆子;
+  - the stone contact shadow is drawn on wood only, so the printed board stays as it was.
+  The finish's light and sheen are now computed once per board size, so dragging the slider repeats only the grain pass.
+- **Outstanding:** the owner's walk in the built app; the grain default (0.35) checked on 榧木 and 胡桃 as well as 蜜色; the Chinese row at the phone width; Windows (with M4).
