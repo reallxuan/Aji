@@ -19,8 +19,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { usePanelStore } from '../app/panelStore';
 import { useEngineStore } from '../engine/engineStore';
+import { useProfileStore } from '../engine/profileStore';
 import { formatBytes } from '../setup/format';
-import { backendName } from '../setup/labels';
 import { useBenchmarkStore } from '../setup/benchmarkStore';
 import { useWizardStore } from '../setup/wizardStore';
 import { getInstalled, removeUnused, restartEngine, stopEngine } from '../transport/api';
@@ -36,6 +36,7 @@ import type { UiSettings } from '../transport/generated/UiSettings';
 import { toTransportError, type Transport } from '../transport/transport';
 import { useTransport } from '../transport/TransportProvider';
 import { BenchmarkRow } from './BenchmarkRow';
+import { ProfileList } from './ProfileList';
 import { DiscPreview } from './DiscPreview';
 import { LayoutSettings } from '../layout/LayoutMenu';
 import { BoardStyleControl, GrainStrengthControl } from './BoardStyleControl';
@@ -415,9 +416,24 @@ function PositiveNumber({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  focus = false,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Scroll here once, as 管理引擎… asks (P2 M4 design 6.2). */
+  focus?: boolean;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    ref.current?.scrollIntoView?.({ block: 'start' });
+    usePanelStore.setState({ section: null });
+  }, [focus]);
   return (
-    <section className="border-b border-hairline px-6 py-5">
+    <section ref={ref} className="border-b border-hairline px-6 py-5">
       <h3 className="mb-3 text-[0.75rem] text-text-muted">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
@@ -559,8 +575,8 @@ function VisitLimit({
 }
 
 /**
- * The active engine and its thread count with the benchmark on request, G1's restart and stop,
- * set up again, and the unused-files cleanup.
+ * The engine profiles (P2 M4 design 6.4), the current one's thread count with the benchmark on
+ * request, G1's restart and stop, set up again, and the unused-files cleanup.
  */
 function EngineSection({ transport }: { transport: Transport }) {
   const { t, i18n } = useTranslation();
@@ -572,7 +588,16 @@ function EngineSection({ transport }: { transport: Transport }) {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const reload = useCallback(() => setRefresh((n) => n + 1), []);
+  // A measured count changes the current profile's speed too.
+  const reload = useCallback(() => {
+    setRefresh((n) => n + 1);
+    void useProfileStore.getState().load(transport);
+  }, [transport]);
+  const profiles = useProfileStore((s) => s.profiles);
+  const ownCurrent = profiles.some((p) => p.current && p.source.kind === 'own');
+  // A switch changes the set 测速 measures, a removal what is unused: read the record again.
+  const currentId = profiles.find((p) => p.current)?.id;
+  const profileCount = profiles.length;
 
   useEffect(() => {
     let active = true;
@@ -587,7 +612,7 @@ function EngineSection({ transport }: { transport: Transport }) {
     return () => {
       active = false;
     };
-  }, [transport, refresh]);
+  }, [transport, refresh, currentId, profileCount]);
 
   const run = async (action: (transport: Transport) => Promise<unknown>) => {
     setError(null);
@@ -604,37 +629,31 @@ function EngineSection({ transport }: { transport: Transport }) {
     setRefresh((n) => n + 1);
   };
 
+  const focused = usePanelStore((s) => s.section === 'engine');
   const state = engine?.state ?? null;
   const noEngine = state === null || state === 'notConfigured';
   // A benchmark started here holds the engine and the files until it ends, as the backend
   // refuses restart, setup and delete meanwhile.
   const measuring = useBenchmarkStore((s) => s.job !== null && s.job.outcome === null);
-  // While KataGo starts restart is refused with engineBusy.
-  const busy = state === 'starting' || measuring;
+  // Restart and Stop also work while KataGo starts, as for a start that hangs (M5 minor 7).
+  const busy = measuring;
   const active = installed?.active ?? null;
   const unused = installed && installed.unusedBytes > 0 ? installed.unusedBytes : null;
   const unusedSize = unused === null ? '' : formatBytes(unused, i18n.language);
 
   return (
-    <Section title={t('settings.engine')}>
+    <Section title={t('settings.engine')} focus={focused}>
       <div className="text-[0.875rem]">
-        {active ? (
-          <>
-            <p>
-              {t('settings.engineLine', {
-                version: active.version,
-                backend: backendName(t, active.backend),
-              })}
-            </p>
-            <p className="mt-1 text-[0.8125rem] text-text-muted">
-              {t('settings.networkLine', { network: active.networkName })}
-            </p>
-            <div className="mt-3">
-              <BenchmarkRow active={active} disabled={noEngine || busy} onMeasured={reload} />
-            </div>
-          </>
-        ) : (
-          installed && <p className="text-text-muted">{t('settings.noEngine')}</p>
+        {profiles.length === 0 && installed && !active && (
+          <p className="mb-2 text-text-muted">{t('settings.noEngine')}</p>
+        )}
+        <ProfileList onError={setError} />
+        {/* The benchmark measures the current managed profile; an own one takes its threads
+            from its config (design 6.4). */}
+        {active && !ownCurrent && (
+          <div className="mt-3">
+            <BenchmarkRow active={active} disabled={noEngine || busy} onMeasured={reload} />
+          </div>
         )}
       </div>
       <div className="flex flex-wrap gap-2">

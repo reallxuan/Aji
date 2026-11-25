@@ -35,6 +35,8 @@ test-seams = []
 # Turns the test seams on for this crate's own tests.
 aji-engine = { path = ".", features = ["test-seams"] }
 tempfile = "3.27.0"
+# The paused clock for the console's batching tests.
+tokio = { version = "1.54.1", features = ["test-util"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2.191"

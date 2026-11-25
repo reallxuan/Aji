@@ -25,6 +25,7 @@ use tokio::runtime::Handle;
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 use tokio::task::JoinHandle;
 
+use crate::console::{ConsoleKind, ConsoleLog, ConsoleNote};
 use crate::state::ExitInfo;
 
 /// Where KataGo and its files are. KataGo resolves a relative `model` or `config` against
@@ -133,6 +134,8 @@ fn runtime_path(prepend: &[PathBuf]) -> Option<OsString> {
 
 /// How long to wait for the pipe readers to reach EOF once the process has exited.
 const DRAIN_AFTER_EXIT: Duration = Duration::from_secs(1);
+/// How long a killed KataGo has to exit before Aji goes on without it (M2 N1).
+pub(crate) const KILL_WAIT: Duration = Duration::from_secs(5);
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -582,8 +585,14 @@ pub(crate) async fn read_lines<R: AsyncRead + Unpin>(
 
 /// Drains stderr continuously, keeping its last `keep` lines in `tail`. A pipe nobody reads
 /// would eventually block KataGo.
-pub(crate) async fn keep_stderr_tail(stderr: ChildStderr, keep: usize, tail: StderrTail) {
+pub(crate) async fn keep_stderr_tail(
+    stderr: ChildStderr,
+    keep: usize,
+    tail: StderrTail,
+    console: ConsoleLog,
+) {
     read_lines(stderr, |line| {
+        console.push(ConsoleKind::Stderr, line.clone());
         if keep > 0 {
             let mut tail = lock(&tail);
             if tail.len() >= keep {
@@ -617,13 +626,31 @@ pub(crate) async fn supervise(
     kill: oneshot::Receiver<()>,
     readers: Vec<JoinHandle<()>>,
     tail: StderrTail,
+    console: ConsoleLog,
 ) -> (ExitInfo, Vec<String>) {
     let status = tokio::select! {
-        status = process.child.wait() => status,
+        status = process.child.wait() => Some(status),
         _ = kill => {
             let _ = process.child.start_kill();
-            process.child.wait().await
+            wait_after_kill(process.child.wait(), KILL_WAIT).await
         }
+    };
+    let Some(status) = status else {
+        // A KataGo that does not die is left to a task that reaps it if it ever exits, so the
+        // engine can go on (M2 N1).
+        let mut tail: Vec<String> = lock(&tail).iter().cloned().collect();
+        tail.push("aji: KataGo did not exit after being killed".into());
+        console.note(ConsoleNote::GaveUp);
+        tokio::spawn(async move {
+            let _ = process.child.wait().await;
+        });
+        return (
+            ExitInfo {
+                code: None,
+                signal: None,
+            },
+            tail,
+        );
     };
     let _ = tokio::time::timeout(DRAIN_AFTER_EXIT, async {
         for reader in readers {
@@ -633,6 +660,14 @@ pub(crate) async fn supervise(
     .await;
     let tail = lock(&tail).iter().cloned().collect();
     (exit_info(status), tail)
+}
+
+/// `wait`'s result, or `None` when it takes longer than `limit`.
+pub(crate) async fn wait_after_kill(
+    wait: impl std::future::Future<Output = io::Result<ExitStatus>>,
+    limit: Duration,
+) -> Option<io::Result<ExitStatus>> {
+    tokio::time::timeout(limit, wait).await.ok()
 }
 
 fn exit_info(status: io::Result<ExitStatus>) -> ExitInfo {
@@ -662,6 +697,14 @@ fn signal(_status: &ExitStatus) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn a_child_that_ignores_kill_is_given_up() {
+        let started = tokio::time::Instant::now();
+        let waited = wait_after_kill(std::future::pending(), KILL_WAIT).await;
+        assert!(waited.is_none());
+        assert_eq!(started.elapsed(), KILL_WAIT);
+    }
 
     #[tokio::test]
     async fn lines_are_lossy_and_lose_their_endings() {

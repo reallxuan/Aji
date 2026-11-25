@@ -6,6 +6,10 @@ import { usePanelStore } from './app/panelStore';
 import { useKeyDispatcher } from './commands/useKeyDispatcher';
 import { useEngineStore } from './engine/engineStore';
 import { useEngineSync } from './engine/useEngineSync';
+import { useConsoleSync } from './engine/consoleStore';
+import { useProfileSync } from './engine/profileStore';
+import { SwitchConfirm } from './engine/SwitchConfirm';
+import { AddEngineDialog } from './engine/AddEngineDialog';
 import { useGameSync } from './game/useGameSync';
 import { DropOverlay } from './board/DropOverlay';
 import { LayoutFrame } from './layout/LayoutFrame';
@@ -30,6 +34,8 @@ export default function App() {
   const { ready } = useGameSync();
   useTrendSync();
   useJobSync();
+  useProfileSync();
+  useConsoleSync();
   useCacheSync();
   usePlatformSync();
   const engine = useEngineStore((s) => s.engine);
@@ -70,11 +76,15 @@ export default function App() {
       : undefined;
 
   return (
-    <LayoutFrame
-      boardOverlay={<DropOverlay />}
-      side={side}
-      onCloseSide={closeSide}
-      sideLocked={installing}
-    />
+    <>
+      <LayoutFrame
+        boardOverlay={<DropOverlay />}
+        side={side}
+        onCloseSide={closeSide}
+        sideLocked={installing}
+      />
+      <SwitchConfirm />
+      <AddEngineDialog />
+    </>
   );
 }

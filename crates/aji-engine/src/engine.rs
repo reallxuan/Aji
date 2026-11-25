@@ -20,6 +20,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
 
 use crate::cache::{AnalysisCache, DEFAULT_CACHE_ENTRIES};
+use crate::console::{ConsoleKind, ConsoleLog, ConsoleNote, ConsoleSendError};
 use crate::gate::SubmitGate;
 use crate::identity::EngineIdentity;
 use crate::job::{JOB_REPORT_EVERY, JobItem, JobPlan, JobQueue, JobRun, JobStatus};
@@ -191,6 +192,8 @@ enum Command {
     Updates(Vec<PositionKey>, Reply<Vec<Option<AnalysisUpdate>>>),
     SetIdentity(Option<EngineIdentity>, Reply<()>),
     StopJob(Reply<()>),
+    /// A console query's line: sent when KataGo runs (`true`).
+    ConsoleSend(String, Reply<bool>),
     Shutdown(Reply<()>),
 }
 
@@ -200,6 +203,7 @@ pub struct Engine {
     commands: mpsc::UnboundedSender<Command>,
     snapshot: Arc<Mutex<Snapshot>>,
     store: Option<Store>,
+    console: ConsoleLog,
 }
 
 impl fmt::Debug for Engine {
@@ -254,7 +258,9 @@ impl Engine {
         let (commands, command_rx) = mpsc::unbounded_channel();
         let (report_tx, reports) = mpsc::unbounded_channel();
         let cache = AnalysisCache::with_capacity(options.cache_entries);
+        let console = ConsoleLog::default();
         let actor = Actor {
+            console: console.clone(),
             throttle: Throttle::new(options.throttle),
             gate: SubmitGate::new(options.submit_interval),
             submit_at: None,
@@ -293,6 +299,7 @@ impl Engine {
             commands,
             snapshot,
             store,
+            console,
         }
     }
 
@@ -457,6 +464,25 @@ impl Engine {
         self.ask(Command::StopJob).await;
     }
 
+    /// The console's log (P2 M4 design 6.5).
+    pub fn console(&self) -> ConsoleLog {
+        self.console.clone()
+    }
+
+    /// Sends a query typed into the console, after [`ConsoleLog::console_query`]'s check.
+    /// Gives the id its replies carry; KataGo's replies to it are seen only in the console,
+    /// since the actor ignores ids it did not send.
+    pub async fn console_send(&self, query: &str) -> Result<String, ConsoleSendError> {
+        let (id, line) = self
+            .console
+            .console_query(query)
+            .map_err(ConsoleSendError::Refused)?;
+        match self.ask(|reply| Command::ConsoleSend(line, reply)).await {
+            Some(true) => Ok(id),
+            _ => Err(ConsoleSendError::NotRunning),
+        }
+    }
+
     /// The most job queries KataGo held at once.
     #[cfg(feature = "test-seams")]
     pub fn job_peak_in_flight(&self) -> usize {
@@ -597,6 +623,7 @@ impl Drop for ProcIo {
 }
 
 struct Actor {
+    console: ConsoleLog,
     files: Option<EngineFiles>,
     identity: Option<EngineIdentity>,
     store: Option<Store>,
@@ -728,6 +755,13 @@ impl Actor {
             Command::StopJob(reply) => {
                 self.stop_job();
                 let _ = reply.send(());
+            }
+            Command::ConsoleSend(line, reply) => {
+                let running = self.stdin().is_some();
+                if running {
+                    self.send(line);
+                }
+                let _ = reply.send(running);
             }
             Command::Updates(keys, reply) => self.updates(keys, reply),
             Command::SetIdentity(identity, reply) => {
@@ -1205,6 +1239,9 @@ impl Actor {
     fn start_process(&mut self, automatic: bool) {
         let Some(files) = &self.files else { return };
         eprintln!("aji: starting KataGo {}", files.katago.display());
+        self.console.note(ConsoleNote::Started {
+            katago: files.katago.display().to_string(),
+        });
         let spec = katago_launch(files);
         self.generation += 1;
         let generation = self.generation;
@@ -1330,7 +1367,9 @@ impl Actor {
         let writer = tokio::spawn(process::write_lines(stdin, stdin_rx));
 
         let reports = self.report_tx.clone();
+        let console = self.console.clone();
         let stdout_reader = tokio::spawn(process::read_lines(stdout, move |line| {
+            console.push(ConsoleKind::Received, line.clone());
             reports
                 .send(Report::Line(generation, parse_line(&line)))
                 .is_ok()
@@ -1340,6 +1379,7 @@ impl Actor {
             stderr,
             self.options.stderr_lines,
             Arc::clone(&tail),
+            self.console.clone(),
         ));
 
         let (kill, kill_rx) = oneshot::channel();
@@ -1348,9 +1388,10 @@ impl Actor {
         let hold = self.options.hold_exit_reports;
         #[cfg(not(feature = "test-seams"))]
         let hold = false;
+        let console = self.console.clone();
         let supervisor = tokio::spawn(async move {
             let readers = vec![stdout_reader, stderr_reader];
-            let (exit, tail) = process::supervise(process, kill_rx, readers, tail).await;
+            let (exit, tail) = process::supervise(process, kill_rx, readers, tail, console).await;
             if !hold {
                 let _ = reports.send(Report::Exited(generation, exit, tail));
             }
@@ -1366,6 +1407,12 @@ impl Actor {
     /// The process has exited, or never started. Applies what was asked of it, or reports
     /// the crash.
     fn process_gone(&mut self, exit: Option<ExitInfo>, tail: Vec<String>, unexpected: CrashReason) {
+        if let Some(exit) = &exit {
+            self.console.note(ConsoleNote::Exited {
+                code: exit.code,
+                signal: exit.signal,
+            });
+        }
         let then = self.process.take().and_then(|process| process.then);
         lock(&self.snapshot).pid = None;
         self.current = None;
@@ -1992,14 +2039,18 @@ impl Actor {
 
     /// Queues a line for KataGo's stdin. Never waits.
     fn send(&self, line: String) {
-        let stdin = self
-            .process
-            .as_ref()
-            .and_then(|process| process.io.as_ref())
-            .and_then(|io| io.stdin.as_ref());
-        if let Some(stdin) = stdin {
+        if let Some(stdin) = self.stdin() {
+            self.console.push(ConsoleKind::Sent, line.clone());
             let _ = stdin.send(line);
         }
+    }
+
+    /// KataGo's stdin, while a process runs and its stdin is open.
+    fn stdin(&self) -> Option<&mpsc::UnboundedSender<String>> {
+        self.process
+            .as_ref()
+            .and_then(|process| process.io.as_ref())
+            .and_then(|io| io.stdin.as_ref())
     }
 
     /// KataGo's version, once it has answered and while it is not being ended.

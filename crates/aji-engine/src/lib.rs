@@ -19,7 +19,9 @@ mod store;
 mod throttle;
 mod update;
 
+mod console;
 pub use cache::*;
+pub use console::*;
 pub use engine::*;
 pub use identity::*;
 pub use job::{JobItem, JobPlan, JobRun, JobStatus};

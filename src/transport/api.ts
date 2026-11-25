@@ -6,6 +6,7 @@ import type { BackendRecommendation } from './generated/BackendRecommendation';
 import type { CacheScope } from './generated/CacheScope';
 import type { ExportOptions } from './generated/ExportOptions';
 import type { CacheStats } from './generated/CacheStats';
+import type { ConsoleLine } from './generated/ConsoleLine';
 import type { EngineVersionChoice } from './generated/EngineVersionChoice';
 import type { HardwareReport } from './generated/HardwareReport';
 import type { ImportedNetwork } from './generated/ImportedNetwork';
@@ -13,6 +14,8 @@ import type { JobOptions } from './generated/JobOptions';
 import type { JobSnapshot } from './generated/JobSnapshot';
 import type { LicenceInfo } from './generated/LicenceInfo';
 import type { NetworkList } from './generated/NetworkList';
+import type { PickPurpose } from './generated/PickPurpose';
+import type { ProfileSummary } from './generated/ProfileSummary';
 import type { EngineState } from './generated/EngineState';
 import type { PositionKey } from './generated/PositionKey';
 import type { AnalysisRules } from './generated/AnalysisRules';
@@ -259,4 +262,67 @@ export async function scoreGame(transport: Transport, mode: ScoreMode): Promise<
   const r = await expectType(transport, { type: 'gameScore', mode }, 'score');
   const { black, white, komi, margin, owners, openByOwnership, suggestedDead } = r;
   return { black, white, komi, margin, owners, openByOwnership, suggestedDead };
+}
+
+// --- Engine profiles and the console (P2 M4) ---------------------------------------------------
+
+export interface Profiles {
+  profiles: ProfileSummary[];
+  /** `devEngine` in settings.json decides what runs: no profile can be switched to. */
+  devOverride: boolean;
+}
+
+export async function getProfiles(transport: Transport): Promise<Profiles> {
+  const { profiles, devOverride } = await expectType(
+    transport,
+    { type: 'engineProfiles' },
+    'engineProfiles',
+  );
+  return { profiles, devOverride };
+}
+
+/** Stops a whole-game job, then runs the profile `id`. */
+export const switchProfile = (transport: Transport, id: string) =>
+  expectOk(transport, { type: 'engineProfileSwitch', id });
+/** An empty name goes back to the default. */
+export const renameProfile = (transport: Transport, id: string, name: string) =>
+  expectOk(transport, { type: 'engineProfileRename', id, name });
+export const removeProfile = (transport: Transport, id: string) =>
+  expectOk(transport, { type: 'engineProfileRemove', id });
+
+export interface OwnFiles {
+  katago: string;
+  model: string;
+  config: string;
+  name?: string;
+}
+
+/** Checks and adds one's own KataGo files as the current profile; the list after. */
+export async function addOwnProfile(transport: Transport, files: OwnFiles): Promise<Profiles> {
+  const { profiles, devOverride } = await expectType(
+    transport,
+    { type: 'engineProfileAddOwn', ...files },
+    'engineProfiles',
+  );
+  return { profiles, devOverride };
+}
+
+/** Opens a file dialog on the engine machine; its path there, or `null` when cancelled. */
+export async function pickFile(transport: Transport, purpose: PickPurpose): Promise<string | null> {
+  return (await expectType(transport, { type: 'setupPickFile', purpose }, 'setupPickFile')).path;
+}
+
+/** A console opened or closed: KataGo's protocol lines are kept only while one is open. */
+export const openConsole = (transport: Transport, open: boolean) =>
+  expectOk(transport, { type: 'engineConsoleOpen', open });
+
+export async function getConsoleLines(transport: Transport, after: number): Promise<ConsoleLine[]> {
+  return (await expectType(transport, { type: 'engineConsoleLines', after }, 'engineConsoleLines'))
+    .lines;
+}
+
+/** Sends a console query; the id its replies carry. */
+export async function sendConsole(transport: Transport, query: string): Promise<string> {
+  return (await expectType(transport, { type: 'engineConsoleSend', query }, 'engineConsoleSent'))
+    .id;
 }

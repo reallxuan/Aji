@@ -53,7 +53,12 @@
     "fileWriteFailed": "无法保存文件。",
     "fileNotSgf": "只能打开 .sgf 文件。",
     "fileMissing": "文件已移动或删除。",
-    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。"
+    "scoreUnavailable": "此局面还没有分析结果，无法估算形势。",
+    "engineProfileCurrent": "正在使用的引擎不能移除，请先切换到其他引擎。",
+    "engineNoSuchProfile": "这个引擎已不在列表中。",
+    "engineDevOverride": "settings.json 里设置了开发引擎，这里不能切换引擎。",
+    "engineOwnFile": "所选的文件中有一个不能使用。",
+    "engineConsoleRefused": "控制台没有发送这条查询。"
   },
   "engine": {
     "state": {
@@ -113,6 +118,92 @@
         "pause": "点击暂停",
         "resume": "点击继续",
         "continue": "点击继续计算 {{visits}} 次"
+      }
+    },
+    "profile": {
+      "menuTitle": "引擎配置",
+      "dev": "开发引擎",
+      "devEntry": "开发引擎 (settings.json)",
+      "ownFiles": "自己的文件",
+      "detail": "{{network}}　{{speed}}",
+      "speed": "约 {{speed}} 次/秒",
+      "unmeasured": "未测速",
+      "add": "添加引擎…",
+      "manage": "管理引擎…",
+      "switchTitle": "切换到 {{name}}",
+      "switchBody": "切换引擎会停止整盘分析（已完成 {{done}} / {{total}}）。已有结果会保留，切回来时还在。仍然切换吗？",
+      "cancel": "取消",
+      "switch": "切换",
+      "console": "引擎控制台"
+    },
+    "add": {
+      "title": "添加引擎",
+      "ways": {
+        "download": "下载权重",
+        "import": "导入权重文件",
+        "own": "使用自己的 KataGo"
+      },
+      "build": "使用 KataGo {{version}}（{{backend}}）",
+      "inUse": "已有",
+      "downloadUse": "下载并使用",
+      "importNote": "选择一个 KataGo 权重文件（.bin.gz），复制到 Aji 里，用下面的 KataGo 运行。",
+      "chooseFile": "选择权重文件…",
+      "files": {
+        "katago": "KataGo 程序",
+        "model": "权重",
+        "config": "配置文件"
+      },
+      "browse": "浏览…",
+      "name": "名字",
+      "namePlaceholder": "可选，默认用权重的名字",
+      "check": "检查并添加",
+      "problems": {
+        "missing": "找不到这个文件。",
+        "notKatago": "这不是 KataGo 程序。",
+        "unreadable": "读不了这个文件。"
+      },
+      "noBuild": "还没有安装 KataGo。设置向导会安装 KataGo 和权重。",
+      "openWizard": "打开设置向导",
+      "networksFailed": "权重列表加载失败。",
+      "failed": "添加引擎失败：{{reason}}",
+      "cancelInstall": "取消",
+      "back": "返回",
+      "cancel": "取消"
+    },
+    "console": {
+      "title": "引擎控制台",
+      "filters": {
+        "all": "全部",
+        "log": "日志",
+        "protocol": "协议"
+      },
+      "pause": "暂停滚动",
+      "copy": "复制",
+      "clear": "清空",
+      "kinds": {
+        "stderr": "日志",
+        "aji": "Aji",
+        "sent": "发送",
+        "received": "接收"
+      },
+      "expand": "展开",
+      "collapse": "收起",
+      "empty": "还没有内容。",
+      "input": "控制台查询",
+      "placeholder": "带 action 的 JSON 查询，比如 {\"action\":\"query_version\"}",
+      "notes": {
+        "started": "启动 KataGo：{{katago}}",
+        "exited": "KataGo 已退出。",
+        "exitedCode": "KataGo 已退出（退出码 {{code}}）。",
+        "exitedSignal": "KataGo 已退出（信号 {{signal}}）。",
+        "gaveUp": "KataGo 被结束后没有退出，Aji 不再等它。"
+      },
+      "refused": {
+        "notJson": "没有发送：这不是一个 JSON 对象。",
+        "search": "没有发送：控制台只发送带 action 的查询，比如 query_version。",
+        "terminateAll": "没有发送 terminate_all：它会结束 Aji 自己的分析。",
+        "terminateOther": "没有发送：terminate 只能结束控制台自己的查询。",
+        "notRunning": "没有发送：KataGo 没有在运行。"
       }
     }
   },
@@ -359,7 +450,6 @@
     "visitLimitNote": "达到上限后停止分析，显卡空闲；换一步时重新开始。",
     "engine": "引擎",
     "engineLine": "KataGo {{version}}（{{backend}}）",
-    "networkLine": "权重 {{network}}",
     "threadsDefault": "搜索线程：{{threads}}（默认值，未测速）",
     "threadsMeasured": "搜索线程：{{threads}}（已测速，{{speed}} 次/秒）",
     "benchmark": "测速",
@@ -437,7 +527,16 @@
     "recentMoves": "最近显示手数",
     "replaySeconds": "自动播放间隔（秒）",
     "openAt": "打开棋谱时显示",
-    "gameStart": "棋局开始"
+    "gameStart": "棋局开始",
+    "profile": {
+      "detail": "{{build}}　{{network}}　{{threads}} 线程，{{speed}}",
+      "ownDetail": "{{katago}}　线程由配置文件决定",
+      "more": "更多",
+      "rename": "重命名",
+      "remove": "移除",
+      "removeCurrent": "当前配置不能移除，请先切换",
+      "name": "配置名字"
+    }
   },
   "game": {
     "players": "{{black}} 对 {{white}}"
@@ -493,7 +592,8 @@
       "suicide": "这一步会自杀。",
       "ko": "不能立即回提。",
       "offBoard": "落点在棋盘之外。"
-    }
+    },
+    "switchFailed": "切换引擎失败"
   },
   "rules": {
     "title": "分析规则",
@@ -638,7 +738,8 @@
       "swings": "波动",
       "subboard": "副盘",
       "tree": "分支",
-      "comments": "评论"
+      "comments": "评论",
+      "console": "引擎控制台"
     },
     "noCandidate": "无候选",
     "move": "移动{{panel}}",
@@ -716,6 +817,12 @@
     },
     "replay": {
       "toggle": "开始或暂停自动播放"
+    },
+    "engine": {
+      "profile": {
+        "next": "下一个引擎",
+        "previous": "上一个引擎"
+      }
     }
   },
   "screenshot": {

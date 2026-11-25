@@ -54,6 +54,11 @@ const KNOWN_CODES: Record<ErrorCode, true> = {
   fileNotSgf: true,
   fileMissing: true,
   scoreUnavailable: true,
+  engineProfileCurrent: true,
+  engineNoSuchProfile: true,
+  engineDevOverride: true,
+  engineOwnFile: true,
+  engineConsoleRefused: true,
 };
 
 function isKnownCode(value: unknown): value is ErrorCode {

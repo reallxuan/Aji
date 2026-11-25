@@ -21,32 +21,43 @@ const toNetwork = () => useWizardStore.getState().backTo('network');
 /** A component's name and version, as the manifest gives them (data, not interface text). */
 const componentLabel = (component: LicensedComponent) => `${component.name} ${component.version}`;
 
-/** The backend after `current` in the recommendation, for the offer a declined licence leads to. */
-function nextBackend(recommendation: BackendRecommendation | null, current: Backend | null) {
-  const backends = recommendation?.backends.map((b) => b.backend) ?? [];
-  const index = current ? backends.indexOf(current) : -1;
-  return backends.slice(index + 1).find((b) => b !== current) ?? null;
+/**
+ * The backends after `current`, in the order the server falls back in: the default, then the
+ * fallbacks (M5 minor 10).
+ */
+function laterBackends(recommendation: BackendRecommendation | null, current: Backend | null) {
+  if (!recommendation) return [];
+  const order = [recommendation.default, ...recommendation.fallbacks].filter(
+    (b, i, all): b is Backend => b !== null && all.indexOf(b) === i,
+  );
+  const index = current ? order.indexOf(current) : -1;
+  return order.slice(index + 1);
 }
 
-/** The offer for the next backend's newest engine; `null` when there is none or it cannot load. */
-async function nextOffer(transport: Transport): Promise<FallbackOffer | null> {
+/**
+ * The offer a declined licence leads to: the newest engine of the next backend that needs none
+ * of the `declined` licences; `null` when there is none or the lists cannot load.
+ */
+async function nextOffer(transport: Transport, declined: string[]): Promise<FallbackOffer | null> {
   const { recommendation, backend } = useWizardStore.getState();
-  const next = nextBackend(recommendation, backend);
-  if (!next) return null;
   try {
-    const versions = await getVersions(transport, next);
-    const version = versions.find((v) => v.latest) ?? versions[0];
-    return version
-      ? {
-          backend: next,
-          engine: version.engine,
-          downloadBytes: version.downloadBytes,
-          runtimeBytes: version.runtimeBytes,
-        }
-      : null;
+    for (const next of laterBackends(recommendation, backend)) {
+      const versions = await getVersions(transport, next);
+      const version = versions.find((v) => v.latest) ?? versions[0];
+      if (!version) continue;
+      const { licences } = await getLicences(transport, version.engine);
+      if (licences.some((licence) => declined.includes(licence.textSha256))) continue;
+      return {
+        backend: next,
+        engine: version.engine,
+        downloadBytes: version.downloadBytes,
+        runtimeBytes: version.runtimeBytes,
+      };
+    }
   } catch {
-    return null;
+    // No offer is better than a wrong one.
   }
+  return null;
 }
 
 /**
@@ -104,7 +115,8 @@ export function StepLicence() {
     );
   const decline = async () => {
     setDeclining(true);
-    useWizardStore.getState().decline(await nextOffer(transport));
+    const declined = pending.map((licence) => licence.textSha256);
+    useWizardStore.getState().decline(await nextOffer(transport, declined));
   };
 
   return (

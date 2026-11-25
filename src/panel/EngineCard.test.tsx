@@ -25,6 +25,7 @@ const KEY = 'abababababababab';
 const METAL: RunningEngine = {
   backend: 'metal',
   networkName: 'kata1-b28c512nbt-s9584861952-d4960414494',
+  profile: 'kata1-b28c512nbt-s9584861952-d4960414494',
 };
 
 function mount(
@@ -133,7 +134,7 @@ it('shows the continue hint with the limit when stopped at it', async () => {
 it('names a development engine without a backend', async () => {
   mount(
     { state: 'paused', version: '1.18.2' },
-    { running: { backend: null, networkName: 'b18c384nbt.bin.gz' } },
+    { running: { backend: null, networkName: 'b18c384nbt.bin.gz', profile: null } },
   );
   await waitFor(() => expect(row('网络')).toHaveTextContent('b18c384nbt.bin.gz'));
   expect(row('引擎')).toHaveTextContent(/^引擎KataGo 1\.18\.2$/);

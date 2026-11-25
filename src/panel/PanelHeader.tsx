@@ -6,6 +6,7 @@ import { SettingsIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePanelStore } from '../app/panelStore';
 import { cn } from 'cn';
+import { ProfileChip } from '../engine/ProfileChip';
 import { EngineIndicator } from './EngineIndicator';
 import { GameMenu } from './GameMenu';
 import { MoveCounter } from './MoveCounter';
@@ -79,6 +80,8 @@ export function PanelHeader({
             <NavButtons touch={touch} />
           </>
         )}
+        {/* The phone has no room: its profiles are in Settings (P2 M4 design 6.2). */}
+        {!compact && <ProfileChip />}
         <EngineIndicator touch={touch} />
         {/* On the Mac, 布局 and 截图 are in the menu bar's 显示 and 文件 menus. */}
         {(compact || browserMenus || (os !== null && os !== 'macos')) && <ViewMenu touch={touch} />}

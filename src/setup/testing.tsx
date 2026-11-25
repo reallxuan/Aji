@@ -3,6 +3,8 @@ import { StrictMode, type ReactNode } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { createEngineStore, EngineStoreProvider } from '../engine/engineStore';
 import { createI18n } from '../i18n/createI18n';
+import { createFakeFiles } from '../platform/fakeFiles';
+import { PlatformProvider } from '../platform/PlatformProvider';
 import type { Language } from '../i18n/language';
 import { useSettingsSync } from '../settings/useSettingsSync';
 import { createFakeTransport, type FakeTransport } from '../transport/fake';
@@ -270,6 +272,8 @@ export function setupTransport(
         return { type: 'setupInstalled', active: null, unusedBytes: 0 };
       case 'setupRemoveUnused':
         return { type: 'setupRemoved', freedBytes: 0 };
+      case 'engineProfiles':
+        return { type: 'engineProfiles', profiles: [], devOverride: false };
       case 'engineRestart':
       case 'engineStop':
         return { type: 'ok' };
@@ -321,7 +325,9 @@ export function renderWithProviders(
     <I18nextProvider i18n={i18n}>
       <TransportProvider transport={transport}>
         <EngineStoreProvider store={store}>
-          <SettingsSync>{node}</SettingsSync>
+          <PlatformProvider files={createFakeFiles()}>
+            <SettingsSync>{node}</SettingsSync>
+          </PlatformProvider>
         </EngineStoreProvider>
       </TransportProvider>
     </I18nextProvider>,

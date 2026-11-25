@@ -4,6 +4,7 @@ import { HeaderPanel } from '../panel/HeaderPanel';
 import { TrendGraph } from '../panel/TrendGraph';
 import { TreePanel } from '../tree/TreePanel';
 import { CommentPanel } from '../comments/CommentPanel';
+import { ConsolePanel } from '../engine/ConsolePanel';
 import { MIN_SIZES, type PanelSizeSpec } from './constants';
 import type { PanelKind, PanelRef } from './model';
 import { SubBoard } from '../panel/SubBoard';
@@ -74,6 +75,13 @@ const SPECS: Record<PanelKind, PanelSpec> = {
     hideable: true,
     minSize: MIN_SIZES.subboard,
     Component: ({ panel }) => <SubBoard rank={panel.rank ?? 1} />,
+  },
+  console: {
+    kind: 'console',
+    labelKey: 'layout.panels.console',
+    hideable: true,
+    minSize: MIN_SIZES.console,
+    Component: () => <ConsolePanel />,
   },
 };
 

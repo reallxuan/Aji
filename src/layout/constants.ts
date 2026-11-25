@@ -48,6 +48,7 @@ export const MIN_SIZES: Record<PanelKind, PanelSizeSpec> = {
   tree: { width: 200, height: 120, foldWithoutVariations: true },
   comments: { width: 200, height: 120 },
   subboard: { width: 200, height: 220 },
+  console: { width: 280, height: 200 },
 };
 
 /** Panels whose height is their content's, not a share of the column. */

@@ -35,7 +35,7 @@ use game::GameSession;
 pub use ipc::{EVENT_CHANNEL, TauriEventSink};
 use platform::DesktopFiles;
 use platform::menu::MenuLanguage;
-use protocol::{AppEvent, OsKind};
+use protocol::{AppEvent, OsKind, PickPurpose};
 use service::{AppContext, EventSink, FilePicker};
 use settings::{LanguagePreference, Settings};
 
@@ -181,15 +181,14 @@ fn engine_files(
     root: &InstallRoot,
 ) -> Option<EngineFiles> {
     let files = service::startup_files(settings, installed, root);
-    match (&settings.dev_engine, &installed.active, &files) {
+    match (&settings.dev_engine, installed.current_key(), &files) {
         (Some(_), _, _) => eprintln!("aji: starting the development engine"),
-        (None, Some(active), Some(_)) => eprintln!(
-            "aji: starting the installed engine {} with {}",
-            active.engine, active.network
-        ),
-        (None, Some(active), None) => eprintln!(
-            "aji: starting without an engine: the active set {} with {} is incomplete",
-            active.engine, active.network
+        (None, Some(current), Some(_)) => {
+            eprintln!("aji: starting the engine profile {}", current.id())
+        }
+        (None, Some(current), None) => eprintln!(
+            "aji: starting without an engine: the profile {} is incomplete",
+            current.id()
         ),
         (None, None, _) => eprintln!("aji: starting without an engine: none is installed"),
     }
@@ -264,23 +263,41 @@ fn start_installer(
     }))
 }
 
-/// The native file dialog, for importing a network.
+/// The native file dialog, for importing a network and for own-files profiles.
 struct DialogPicker(tauri::AppHandle);
 
-impl FilePicker for DialogPicker {
-    fn pick_network(&self) -> Option<PathBuf> {
-        // "KataGo" names the filter: a product name, the same in every language.
-        let mut dialog = self.0.dialog().file().add_filter("KataGo", &["gz"]);
+impl DialogPicker {
+    /// A file, filtered to `extension` when given.
+    fn pick(&self, extension: Option<&str>) -> Option<PathBuf> {
+        let mut dialog = self.0.dialog().file();
+        if let Some(extension) = extension {
+            // "KataGo" names the filter: a product name, the same in every language.
+            dialog = dialog.add_filter("KataGo", &[extension]);
+        }
         if let Some(main) = self.0.get_webview_window("main") {
             dialog = dialog.set_parent(&main);
         }
         match dialog.blocking_pick_file()?.into_path() {
             Ok(path) => Some(path),
             Err(error) => {
-                eprintln!("aji: the chosen network is not a file path: {error}");
+                eprintln!("aji: the chosen file is not a file path: {error}");
                 None
             }
         }
+    }
+}
+
+impl FilePicker for DialogPicker {
+    fn pick_network(&self) -> Option<PathBuf> {
+        self.pick(Some("gz"))
+    }
+
+    fn pick_file(&self, purpose: PickPurpose) -> Option<PathBuf> {
+        self.pick(match purpose {
+            PickPurpose::Katago => None,
+            PickPurpose::Model => Some("gz"),
+            PickPurpose::Config => Some("cfg"),
+        })
     }
 }
 
@@ -378,6 +395,10 @@ pub fn run() {
                 follow: Arc::default(),
             };
             tauri::async_runtime::spawn(follow::follow_engine(ctx.clone(), followed));
+            let console_sink = Arc::clone(&ctx.events);
+            ctx.engine.console().subscribe(move |lines| {
+                console_sink.emit(AppEvent::EngineConsoleLines { lines });
+            });
             app.manage(ctx);
             Ok(())
         })

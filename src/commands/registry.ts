@@ -41,6 +41,8 @@ const ids = [
   'estimate.toggle',
   'candidates.toggleHidden',
   'candidates.peek',
+  'engine.profile.next',
+  'engine.profile.previous',
 ] as const;
 export type CommandId = (typeof ids)[number];
 const knownIds = new Set<string>(ids);

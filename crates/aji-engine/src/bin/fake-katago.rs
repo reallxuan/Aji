@@ -671,6 +671,11 @@ fn print_startup(transcript: &Transcript, scenario: &Scenario) {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // `katago version` needs no config, as in the real program.
+    if args.first().map(String::as_str) == Some("version") {
+        println!("KataGo v1.18.2\nGit revision: fake");
+        process::exit(0);
+    }
     let config_path = arg(&args, "-config").unwrap_or_else(|| die("missing -config"));
     let config_text = std::fs::read_to_string(config_path)
         .unwrap_or_else(|e| die(&format!("{config_path}: {e}")));

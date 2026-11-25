@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
+import { useAddEngineStore } from '../engine/addEngineStore';
 import { getInstallStatus } from '../transport/api';
 import type { JobSnapshot } from '../transport/generated/JobSnapshot';
 import { useTransport } from '../transport/TransportProvider';
 import { isBenchmarkJob, useBenchmarkStore } from './benchmarkStore';
 import { useWizardStore } from './wizardStore';
 
-/** A benchmark job goes to settings; any other job to the wizard. */
+/** A benchmark job goes to settings, 添加引擎's job to its dialog, any other job to the wizard. */
 function route(job: JobSnapshot) {
   if (isBenchmarkJob(job)) useBenchmarkStore.getState().setJob(job);
-  else useWizardStore.getState().applyProgress(job);
+  else if (!useAddEngineStore.getState().claim(job)) useWizardStore.getState().applyProgress(job);
 }
 
 /**

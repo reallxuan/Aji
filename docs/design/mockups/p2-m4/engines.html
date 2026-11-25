@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M4 engine profiles and console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  .dark { --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; --ok:#1e8e5a; --pop:#2a2a2e; --btn:#2c2c31; --chg:#E2A33B; --err:#d0564c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0e0e10; color:#ECEAE4; font-family:Inter,'PingFang SC','Noto Sans SC',sans-serif; font-feature-settings:'tnum'; padding:28px; }
+  .intro { max-width:1180px; margin:0 auto 26px; color:#c9c7c0; font-size:14px; line-height:1.65; }
+  .intro h1 { font-size:20px; margin:0 0 8px; color:#ECEAE4; font-weight:600; }
+  .intro ul { margin:6px 0 0; padding-left:18px; }
+  .section { max-width:1180px; margin:0 auto 48px; }
+  .section h2 { font-size:15px; font-weight:600; margin:0 0 6px; color:#ECEAE4; }
+  .cap { font-size:13px; color:#c9c7c0; margin:0 0 12px; line-height:1.6; max-width:1060px; }
+  .cap b { color:#ECEAE4; }
+  .call { color:#e8c27a; }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:12px; color:#9a988f; margin:0 0 6px; letter-spacing:.5px; }
+
+  .shot { display:flex; background:#141416; border-radius:8px; outline:1px solid #2a2a2e; overflow:hidden; }
+  .board { width:430px; height:430px; margin:10px; border-radius:3px; background:#e9d9b5; position:relative;
+    background-image:linear-gradient(#5b4a2a 1px, transparent 1px), linear-gradient(90deg, #5b4a2a 1px, transparent 1px);
+    background-size:22.6px 22.6px; background-position:11px 11px; opacity:.92; }
+  .panel { background:var(--panel); color:var(--text); width:420px; font-size:13px; position:relative; }
+  .hdr { display:flex; align-items:center; gap:9px; padding:12px 14px 12px 18px; border-bottom:1px solid var(--hairline); height:50px; }
+  .hdr .t { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hdr .nav { color:var(--muted); display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  .hdr .nav b { color:var(--text); font-weight:400; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#1e8e5a; flex:none; }
+  .ic { width:28px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted); font-size:15px; }
+  .pchip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text); border:1px solid var(--hairline); background:var(--btn); border-radius:6px; padding:2px 7px 2px 9px; white-space:nowrap; max-width:130px; }
+  .pchip span { overflow:hidden; text-overflow:ellipsis; }
+  .pchip i { font-style:normal; color:var(--muted); font-size:10px; }
+  .pchip.open { border-color:var(--line); }
+  .editbar { display:flex; align-items:center; gap:6px; padding:7px 14px 7px 18px; border-bottom:1px solid var(--hairline); }
+  .tg { font-size:13px; padding:3px 10px; border-radius:6px; border:1px solid var(--hairline); background:var(--btn); color:var(--text); white-space:nowrap; }
+  .body { padding:14px 18px; color:var(--muted); line-height:1.6; height:340px; }
+
+  .menu { position:absolute; width:340px; background:#2a2a2e; color:#eceae4; border:1px solid #3a3a40; border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.4); padding:5px; font-size:13px; z-index:3; }
+  .menu .it { padding:6px 10px; border-radius:5px; display:flex; gap:9px; align-items:flex-start; }
+  .menu .it .ck { width:12px; flex:none; color:#eceae4; }
+  .menu .it .tx { flex:1; min-width:0; }
+  .menu .it .sub { font-size:11.5px; color:#a3a19a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .menu .it .k { color:#8a887f; font-size:12px; }
+  .menu .it.hi { background:#3a3a40; }
+  .menu .sep { height:1px; background:#3a3a40; margin:5px 4px; }
+  .menu .title { font-size:11px; color:#8a887f; padding:4px 10px 2px; }
+
+  .pop { width:470px; background:var(--pop); color:var(--text); border:1px solid #3a3a40; border-radius:10px; box-shadow:0 14px 36px rgba(0,0,0,.45); padding:16px 18px 14px; font-size:13px; }
+  .pop h3 { margin:0 0 12px; font-size:14px; font-weight:600; }
+  .seg { display:flex; gap:4px; background:#232327; border-radius:7px; padding:3px; margin-bottom:14px; }
+  .seg div { flex:1; text-align:center; padding:5px 0; border-radius:5px; color:var(--muted); font-size:12.5px; }
+  .seg div.on { background:#3a3a40; color:var(--text); }
+  .fld { margin-bottom:10px; }
+  .fld .lb { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .fld .in { display:flex; gap:6px; }
+  .fld .box { flex:1; min-width:0; background:#1c1c1f; border:1px solid #3a3a40; border-radius:6px; padding:6px 9px; font-family:'JetBrains Mono',monospace; font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fld .box.bad { border-color:var(--err); }
+  .fld .msg { font-size:12px; color:var(--err); margin-top:4px; }
+  .fld .ok { font-size:12px; color:#5cb88a; margin-top:4px; }
+  .btn { font-size:12.5px; padding:5px 11px; border-radius:6px; border:1px solid #3a3a40; background:#2c2c31; color:var(--text); white-space:nowrap; }
+  .btn.pri { background:#eceae4; color:#1e1e21; border-color:#eceae4; }
+  .btn.dim { opacity:.4; }
+  .foot { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .netlist div { display:flex; justify-content:space-between; padding:7px 9px; border-radius:6px; }
+  .netlist div.on { background:#3a3a40; }
+  .netlist .m { color:var(--muted); font-size:12px; }
+
+  .settings { width:520px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; padding:18px 20px; font-size:13px; }
+  .settings h4 { margin:0 0 10px; font-size:13px; font-weight:600; }
+  .prof { display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--hairline); border-radius:8px; margin-bottom:6px; }
+  .prof.cur { border-color:var(--line); background:#232327; }
+  .prof .rd { width:14px; height:14px; border-radius:50%; border:1.5px solid var(--line); flex:none; }
+  .prof.cur .rd { border-color:var(--text); background:radial-gradient(circle, var(--text) 0 3.2px, transparent 3.6px); }
+  .prof .tx { flex:1; min-width:0; }
+  .prof .nm { font-weight:500; }
+  .prof .sub { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prof .more { color:var(--muted); font-size:16px; padding:0 4px; }
+  .tag2 { font-size:11px; color:var(--muted); border:1px solid var(--hairline); border-radius:999px; padding:0 7px; margin-left:6px; }
+  .rowline { display:flex; align-items:center; gap:10px; margin-top:12px; color:var(--text); }
+  .rowline .m { color:var(--muted); font-size:12.5px; }
+
+  .console { width:560px; background:var(--panel); color:var(--text); border-radius:8px; outline:1px solid #2a2a2e; font-size:12px; display:flex; flex-direction:column; height:430px; }
+  .console .top { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--hairline); }
+  .console .top .nm { font-weight:600; font-size:13px; margin-right:8px; }
+  .chipf { font-size:12px; padding:2px 9px; border-radius:999px; border:1px solid var(--hairline); color:var(--muted); }
+  .chipf.on { color:var(--text); border-color:var(--line); background:#2c2c31; }
+  .console .top .sp { flex:1; }
+  .lines { flex:1; overflow:hidden; padding:6px 0; font-family:'JetBrains Mono',monospace; font-size:11.3px; line-height:1.55; }
+  .ln { display:flex; gap:8px; padding:1px 12px; white-space:nowrap; }
+  .ln .tm { color:#6c6a64; flex:none; }
+  .ln .kd { flex:none; width:30px; color:#8a887f; }
+  .ln .kd.s { color:#7fa7d6; } .ln .kd.r { color:#7fbf95; } .ln .kd.a { color:#e8c27a; } .ln .kd.e { color:#d0564c; }
+  .ln .tx { overflow:hidden; text-overflow:ellipsis; color:#d6d4cd; }
+  .ln .ex { color:#8fb0e0; flex:none; }
+  .ln.warn .tx { color:#e3a49e; }
+  .inp { display:flex; gap:8px; align-items:center; border-top:1px solid var(--hairline); padding:8px 12px; }
+  .inp .box { flex:1; background:#1c1c1f; border:1px solid #3a3a40; border-radius:6px; padding:6px 9px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#d6d4cd; }
+
+  .phone { width:300px; height:600px; background:var(--panel); border-radius:22px; outline:6px solid #2a2a2e; overflow:hidden; position:relative; font-size:13px; color:var(--text); }
+  .phone .ph { display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--hairline); }
+  .phone .ph .t { flex:1; font-weight:600; }
+  .phone .sec { padding:12px 14px; }
+  .phone .prof { padding:10px; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; height:78%; background:var(--panel); border-top:1px solid var(--line); border-radius:14px 14px 0 0; display:flex; flex-direction:column; box-shadow:0 -10px 30px rgba(0,0,0,.5); }
+  .grip { width:36px; height:4px; border-radius:2px; background:#4a4a50; margin:7px auto 3px; }
+</style>
+</head>
+<body class="dark">
+
+<div class="intro">
+  <h1>M4 第一部分：引擎配置与控制台</h1>
+  设计稿：<code>docs/superpowers/specs/2026-11-25-p2-m4-engines-design.md</code>。界面文字是建议，可以改。
+  <ul>
+    <li><b>配置</b>：每一项是一套"KataGo + 权重 + 线程"，或你自己的三个文件。</li>
+    <li><span class="call">黄色</span>的说明是作者的建议，等你确认。</li>
+  </ul>
+</div>
+
+<!-- 1. Header chip and menu -->
+<div class="section">
+  <h2>1. 一键切换（桌面）</h2>
+  <p class="cap">标题栏里，引擎圆点左边加一个<b>配置标签</b>，显示当前配置的名字。点开是配置列表，当前的打勾，第二行是权重和速度。切换后 KataGo 重启，棋盘、图表和大损失列表只显示这个配置的结果；以前分析过的局面立刻从缓存里出来。<span class="call">整盘分析进行中时，切换前先问一句。</span></p>
+  <div class="shot">
+    <div class="board"></div>
+    <div class="panel">
+      <div class="hdr">
+        <span class="t">2026-11-24 对局.sgf</span>
+        <span class="nav">‹ <b>87</b> / 213 ›</span>
+        <span class="pchip open"><span>b28 主力</span><i>▾</i></span>
+        <span class="dot"></span>
+        <span class="ic">▦</span>
+      </div>
+      <div class="editbar"><span class="tg">试下</span><span class="tg">标记</span><span class="tg">摆子</span><span class="tg">形势判断</span></div>
+      <div class="body">黑 54.3%　领先 1.2 目……</div>
+      <div class="menu" style="right:44px; top:44px;">
+        <div class="title">引擎配置</div>
+        <div class="it hi"><span class="ck">✓</span><div class="tx">b28 主力<div class="sub">kata1-b28c512nbt-s13255M　约 410 次/秒</div></div></div>
+        <div class="it"><span class="ck"></span><div class="tx">zhizi b40<div class="sub">kata1-zhizi-b40c768nbt-s11272M　未测速</div></div></div>
+        <div class="it"><span class="ck"></span><div class="tx">b18 快速<div class="sub">kata1-b18c384nbt-s9996M　约 1,050 次/秒</div></div></div>
+        <div class="it"><span class="ck"></span><div class="tx">Homebrew KataGo<div class="sub">自己的文件　kata1-b28c512nbt-s13255M</div></div></div>
+        <div class="sep"></div>
+        <div class="it"><span class="ck"></span><div class="tx">添加引擎…</div></div>
+        <div class="it"><span class="ck"></span><div class="tx">引擎控制台</div></div>
+        <div class="it"><span class="ck"></span><div class="tx">管理引擎…</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap" style="margin-top:12px">切换时有整盘分析在跑：</p>
+  <div class="pop" style="width:400px">
+    <h3>切换到 zhizi b40</h3>
+    <div style="color:var(--muted); line-height:1.6">切换引擎会停止整盘分析（已完成 64 / 213）。已有结果会保留，切回来时还在。仍然切换吗？</div>
+    <div class="foot"><span class="btn">取消</span><span class="btn pri">切换</span></div>
+  </div>
+</div>
+
+<!-- 2. Add -->
+<div class="section">
+  <h2>2. 添加引擎</h2>
+  <p class="cap">三种方式。<b>下载权重</b>用当前配置的 KataGo，只下载权重，下载完成后新配置成为当前配置。<b>导入权重文件</b>就是现在的导入。<b>使用自己的 KataGo</b>（比如 Homebrew 装的）：三个路径，浏览按钮在引擎所在的机器上打开文件框；保存前会检查文件，失败时指出是哪个文件、什么原因。</p>
+  <div class="row">
+    <div>
+      <p class="label">下载权重</p>
+      <div class="pop">
+        <h3>添加引擎</h3>
+        <div class="seg"><div class="on">下载权重</div><div>导入权重文件</div><div>使用自己的 KataGo</div></div>
+        <div class="netlist">
+          <div class="on"><span>kata1-zhizi-b40c768nbt-s11272M</span><span class="m">最强　约 330 MB</span></div>
+          <div><span>kata1-b28c512nbt-s13255M</span><span class="m">已有</span></div>
+          <div><span>kata1-b18c384nbt-s9996M</span><span class="m">快　约 98 MB</span></div>
+          <div><span>kata1-tf3-b11c768-s12382M</span><span class="m">约 140 MB</span></div>
+        </div>
+        <div style="color:var(--muted); font-size:12px; margin-top:8px">使用 KataGo 1.16.4（Metal）</div>
+        <div class="foot"><span class="btn">取消</span><span class="btn pri">下载并使用</span></div>
+      </div>
+    </div>
+    <div>
+      <p class="label">使用自己的 KataGo（检查没通过）</p>
+      <div class="pop">
+        <h3>添加引擎</h3>
+        <div class="seg"><div>下载权重</div><div>导入权重文件</div><div class="on">使用自己的 KataGo</div></div>
+        <div class="fld"><div class="lb">KataGo 程序</div><div class="in"><div class="box">/opt/homebrew/bin/katago</div><span class="btn">浏览…</span></div><div class="ok">KataGo v1.16.4</div></div>
+        <div class="fld"><div class="lb">权重</div><div class="in"><div class="box bad">/Users/me/katago/b28.bin.gz</div><span class="btn">浏览…</span></div><div class="msg">找不到这个文件。</div></div>
+        <div class="fld"><div class="lb">配置文件</div><div class="in"><div class="box">/opt/homebrew/share/katago/configs/analysis_example.cfg</div><span class="btn">浏览…</span></div></div>
+        <div class="fld"><div class="lb">名字</div><div class="in"><div class="box" style="font-family:inherit">Homebrew KataGo</div></div></div>
+        <div class="foot"><span class="btn">取消</span><span class="btn pri dim">检查并添加</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Settings -->
+<div class="section">
+  <h2>3. 设置里的引擎</h2>
+  <p class="cap">配置列表，点圆圈切换。每行的 ⋯ 菜单有<b>重命名</b>和<b>移除</b>。<span class="call">当前配置不能移除，要先切换。移除只是从列表拿掉，不删文件；某个权重不再被任何配置使用时，才算进"未使用的文件"，删除时照旧要确认。</span>自己的文件在 Aji 的文件夹之外，永远不删。</p>
+  <div class="settings">
+    <h4>引擎</h4>
+    <div class="prof cur"><span class="rd"></span><div class="tx"><div class="nm">b28 主力</div><div class="sub">KataGo 1.16.4（Metal）　kata1-b28c512nbt-s13255M　8 线程，约 410 次/秒</div></div><span class="more">⋯</span></div>
+    <div class="prof"><span class="rd"></span><div class="tx"><div class="nm">zhizi b40</div><div class="sub">KataGo 1.16.4（Metal）　kata1-zhizi-b40c768nbt-s11272M　8 线程，未测速</div></div><span class="more">⋯</span></div>
+    <div class="prof"><span class="rd"></span><div class="tx"><div class="nm">b18 快速</div><div class="sub">KataGo 1.16.4（Metal）　kata1-b18c384nbt-s9996M　12 线程</div></div><span class="more">⋯</span></div>
+    <div class="prof"><span class="rd"></span><div class="tx"><div class="nm">Homebrew KataGo<span class="tag2">自己的文件</span></div><div class="sub">/opt/homebrew/bin/katago　线程由配置文件决定</div></div><span class="more">⋯</span></div>
+    <div style="display:flex; gap:8px; margin-top:10px"><span class="btn">添加引擎…</span><span class="btn">引擎控制台</span></div>
+    <div class="rowline"><span style="flex:1">测速（当前配置）</span><span class="m">8 线程，约 410 次/秒</span><span class="btn">重新测速</span></div>
+    <div style="display:flex; gap:8px; margin-top:12px"><span class="btn">重启</span><span class="btn">停止</span><span class="btn">重新设置</span></div>
+    <div class="rowline"><span style="flex:1">未使用的文件</span><span class="m">412 MB</span><span class="btn">删除</span></div>
+  </div>
+</div>
+
+<!-- 4. Console -->
+<div class="section">
+  <h2>4. 引擎控制台</h2>
+  <p class="cap">一个面板，默认不在任何布局里，从配置菜单打开时加到右栏底部。显示 KataGo 的日志（stderr）、Aji 自己的记录、以及分析协议的发送和接收。长的回复只显示开头 400 字，可以展开。底部可以输入 JSON 查询，Aji 自动补上 <code>id</code>，回复只出现在控制台。<span class="call">会结束 Aji 自己分析的命令（terminate_all，以及终止非控制台的查询）会被拒绝并说明原因。协议内容只在控制台打开时记录，关着时不占用开销。</span></p>
+  <div class="console">
+    <div class="top"><span class="nm">引擎控制台</span><span class="chipf on">全部</span><span class="chipf">日志</span><span class="chipf">协议</span><span class="sp"></span><span class="chipf">暂停滚动</span><span class="chipf">复制</span><span class="chipf">清空</span></div>
+    <div class="lines">
+      <div class="ln"><span class="tm">21:40:02</span><span class="kd a">Aji</span><span class="tx">启动 b28 主力：/Users/me/Library/Application Support/Aji/engines/katago-1.16.4-metal/katago</span></div>
+      <div class="ln"><span class="tm">21:40:02</span><span class="kd">日志</span><span class="tx">KataGo v1.16.4</span></div>
+      <div class="ln"><span class="tm">21:40:03</span><span class="kd">日志</span><span class="tx">Loaded model networks/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz</span></div>
+      <div class="ln"><span class="tm">21:40:04</span><span class="kd">日志</span><span class="tx">Metal backend thread 0: Device 0 Apple M5 Model version 15</span></div>
+      <div class="ln"><span class="tm">21:40:05</span><span class="kd">日志</span><span class="tx">Started, ready to begin handling requests</span></div>
+      <div class="ln"><span class="tm">21:40:05</span><span class="kd s">发送</span><span class="tx">{"id":"a-412","moves":[["B","Q16"],["W","D4"],["B","Q3"]…],"rules":"chinese","komi":7.5,"boardXSize":19,"maxVisits":1000000,"reportDuringSearchEvery":0.2}</span><span class="ex">展开</span></div>
+      <div class="ln"><span class="tm">21:40:05</span><span class="kd r">接收</span><span class="tx">{"id":"a-412","isDuringSearch":true,"moveInfos":[{"move":"R14","visits":96,"winrate":0.5431,"scoreLead":1.21,"order":0,"pv":["R14","Q14",…</span><span class="ex">展开</span></div>
+      <div class="ln"><span class="tm">21:40:05</span><span class="kd r">接收</span><span class="tx">{"id":"a-412","isDuringSearch":true,"moveInfos":[{"move":"R14","visits":212,"winrate":0.5429,"scoreLead":1.19,"order":0,"pv":["R14","Q14",…</span><span class="ex">展开</span></div>
+      <div class="ln"><span class="tm">21:40:11</span><span class="kd s">发送</span><span class="tx">{"action":"query_version","id":"console-1"}</span></div>
+      <div class="ln"><span class="tm">21:40:11</span><span class="kd r">接收</span><span class="tx">{"action":"query_version","git_hash":"9a2d0f1…","id":"console-1","version":"1.16.4"}</span></div>
+      <div class="ln warn"><span class="tm">21:40:19</span><span class="kd e">Aji</span><span class="tx">没有发送 terminate_all：它会结束 Aji 自己的分析。</span></div>
+    </div>
+    <div class="inp"><div class="box">{"action":"clear_cache"}</div><span class="btn">发送</span></div>
+  </div>
+</div>
+
+<!-- 5. Phone -->
+<div class="section">
+  <h2>5. 手机</h2>
+  <p class="cap"><span class="call">手机标题栏放不下配置标签。</span>切换在 设置 › 引擎 里，一点就切（比桌面多一步）。控制台从那里打开，是一个从底部升起的全高面板。</p>
+  <div class="row">
+    <div class="phone">
+      <div class="ph"><span>‹</span><span class="t">设置</span></div>
+      <div class="sec">
+        <div style="font-weight:600; margin-bottom:10px">引擎</div>
+        <div class="prof cur"><span class="rd"></span><div class="tx"><div class="nm">b28 主力</div><div class="sub">kata1-b28c512nbt　约 410 次/秒</div></div><span class="more">⋯</span></div>
+        <div class="prof"><span class="rd"></span><div class="tx"><div class="nm">zhizi b40</div><div class="sub">kata1-zhizi-b40c768nbt</div></div><span class="more">⋯</span></div>
+        <div class="prof"><span class="rd"></span><div class="tx"><div class="nm">b18 快速</div><div class="sub">kata1-b18c384nbt</div></div><span class="more">⋯</span></div>
+        <div style="display:flex; gap:8px; margin-top:10px"><span class="btn" style="padding:10px 12px">添加引擎…</span><span class="btn" style="padding:10px 12px">引擎控制台</span></div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="ph"><span>‹</span><span class="t">设置</span></div>
+      <div class="sec" style="opacity:.35"><div style="font-weight:600">引擎</div></div>
+      <div class="sheet">
+        <div class="grip"></div>
+        <div style="display:flex; align-items:center; gap:6px; padding:4px 12px 8px; border-bottom:1px solid var(--hairline)"><b style="flex:1">引擎控制台</b><span class="chipf on">全部</span><span class="chipf">日志</span><span class="chipf">协议</span></div>
+        <div class="lines" style="font-size:10.5px">
+          <div class="ln"><span class="tm">21:40:03</span><span class="tx">Loaded model networks/kata1-b28c…</span></div>
+          <div class="ln"><span class="tm">21:40:05</span><span class="tx">Started, ready to begin handling…</span></div>
+          <div class="ln"><span class="tm">21:40:05</span><span class="kd s">发送</span><span class="tx">{"id":"a-412","moves":…</span></div>
+          <div class="ln"><span class="tm">21:40:05</span><span class="kd r">接收</span><span class="tx">{"id":"a-412","isDuring…</span></div>
+        </div>
+        <div class="inp"><div class="box">输入 JSON 查询</div><span class="btn">发送</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

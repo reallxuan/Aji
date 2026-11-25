@@ -11,6 +11,7 @@ import { clearAnalysis, openJobPanel, stopGameJob } from '../job/actions';
 import { useJobStore } from '../job/jobStore';
 import { useScoringStore } from '../scoring/scoringStore';
 import { engineAction, runEngineAction } from '../engine/engineAction';
+import { stepProfile } from '../engine/profileStore';
 import type { NavTarget } from '../transport/generated/NavTarget';
 import type { Command, CommandContext, CommandId } from './registry';
 
@@ -129,4 +130,7 @@ export const BUILTINS: Command[] = [
     scope: 'always',
     run: (_, phase) => useViewStore.getState().setHeld(phase === 'down'),
   },
+  // P2 M4 design 6.2: unbound until the shortcut editor binds them.
+  press('engine.profile.next', (ctx) => void stepProfile(ctx.actions, 1)),
+  press('engine.profile.previous', (ctx) => void stepProfile(ctx.actions, -1)),
 ];

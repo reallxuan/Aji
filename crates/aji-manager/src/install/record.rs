@@ -28,7 +28,46 @@ pub struct Installed {
     pub networks: BTreeMap<String, InstalledNetwork>,
     /// Engine sets whose test query passed.
     pub sets: Vec<EngineSet>,
+    /// The set older versions run. It follows [`Installed::current`] while that names a set,
+    /// and keeps the last one while an own-files profile runs (P2 M4 design 8).
     pub active: Option<SetKey>,
+    /// Profiles of the user's own KataGo, network and config (audit P2-G1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub own: Vec<OwnProfile>,
+    /// The profile that runs. A record from v0.1.0 has none; [`Installed::current_key`] then
+    /// takes `active`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<ProfileKey>,
+}
+
+/// A profile of the user's own files, on the engine's machine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnProfile {
+    /// `own-<n>`.
+    pub id: String,
+    pub name: String,
+    pub katago: PathBuf,
+    pub model: PathBuf,
+    pub config: PathBuf,
+}
+
+/// Names a profile: a recorded set, or an own-files profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ProfileKey {
+    Set { engine: String, network: String },
+    Own { id: String },
+}
+
+impl ProfileKey {
+    /// The id the protocol carries: `<engine>/<network>` for a set, the own id otherwise.
+    pub fn id(&self) -> String {
+        match self {
+            ProfileKey::Set { engine, network } => format!("{engine}/{network}"),
+            ProfileKey::Own { id } => id.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +115,9 @@ pub struct EngineSet {
     pub config: String,
     pub threads: u32,
     pub benchmark: Vec<ThreadSpeed>,
+    /// The profile's name, when the user gave one; otherwise the network's display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +136,8 @@ impl Default for Installed {
             networks: BTreeMap::new(),
             sets: Vec::new(),
             active: None,
+            own: Vec::new(),
+            current: None,
         }
     }
 }
@@ -108,16 +152,67 @@ impl EngineSet {
 }
 
 impl Installed {
-    /// Adds `set`, replacing the set with the same engine and network.
-    pub fn put_set(&mut self, set: EngineSet) {
+    /// Adds `set`, replacing the set with the same engine and network. A name the user gave
+    /// the replaced set stays when `set` has none.
+    pub fn put_set(&mut self, mut set: EngineSet) {
         match self
             .sets
             .iter_mut()
             .find(|s| s.engine == set.engine && s.network == set.network)
         {
-            Some(existing) => *existing = set,
+            Some(existing) => {
+                set.name = set.name.or_else(|| existing.name.take());
+                *existing = set;
+            }
             None => self.sets.push(set),
         }
+    }
+
+    /// The profile that runs: `current`, or `active` in a record from v0.1.0.
+    pub fn current_key(&self) -> Option<ProfileKey> {
+        self.current.clone().or_else(|| {
+            self.active.as_ref().map(|key| ProfileKey::Set {
+                engine: key.engine.clone(),
+                network: key.network.clone(),
+            })
+        })
+    }
+
+    /// Makes `key` current. A set also becomes `active`, so an older version runs it too.
+    pub fn set_current(&mut self, key: ProfileKey) {
+        if let ProfileKey::Set { engine, network } = &key {
+            self.active = Some(SetKey {
+                engine: engine.clone(),
+                network: network.clone(),
+            });
+        }
+        self.current = Some(key);
+    }
+
+    /// The recorded profile with this protocol id.
+    pub fn profile_key(&self, id: &str) -> Option<ProfileKey> {
+        if let Some(own) = self.own.iter().find(|o| o.id == id) {
+            return Some(ProfileKey::Own { id: own.id.clone() });
+        }
+        self.sets
+            .iter()
+            .map(EngineSet::key)
+            .find(|key| format!("{}/{}", key.engine, key.network) == id)
+            .map(|key| ProfileKey::Set {
+                engine: key.engine,
+                network: key.network,
+            })
+    }
+
+    /// The id for a new own-files profile: one past the highest.
+    pub fn next_own_id(&self) -> String {
+        let highest = self
+            .own
+            .iter()
+            .filter_map(|o| o.id.strip_prefix("own-")?.parse::<u64>().ok())
+            .max()
+            .unwrap_or(0);
+        format!("own-{}", highest + 1)
     }
 
     /// The set `active` names, if it is recorded.
@@ -284,6 +379,50 @@ pub fn engine_files(
     })
 }
 
+/// The files to run one's own KataGo with: the working folder is the config's folder, the config
+/// goes by file name and the model relative to that folder when it lives inside it, so a
+/// non-ASCII path stays off KataGo's command line (roadmap 3.3). KataGo stays absolute.
+pub fn own_files(katago: &Path, model: &Path, config: &Path) -> EngineFiles {
+    let working_dir = config.parent().map(Path::to_path_buf).unwrap_or_default();
+    let config_name = config
+        .file_name()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| config.to_path_buf());
+    let model = model
+        .strip_prefix(&working_dir)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| model.to_path_buf());
+    EngineFiles {
+        katago: katago.to_path_buf(),
+        model,
+        config: config_name,
+        working_dir,
+        path_prepend: Vec::new(),
+    }
+}
+
+/// The files to run the profile `key` with, or `None` when it is not recorded or names a
+/// component that is not.
+pub fn profile_files(
+    root: &InstallRoot,
+    installed: &Installed,
+    key: &ProfileKey,
+) -> Option<EngineFiles> {
+    match key {
+        ProfileKey::Set { engine, network } => {
+            let set = installed
+                .sets
+                .iter()
+                .find(|s| &s.engine == engine && &s.network == network)?;
+            engine_files(root, installed, set)
+        }
+        ProfileKey::Own { id } => {
+            let own = installed.own.iter().find(|o| &o.id == id)?;
+            Some(own_files(&own.katago, &own.model, &own.config))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Barrier};
@@ -302,6 +441,7 @@ mod tests {
                 threads,
                 visits_per_second: 123.5,
             }],
+            name: None,
         }
     }
 
@@ -335,6 +475,161 @@ mod tests {
             network: "n".into(),
         });
         installed
+    }
+
+    // ------------------------------------------------------------ P2 M4: profiles
+
+    #[test]
+    fn a_v010_record_reads_with_the_active_set_current() {
+        let json = serde_json::json!({
+            "schema": 1,
+            "engines": {},
+            "runtimes": {},
+            "networks": {},
+            "sets": [
+                {"engine": "e", "network": "n", "runtime": null, "config": "configs/a.cfg", "threads": 4, "benchmark": []},
+                {"engine": "e", "network": "m", "runtime": null, "config": "configs/b.cfg", "threads": 4, "benchmark": []}
+            ],
+            "active": {"engine": "e", "network": "m"}
+        });
+        let installed = parse_installed(json.to_string().as_bytes()).unwrap();
+        assert_eq!(
+            installed.current_key(),
+            Some(ProfileKey::Set {
+                engine: "e".into(),
+                network: "m".into()
+            })
+        );
+        assert!(installed.sets.iter().all(|s| s.name.is_none()));
+        assert!(installed.own.is_empty());
+    }
+
+    #[test]
+    fn profile_fields_round_trip_and_are_skipped_when_empty() {
+        let plain = serde_json::to_value(sample()).unwrap();
+        assert!(plain.get("own").is_none(), "{plain}");
+        assert!(plain.get("current").is_none(), "{plain}");
+        assert!(plain["sets"][0].get("name").is_none(), "{plain}");
+
+        let mut installed = sample();
+        installed.sets[0].name = Some("b28 主力".into());
+        installed.own.push(OwnProfile {
+            id: "own-1".into(),
+            name: "Homebrew".into(),
+            katago: "/opt/homebrew/bin/katago".into(),
+            model: "/Users/me/b28.bin.gz".into(),
+            config: "/Users/me/analysis.cfg".into(),
+        });
+        installed.set_current(ProfileKey::Own { id: "own-1".into() });
+        let bytes = serde_json::to_vec(&installed).unwrap();
+        assert_eq!(parse_installed(&bytes).unwrap(), installed);
+    }
+
+    #[test]
+    fn set_current_keeps_active_for_older_versions() {
+        let mut installed = sample();
+        installed.put_set(set("e", "m", 8));
+        installed.set_current(ProfileKey::Set {
+            engine: "e".into(),
+            network: "m".into(),
+        });
+        assert_eq!(
+            installed.active,
+            Some(SetKey {
+                engine: "e".into(),
+                network: "m".into()
+            })
+        );
+        installed.set_current(ProfileKey::Own { id: "own-1".into() });
+        assert_eq!(installed.active.as_ref().unwrap().network, "m");
+        assert_eq!(
+            installed.current_key(),
+            Some(ProfileKey::Own { id: "own-1".into() })
+        );
+    }
+
+    #[test]
+    fn put_set_keeps_a_given_name() {
+        let mut installed = sample();
+        installed.sets[0].name = Some("主力".into());
+        installed.put_set(set("e", "n", 8));
+        assert_eq!(installed.sets[0].name.as_deref(), Some("主力"));
+        assert_eq!(installed.sets[0].threads, 8);
+    }
+
+    #[test]
+    fn profile_ids_name_sets_and_own_profiles() {
+        let mut installed = sample();
+        installed.own.push(OwnProfile {
+            id: "own-2".into(),
+            name: "x".into(),
+            katago: "/k".into(),
+            model: "/m".into(),
+            config: "/c".into(),
+        });
+        let set_key = ProfileKey::Set {
+            engine: "e".into(),
+            network: "n".into(),
+        };
+        assert_eq!(set_key.id(), "e/n");
+        assert_eq!(installed.profile_key("e/n"), Some(set_key));
+        assert_eq!(
+            installed.profile_key("own-2"),
+            Some(ProfileKey::Own { id: "own-2".into() })
+        );
+        assert_eq!(installed.profile_key("e/zzz"), None);
+        assert_eq!(installed.profile_key("own-9"), None);
+        assert_eq!(installed.next_own_id(), "own-3");
+    }
+
+    #[test]
+    fn own_files_run_from_the_config_folder() {
+        let dir = Path::new("/Users/me/围棋 files");
+        let files = own_files(
+            Path::new("/opt/homebrew/bin/katago"),
+            &dir.join("nets").join("b28.bin.gz"),
+            &dir.join("analysis 棋.cfg"),
+        );
+        assert_eq!(files.working_dir, dir);
+        assert_eq!(files.config, PathBuf::from("analysis 棋.cfg"));
+        assert_eq!(files.model, Path::new("nets").join("b28.bin.gz"));
+        assert_eq!(files.katago, PathBuf::from("/opt/homebrew/bin/katago"));
+        let outside = own_files(
+            Path::new("/k"),
+            Path::new("/elsewhere/b28.bin.gz"),
+            &dir.join("a.cfg"),
+        );
+        assert_eq!(outside.model, PathBuf::from("/elsewhere/b28.bin.gz"));
+    }
+
+    #[test]
+    fn profile_files_runs_a_set_or_an_own_profile() {
+        let root = InstallRoot::new(PathBuf::from("/data/aji"));
+        let mut installed = sample();
+        installed.own.push(OwnProfile {
+            id: "own-1".into(),
+            name: "x".into(),
+            katago: "/k/katago".into(),
+            model: "/m/b.bin.gz".into(),
+            config: "/m/a.cfg".into(),
+        });
+        let set_files = profile_files(
+            &root,
+            &installed,
+            &ProfileKey::Set {
+                engine: "e".into(),
+                network: "n".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(set_files.model, Path::new("networks").join("n.bin.gz"));
+        let own =
+            profile_files(&root, &installed, &ProfileKey::Own { id: "own-1".into() }).unwrap();
+        assert_eq!(own.working_dir, PathBuf::from("/m"));
+        assert_eq!(own.model, PathBuf::from("b.bin.gz"));
+        assert!(
+            profile_files(&root, &installed, &ProfileKey::Own { id: "own-7".into() }).is_none()
+        );
     }
 
     fn bad_files(dir: &Path) -> Vec<String> {

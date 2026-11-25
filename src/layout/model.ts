@@ -4,7 +4,15 @@
  */
 
 export type PanelKind =
-  'header' | 'winrate' | 'trend' | 'candidates' | 'swings' | 'tree' | 'comments' | 'subboard';
+  | 'header'
+  | 'winrate'
+  | 'trend'
+  | 'candidates'
+  | 'swings'
+  | 'tree'
+  | 'comments'
+  | 'subboard'
+  | 'console';
 export const PANEL_KINDS: readonly PanelKind[] = [
   'header',
   'winrate',
@@ -14,6 +22,8 @@ export const PANEL_KINDS: readonly PanelKind[] = [
   'tree',
   'comments',
   'subboard',
+  // P2 M4 design 6.5: in no preset; 引擎控制台 adds it.
+  'console',
 ];
 
 export type PanelRef = {
