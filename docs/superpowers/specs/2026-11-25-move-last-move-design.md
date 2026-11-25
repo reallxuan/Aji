@@ -1,7 +1,7 @@
 # Move the last move: design
 
 - Date: 2026-11-25
-- Status: Waiting for the owner's approval
+- Status: Approved by the owner on 2026-11-25 and built on `feat/move-last-move`. Results under **Built** at the end.
 - Placement: one small branch, `feat/move-last-move`, before Phase 2 M4.
 
 ## Why
@@ -74,3 +74,20 @@ On the Mac, in `pnpm dev` and `pnpm tauri dev`, both themes, mouse and touch:
 - move a move so that a later move lands on the new point, see the dialog with the right count, cancel, then confirm, and see the later node marked illegal;
 - check that try-out, 标记, 摆子 and 终局点目 behave as above;
 - save and reopen the record in Aji and in Sabaki.
+
+## Built
+
+Built on 2026-11-25, from this design without a written plan.
+
+- **Where things went (the builder's choices).**
+  - The hint is a line under the edit row, with a Cancel button: in the side panel on a wide window, under the board on a phone. A first try put it over the board's top edge, where it hid about ten points of the first line and was the only Cancel a touch user had.
+  - The waiting state is a small store of its own (`src/edit/moveMoveStore.ts`), not the mode store, since it is not a board mode.
+  - The core reuses the record's illegal-node pass: it applies the change, compares the illegal nodes with the ones before, and undoes it.
+- **Protocol.** `moveLastMove { to, allowIllegal }`. The refusal is the error code `gameLaterMovesIllegal`, with the count in `detail`, as other refusals carry their reason.
+- **Checks.** Rust tests, clippy and formatting; 1010 frontend tests, lint and type checking pass. New tests cover the core edit (captures recomputed, an illegal point refused, the count across branches, a pass refused), the session (try-out, the count), the browser fake, and the interface (the item only on the current move, picking and sending, Esc, Cancel and a right click cancelling, the dialog resending, the question dropped when the position or the record changes, and a double click sending only the move).
+- **Browser, `pnpm dev`, `?scenario=analysing`.** At 800 × 600 in the light theme (and in the dark theme before the hint moved): the item shows only on the current move's stone. Picking hides the candidate discs and shows the hover square in the stone's colour. A move to an empty point keeps the move number and gets new analysis. An occupied point is refused with the usual notice. Undo and redo restore each point with its cached analysis. Moving white onto black's next point opens the dialog with a count of 1, and confirming marks move 3 as breaking the rules. In try-out, a record stone has no item, and a try-out stone moves and keeps its try-out number. At 375 × 812 in the dark theme, the board does not move when the hint appears, and a move to J19 on the first line works.
+- **Review.** A fresh review of the branch found nothing severe in the core or the protocol. Two interface fixes were folded into the frontend commit:
+  - the second click of a double click, landing after the picking ended, could play a stray move; the board now takes no click while the move is on its way;
+  - an undo, an edit or entering try-out left the picking or the question open, since only navigation and a new game ended them; they now end on any record change and on try-out.
+  Left as it is: the edit names no node, so it moves the move of whatever node is current when it arrives. A navigation still in flight when 移动 is pressed in the dialog would move the new position's move without asking. `play` has the same exposure; closing it would add the node to the protocol.
+- **Outstanding:** the owner's walk in `pnpm tauri dev` with KataGo; a long press on a touch screen; ko and suicide points, which the tests cover but the browser did not; save and reopen in Aji and in Sabaki.
