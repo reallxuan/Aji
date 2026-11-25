@@ -20,6 +20,8 @@ export interface BoardView {
   /** The board style (P2 M1 design 5.7). Default honey. */
   style?: BoardId;
   orientation?: Orientation;
+  /** The wood's grain strength, 0 to 1 (polish design 3). Default `DEFAULT_GRAIN_STRENGTH`. */
+  grain?: number;
 }
 
 /**
@@ -34,7 +36,7 @@ export function drawBoard(
 ): void {
   const { cssSize, dpr, boardSize } = view;
   const style = BOARD_STYLES[view.style ?? 'honey'];
-  const wood = woodTexture(cssSize, dpr, create, style);
+  const wood = woodTexture(cssSize, dpr, create, style, view.grain);
   if (!wood) return;
   const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
 
@@ -79,6 +81,8 @@ export function drawBoard(
     ctx.fill();
   }
 
+  if (style.grain) drawRim(ctx, Math.round(cssSize * dpr), dpr);
+
   // Coordinates sit in the band outside the stones, so an edge stone never covers one.
   if (view.coordinates === false) return;
   const labelSize = Math.min(LABEL_SIZE, geometry.labelBand * 0.65);
@@ -90,4 +94,19 @@ export function drawBoard(
   const band = (geometry.labelBand / 2) * dpr;
   for (const { label, x } of geometry.columns) ctx.fillText(label, x * dpr, band);
   for (const { label, y } of geometry.rows) ctx.fillText(label, band, y * dpr);
+}
+
+/**
+ * A wood board's bevelled rim (polish design 3): a hairline of light along the top and left
+ * edges and of shade along the bottom and right, as on a board lit from the upper left. It stays
+ * within the outermost 2 CSS pixels, so the surface inside is as flat as before (M7 design 13.5).
+ */
+function drawRim(ctx: CanvasRenderingContext2D, size: number, dpr: number): void {
+  const edge = Math.min(2 * dpr, Math.max(dpr, Math.round(size * 0.002)));
+  ctx.fillStyle = 'rgba(255, 246, 226, 0.45)';
+  ctx.fillRect(0, 0, size, edge);
+  ctx.fillRect(0, edge, edge, size - edge);
+  ctx.fillStyle = 'rgba(40, 20, 0, 0.32)';
+  ctx.fillRect(edge, size - edge, size - edge, edge);
+  ctx.fillRect(size - edge, edge, edge, size - 2 * edge);
 }

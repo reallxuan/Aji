@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -27,6 +27,8 @@ import { drawEditOverlay } from './badges';
 import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
+import { channel, setGrainMap } from './grainMaps';
+import type { GrainMapId } from './styles';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, '__screenshots__');
@@ -223,9 +225,16 @@ function mockupDiscs(
 const empty = (n: number): (Color | null)[] => Array.from({ length: n * n }, () => null);
 
 describe('board screenshots', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     GlobalFonts.registerFromPath(join(HERE, '../assets/fonts/Inter-Regular.woff2'), 'Inter');
     GlobalFonts.registerFromPath(join(HERE, '../assets/fonts/Inter-Medium.woff2'), 'Inter');
+    // The bundled grain maps, decoded by Skia as the app's webview would.
+    for (const id of ['honey', 'kaya', 'walnut'] as GrainMapId[]) {
+      const image = await loadImage(readFileSync(join(HERE, `../assets/wood/${id}.jpg`)));
+      const ctx = createCanvas(image.width, image.height).getContext('2d');
+      ctx.drawImage(image, 0, 0);
+      setGrainMap(id, channel(ctx.getImageData(0, 0, image.width, image.height).data), image.width);
+    }
   });
 
   for (const boardSize of [9, 13, 19]) {

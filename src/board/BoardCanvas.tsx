@@ -18,6 +18,8 @@ import { boardGeometry, gridPosition, pointAt, STONE_RADIUS_SHARE } from './geom
 import { drawStones, makeStoneSprites } from './stones';
 import { useBoardGestures } from './useBoardGestures';
 import { useDevicePixelRatio } from './useDevicePixelRatio';
+import { useGrainMapsVersion } from './grainMaps';
+import { BOARD_STYLES, DEFAULT_GRAIN_STRENGTH } from './styles';
 
 export interface BoardCanvasProps {
   /** The board's side in CSS pixels. */
@@ -81,6 +83,8 @@ export interface BoardCanvasProps {
    * design 2); `null` when a click places nothing. Mouse only, never on touch.
    */
   hoverColor?: Color | null;
+  /** The wood's grain strength, 0 to 1 (polish design 3). Default `DEFAULT_GRAIN_STRENGTH`. */
+  grainStrength?: number;
 }
 
 const NONE: never[] = [];
@@ -131,6 +135,7 @@ export function BoardCanvas({
   tryoutNumbers = NONE,
   numbers = NONE,
   hoverColor = null,
+  grainStrength = DEFAULT_GRAIN_STRENGTH,
 }: BoardCanvasProps) {
   const markLayer = useRef<HTMLCanvasElement>(null);
   const editLayer = useRef<HTMLCanvasElement>(null);
@@ -163,18 +168,39 @@ export function BoardCanvas({
     };
   }, []);
 
+  const grainLoaded = useGrainMapsVersion();
   useEffect(() => {
     const ctx = board.current?.getContext('2d');
     if (ctx)
-      drawBoard(ctx, { cssSize, dpr, boardSize, orientation, coordinates, style: boardStyle });
-  }, [cssSize, dpr, boardSize, orientation, coordinates, boardStyle, fontsLoaded]);
+      drawBoard(ctx, {
+        cssSize,
+        dpr,
+        boardSize,
+        orientation,
+        coordinates,
+        style: boardStyle,
+        grain: grainStrength,
+      });
+  }, [
+    cssSize,
+    dpr,
+    boardSize,
+    orientation,
+    coordinates,
+    boardStyle,
+    grainStrength,
+    fontsLoaded,
+    grainLoaded,
+  ]);
 
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
+  // Stones rest on wood with a contact shadow; the printed board stays flat (polish design 3).
+  const onWood = BOARD_STYLES[boardStyle].grain !== null;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
   // spacing and ratio, then stamped.
   const sprites = useMemo(
-    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle),
-    [spacing, dpr, stoneStyle],
+    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle, onWood),
+    [spacing, dpr, stoneStyle, onWood],
   );
 
   const marked = useMemo(
@@ -411,7 +437,16 @@ export function BoardCanvas({
       }}
       {...gestures.handlers}
     >
-      <canvas ref={board} width={backing} height={backing} style={style} aria-hidden />
+      <canvas
+        ref={board}
+        width={backing}
+        height={backing}
+        // A wood board sits above the window (polish design 3); printed stays flat on it.
+        style={
+          BOARD_STYLES[boardStyle].grain ? { ...style, boxShadow: 'var(--board-shadow)' } : style
+        }
+        aria-hidden
+      />
       <canvas
         ref={stoneLayer}
         width={backing}

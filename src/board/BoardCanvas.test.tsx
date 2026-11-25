@@ -84,6 +84,47 @@ describe('BoardCanvas', () => {
     rerender(<BoardCanvas cssSize={320} boardSize={9} stones={two} lastMove={null} />);
     expect(stones.makeStoneSprites).toHaveBeenCalledTimes(2);
   });
+
+  it('gives stones a contact shadow on wood only (UI polish design 3)', () => {
+    stubRatio(1);
+    const { rerender } = render(
+      <BoardCanvas cssSize={300} boardSize={9} stones={empty(9)} lastMove={null} />,
+    );
+    expect(vi.mocked(stones.makeStoneSprites).mock.lastCall?.[4]).toBe(true);
+    rerender(
+      <BoardCanvas
+        cssSize={300}
+        boardSize={9}
+        stones={empty(9)}
+        lastMove={null}
+        boardStyle="printed"
+      />,
+    );
+    expect(vi.mocked(stones.makeStoneSprites).mock.lastCall?.[4]).toBe(false);
+  });
+});
+
+describe('BoardCanvas hover square', () => {
+  const square = (c: Element) => c.querySelector('[data-layer="hover-square"]');
+
+  it('drops a point left over from another grid, and clears on a touch', () => {
+    stubRatio(1);
+    const props = { stones: empty(19), lastMove: null, hoverColor: 'black' as const };
+    const { container, rerender } = render(<BoardCanvas cssSize={400} boardSize={19} {...props} />);
+    const area = container.firstElementChild as HTMLElement;
+    const g = boardGeometry(400, 19);
+    fireEvent.mouseMove(area, { clientX: g.lines[15], clientY: g.lines[15] });
+    expect(square(container)).not.toBeNull();
+    // A 9×9 game opens under a still mouse: no square at a point the new board lacks.
+    rerender(<BoardCanvas cssSize={400} boardSize={9} {...props} stones={empty(9)} />);
+    expect(square(container)).toBeNull();
+    rerender(<BoardCanvas cssSize={400} boardSize={19} {...props} orientation={1} />);
+    expect(square(container)).toBeNull();
+    fireEvent.mouseMove(area, { clientX: g.lines[4], clientY: g.lines[4] });
+    expect(square(container)).not.toBeNull();
+    fireEvent.pointerDown(area, { pointerType: 'touch', clientX: 5, clientY: 5 });
+    expect(square(container)).toBeNull();
+  });
 });
 
 describe('BoardCanvas candidates', () => {
