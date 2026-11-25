@@ -5,6 +5,7 @@ use super::{Game, Illegal, NodeId, expand_points};
 use crate::sgf::{SgfNode, SgfProp};
 use crate::{BoardSize, Color, Move, Point};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use ts_rs::TS;
 
 /// One reversible edit to the arena. Structural operations preserve a forest of ordered trees.
@@ -176,6 +177,14 @@ pub enum Edit {
         node: NodeId,
     },
     DropTryout,
+    /// Puts a node's own move on another point. Its children and every later move stay as they
+    /// are; a later move this makes illegal is refused unless `allow_illegal` (move-last-move
+    /// design).
+    MovePlay {
+        node: NodeId,
+        to: Point,
+        allow_illegal: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,6 +192,8 @@ pub enum EditError {
     Illegal(Illegal),
     NoSuchNode,
     NotTryout,
+    /// How many later moves, legal before, a `MovePlay` would make illegal.
+    LaterMovesIllegal(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,7 +347,8 @@ impl Game {
             | SetComment { node, .. }
             | SetMark { node, .. }
             | ClearMarks { node }
-            | KeepTryout { node } => node,
+            | KeepTryout { node }
+            | MovePlay { node, .. } => node,
             SetInfo { .. } | DropTryout => self.root(),
         };
         if !self.is_attached(target) {
@@ -489,6 +501,44 @@ impl Game {
                         forward.push(Op::SetTryout { node: n, on: false });
                     }
                     stack.extend_from_slice(self.children(n));
+                }
+            }
+            MovePlay {
+                node,
+                to,
+                allow_illegal,
+            } => {
+                self.check_point(to)?;
+                let Ok(Some((color, Move::Play(from)))) = self.recorded_move(node) else {
+                    return Err(EditError::NoSuchNode);
+                };
+                if from != to {
+                    let mut sgf = self.sgf(node).clone();
+                    set_prop(&mut sgf, color.gtp(), &sgf_point(to));
+                    let op = Op::SetProps {
+                        node,
+                        props: sgf.props,
+                    };
+                    // A trial: the record's own scan says whether the move and the later ones
+                    // stay legal, setup in the same node included. Then it is undone.
+                    let before: HashSet<NodeId> = self.illegal_nodes().iter().copied().collect();
+                    let undo = self.apply_op(&op);
+                    let own = self.illegal(node);
+                    let later = self
+                        .illegal_nodes()
+                        .iter()
+                        .filter(|&&n| n != node && !before.contains(&n))
+                        .count();
+                    self.apply_op(&undo);
+                    if let Some(reason) = own {
+                        return Err(EditError::Illegal(reason));
+                    }
+                    if later > 0 && !allow_illegal {
+                        return Err(EditError::LaterMovesIllegal(
+                            u32::try_from(later).unwrap_or(u32::MAX),
+                        ));
+                    }
+                    forward.push(op);
                 }
             }
             DropTryout => {
@@ -948,6 +998,87 @@ mod tests {
         assert!(g.sgf(1).get("AE").is_none());
         setup(&mut g, 1, "aa", None);
         assert_eq!(g.sgf(1).first("AE"), Some("aa"));
+    }
+
+    fn move_play(g: &mut Game, node: NodeId, to: &str, allow: bool) -> Result<Change, EditError> {
+        g.edit(&Edit::MovePlay {
+            node,
+            to: pt(to),
+            allow_illegal: allow,
+        })
+    }
+
+    #[test]
+    fn move_play_changes_only_the_point_and_keeps_later_moves() {
+        let mut g = record("(;SZ[9];B[aa]C[note];W[bb];B[cc])");
+        let change = move_play(&mut g, 1, "dd", false).unwrap();
+        assert_eq!(change.focus, 1);
+        assert_eq!(g.sgf(1).first("B"), Some("dd"));
+        assert_eq!(g.sgf(1).first("C"), Some("note"));
+        assert_eq!(g.children(1), [2]);
+        assert_eq!(g.board_at(3).get(pt("dd")), Some(Black));
+        assert_eq!(g.board_at(3).get(pt("aa")), None);
+        g.undo(&change);
+        assert_eq!(g.sgf(1).first("B"), Some("aa"));
+        g.redo(&change);
+        assert_eq!(g.sgf(1).first("B"), Some("dd"));
+    }
+
+    #[test]
+    fn move_play_recomputes_its_captures() {
+        // White's stone at ba has one liberty left, at ca, once Black's move lands there.
+        let mut g = record("(;SZ[9]AW[ba]AB[aa][bb];B[ee])");
+        move_play(&mut g, 1, "ca", false).unwrap();
+        assert_eq!(g.board_at(1).get(pt("ba")), None);
+    }
+
+    #[test]
+    fn move_play_refuses_an_illegal_point_and_changes_nothing() {
+        let mut g = record("(;SZ[9];B[aa];W[bb];B[cc])");
+        assert_eq!(
+            move_play(&mut g, 3, "bb", true),
+            Err(EditError::Illegal(Illegal::Occupied))
+        );
+        assert_eq!(g.sgf(3).first("B"), Some("cc"));
+        assert_eq!(
+            move_play(&mut g, 3, "zz", true),
+            Err(EditError::Illegal(Illegal::OffBoard))
+        );
+    }
+
+    #[test]
+    fn move_play_counts_later_moves_it_would_make_illegal() {
+        let mut g = record("(;SZ[9];B[aa];W[bb](;B[cc])(;B[dd];W[cc]))");
+        assert!(g.illegal_nodes().is_empty());
+        assert_eq!(
+            move_play(&mut g, 1, "cc", false),
+            Err(EditError::LaterMovesIllegal(2))
+        );
+        assert_eq!(g.sgf(1).first("B"), Some("aa"));
+        assert!(g.illegal_nodes().is_empty());
+        let change = move_play(&mut g, 1, "cc", true).unwrap();
+        assert_eq!(g.illegal_nodes(), [3, 5]);
+        g.undo(&change);
+        assert!(g.illegal_nodes().is_empty());
+    }
+
+    #[test]
+    fn move_play_needs_a_played_move() {
+        let mut g = record("(;SZ[9];B[aa];W[])");
+        assert_eq!(
+            move_play(&mut g, 2, "cc", false),
+            Err(EditError::NoSuchNode)
+        );
+        assert_eq!(
+            move_play(&mut g, 0, "cc", false),
+            Err(EditError::NoSuchNode)
+        );
+        assert!(
+            move_play(&mut g, 1, "aa", false)
+                .unwrap()
+                .forward
+                .is_empty()
+        );
     }
 
     #[test]
