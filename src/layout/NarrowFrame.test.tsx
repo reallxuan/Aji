@@ -218,6 +218,21 @@ describe('the narrow arrangement', () => {
     expect(usePanelStore.getState().view).toBe('main');
   });
 
+  it('the console opened from settings rises over the settings sheet', async () => {
+    renderApp({ state: 'ready', version: '1.18.2', limitReached: false });
+    await act(async () => {});
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '设置' })));
+    const settings = screen.getByRole('dialog');
+    await act(async () =>
+      fireEvent.click(await within(settings).findByRole('button', { name: '引擎控制台' })),
+    );
+    const console = screen.getByRole('dialog', { name: '引擎控制台' });
+    // Both sheets sit on the same layer, so the later one in the document is drawn on top.
+    expect(
+      settings.compareDocumentPosition(console) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('the first-run wizard shows in the sheet', async () => {
     renderApp({ state: 'notConfigured' });
     const sheet = await screen.findByRole('dialog');

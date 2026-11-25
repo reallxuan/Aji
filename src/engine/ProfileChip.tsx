@@ -17,6 +17,7 @@ import { useActionContext } from '../game/useActionContext';
 import { middleTruncate } from '../panel/EngineCard';
 import type { ProfileSummary } from '../transport/generated/ProfileSummary';
 import { useAddEngineStore } from './addEngineStore';
+import { openConsole } from './openConsole';
 import { switchProfileAsking, useProfileStore } from './profileStore';
 
 /** How many characters of a profile's name the chip shows. */
@@ -103,6 +104,7 @@ export function ProfileChip() {
         <DropdownMenuItem onSelect={() => useAddEngineStore.getState().setOpen(true)}>
           {t('engine.profile.add')}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={openConsole}>{t('engine.profile.console')}</DropdownMenuItem>
         <DropdownMenuItem onSelect={openEngineSettings}>
           {t('engine.profile.manage')}
         </DropdownMenuItem>

@@ -133,7 +133,8 @@
       "switchTitle": "Switch to {{name}}",
       "switchBody": "Switching engines stops the game analysis ({{done}} / {{total}} done). The results so far are kept and are still there when you switch back. Switch anyway?",
       "cancel": "Cancel",
-      "switch": "Switch"
+      "switch": "Switch",
+      "console": "Engine console"
     },
     "add": {
       "title": "Add engine",
@@ -168,6 +169,42 @@
       "cancelInstall": "Cancel",
       "back": "Back",
       "cancel": "Cancel"
+    },
+    "console": {
+      "title": "Engine console",
+      "filters": {
+        "all": "All",
+        "log": "Log",
+        "protocol": "Protocol"
+      },
+      "pause": "Pause scrolling",
+      "copy": "Copy",
+      "clear": "Clear",
+      "kinds": {
+        "stderr": "Log",
+        "aji": "Aji",
+        "sent": "Sent",
+        "received": "Got"
+      },
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "empty": "Nothing yet.",
+      "input": "Console query",
+      "placeholder": "A JSON query with an action, such as {\"action\":\"query_version\"}",
+      "notes": {
+        "started": "Started KataGo: {{katago}}",
+        "exited": "KataGo exited.",
+        "exitedCode": "KataGo exited (exit code {{code}}).",
+        "exitedSignal": "KataGo exited (signal {{signal}}).",
+        "gaveUp": "KataGo did not exit after being killed; Aji stopped waiting for it."
+      },
+      "refused": {
+        "notJson": "Not sent: this is not a JSON object.",
+        "search": "Not sent: the console sends only queries with an action, such as query_version.",
+        "terminateAll": "Not sent: terminate_all would end Aji's own analysis.",
+        "terminateOther": "Not sent: terminate can end only the console's own queries.",
+        "notRunning": "Not sent: KataGo is not running."
+      }
     }
   },
   "analysis": {
@@ -701,7 +738,8 @@
       "swings": "Swings",
       "subboard": "Sub-board",
       "tree": "Variations",
-      "comments": "Comments"
+      "comments": "Comments",
+      "console": "Engine console"
     },
     "noCandidate": "No candidate",
     "move": "Move {{panel}}",

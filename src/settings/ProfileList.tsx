@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAddEngineStore } from '../engine/addEngineStore';
+import { openConsole } from '../engine/openConsole';
 import { switchProfileAsking, useProfileStore } from '../engine/profileStore';
 import { useActionContext } from '../game/useActionContext';
 import { backendName } from '../setup/labels';
@@ -164,6 +165,9 @@ export function ProfileList({ onError }: { onError(message: string): void }) {
       <div className="flex flex-wrap gap-2 pt-1">
         <Button variant="outline" size="sm" onClick={openAdd}>
           {t('engine.profile.add')}
+        </Button>
+        <Button variant="outline" size="sm" onClick={openConsole}>
+          {t('engine.profile.console')}
         </Button>
       </div>
     </div>

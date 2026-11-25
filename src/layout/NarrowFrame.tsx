@@ -1,9 +1,11 @@
 import { useModeStore } from '../edit/modeStore';
 import { EditRow } from '../edit/EditRow';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDeviceStore } from '../device/deviceStore';
 import { useEngineStore } from '../engine/engineStore';
+import { ConsoleSheet } from '../engine/ConsolePanel';
+import { useConsoleSheet } from '../engine/openConsole';
 import { BottomNav } from '../panel/BottomNav';
 import { CapturesLine } from '../panel/CapturesLine';
 import { EngineStatus } from '../panel/EngineStatus';
@@ -58,6 +60,11 @@ export function NarrowFrame({
   const { t } = useTranslation();
   const { width, height } = useWindowSize();
   const { layout } = useLayout();
+  // 引擎控制台 opens as a sheet here (P2 M4 design 6.5).
+  useEffect(() => {
+    useConsoleSheet.setState({ narrow: true });
+    return () => useConsoleSheet.setState({ narrow: false, open: false });
+  }, []);
   // Final scoring (P2 M2 design 5.8): the count takes the panels' place under the board.
   const scoring = useScoringStore((s) => s.active);
   const notConfigured = useEngineStore((s) => s.engine?.state === 'notConfigured');
@@ -170,6 +177,8 @@ export function NarrowFrame({
       {side !== undefined && onCloseSide && (
         <Sheet onClose={sideLocked ? undefined : onCloseSide}>{side}</Sheet>
       )}
+      {/* After the settings sheet, so the console opened from there comes up over it. */}
+      {!placeholder && <ConsoleSheet />}
     </div>
   );
 }

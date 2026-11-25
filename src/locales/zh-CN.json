@@ -133,7 +133,8 @@
       "switchTitle": "切换到 {{name}}",
       "switchBody": "切换引擎会停止整盘分析（已完成 {{done}} / {{total}}）。已有结果会保留，切回来时还在。仍然切换吗？",
       "cancel": "取消",
-      "switch": "切换"
+      "switch": "切换",
+      "console": "引擎控制台"
     },
     "add": {
       "title": "添加引擎",
@@ -168,6 +169,42 @@
       "cancelInstall": "取消",
       "back": "返回",
       "cancel": "取消"
+    },
+    "console": {
+      "title": "引擎控制台",
+      "filters": {
+        "all": "全部",
+        "log": "日志",
+        "protocol": "协议"
+      },
+      "pause": "暂停滚动",
+      "copy": "复制",
+      "clear": "清空",
+      "kinds": {
+        "stderr": "日志",
+        "aji": "Aji",
+        "sent": "发送",
+        "received": "接收"
+      },
+      "expand": "展开",
+      "collapse": "收起",
+      "empty": "还没有内容。",
+      "input": "控制台查询",
+      "placeholder": "带 action 的 JSON 查询，比如 {\"action\":\"query_version\"}",
+      "notes": {
+        "started": "启动 KataGo：{{katago}}",
+        "exited": "KataGo 已退出。",
+        "exitedCode": "KataGo 已退出（退出码 {{code}}）。",
+        "exitedSignal": "KataGo 已退出（信号 {{signal}}）。",
+        "gaveUp": "KataGo 被结束后没有退出，Aji 不再等它。"
+      },
+      "refused": {
+        "notJson": "没有发送：这不是一个 JSON 对象。",
+        "search": "没有发送：控制台只发送带 action 的查询，比如 query_version。",
+        "terminateAll": "没有发送 terminate_all：它会结束 Aji 自己的分析。",
+        "terminateOther": "没有发送：terminate 只能结束控制台自己的查询。",
+        "notRunning": "没有发送：KataGo 没有在运行。"
+      }
     }
   },
   "analysis": {
@@ -701,7 +738,8 @@
       "swings": "波动",
       "subboard": "副盘",
       "tree": "分支",
-      "comments": "评论"
+      "comments": "评论",
+      "console": "引擎控制台"
     },
     "noCandidate": "无候选",
     "move": "移动{{panel}}",
