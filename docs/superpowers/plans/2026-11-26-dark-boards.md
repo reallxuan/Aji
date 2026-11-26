@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-26-dark-boards-design.md`
 
-The owner asked for a brief plan, executed natively in this session.
+The owner asked for a brief plan, executed natively in this session. Done on 2026-11-26; Tasks 3 and 4 landed as one commit, because the settings control would not compile without the new device field.
 
 ## Global Constraints
 
@@ -53,8 +53,8 @@ The owner asked for a brief plan, executed natively in this session.
   - flat white `#D6D4CD` with edge `rgba(0,0,0,.5)` at `0.07`.
 - **The boards** take their bases, lines, stars and labels from the spec. Both have `grain: null` and `lineWeight` 0.7.
 
-- [ ] Test: `SETS` ends with Graphite and Ink, each with flat stones, and every style has an `ink`.
-- [ ] Implement, then run `pnpm vitest run src/board`. Expected: PASS.
+- [x] Test: `SETS` ends with Graphite and Ink, each with flat stones, and every style has an `ink`.
+- [x] Implement, then run `pnpm vitest run src/board`. Expected: PASS.
 
 ### Task 2: Drawing reads the inks
 
@@ -64,9 +64,9 @@ The owner asked for a brief plan, executed natively in this session.
 - `BoardCanvas` passes the board's `ink.flat`, and its sprite memo depends on `boardStyle`.
 - The best disc's shadow is drawn only when `BOARD_STYLES[style].grain` is not `null`.
 
-- [ ] Screenshot tests: add `set-graphite-flat`, `set-ink-flat` and `ink-discs-marks-badges` (discs with the played ring, marks on empty points and stones, a badge). Write the new baselines with `UPDATE_SCREENSHOTS=1`, only for these.
-- [ ] Run `pnpm vitest run src/board`. Expected: every old baseline passes unchanged.
-- [ ] Commit `feat: draw the graphite and ink boards`.
+- [x] Screenshot tests: add `set-graphite-flat`, `set-ink-flat` and `ink-discs-marks-badges` (discs with the played ring, marks on empty points and stones, a badge). Write the new baselines with `UPDATE_SCREENSHOTS=1`, only for these.
+- [x] Run `pnpm vitest run src/board`. Expected: every old baseline passes unchanged.
+- [x] Commit `feat: draw the graphite and ink boards`.
 
 ### Task 3: One board per theme
 
@@ -81,13 +81,13 @@ The owner asked for a brief plan, executed natively in this session.
 - `effectiveStyle(device: Pick<DeviceSettings, 'boardStyles'>, startedNarrow: boolean, theme: Theme): StyleChoice`.
 - `useBoardStyle(theme?: Theme)` defaults to `useResolvedTheme()`.
 
-- [ ] Tests:
+- [x] Tests:
   - the migration;
   - a bad entry for one theme;
   - `effectiveStyle` per theme;
   - `useBoardStyle` follows a `data-theme` change.
-- [ ] Implement, then run `pnpm vitest run src/device src/board src/theme`. Expected: PASS.
-- [ ] Commit `feat: choose a board for each theme`.
+- [x] Implement, then run `pnpm vitest run src/device src/board src/theme`. Expected: PASS.
+- [x] Commit `feat: choose a board for each theme`.
 
 ### Task 4: Settings (S3) and strings
 
@@ -99,16 +99,16 @@ The owner asked for a brief plan, executed natively in this session.
 - **The grain slider** rests when neither theme's effective board has grain. `settings.board.noGrain` becomes "Neither theme's board has grain" / 两种主题的棋盘都没有木纹.
 - **New names:** `boards.graphite` Graphite / 石墨, `boards.ink` Ink / 墨黑.
 
-- [ ] Tests:
+- [x] Tests:
   - a tile writes only the current theme;
   - the other-theme select writes the other theme;
   - the slider is active with dark set to Graphite and light set to Honey.
-- [ ] Run `pnpm vitest run src/settings src/i18n`. Expected: PASS.
-- [ ] Commit `feat: board style for each theme in settings`.
+- [x] Run `pnpm vitest run src/settings src/i18n`. Expected: PASS.
+- [x] Commit `feat: board style for each theme in settings`.
 
 ### Task 5: Docs and the check
 
-- [ ] Update the interface design (board section and principle 2), P2 M1 5.7, and `docs/development.md` (`boardStyle` becomes `boardStyles`). Fill in the spec's **Built** section.
-- [ ] Run the whole suite, typecheck and lint: `pnpm -s test --exclude '.claude/**'`, `pnpm -s typecheck`, `pnpm -s lint`.
-- [ ] In `pnpm dev`, at 1440 × 900, in both themes: Graphite for dark with Honey for light, switch themes, then Ink. Take screenshots.
-- [ ] Commit `docs: record the dark boards`.
+- [x] Update the interface design (board section and principle 2), P2 M1 5.7, and `docs/development.md` (`boardStyle` becomes `boardStyles`). Fill in the spec's **Built** section.
+- [x] Run the whole suite, typecheck and lint: `pnpm -s test --exclude '.claude/**'`, `pnpm -s typecheck`, `pnpm -s lint`.
+- [x] In `pnpm dev`, at 1440 × 900, in both themes: Graphite for dark with Honey for light, switch themes, then Ink. Take screenshots.
+- [x] Commit `docs: record the dark boards`.

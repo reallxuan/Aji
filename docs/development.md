@@ -274,7 +274,7 @@ multiple of 0.5 from -150 to 150).
 
 What belongs to one machine rather than to the user lives in the webview's `localStorage` under
 `aji.device`, not in `settings.json` (P2 M1 design 5.8): the layout, the phone layout's active
-tab, the keymap overrides (empty until M4), the board and stone style, the interface scale,
+tab, the keymap overrides (empty until M4), the board and stone style for each theme (`boardStyles`, `{ dark, light }`; a single `boardStyle` from an older build reads as both), the interface scale,
 coordinates, the disc lines, the graph's perspective, the score option (`scoreWithKomi`),
 always on top, and whether the device first launched in the phone arrangement (`startedNarrow`,
 which picks the default board style until one is chosen). The value is a JSON object with `version: 1`; a field Aji cannot read takes its

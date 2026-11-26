@@ -1,7 +1,7 @@
 # Dark boards: design
 
 - Date: 2026-11-26
-- Status: Approved by the owner on 2026-11-26. Not built yet.
+- Status: Approved by the owner on 2026-11-26 and built on `feat/dark-boards`. Results under **Built** at the end.
 - Placement: one small branch after Phase 2 M4 part 1. The owner decides when it is built.
 - Mockups: `docs/design/mockups/p2-dark-boards/` (1 base colour, 2 stones, 3 candidates, 4 settings).
 - **[Decided]** marks the owner's choices in the mockups and in conversation. **[Proposed]** marks the designer's calls, which the owner may change while reading.
@@ -162,3 +162,33 @@ Two other options were not taken:
   - the interface design: the board section, and principle 2's "the one warm object", which no longer holds on a dark board the user chose;
   - P2 M1 5.7: the board now follows a per-theme choice;
   - `docs/development.md`, where it describes `boardStyle`.
+
+## Built
+
+Built on 2026-11-26 from the plan `docs/superpowers/plans/2026-11-26-dark-boards.md`, on `feat/dark-boards`.
+
+- **Inks.** `BoardStyle.ink` (`BoardInk`: `mark`, `badgeOutline`, `badgeFill`, `badgeLetter`, `played`, `flat`) replaces the walnut checks in `marks.ts` and `badges.ts`. The played ring's colour moved from `PLAYED_RING` to the board; `PLAYED_RING` keeps its width.
+- **Flat stones.** They take the board's `ink.flat`, passed to `makeStoneSprites`.
+- **The best disc's shadow** keys off grain.
+- **The resolved theme** reaches `useBoardStyle` through `useResolvedTheme` (`src/theme/useResolvedTheme.ts`), which follows `<html data-theme>` with a `MutationObserver`.
+- **Device settings.** `boardStyles: { dark, light }` replaces `boardStyle` within storage version 1. An older `boardStyle` reads as both themes, and an unreadable entry falls back for its theme alone.
+- **The outer edge** uses the line colour at a heavier width, as on the other boards.
+- **Screenshot baselines:** `set-graphite-flat`, `set-ink-flat`, `ink-discs-marks-badges@2x` and `ownership-ink@2x` are new. No existing baseline changed.
+- **Checked in `pnpm dev`** at 1440 × 900:
+  - Graphite, then Ink, for the dark theme;
+  - switching to the light theme and back, with the board following;
+  - changing the light theme's board from the other-theme select;
+  - the grain slider resting with Ink and Printed;
+  - the hovered line's numbers on Ink;
+  - a reload keeping both choices;
+  - a store holding only an old `boardStyle`, read as Ink in both themes and rewritten as `boardStyles` on the next change.
+- **Seen only in the screenshot tests:** the position estimate on Ink, and marks on empty points. The development scenario gives no ownership.
+- **Found:** a dead black stone under White's square fades to almost nothing on Ink. It is drawn at 45% opacity, black on near-black. Left for the owner to judge.
+- **Not checked yet:**
+  - `pnpm tauri dev`;
+  - following the system theme;
+  - sub-boards and the copied image;
+  - a Custom mix;
+  - final scoring;
+  - the phone layout's default;
+  - the settings row in the 280 px classic column and in zh-CN.
