@@ -28,7 +28,7 @@ import { boardGeometry } from './geometry';
 import { drawStones, makeStoneSprites } from './stones';
 import type { BoardId, StoneId } from '../device/deviceSettings';
 import { channel, setGrainMap } from './grainMaps';
-import type { GrainMapId } from './styles';
+import { BOARD_STYLES, type GrainMapId } from './styles';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, '__screenshots__');
@@ -88,6 +88,8 @@ function render(
     view.dpr,
     skia,
     stoneStyle,
+    true,
+    BOARD_STYLES[view.style ?? 'honey'].ink.flat,
   );
   drawStones(
     upper.getContext('2d') as unknown as CanvasRenderingContext2D,
@@ -137,6 +139,8 @@ function renderOwnership(
     view.dpr,
     skia,
     stoneStyle,
+    true,
+    BOARD_STYLES[view.style ?? 'honey'].ink.flat,
   );
   drawStones(
     upper.getContext('2d') as unknown as CanvasRenderingContext2D,
@@ -328,6 +332,18 @@ describe('board screenshots', () => {
     );
   });
 
+  it('ownership-ink: the squares on the darkest board, with flat stones (dark boards design)', () => {
+    compare(
+      'ownership-ink@2x',
+      renderOwnership(
+        { cssSize: CSS_SIZE, dpr: 2, boardSize: 19, style: 'ink' },
+        parse(SAMSUNG_58),
+        OWNERSHIP_58,
+        'flat',
+      ),
+    );
+  });
+
   it('final-scoring-9x9: the mockup game counted, C5 and H4 dead, dame bare', () => {
     // The backend's owners for it (area, after removing the two dead stones).
     const owners = [
@@ -468,6 +484,9 @@ describe('board screenshots', () => {
     ['kaya', 'yunzi'],
     ['walnut', 'slate'],
     ['printed', 'flat'],
+    // The dark boards design's.
+    ['graphite', 'flat'],
+    ['ink', 'flat'],
   ];
   for (const [board, stones] of SET_SHOTS) {
     it(`draws the ${board} board with ${stones} stones`, () => {
@@ -560,6 +579,49 @@ describe('board screenshots', () => {
     const inside = (x: number, y: number) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= reach;
     const R = Math.ceil(g.stoneRadius * 2);
     expect(changed(bare, withStone, [c - R, c - R, c + R, c + R], inside)).toBe(0);
+  });
+
+  it('ink-discs-marks-badges: the inks over a dark board (dark boards design)', () => {
+    const view = { cssSize: CSS_SIZE, dpr: 2, boardSize: 19, style: 'ink' as const };
+    const stones = parse(SAMSUNG_58);
+    const draws = {
+      candidates: mockupDiscs(),
+      lines: ['winrate', 'scoreLead'] as [DiscField, DiscField],
+    };
+    const marks = [
+      { point: { x: 1, y: 1 }, mark: { kind: 'triangle' } as Mark },
+      { point: { x: 2, y: 1 }, mark: { kind: 'square' } as Mark },
+      { point: { x: 9, y: 12 }, mark: { kind: 'label', text: 'A' } as Mark },
+      { point: { x: 11, y: 12 }, mark: { kind: 'circle' } as Mark },
+    ];
+    const badges = [
+      { point: { x: 2, y: 8 }, letter: 'A', outlined: true, tryout: false },
+      { point: { x: 10, y: 5 }, letter: 'B', outlined: false, tryout: false },
+      { point: { x: 14, y: 7 }, letter: 'C', outlined: true, tryout: true },
+    ];
+    const size = CSS_SIZE * view.dpr;
+    compare(
+      'ink-discs-marks-badges@2x',
+      render(
+        view,
+        stones,
+        SAMSUNG_LAST,
+        draws,
+        (ctx) => {
+          drawMarks(ctx, marks, view, stones);
+          const layer = createCanvas(size, size);
+          drawEditOverlay(
+            layer.getContext('2d') as unknown as CanvasRenderingContext2D,
+            view,
+            stones,
+            badges,
+            [],
+          );
+          ctx.drawImage(layer as unknown as CanvasImageSource, 0, 0);
+        },
+        'flat',
+      ),
+    );
   });
 
   it('marks_on_stones_and_empty_points', () => {

@@ -5,14 +5,21 @@ import type { SwingBy } from '../analysis/swings';
 import { MAX_VARIATION } from '../analysis/constants';
 import { DEFAULT_GRAIN_STRENGTH } from '../board/styles';
 
-export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed';
+export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed' | 'graphite' | 'ink';
 export type StoneId = 'slate' | 'yunzi' | 'flat';
 /** Maximum delay supported by a browser's signed 32-bit millisecond timer. */
 export const MAX_REPLAY_SECONDS = 2147483647 / 1000;
 
 export type InterfaceScale = 90 | 100 | 110 | 125 | 150;
 
-export const BOARD_IDS: readonly BoardId[] = ['honey', 'kaya', 'walnut', 'printed'];
+export const BOARD_IDS: readonly BoardId[] = [
+  'honey',
+  'kaya',
+  'walnut',
+  'printed',
+  'graphite',
+  'ink',
+];
 export const STONE_IDS: readonly StoneId[] = ['slate', 'yunzi', 'flat'];
 export const INTERFACE_SCALES: readonly InterfaceScale[] = [90, 100, 110, 125, 150];
 const DISC_FIELDS: readonly DiscField[] = ['winrate', 'scoreLead', 'visits'];

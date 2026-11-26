@@ -3,6 +3,7 @@ import type { Color } from '../transport/generated/Color';
 import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
+import { BOARD_STYLES } from './styles';
 import { gridPosition, boardGeometry, type BoardGeometry } from './geometry';
 
 export interface Badge {
@@ -69,6 +70,7 @@ export function drawEditOverlay(
   ctx.textBaseline = 'middle';
   const s = g.spacing;
   const amber = '#e2a33b';
+  const ink = BOARD_STYLES[view.style ?? 'honey'].ink;
   const number = ({ point, n }: StoneNumber) => {
     if (marked?.has(point.y * view.boardSize + point.x)) return;
     ctx.fillStyle = stones[point.y * view.boardSize + point.x] === 'black' ? '#f2f0ea' : '#1a1a1a';
@@ -101,7 +103,7 @@ export function drawEditOverlay(
     const b = group[0];
     const tryout = group.some((choice) => choice.tryout);
     if (b.outlined) {
-      ctx.strokeStyle = view.style === 'walnut' ? '#f3efe4' : 'rgba(43,29,14,.7)';
+      ctx.strokeStyle = ink.badgeOutline;
       ctx.lineWidth = 1.3;
       ctx.beginPath();
       const at = gridPosition(g, b.point);
@@ -109,11 +111,11 @@ export function drawEditOverlay(
       ctx.stroke();
     }
     const { x, y, size } = badgeBox(g, b.point);
-    ctx.fillStyle = tryout ? amber : '#1f1a14';
+    ctx.fillStyle = tryout ? amber : ink.badgeFill;
     ctx.beginPath();
     ctx.roundRect(x, y, size, size, size * 0.22);
     ctx.fill();
-    ctx.fillStyle = tryout ? '#1f1a14' : '#f3efe4';
+    ctx.fillStyle = tryout ? '#1f1a14' : ink.badgeLetter;
     ctx.font = `700 ${size * 0.72}px Inter`;
     ctx.fillText(
       group.length > 1 ? `${b.letter}+` : b.letter,

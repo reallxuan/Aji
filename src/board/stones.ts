@@ -6,6 +6,7 @@ import type { Point } from '../transport/generated/Point';
 import { asImage, type CanvasFactory, type OffscreenCanvasLike } from './canvasFactory';
 import type { BoardView } from './drawBoard';
 import { gridPosition, boardGeometry, STONE_RADIUS_SHARE } from './geometry';
+import { BOARD_STYLES, type FlatStones } from './styles';
 /** The last-move dot is 0.22 of the spacing across. */
 const DOT_SHARE = 0.11;
 /** Each white stone takes one of this many grain rotations, by point. */
@@ -179,14 +180,24 @@ function paintYunzi(
   ctx.restore();
 }
 
-/** Flat (board styles mockup): a solid fill and a thin outline, and no shadow at all. */
-function paintFlat(ctx: CanvasRenderingContext2D, c: number, r: number, color: Color): void {
-  ctx.fillStyle = color === 'black' ? '#1b1b1a' : '#fbfaf6';
+/**
+ * Flat (board styles mockup): a solid fill and a thin outline, and no shadow at all. The colours
+ * are the board's (dark boards design), so a flat stone reads on a dark board too.
+ */
+function paintFlat(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  color: Color,
+  flat: FlatStones,
+): void {
+  const ink = flat[color];
+  ctx.fillStyle = ink.fill;
   ctx.beginPath();
   ctx.arc(c, c, r * 0.96, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = Math.max(1, r * 0.07);
-  ctx.strokeStyle = '#2a2620';
+  ctx.lineWidth = Math.max(1, r * ink.edgeWidth);
+  ctx.strokeStyle = ink.edge;
   ctx.stroke();
 }
 
@@ -198,12 +209,13 @@ function sprite(
   rotation: number,
   stones: StoneId,
   contact: boolean,
+  flat: FlatStones,
 ): OffscreenCanvasLike {
   const canvas = create(half * 2, half * 2);
   const ctx = canvas.getContext('2d');
   if (!ctx || radius <= 0) return canvas;
   if (stones === 'yunzi') paintYunzi(ctx, half, radius, color, contact);
-  else if (stones === 'flat') paintFlat(ctx, half, radius, color);
+  else if (stones === 'flat') paintFlat(ctx, half, radius, color, flat);
   else paintSlate(ctx, half, radius, color, rotation, contact);
   return canvas;
 }
@@ -220,14 +232,16 @@ export function makeStoneSprites(
   stones: StoneId = 'slate',
   /** A contact shadow where the stone meets wood; none on the printed board. */
   contact = true,
+  /** The flat stones' colours: the board's. */
+  flat: FlatStones = BOARD_STYLES.honey.ink.flat,
 ): StoneSprites {
   const radius = Math.max(0, spacing * STONE_RADIUS_SHARE * dpr);
   // The offset shadow reaches about 0.2 + 0.55 radii past the stone.
   const half = Math.max(1, Math.ceil(radius * 1.8));
   return {
-    black: sprite(create, half, radius, 'black', 0, stones, contact),
+    black: sprite(create, half, radius, 'black', 0, stones, contact, flat),
     white: Array.from({ length: WHITE_ROTATIONS }, (_, i) =>
-      sprite(create, half, radius, 'white', i, stones, contact),
+      sprite(create, half, radius, 'white', i, stones, contact, flat),
     ),
     radius,
   };
