@@ -1,4 +1,5 @@
 import type { BoardId, DeviceSettings, StoneId } from '../device/deviceSettings';
+import type { Theme } from '../theme/theme';
 
 export type GrainMapId = 'honey' | 'kaya' | 'walnut';
 
@@ -164,13 +165,15 @@ export const sameStyle = (a: StyleChoice, b: StyleChoice) =>
   a.board === b.board && a.stones === b.stones;
 
 /**
- * The style to draw: the device's choice, or the default. A device that started in the phone
+ * The style to draw in `theme`: the device's choice for it, or the default. A device that started in the phone
  * layout defaults to printed with flat stones (design 5.5); any other to honey with slate.
  */
 export function effectiveStyle(
-  device: Pick<DeviceSettings, 'boardStyle'>,
+  device: Pick<DeviceSettings, 'boardStyles'>,
   startedNarrow: boolean,
+  theme: Theme,
 ): StyleChoice {
-  if (device.boardStyle) return device.boardStyle;
+  const chosen = device.boardStyles[theme];
+  if (chosen) return chosen;
   return startedNarrow ? SETS[3] : SETS[0];
 }

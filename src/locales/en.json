@@ -468,13 +468,19 @@
       "board": "Board",
       "set": "{{board}} with {{stones}}",
       "custom": "Custom",
+      "inTheme": {
+        "dark": "In the dark theme",
+        "light": "In the light theme"
+      },
       "grain": "Wood grain",
-      "noGrain": "The printed board has no grain",
+      "noGrain": "Neither theme's board has grain",
       "boards": {
         "honey": "Honey",
         "kaya": "Kaya",
         "walnut": "Walnut",
-        "printed": "Printed"
+        "printed": "Printed",
+        "graphite": "Graphite",
+        "ink": "Ink"
       },
       "stones": {
         "title": "Stones",

@@ -93,11 +93,19 @@ describe('board styles', () => {
     expect(BOARD_STYLES.walnut.ink).toEqual({ ...light, mark: '#f3efe4', badgeOutline: '#f3efe4' });
   });
 
-  it('the default style depends on the device', () => {
-    const device = { ...DEFAULT_DEVICE_SETTINGS, boardStyle: null };
-    expect(effectiveStyle(device, false)).toEqual({ board: 'honey', stones: 'slate' });
-    expect(effectiveStyle(device, true)).toEqual({ board: 'printed', stones: 'flat' });
-    const chosen = { ...device, boardStyle: { board: 'kaya' as const, stones: 'flat' as const } };
-    expect(effectiveStyle(chosen, true)).toEqual({ board: 'kaya', stones: 'flat' });
+  it('the default style depends on the device, in both themes', () => {
+    const device = DEFAULT_DEVICE_SETTINGS;
+    for (const theme of ['dark', 'light'] as const) {
+      expect(effectiveStyle(device, false, theme)).toEqual({ board: 'honey', stones: 'slate' });
+      expect(effectiveStyle(device, true, theme)).toEqual({ board: 'printed', stones: 'flat' });
+    }
+  });
+
+  it('each theme draws its own choice (dark boards design)', () => {
+    const device = {
+      boardStyles: { dark: { board: 'graphite' as const, stones: 'flat' as const }, light: null },
+    };
+    expect(effectiveStyle(device, false, 'dark')).toEqual({ board: 'graphite', stones: 'flat' });
+    expect(effectiveStyle(device, false, 'light')).toEqual({ board: 'honey', stones: 'slate' });
   });
 });

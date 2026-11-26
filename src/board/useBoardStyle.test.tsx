@@ -1,11 +1,15 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it } from 'vitest';
-import { resetDeviceStore } from '../device/deviceStore';
+import { resetDeviceStore, useDeviceStore } from '../device/deviceStore';
+import { applyTheme } from '../theme/theme';
 import { useDeviceSync } from '../device/useDeviceSync';
 import { resetStartedNarrow } from '../layout/startedNarrow';
 import { useBoardStyle } from './useBoardStyle';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  delete document.documentElement.dataset.theme;
+});
 
 /** One launch of the app in a window of this size: a fresh session over the same storage. */
 function launch(innerWidth: number, innerHeight: number) {
@@ -35,4 +39,22 @@ it('a store this build cannot read is not written to keep the answer', () => {
   localStorage.setItem('aji.device', stored);
   expect(launch(375, 812)).toEqual({ board: 'printed', stones: 'flat' });
   expect(localStorage.getItem('aji.device')).toBe(stored);
+});
+
+it('draws the board chosen for the theme the window is in, and follows a switch', async () => {
+  resetDeviceStore();
+  Object.assign(window, { innerWidth: 1440, innerHeight: 900 });
+  applyTheme('dark');
+  const { result } = renderHook(() => {
+    useDeviceSync();
+    return useBoardStyle();
+  });
+  act(() =>
+    useDeviceStore.getState().update({
+      boardStyles: { dark: { board: 'graphite', stones: 'flat' }, light: null },
+    }),
+  );
+  expect(result.current).toEqual({ board: 'graphite', stones: 'flat' });
+  act(() => applyTheme('light'));
+  await waitFor(() => expect(result.current).toEqual({ board: 'honey', stones: 'slate' }));
 });

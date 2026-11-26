@@ -468,13 +468,19 @@
       "board": "棋盘",
       "set": "{{board}}配{{stones}}",
       "custom": "自定义",
+      "inTheme": {
+        "dark": "深色主题下",
+        "light": "浅色主题下"
+      },
       "grain": "木纹强度",
-      "noGrain": "印刷棋盘没有木纹",
+      "noGrain": "两种主题的棋盘都没有木纹",
       "boards": {
         "honey": "蜜色",
         "kaya": "榧木",
         "walnut": "胡桃",
-        "printed": "印刷"
+        "printed": "印刷",
+        "graphite": "石墨",
+        "ink": "墨黑"
       },
       "stones": {
         "title": "棋子",

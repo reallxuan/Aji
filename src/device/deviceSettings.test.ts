@@ -23,7 +23,10 @@ describe('parseDeviceSettings', () => {
       layout: { anything: true },
       narrowTab: 'candidates',
       keymap: { ArrowLeft: 'nav.next' },
-      boardStyle: { board: 'walnut', stones: 'yunzi' },
+      boardStyles: {
+        dark: { board: 'ink', stones: 'flat' },
+        light: { board: 'walnut', stones: 'yunzi' },
+      },
       grainStrength: 0.6,
       startedNarrow: true,
       interfaceScale: 125,
@@ -53,13 +56,29 @@ describe('parseDeviceSettings', () => {
   it('rejects a board style naming an unknown board, and equal disc lines', () => {
     const parsed = parseDeviceSettings({
       version: 1,
-      boardStyle: { board: 'oak', stones: 'flat' },
+      boardStyles: {
+        dark: { board: 'oak', stones: 'flat' },
+        light: { board: 'kaya', stones: 'flat' },
+      },
       discLines: ['winrate', 'winrate'],
       keymap: { a: 3 },
     });
-    expect(parsed.boardStyle).toBeNull();
+    // Only the theme with the unknown board falls back.
+    expect(parsed.boardStyles).toEqual({ dark: null, light: { board: 'kaya', stones: 'flat' } });
     expect(parsed.discLines).toEqual(['winrate', 'scoreLead']);
     expect(parsed.keymap).toEqual({});
+  });
+
+  it('a single board style from before the dark boards design applies to both themes', () => {
+    const parsed = parseDeviceSettings({
+      version: 1,
+      boardStyle: { board: 'walnut', stones: 'slate' },
+    });
+    expect(parsed.boardStyles).toEqual({
+      dark: { board: 'walnut', stones: 'slate' },
+      light: { board: 'walnut', stones: 'slate' },
+    });
+    expect(parsed).not.toHaveProperty('boardStyle');
   });
 
   it('a grain strength outside 0 to 1 reads as the default (UI polish design 3)', () => {

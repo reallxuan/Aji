@@ -4,7 +4,10 @@ import { useDeviceStore } from '../device/deviceStore';
 import { renderWithGame } from '../game/renderWithGame';
 import { BoardStyleControl, GrainStrengthControl } from './BoardStyleControl';
 
-const stored = () => useDeviceStore.getState().settings.boardStyle;
+// The test window is in the dark theme: no `data-theme` reads as dark.
+const stored = (theme: 'dark' | 'light' = 'dark') =>
+  useDeviceStore.getState().settings.boardStyles[theme];
+const mix = { dark: { board: 'printed', stones: 'slate' }, light: null } as const;
 
 /** Opens a Radix select and picks an option by its text. */
 function choose(name: string, option: string) {
@@ -38,7 +41,7 @@ it('choosing a set and custom mixing update the device settings', () => {
 });
 
 it('a stored mix that is no set shows as custom', () => {
-  useDeviceStore.getState().update({ boardStyle: { board: 'printed', stones: 'slate' } });
+  useDeviceStore.getState().update({ boardStyles: mix });
   renderWithGame(<BoardStyleControl />);
   expect(screen.getByRole('radio', { name: '自定义' })).toHaveAttribute('aria-checked', 'true');
   expect(screen.getByRole('combobox', { name: '棋子' })).toHaveTextContent('写实');
@@ -55,19 +58,54 @@ it('the custom tile looks like the sets: a swatch with its name under it', () =>
   expect(swatch()!.querySelector('canvas')).toBeNull();
   expect(within(custom()).getByText('自定义')).toBeInTheDocument();
   // Once the style is a mix, the swatch shows it.
-  act(() =>
-    useDeviceStore.getState().update({ boardStyle: { board: 'printed', stones: 'slate' } }),
-  );
+  act(() => useDeviceStore.getState().update({ boardStyles: mix }));
   expect(swatch()!.querySelector('canvas')).not.toBeNull();
 });
 
-it('the grain slider sets the strength in steps of 5%, and rests on the printed board', () => {
+it('the grain slider sets the strength in steps of 5%, and rests when neither board has grain', () => {
   renderWithGame(<GrainStrengthControl />);
   const slider = screen.getByRole('slider', { name: '木纹强度' });
   expect(slider).toHaveAttribute('aria-valuenow', '0.35');
   expect(screen.getByText('35%')).toBeVisible();
   fireEvent.keyDown(slider, { key: 'ArrowRight' });
   expect(useDeviceStore.getState().settings.grainStrength).toBe(0.4);
-  act(() => useDeviceStore.getState().update({ boardStyle: { board: 'printed', stones: 'flat' } }));
+  // The light theme's honey still has grain.
+  act(() =>
+    useDeviceStore
+      .getState()
+      .update({ boardStyles: { dark: { board: 'graphite', stones: 'flat' }, light: null } }),
+  );
+  expect(screen.getByRole('slider', { name: '木纹强度' })).not.toHaveAttribute('data-disabled');
+  act(() =>
+    useDeviceStore.getState().update({
+      boardStyles: {
+        dark: { board: 'graphite', stones: 'flat' },
+        light: { board: 'printed', stones: 'flat' },
+      },
+    }),
+  );
   expect(screen.getByRole('slider', { name: '木纹强度' })).toHaveAttribute('data-disabled');
+});
+
+it('the tiles set the theme the window is in, the line under them the other (dark boards design)', () => {
+  renderWithGame(<BoardStyleControl />);
+  expect(screen.getByText('深色主题下')).toBeVisible();
+  const sets = screen.getByRole('radiogroup', { name: '棋盘样式' });
+  fireEvent.click(within(sets).getByRole('radio', { name: '石墨配平面' }));
+  expect(stored('dark')).toEqual({ board: 'graphite', stones: 'flat' });
+  expect(stored('light')).toBeNull();
+  // The other theme's board, honey by default.
+  expect(screen.getByRole('combobox', { name: '浅色主题下' })).toHaveTextContent('蜜色');
+  choose('浅色主题下', '印刷');
+  expect(stored('light')).toEqual({ board: 'printed', stones: 'flat' });
+  expect(stored('dark')).toEqual({ board: 'graphite', stones: 'flat' });
+});
+
+it("the other theme's mix shows as custom and is kept", () => {
+  useDeviceStore.getState().update({
+    boardStyles: { dark: null, light: { board: 'kaya', stones: 'flat' } },
+  });
+  renderWithGame(<BoardStyleControl />);
+  expect(screen.getByRole('combobox', { name: '浅色主题下' })).toHaveTextContent('自定义');
+  expect(stored('light')).toEqual({ board: 'kaya', stones: 'flat' });
 });
