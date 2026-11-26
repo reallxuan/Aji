@@ -58,8 +58,11 @@ export const TIER_STYLE: Record<Tier, TierStyle> = {
   },
 };
 
-/** The outer ring of the move actually played next. */
-export const PLAYED_RING = { color: '#2B1D0E', width: 2.5 };
+/**
+ * The outer ring of the move actually played next. Its colour is the board's (`ink.played`), so it
+ * shows on the dark boards too.
+ */
+export const PLAYED_RING = { width: 2.5 };
 
 /**
  * Chip fills off the board: the solid colour each translucent fill shows over the wood

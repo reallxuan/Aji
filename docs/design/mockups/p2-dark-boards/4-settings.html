@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Board per theme: settings</title>
+<style>
+  :root { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --soft:#28282c; --text:#eceae4; --muted:#a3a19a; --line:#5a5a61; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--text); font:14px/1.55 Inter, -apple-system, "PingFang SC", sans-serif; padding:28px 24px 60px; }
+  .wrap { max-width:1240px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 6px; }
+  p.lead { margin:0 0 18px; color:var(--muted); max-width:920px; }
+  .grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px; }
+  @media (max-width:1100px) { .grid { grid-template-columns:1fr; } }
+  .opt { border:2px solid var(--hairline); border-radius:8px; padding:14px; cursor:pointer; background:#1a1a1d; }
+  .opt.selected { border-color:#7fb2ff; }
+  .opt h3 { margin:0 0 4px; font-size:15px; }
+  .opt .cap { color:var(--muted); font-size:12.5px; margin:0 0 12px; min-height:58px; }
+  /* the settings panel mock, 400 px like a typical right column */
+  .panel { background:var(--panel); border:1px solid var(--hairline); border-radius:6px; padding:12px 14px; width:100%; max-width:400px; font-size:13px; }
+  .r { display:grid; grid-template-columns:78px 1fr; gap:10px; align-items:start; padding:6px 0; }
+  .r > .k { color:var(--text); padding-top:4px; }
+  .sub { color:var(--muted); font-size:12px; margin:2px 0 4px; }
+  .tiles { display:flex; flex-wrap:wrap; gap:4px; }
+  .tile { display:flex; flex-direction:column; align-items:center; gap:3px; padding:3px; border-radius:6px; color:var(--muted); font-size:11px; }
+  .tile.on { color:var(--text); box-shadow:0 0 0 2px var(--text); }
+  .tile canvas { width:44px; height:44px; border-radius:2px; display:block; }
+  .tile .dash { width:44px; height:44px; border:1px dashed var(--line); border-radius:2px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:16px; }
+  .seg { display:inline-flex; background:var(--soft); border-radius:6px; padding:2px; margin-bottom:6px; }
+  .seg span { padding:2px 10px; border-radius:4px; color:var(--muted); font-size:12px; }
+  .seg span.on { background:#3a3a40; color:var(--text); }
+  .sel { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--hairline); border-radius:6px; padding:2px 8px; font-size:12px; }
+  .slider { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; padding-top:4px; }
+  .slider i { display:block; width:140px; height:4px; border-radius:2px; background:var(--soft); position:relative; }
+  .slider i::before { content:''; position:absolute; left:0; top:0; height:4px; width:35%; background:var(--text); border-radius:2px; }
+  .slider i::after { content:''; position:absolute; left:calc(35% - 6px); top:-4px; width:12px; height:12px; border-radius:50%; background:var(--text); }
+  .notes { margin-top:24px; color:var(--muted); max-width:920px; }
+  .notes b { color:var(--text); }
+  .notes ul { padding-left:18px; margin:6px 0 0; }
+</style>
+</head>
+<body>
+<script>window.toggleSelect = window.toggleSelect || ((el) => el.classList.toggle("selected"));</script>
+<div class="wrap">
+  <h1>One board per theme: how Settings shows it</h1>
+  <p class="lead">Three ways to lay out Settings, then Interface, then Board style. Each mock is a 400 px settings column, the width of the default layout's right column at 1440 by 900. The sets are now six: the four of today, then <b>石墨</b> (Graphite) and <b>墨黑</b> (Ink), each with the flat stones you picked. In every mock the window is in the dark theme, the dark theme uses Graphite and the light theme keeps Honey. Click the one you prefer.</p>
+
+  <div class="grid">
+    <div class="opt" data-choice="s1" onclick="toggleSelect(this)">
+      <h3>S1 Two rows</h3>
+      <p class="cap">One row of tiles per theme, both always visible. Nothing is hidden, but the section is about twice as tall, and in a narrow column each row wraps.</p>
+      <div class="panel">
+        <div class="r"><div class="k">棋盘</div>
+          <div>
+            <div class="sub">深色主题</div>
+            <div class="tiles" data-on="graphite"></div>
+            <div class="sub" style="margin-top:8px">浅色主题</div>
+            <div class="tiles" data-on="honey"></div>
+          </div>
+        </div>
+        <div class="r"><div class="k">木纹强度</div><div class="slider"><i></i>35%</div></div>
+      </div>
+    </div>
+
+    <div class="opt" data-choice="s2" onclick="toggleSelect(this)">
+      <h3>S2 A theme switch above one row</h3>
+      <p class="cap">One row of tiles, and a small switch above it choosing which theme you are setting. It opens on the theme you are in. As compact as today, but one choice is behind the switch.</p>
+      <div class="panel">
+        <div class="r"><div class="k">棋盘</div>
+          <div>
+            <div class="seg"><span class="on">深色主题</span><span>浅色主题</span></div>
+            <div class="tiles" data-on="graphite"></div>
+          </div>
+        </div>
+        <div class="r"><div class="k">木纹强度</div><div class="slider"><i></i>35%</div></div>
+      </div>
+    </div>
+
+    <div class="opt" data-choice="s3" onclick="toggleSelect(this)">
+      <h3>S3 Tiles for this theme, a select for the other</h3>
+      <p class="cap">The tiles set the board of the theme you are in, as today. One line under them names the other theme's board as a select. Clicking a tile never changes the other theme.</p>
+      <div class="panel">
+        <div class="r"><div class="k">棋盘</div>
+          <div>
+            <div class="sub">深色主题下</div>
+            <div class="tiles" data-on="graphite"></div>
+            <div style="margin-top:8px; display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px">浅色主题下 <span class="sel" style="color:var(--text)">蜜色 <span style="color:var(--muted)">⌄</span></span></div>
+          </div>
+        </div>
+        <div class="r"><div class="k">木纹强度</div><div class="slider"><i></i>35%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <b>The same in all three</b>
+    <ul>
+      <li>Both themes start on Honey, so nothing changes until someone chooses. A device that started in the phone layout starts on Printed in both themes, as today.</li>
+      <li>Custom (the last tile) mixes a board and stones, for each theme on its own.</li>
+      <li>The wood-grain slider rests only when neither theme's board has grain.</li>
+      <li>Anyone who chose a board before this change keeps it in both themes.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const SETS = [
+  ['honey','蜜色','#DDB067','#3A2A14','slate'],
+  ['kaya','榧木','#E9C98A','#4A3518','yunzi'],
+  ['walnut','胡桃','#6E4A2C','rgba(236,220,190,.78)','slate'],
+  ['printed','印刷','#F1E7CF','#4F4232','flat'],
+  ['graphite','石墨','#2A2A2E','rgba(236,234,228,.4)','flatdark'],
+  ['ink','墨黑','#0E0E10','rgba(236,234,228,.32)','flatdark'],
+];
+const B = [[2,2],[4,3],[3,5],[6,4],[5,6]], W = [[3,2],[4,4],[3,4],[5,5],[6,6]];
+function thumb(cv, [, , base, line, stones]){
+  const ctx = cv.getContext('2d'), S = 44, dpr = 2; ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = base; ctx.fillRect(0,0,S,S);
+  const sp = S/9, P = i => sp/2 + i*sp, r = sp*0.47;
+  ctx.strokeStyle = line; ctx.lineWidth = .5; ctx.beginPath();
+  for (let i=0;i<9;i++){ ctx.moveTo(P(i),P(0)); ctx.lineTo(P(i),P(8)); ctx.moveTo(P(0),P(i)); ctx.lineTo(P(8),P(i)); }
+  ctx.stroke();
+  const stone = (x,y,c) => {
+    ctx.beginPath(); ctx.arc(P(x),P(y),r,0,7);
+    if (stones==='flatdark'){ ctx.fillStyle = c ? '#050506' : '#D6D4CD'; ctx.fill(); ctx.lineWidth=.8; ctx.strokeStyle = c ? '#5A5A61' : 'rgba(0,0,0,.5)'; ctx.stroke(); }
+    else if (stones==='flat'){ ctx.fillStyle = c ? '#1b1b1a' : '#fbfaf6'; ctx.fill(); ctx.lineWidth=.6; ctx.strokeStyle='#2a2620'; ctx.stroke(); }
+    else { const g = ctx.createRadialGradient(P(x)-r*.35,P(y)-r*.4,r*.1,P(x),P(y),r);
+      if (c){ g.addColorStop(0,'#666'); g.addColorStop(.4,'#222'); g.addColorStop(1,'#0a0a0a'); } else { g.addColorStop(0,'#fff'); g.addColorStop(.7,'#efebe2'); g.addColorStop(1,'#c9c2b4'); }
+      ctx.fillStyle = g; ctx.fill(); }
+  };
+  B.forEach(([x,y]) => stone(x,y,true)); W.forEach(([x,y]) => stone(x,y,false));
+}
+document.querySelectorAll('.tiles').forEach(row => {
+  for (const set of SETS){
+    const t = document.createElement('div'); t.className = 'tile' + (row.dataset.on === set[0] ? ' on' : '');
+    const cv = document.createElement('canvas'); cv.width = 88; cv.height = 88; thumb(cv, set);
+    const label = document.createElement('span'); label.textContent = set[1];
+    t.append(cv, label); row.append(t);
+  }
+  const c = document.createElement('div'); c.className = 'tile';
+  c.innerHTML = '<div class="dash">⚙</div><span>自定义</span>'; row.append(c);
+});
+</script>
+</body>
+</html>

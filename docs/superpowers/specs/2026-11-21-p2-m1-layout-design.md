@@ -204,7 +204,7 @@ The board's gestures are fixed here for all of Phase 2 (plan 4.2). Pointer type 
   - walnut with slate and shell;
   - printed with flat.
   - These are as approved in the board styles mockup. **[Decided]**
-- **Settings, 设置 → 界面 → 棋盘:** four thumbnails, one per set, and a 自定义 tile of the same size (a dashed square, or the mix in use) that shows two selects, board and stones. The default is honey with slate and shell, in both themes.
+- **Settings, 设置 → 界面 → 棋盘:** four thumbnails, one per set, and a 自定义 tile of the same size (a dashed square, or the mix in use) that shows two selects, board and stones. The default is honey with slate and shell, in both themes. Since the [dark boards design](2026-11-26-dark-boards-design.md) the settings show six sets and the choice is kept per theme; the tiles set the current theme's board, and one line under them the other's.
 - **A board style is data:**
   - the base colour;
   - the grain colours, density and amplitude, or none;

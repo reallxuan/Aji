@@ -4,15 +4,23 @@ import type { CandidateSort, CandidateSortKey } from '../analysis/sortCandidates
 import type { SwingBy } from '../analysis/swings';
 import { MAX_VARIATION } from '../analysis/constants';
 import { DEFAULT_GRAIN_STRENGTH } from '../board/styles';
+import type { Theme } from '../theme/theme';
 
-export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed';
+export type BoardId = 'honey' | 'kaya' | 'walnut' | 'printed' | 'graphite' | 'ink';
 export type StoneId = 'slate' | 'yunzi' | 'flat';
 /** Maximum delay supported by a browser's signed 32-bit millisecond timer. */
 export const MAX_REPLAY_SECONDS = 2147483647 / 1000;
 
 export type InterfaceScale = 90 | 100 | 110 | 125 | 150;
 
-export const BOARD_IDS: readonly BoardId[] = ['honey', 'kaya', 'walnut', 'printed'];
+export const BOARD_IDS: readonly BoardId[] = [
+  'honey',
+  'kaya',
+  'walnut',
+  'printed',
+  'graphite',
+  'ink',
+];
 export const STONE_IDS: readonly StoneId[] = ['slate', 'yunzi', 'flat'];
 export const INTERFACE_SCALES: readonly InterfaceScale[] = [90, 100, 110, 125, 150];
 const DISC_FIELDS: readonly DiscField[] = ['winrate', 'scoreLead', 'visits'];
@@ -41,6 +49,9 @@ export interface MoveNumbers {
   lastOn: 'all' | 'last';
 }
 
+export type BoardChoice = { board: BoardId; stones: StoneId };
+export type BoardStyles = Record<Theme, BoardChoice | null>;
+
 /**
  * Settings that belong to one device rather than to the engine side (P2 M1 design 5.8): a phone
  * and the desktop show the same engine differently.
@@ -56,8 +67,11 @@ export interface DeviceSettings {
   narrowTab: string | null;
   /** Key chord to command id; empty until the shortcut editor (Phase 2 M4). */
   keymap: Record<string, string>;
-  /** `null` is the default for the device (design 5.5). */
-  boardStyle: { board: BoardId; stones: StoneId } | null;
+  /**
+   * The board and stones for each theme (dark boards design); `null` is the default for the
+   * device (design 5.5).
+   */
+  boardStyles: BoardStyles;
   /** The wood boards' grain, 0 (none) to 1 (UI polish design 3). */
   grainStrength: number;
   /**
@@ -97,7 +111,7 @@ export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   layout: null,
   narrowTab: null,
   keymap: {},
-  boardStyle: null,
+  boardStyles: { dark: null, light: null },
   grainStrength: DEFAULT_GRAIN_STRENGTH,
   startedNarrow: null,
   interfaceScale: 100,
@@ -139,10 +153,23 @@ function parseKeymap(v: unknown): Record<string, string> | undefined {
     : undefined;
 }
 
-function parseBoardStyle(v: unknown): DeviceSettings['boardStyle'] | undefined {
-  if (v === null) return null;
-  if (!isRecord(v) || !oneOf(BOARD_IDS, v.board) || !oneOf(STONE_IDS, v.stones)) return undefined;
+function parseBoardStyle(v: unknown): BoardChoice | null {
+  if (!isRecord(v) || !oneOf(BOARD_IDS, v.board) || !oneOf(STONE_IDS, v.stones)) return null;
   return { board: v.board, stones: v.stones };
+}
+
+/**
+ * One choice per theme, each read on its own. A store from before the dark boards design has a
+ * single `boardStyle`, which becomes the choice for both themes.
+ */
+function parseBoardStyles(raw: Record<string, unknown>): BoardStyles {
+  if (isRecord(raw.boardStyles))
+    return {
+      dark: parseBoardStyle(raw.boardStyles.dark),
+      light: parseBoardStyle(raw.boardStyles.light),
+    };
+  const old = parseBoardStyle(raw.boardStyle);
+  return { dark: old, light: old };
 }
 
 function parseDiscLines(v: unknown): DeviceSettings['discLines'] | undefined {
@@ -198,7 +225,7 @@ export function parseDeviceSettings(raw: unknown): DeviceSettings {
     layout: raw.layout === undefined ? d.layout : raw.layout,
     narrowTab: typeof raw.narrowTab === 'string' ? raw.narrowTab : d.narrowTab,
     keymap: parseKeymap(raw.keymap) ?? d.keymap,
-    boardStyle: parseBoardStyle(raw.boardStyle) ?? d.boardStyle,
+    boardStyles: parseBoardStyles(raw),
     grainStrength:
       typeof raw.grainStrength === 'number' && raw.grainStrength >= 0 && raw.grainStrength <= 1
         ? raw.grainStrength

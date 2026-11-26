@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dark boards: base colour</title>
+<style>
+  :root { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --text:#eceae4; --muted:#a3a19a; }
+  body.light { --ground:#e3e3e0; --panel:#f5f5f3; --hairline:#d6d6d2; --text:#1d1d1b; --muted:#5e5e5a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--text); font:14px/1.55 Inter, -apple-system, "PingFang SC", sans-serif; padding:28px 24px 60px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 6px; }
+  p { margin:0 0 10px; color:var(--muted); max-width:860px; }
+  p b { color:var(--text); font-weight:600; }
+  .toggle { position:fixed; top:14px; right:18px; background:var(--panel); border:1px solid var(--hairline); color:var(--text); border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:22px; margin-top:22px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:2px solid var(--hairline); border-radius:8px; padding:16px; cursor:pointer; display:flex; gap:16px; align-items:flex-start; }
+  .card.ref { cursor:default; border-style:dashed; }
+  .card.selected { border-color:#7fb2ff; }
+  .card canvas { width:380px; height:380px; flex:none; border-radius:2px; }
+  body:not(.light) .card canvas.shadow { box-shadow:0 8px 22px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.5); }
+  .meta h3 { margin:0 0 6px; font-size:15px; font-weight:600; }
+  .meta .tag { display:inline-block; font-size:12px; color:var(--muted); border:1px solid var(--hairline); border-radius:4px; padding:0 6px; margin-bottom:8px; }
+  .meta ul { margin:0; padding-left:18px; color:var(--muted); font-size:13px; }
+  .meta li { margin-bottom:4px; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; border:1px solid var(--hairline); margin-right:4px; }
+  @media (max-width:640px) { .card { flex-direction:column; } .card canvas { width:100%; height:auto; aspect-ratio:1; } }
+  .notes { margin-top:28px; }
+  .notes h2 { font-size:15px; margin:0 0 6px; }
+  .notes ul { color:var(--muted); margin:0; padding-left:18px; max-width:900px; }
+</style>
+</head>
+<body>
+<script>window.toggleSelect = window.toggleSelect || ((el) => el.classList.toggle("selected"));</script>
+<button class="toggle" onclick="document.body.classList.toggle('light')">Switch light / dark interface</button>
+<div class="wrap">
+  <h1>A new black board like 印刷 (Printed): how black?</h1>
+  <p>Three blacks, each drawn the way Printed is: <b>no grain, thin lines, no shadow, flat stones</b>. The cards sit on the dark theme's panel colour <span class="sw" style="background:#1e1e21"></span>#1E1E21, and the page on the window colour <span class="sw" style="background:#161618"></span>#161618. The button at the top right switches to the light interface.</p>
+  <p>So that they read on black, the stones and marks are already adjusted as listed under "On the board" below. This page asks only about <b>the base colour and the lines</b>; the stones and the candidates come next.</p>
+
+  <div class="grid">
+    <div class="card" data-choice="graphite" onclick="toggleSelect(this)">
+      <canvas id="b-graphite" width="760" height="760"></canvas>
+      <div class="meta">
+        <h3>A 石墨 (Graphite)</h3>
+        <span class="tag">a step lighter than the panel</span>
+        <ul>
+          <li>Base <span class="sw" style="background:#2A2A2E"></span>#2A2A2E</li>
+          <li>The board stands out by being a little lighter than its surroundings, with no shadow</li>
+          <li>Black stones are darker than the board, so contrast is best</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" data-choice="ink" onclick="toggleSelect(this)">
+      <canvas id="b-ink" width="760" height="760"></canvas>
+      <div class="meta">
+        <h3>B 墨黑 (Ink)</h3>
+        <span class="tag">darker than the window</span>
+        <ul>
+          <li>Base <span class="sw" style="background:#0E0E10"></span>#0E0E10</li>
+          <li>The blackest, like a dark screen, and the least glaring at night</li>
+          <li>Black stones are nearly the board's colour and are told apart only by a light edge</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" data-choice="warm" onclick="toggleSelect(this)">
+      <canvas id="b-warm" width="760" height="760"></canvas>
+      <div class="meta">
+        <h3>C 暖黑 (Warm black)</h3>
+        <span class="tag">a hint of wood</span>
+        <ul>
+          <li>Base <span class="sw" style="background:#25211C"></span>#25211C, lines slightly cream</li>
+          <li>Keeps the principle that the board is the one warm object on screen</li>
+          <li>Next to the neutral grey interface, it reads as another material</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card ref">
+      <canvas id="b-printed" width="760" height="760"></canvas>
+      <div class="meta">
+        <h3>For comparison: today's 印刷 (Printed)</h3>
+        <span class="tag">not an option</span>
+        <ul>
+          <li>Base <span class="sw" style="background:#F1E7CF"></span>#F1E7CF, lines #4F4232</li>
+          <li>Stones, candidates and marks drawn as Aji draws them today</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>On the board (the same on all three, confirmed separately next)</h2>
+    <ul>
+      <li>Black stones: pure black with a thin light edge (today's flat black stone has a dark edge, which vanishes on black). White stones: a little darker than today, to glare less.</li>
+      <li>Candidates: paper discs and cinnabar rings as today; the ring of the move actually played turns from dark brown to light, or it cannot be seen on black.</li>
+      <li>The variation badge turns from a dark badge with a light letter to a light badge with a dark letter; marks and labels on empty points are light.</li>
+      <li>The last-move dot is unchanged: dark on a white stone, light on a black one.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const LETTERS = 'ABCDEFGHJKLMNOPQRST';
+const BOARDS = {
+  graphite: { base:'#2A2A2E', line:'rgba(236,234,228,.34)', edge:'rgba(236,234,228,.5)', star:'rgba(236,234,228,.6)', label:'rgba(236,234,228,.5)', dark:true },
+  ink:      { base:'#0E0E10', line:'rgba(236,234,228,.26)', edge:'rgba(236,234,228,.42)', star:'rgba(236,234,228,.55)', label:'rgba(236,234,228,.45)', dark:true },
+  warm:     { base:'#25211C', line:'rgba(238,224,198,.32)', edge:'rgba(238,224,198,.48)', star:'rgba(238,224,198,.6)', label:'rgba(238,224,198,.5)', dark:true },
+  printed:  { base:'#F1E7CF', line:'#4F4232', edge:'#4F4232', star:'#4F4232', label:'rgba(79,66,50,.75)', dark:false },
+};
+// [col, row from top, colour]
+const STONES = [
+  [15,3,'b'],[3,15,'w'],[16,15,'b'],[3,3,'w'],[14,16,'b'],[15,13,'w'],[16,13,'b'],[16,12,'w'],
+  [13,15,'b'],[2,5,'b'],[5,2,'w'],[2,2,'b'],[2,3,'w'],[1,3,'b'],[4,16,'b'],[4,15,'w'],[9,9,'b'],[10,10,'w'],
+];
+const LAST = [15,13];
+// [col, row, tier, line1, line2, played]
+const DISCS = [
+  [13,13,'best','54.2','+1.8',false],
+  [5,15,'close','51.0','+0.9',true],
+  [9,3,'doubtful','44.6','−0.7',false],
+  [16,8,'poor','38.1','−2.4',false],
+];
+const TIERS = {
+  best:{fill:'#FDF6E3',a:1,ring:'#B8321F',ra:1,w:3.5,text:'#2B1D0E',bold:true},
+  close:{fill:'#FBF1D9',a:1,ring:'#B8321F',ra:1,w:1.5,text:'#2B1D0E',bold:false},
+  doubtful:{fill:'#FBF1D9',a:.85,ring:'#8A6A32',ra:1,w:1.5,text:'#4A3410',bold:false},
+  poor:{fill:'#FBF1D9',a:.5,ring:'#8A6A32',ra:.6,w:1,text:'#4A3410',bold:false},
+};
+function rgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;}
+
+function draw(id, key){
+  const b = BOARDS[key];
+  const cv = document.getElementById(id), ctx = cv.getContext('2d');
+  const dpr = 2, S = 380;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = b.base; ctx.fillRect(0,0,S,S);
+  const band = 18, sp = (S - band - 12) / 18.6, o = band + sp*0.55;
+  const P = i => o + i*sp;
+  const r = sp*0.48;
+  // grid
+  ctx.strokeStyle = b.line; ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  for (let i=1;i<18;i++){ ctx.moveTo(P(i),P(0)); ctx.lineTo(P(i),P(18)); ctx.moveTo(P(0),P(i)); ctx.lineTo(P(18),P(i)); }
+  ctx.stroke();
+  ctx.strokeStyle = b.edge; ctx.lineWidth = 1.1; ctx.strokeRect(P(0),P(0),P(18)-P(0),P(18)-P(0));
+  ctx.fillStyle = b.star;
+  for (const x of [3,9,15]) for (const y of [3,9,15]) { ctx.beginPath(); ctx.arc(P(x),P(y),Math.max(1.5,sp*0.11),0,7); ctx.fill(); }
+  // coordinates
+  ctx.fillStyle = b.label; ctx.font = '9px Inter, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let i=0;i<19;i++){ ctx.fillText(LETTERS[i],P(i),band/2); ctx.fillText(String(19-i),band/2,P(i)); }
+  // stones
+  for (const [x,y,c] of STONES){
+    ctx.beginPath(); ctx.arc(P(x),P(y),r*0.96,0,7);
+    if (b.dark){
+      ctx.fillStyle = c==='b' ? '#050506' : '#E9E7E0'; ctx.fill();
+      ctx.lineWidth = Math.max(1, r*0.08);
+      ctx.strokeStyle = c==='b' ? 'rgba(236,234,228,.55)' : 'rgba(0,0,0,.5)'; ctx.stroke();
+    } else {
+      ctx.fillStyle = c==='b' ? '#1b1b1a' : '#fbfaf6'; ctx.fill();
+      ctx.lineWidth = Math.max(1, r*0.07); ctx.strokeStyle = '#2a2620'; ctx.stroke();
+    }
+  }
+  // last move dot
+  { const under = STONES.find(s=>s[0]===LAST[0]&&s[1]===LAST[1])[2];
+    ctx.fillStyle = under==='b' ? '#f2efe8' : '#1a1a1a';
+    ctx.beginPath(); ctx.arc(P(LAST[0]),P(LAST[1]),sp*0.11,0,7); ctx.fill(); }
+  // candidate discs
+  for (const [x,y,tier,l1,l2,played] of DISCS){
+    const t = TIERS[tier], cx=P(x), cy=P(y);
+    ctx.fillStyle = rgba(t.fill,t.a); ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.lineWidth = t.w; ctx.strokeStyle = rgba(t.ring,t.ra); ctx.beginPath(); ctx.arc(cx,cy,r-t.w/2,0,7); ctx.stroke();
+    if (played){ ctx.lineWidth=2.5; ctx.strokeStyle = b.dark ? '#ECEAE4' : '#2B1D0E'; ctx.beginPath(); ctx.arc(cx,cy,r+1.25,0,7); ctx.stroke(); }
+    ctx.fillStyle = t.text; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = `${t.bold?700:600} ${r*0.62}px Inter, sans-serif`; ctx.fillText(l1,cx,cy-r*0.2);
+    ctx.font = `500 ${r*0.48}px Inter, sans-serif`; ctx.fillText(l2,cx,cy+r*0.36);
+  }
+  // triangle mark on a black stone, letter label on an empty point
+  { const cx=P(9), cy=P(9), s=sp*0.3; ctx.strokeStyle='#f2f0ea'; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(cx,cy-s); ctx.lineTo(cx+s*.9,cy+s*.6); ctx.lineTo(cx-s*.9,cy+s*.6); ctx.closePath(); ctx.stroke(); }
+  { const cx=P(6), cy=P(11); ctx.fillStyle=b.base; ctx.beginPath(); ctx.arc(cx,cy,sp*0.36,0,7); ctx.fill();
+    ctx.fillStyle = b.dark ? '#ECEAE4' : '#2b1d0e'; ctx.font=`600 ${sp*0.5}px Inter, sans-serif`; ctx.fillText('a',cx,cy+1); }
+  // variation badge on an empty point
+  { const cx=P(11), cy=P(15), size=sp*0.46;
+    ctx.strokeStyle = b.dark ? 'rgba(236,234,228,.75)' : 'rgba(43,29,14,.7)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(cx,cy,sp*0.42*0.75,0,7); ctx.stroke();
+    const bx=cx+sp*0.18, by=cy-sp*0.62;
+    ctx.fillStyle = b.dark ? '#ECEAE4' : '#1f1a14'; ctx.beginPath(); ctx.roundRect(bx,by,size,size,size*0.22); ctx.fill();
+    ctx.fillStyle = b.dark ? '#1f1a14' : '#f3efe4'; ctx.font=`700 ${size*0.72}px Inter, sans-serif`; ctx.fillText('B',bx+size/2,by+size/2+0.5); }
+}
+draw('b-graphite','graphite'); draw('b-ink','ink'); draw('b-warm','warm'); draw('b-printed','printed');
+</script>
+</body>
+</html>

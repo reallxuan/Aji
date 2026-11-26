@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dark boards: candidates</title>
+<style>
+  :root { --ground:#161618; --panel:#1e1e21; --hairline:#303035; --text:#eceae4; --muted:#a3a19a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--text); font:14px/1.55 Inter, -apple-system, "PingFang SC", sans-serif; padding:28px 24px 60px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 6px; }
+  h2 { font-size:16px; font-weight:600; margin:30px 0 4px; }
+  p { margin:0 0 10px; color:var(--muted); max-width:900px; }
+  p b { color:var(--text); font-weight:600; }
+  .row { display:grid; grid-template-columns:110px repeat(3, minmax(0,1fr)); gap:16px; align-items:center; margin-top:14px; }
+  .rowlabel { color:var(--muted); font-size:13px; }
+  .rowlabel b { display:block; color:var(--text); font-size:14px; }
+  .head { color:var(--text); font-weight:600; font-size:14px; }
+  .head span { display:block; font-weight:400; color:var(--muted); font-size:12px; }
+  .cell { background:var(--panel); border:2px solid var(--hairline); border-radius:8px; padding:10px; cursor:pointer; }
+  .cell.selected { border-color:#7fb2ff; }
+  .cell canvas { width:100%; height:auto; aspect-ratio:1; display:block; }
+  ul { color:var(--muted); margin:6px 0 0; padding-left:18px; max-width:900px; }
+  li { margin-bottom:4px; }
+  li b { color:var(--text); font-weight:600; }
+  @media (max-width:760px) { .row { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<script>window.toggleSelect = window.toggleSelect || ((el) => el.classList.toggle("selected"));</script>
+<div class="wrap">
+  <h1>Candidates and marks on the black boards</h1>
+  <p>The stones are the owner's choice, <b>K2</b> black and <b>W3</b> white. Each cell has the four candidate tiers (best, close, doubtful, poor, from upper left to lower right). The close one is the move actually played in the record, so it has the outer ring. There is also a variation badge "B", a letter "a" on an empty point, and the position estimate's squares at the lower right.</p>
+
+  <h2>How are the candidate discs drawn?</h2>
+  <div class="row">
+    <div></div>
+    <div class="head">D1 Unchanged<span>Today's paper discs and cinnabar rings, the same on every board (as P2 M1 decided)</span></div>
+    <div class="head">D2 Dimmed paper<span>Still paper, brought down to about W3's brightness, so no longer brighter than the white stones</span></div>
+    <div class="head">D3 Dark discs<span>Dark grey with light text; brighter cinnabar rings for best and close, grey-brown for doubtful and poor</span></div>
+  </div>
+  <div class="row">
+    <div class="rowlabel"><b>A 石墨 (Graphite)</b>#2A2A2E</div>
+    <div class="cell" data-choice="d1" onclick="toggleSelect(this)"><canvas data-board="A" data-disc="d1" width="600" height="600"></canvas></div>
+    <div class="cell" data-choice="d2" onclick="toggleSelect(this)"><canvas data-board="A" data-disc="d2" width="600" height="600"></canvas></div>
+    <div class="cell" data-choice="d3" onclick="toggleSelect(this)"><canvas data-board="A" data-disc="d3" width="600" height="600"></canvas></div>
+  </div>
+  <div class="row">
+    <div class="rowlabel"><b>B 墨黑 (Ink)</b>#0E0E10</div>
+    <div class="cell" data-choice="d1" onclick="toggleSelect(this)"><canvas data-board="B" data-disc="d1" width="600" height="600"></canvas></div>
+    <div class="cell" data-choice="d2" onclick="toggleSelect(this)"><canvas data-board="B" data-disc="d2" width="600" height="600"></canvas></div>
+    <div class="cell" data-choice="d3" onclick="toggleSelect(this)"><canvas data-board="B" data-disc="d3" width="600" height="600"></canvas></div>
+  </div>
+
+  <h2>Changes the same in all three columns (proposed)</h2>
+  <ul>
+    <li><b>The ring of the move actually played</b> turns from dark brown to light, or it cannot be seen on black.</li>
+    <li><b>The variation badge</b> turns light with a dark letter; the amber try-out badge is unchanged.</li>
+    <li><b>Marks and letters on empty points</b> are light, as on today's walnut board.</li>
+    <li><b>The position estimate's squares</b> keep today's colours. The black square already has a light rim, which is what shows it on black.</li>
+  </ul>
+  <p style="margin-top:10px">With D2 or D3, the rank chips in the candidates table, drawn after the discs, would have to change with the board too, or the table and the board would not match.</p>
+</div>
+
+<script>
+const BOARDS = {
+  A: { base:'#2A2A2E', line:'rgba(236,234,228,.34)', star:'rgba(236,234,228,.6)' },
+  B: { base:'#0E0E10', line:'rgba(236,234,228,.26)', star:'rgba(236,234,228,.55)' },
+};
+const DISCS = {
+  d1: {
+    best:{fill:'#FDF6E3',a:1,ring:'#B8321F',ra:1,w:3.5,text:'#2B1D0E',bold:true},
+    close:{fill:'#FBF1D9',a:1,ring:'#B8321F',ra:1,w:1.5,text:'#2B1D0E'},
+    doubtful:{fill:'#FBF1D9',a:.85,ring:'#8A6A32',ra:1,w:1.5,text:'#4A3410'},
+    poor:{fill:'#FBF1D9',a:.5,ring:'#8A6A32',ra:.6,w:1,text:'#4A3410'},
+  },
+  d2: {
+    best:{fill:'#DCD5C4',a:1,ring:'#B8321F',ra:1,w:3.5,text:'#2B1D0E',bold:true},
+    close:{fill:'#D6CEBB',a:1,ring:'#B8321F',ra:1,w:1.5,text:'#2B1D0E'},
+    doubtful:{fill:'#D6CEBB',a:.85,ring:'#8A6A32',ra:1,w:1.5,text:'#4A3410'},
+    poor:{fill:'#D6CEBB',a:.5,ring:'#8A6A32',ra:.6,w:1,text:'#4A3410'},
+  },
+  d3: {
+    best:{fill:'#3C3C42',a:1,ring:'#D9553C',ra:1,w:3.5,text:'#F4F2EC',bold:true},
+    close:{fill:'#34343A',a:1,ring:'#D9553C',ra:1,w:1.5,text:'#ECEAE4'},
+    doubtful:{fill:'#34343A',a:.85,ring:'#8C8476',ra:1,w:1.5,text:'#BEBCB4'},
+    poor:{fill:'#34343A',a:.55,ring:'#8C8476',ra:.6,w:1,text:'#A3A19A'},
+  },
+};
+// a 10 x 10 window in the middle of the board
+const STONES = [[2,2,'b'],[3,3,'w'],[4,2,'b'],[3,5,'w'],[6,4,'b'],[5,6,'w'],[7,6,'b'],[6,7,'w'],[2,7,'b']];
+const PLAY = [
+  [4,4,'best','54.2','+1.8',false],
+  [5,3,'close','51.0','+0.9',true],
+  [7,4,'doubtful','44.6','−0.7',false],
+  [4,7,'poor','38.1','−2.4',false],
+];
+const OWN = [[8,8,'b'],[9,8,'b'],[8,9,'b'],[9,9,'w'],[7,9,'w'],[9,7,'w']];
+function rgba(hex,a){ if(a>=1) return hex; const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
+function draw(cv){
+  const b = BOARDS[cv.dataset.board], tiers = DISCS[cv.dataset.disc];
+  const ctx = cv.getContext('2d'), dpr = 2, S = 300;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = b.base; ctx.fillRect(0,0,S,S);
+  const sp = S/10, P = i => sp*0.5 + i*sp, r = sp*0.48;
+  ctx.strokeStyle = b.line; ctx.lineWidth = 0.8; ctx.beginPath();
+  for (let i=0;i<10;i++){ ctx.moveTo(P(i),0); ctx.lineTo(P(i),S); ctx.moveTo(0,P(i)); ctx.lineTo(S,P(i)); }
+  ctx.stroke();
+  ctx.fillStyle = b.star; ctx.beginPath(); ctx.arc(P(1),P(1),sp*0.11,0,7); ctx.fill();
+  for (const [x,y,c] of STONES){
+    ctx.beginPath(); ctx.arc(P(x),P(y),r*0.96,0,7);
+    if (c==='b'){ ctx.fillStyle='#050506'; ctx.fill(); ctx.lineWidth=Math.max(1,r*0.1); ctx.strokeStyle='#5A5A61'; ctx.stroke(); }
+    else { ctx.fillStyle='#D6D4CD'; ctx.fill(); ctx.lineWidth=Math.max(1,r*0.07); ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.stroke(); }
+  }
+  ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(P(6),P(7),sp*0.11,0,7); ctx.fill();
+  for (const [x,y,tier,l1,l2,played] of PLAY){
+    const t = tiers[tier], cx=P(x), cy=P(y);
+    ctx.fillStyle = rgba(t.fill,t.a); ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.lineWidth=t.w; ctx.strokeStyle=rgba(t.ring,t.ra); ctx.beginPath(); ctx.arc(cx,cy,r-t.w/2,0,7); ctx.stroke();
+    if (played){ ctx.lineWidth=2.5; ctx.strokeStyle='#ECEAE4'; ctx.beginPath(); ctx.arc(cx,cy,r+1.25,0,7); ctx.stroke(); }
+    ctx.fillStyle=t.text; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`${t.bold?700:600} ${r*0.62}px Inter, sans-serif`; ctx.fillText(l1,cx,cy-r*0.2);
+    ctx.font=`500 ${r*0.48}px Inter, sans-serif`; ctx.fillText(l2,cx,cy+r*0.36);
+  }
+  // letter label on an empty point
+  { const cx=P(1), cy=P(5); ctx.fillStyle=b.base; ctx.beginPath(); ctx.arc(cx,cy,sp*0.36,0,7); ctx.fill();
+    ctx.fillStyle='#ECEAE4'; ctx.font=`600 ${sp*0.5}px Inter, sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('a',cx,cy+1); }
+  // variation badge
+  { const cx=P(1), cy=P(8), size=sp*0.46;
+    ctx.strokeStyle='rgba(236,234,228,.75)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(cx,cy,sp*0.32,0,7); ctx.stroke();
+    const bx=cx+sp*0.18, by=cy-sp*0.62;
+    ctx.fillStyle='#ECEAE4'; ctx.beginPath(); ctx.roundRect(bx,by,size,size,size*0.22); ctx.fill();
+    ctx.fillStyle='#1f1a14'; ctx.font=`700 ${size*0.72}px Inter, sans-serif`; ctx.fillText('B',bx+size/2,by+size/2+0.5); }
+  // ownership squares
+  for (const [x,y,c] of OWN){
+    const s = sp*0.36, cx=P(x), cy=P(y);
+    ctx.fillStyle = c==='b' ? 'rgba(18,18,18,.86)' : 'rgba(250,248,242,.92)';
+    ctx.fillRect(cx-s/2,cy-s/2,s,s);
+    ctx.lineWidth=1; ctx.strokeStyle = c==='b' ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.28)';
+    ctx.strokeRect(cx-s/2,cy-s/2,s,s);
+  }
+}
+document.querySelectorAll('canvas').forEach(draw);
+</script>
+</body>
+</html>

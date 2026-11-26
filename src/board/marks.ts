@@ -46,14 +46,7 @@ export function drawMarks(
   for (const { point, mark } of marks) {
     const { x, y } = gridPosition(geometry, point);
     const stone = stones[point.y * view.boardSize + point.x];
-    const ink =
-      stone === 'black'
-        ? '#f2f0ea'
-        : stone === 'white'
-          ? '#1a1a1a'
-          : view.style === 'walnut'
-            ? '#f3efe4'
-            : '#2b1d0e';
+    const ink = stone === 'black' ? '#f2f0ea' : stone === 'white' ? '#1a1a1a' : wood.ink.mark;
     ctx.strokeStyle = ink;
     ctx.beginPath();
     switch (mark.kind) {

@@ -7,6 +7,7 @@ import type { Move } from '../transport/generated/Move';
 import type { Point } from '../transport/generated/Point';
 import type { BoardView } from './drawBoard';
 import { gridPosition, boardGeometry } from './geometry';
+import { BOARD_STYLES } from './styles';
 
 /** The best disc's drop shadow, in CSS pixels. */
 const BEST_SHADOW = { color: 'rgba(40, 20, 4, 0.35)', blur: 6, offsetY: 2 };
@@ -40,6 +41,7 @@ export function drawCandidates(
   const geometry = boardGeometry(cssSize, boardSize, view.coordinates, view.orientation);
   const r = geometry.stoneRadius * dpr;
   const px = (css: number) => css * dpr;
+  const board = BOARD_STYLES[view.style ?? 'honey'];
   // A board so small that a disc cannot hold its ring (a window being dragged narrow) shows no
   // discs, rather than asking the canvas for a negative radius, which throws.
   if (r <= px(THICKEST_RING)) return;
@@ -52,8 +54,8 @@ export function drawCandidates(
     const cy = at.y * dpr;
 
     ctx.save();
-    // The printed board is flat: nothing casts a shadow on it (P2 M1 design 5.7).
-    if (style.shadow && view.style !== 'printed') {
+    // A board without grain is flat: nothing casts a shadow on it (P2 M1 design 5.7).
+    if (style.shadow && board.grain) {
       ctx.shadowColor = BEST_SHADOW.color;
       ctx.shadowBlur = px(BEST_SHADOW.blur);
       ctx.shadowOffsetY = px(BEST_SHADOW.offsetY);
@@ -72,7 +74,7 @@ export function drawCandidates(
 
     if (c.played) {
       ctx.lineWidth = px(PLAYED_RING.width);
-      ctx.strokeStyle = PLAYED_RING.color;
+      ctx.strokeStyle = board.ink.played;
       ctx.beginPath();
       // Centred half its width outside the disc, so it starts where the disc ends (design 13.3).
       ctx.arc(cx, cy, r + px(PLAYED_RING.width) / 2, 0, Math.PI * 2);
@@ -96,7 +98,7 @@ export function drawCandidates(
  */
 export function drawNextRing(
   ctx: CanvasRenderingContext2D,
-  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates' | 'orientation'>,
+  view: Pick<BoardView, 'cssSize' | 'dpr' | 'boardSize' | 'coordinates' | 'orientation' | 'style'>,
   point: Point,
 ): void {
   const geometry = boardGeometry(view.cssSize, view.boardSize, view.coordinates, view.orientation);
@@ -105,7 +107,7 @@ export function drawNextRing(
   if (r <= 0) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.lineWidth = px(PLAYED_RING.width);
-  ctx.strokeStyle = PLAYED_RING.color;
+  ctx.strokeStyle = BOARD_STYLES[view.style ?? 'honey'].ink.played;
   ctx.beginPath();
   const at = gridPosition(geometry, point);
   ctx.arc(at.x * view.dpr, at.y * view.dpr, r + px(PLAYED_RING.width) / 2, 0, Math.PI * 2);

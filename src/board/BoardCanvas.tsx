@@ -196,11 +196,12 @@ export function BoardCanvas({
   const spacing = boardGeometry(cssSize, boardSize, coordinates).spacing;
   // Stones rest on wood with a contact shadow; the printed board stays flat (polish design 3).
   const onWood = BOARD_STYLES[boardStyle].grain !== null;
+  const flat = BOARD_STYLES[boardStyle].ink.flat;
   // Drawing a stone with its gradients and shadows is slow; each look is drawn once per
   // spacing and ratio, then stamped.
   const sprites = useMemo(
-    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle, onWood),
-    [spacing, dpr, stoneStyle, onWood],
+    () => makeStoneSprites(spacing, dpr, domCanvas, stoneStyle, onWood, flat),
+    [spacing, dpr, stoneStyle, onWood, flat],
   );
 
   const marked = useMemo(
